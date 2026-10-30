@@ -13,6 +13,10 @@ import WidgetKit
 /// The small companion card: the pixel companion, its name top right, the state word, and Home's
 /// hearts with any gold hearts after them.
 ///
+/// When a feeling's bubble moves to the companion's top-left corner beside a worn piece (Refinements
+/// group 16), the companion moves right as far as the bubble reaches, clear of the widget's rounded
+/// corner; the medium card has the room and doesn't move.
+///
 /// While the companion is asleep it shows "Asleep" and the pixel "z", and drops the hearts — nothing
 /// of the day (``WidgetCompanionEmotion/hidesTheDay``). A tap opens Home.
 struct CompanionSmallView: View {
@@ -29,7 +33,7 @@ struct CompanionSmallView: View {
                 HStack(alignment: .top, spacing: 4) {
                     WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 3,
                                           ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
-                                          motif: entry.homeScreenMotif)
+                                          motif: entry.homeScreenMotif, makesRoomForALeftMotif: true)
                     Spacer(minLength: 0)
                     if let name = entry.companionName {
                         Text(verbatim: name)
@@ -144,8 +148,8 @@ struct WidgetBubbleTail: Shape {
     }
 }
 
-/// The Lock Screen circle: the pixel companion's silhouette with its face cut out, plus the pixel "z"
-/// while asleep (`b4-w-lock`).
+/// The Lock Screen circle: the pixel companion in one colour, its face cut out and a thin cut line round
+/// each worn piece (phone test W-11), plus the pixel "z" while asleep (`b4-w-lock`).
 ///
 /// The state face only — the owner's 2026-09-24 rule — except asleep, which says nothing about the
 /// day (``FernletWidgetEmotionPolicy``). No word, hearts or name.

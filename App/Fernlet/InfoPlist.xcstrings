@@ -124,13 +124,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "With background mapping on, Fernlet uncovers the map from the places you visit during the day, using little battery. It stays on this iPhone."
+            "value" : "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive. It stays on this iPhone."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Con el mapeo en segundo plano activado, Fernlet descubre el mapa con los lugares que visitas durante el día, con poca batería. Todo se queda en este iPhone."
+            "value" : "Con el mapeo en segundo plano activado, Fernlet descubre el mapa con los lugares que visitas y las carreteras por las que conduces. Todo se queda en este iPhone."
           }
         }
       }
@@ -148,6 +148,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tu compañero vive en un mapa de dónde estás. El mapa se descubre mientras vas, y el historial se queda en este iPhone."
+          }
+        }
+      }
+    },
+    "NSMotionUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet usa el movimiento para saber cuándo vas en bici o en coche, solo mientras \"Registrar mis salidas en bici\" está activado. Todo se queda en este iPhone."
           }
         }
       }

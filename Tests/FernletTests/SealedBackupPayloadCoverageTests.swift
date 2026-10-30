@@ -26,6 +26,7 @@ import FernletFoundation
 import PrivateHealthStore
 import PrivateMemoryStore
 import PrivateStoreCore
+import WorldMapStore
 @testable import Fernlet
 
 /// A minimal `SealedBackupContext` so the coordinator can be tested without a `FernletStore`.
@@ -176,6 +177,29 @@ final class FakeSealedBackupHost: SealedBackupContext {
     func recordSealedBackupEscrowConflict(_ inConflict: Bool) {}
     func recordRetiredSealedBackupDeleted(_ payloadType: SealedBackupPayloadType) {
         retiredBackupsDeleted.append(payloadType)
+    }
+
+    /// The World passport's vault: a temporary folder and in-memory keys (``tearDownWorldPassport()``
+    /// removes it).
+    let worldPassportVault = WorldMapVault.ephemeral()
+    /// The World passport keeper the journal's head reads and merges into — production's `worldFog.atlas`
+    /// type, over ``worldPassportVault``, with no atlas (a test fills it through `restore`).
+    lazy var worldPassport = WorldAtlasKeeper(vault: worldPassportVault, openAtlas: { nil })
+
+    /// Mirrors `FernletStore.sealedBackupWorldPassport()`: the keeper's book, refused in a decoy or while
+    /// it can't be read.
+    func sealedBackupWorldPassport() throws -> PassportBook {
+        try worldPassport.bookForBackup()
+    }
+
+    /// Mirrors `FernletStore.restoreSealedBackupWorldPassport(_:)`: the keeper's merge.
+    func restoreSealedBackupWorldPassport(_ book: PassportBook) throws {
+        try worldPassport.restore(book)
+    }
+
+    /// Removes the passport's temporary folder.
+    func tearDownWorldPassport() {
+        _ = worldPassportVault.clearAll()
     }
 
     /// Mirrors `FernletStore.reinstateJournalEntries(from:)`'s load-bearing SIDE EFFECT: it writes day

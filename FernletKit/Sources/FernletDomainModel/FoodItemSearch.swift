@@ -28,6 +28,13 @@ public nonisolated enum FoodBrandLexicon {
         return chains.contains { n.contains($0) }
     }
 
+    /// The chain a run-together word spells ("chickfila" → "chick fil a"), or nil. Only multi-word
+    /// chains qualify; a one-word chain already is its own spelling. Feeds ``FoodSearchVocabulary``'s
+    /// offered suggestion, never a silent rewrite.
+    nonisolated public static func chainSpelling(forRunTogether word: String) -> String? {
+        chains.first { $0.contains(" ") && $0.replacingOccurrences(of: " ", with: "") == word }
+    }
+
     nonisolated public static func queryContainsBrandToken(_ query: String) -> Bool {
         let n = FoodItemSearch.normalized(query)
         return chains.contains { n.contains($0) }
@@ -89,7 +96,7 @@ public nonisolated enum FoodBrandLexicon {
     /// the token immediately before it; every other token passes through unchanged. A standalone "s"
     /// arising from anything OTHER than a stripped apostrophe is not a realistic token in typed food
     /// text, so this is safe as a general collapse rather than a per-chain special case.
-    nonisolated private static func possessiveCollapsed(_ normalizedText: String) -> String {
+    nonisolated static func possessiveCollapsed(_ normalizedText: String) -> String {
         let tokens = normalizedText.split(separator: " ").map(String.init)
         var collapsed: [String] = []
         for token in tokens {
@@ -209,9 +216,11 @@ public nonisolated enum FoodItemSearch {
         public static let empty = Index(foodItems: [])
 
         fileprivate func matches(
-            _ query: SearchQuery, limit: Int, history: FoodSearchHistory, now: Date, ranking: FoodSearchRanking
+            _ query: SearchQuery, limit: Int, history: FoodSearchHistory, now: Date, ranking: FoodSearchRanking,
+            brandAware: Bool
         ) -> [FoodItem] {
-            scoredMatches(query, limit: limit, history: history, now: now, ranking: ranking).map(\.foodItem)
+            scoredMatches(query, limit: limit, history: history, now: now, ranking: ranking, brandAware: brandAware)
+                .map(\.foodItem)
         }
 
         /// Scores, ranks, floors and demotes — steps 1–5 of the ordering documented on
@@ -227,7 +236,8 @@ public nonisolated enum FoodItemSearch {
             limit: Int,
             history: FoodSearchHistory,
             now: Date,
-            ranking: FoodSearchRanking
+            ranking: FoodSearchRanking,
+            brandAware: Bool
         ) -> [(foodItem: FoodItem, score: Int)] {
             let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(query.normalized)
             // Fix 1.8's BOTH floors, applied as part of scoring so a floored row never enters the
@@ -245,7 +255,8 @@ public nonisolated enum FoodItemSearch {
                       score >= FoodItemSearch.minimumBindScore else { return nil }
                 return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
             }
-            let ranked = FoodItemSearch.markingIdentity(scored, query: query, ranking: ranking, isBrandQuery: isBrandQuery)
+            let branded = brandAware ? FoodItemSearch.markingTypedBrand(scored, query: query) : scored
+            let ranked = FoodItemSearch.markingIdentity(branded, query: query, ranking: ranking, isBrandQuery: isBrandQuery)
                 .sorted { first, second in
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
                 }
@@ -293,12 +304,40 @@ public nonisolated enum FoodItemSearch {
         /// ``FoodSearchRanking/standard``, which makes the key inert there. `ranksAhead` reads it twice:
         /// non-zero first, above history; the level itself after history and source.
         var identity = 0
+        /// Whether the row agrees with a brand the person typed (``FoodBrandAgreement``). Set only on the
+        /// typed surface (`brandAware`); false everywhere else, which makes the key inert there.
+        var brandAgrees = false
+        let normalizedName: String
 
         init(entry: Index.Entry, score: Int, history: Int) {
             self.foodItem = entry.foodItem
             self.score = score
             self.history = history
             self.nameTokens = entry.nameTokens
+            self.normalizedName = entry.normalizedName
+        }
+    }
+
+    /// Marks the rows that agree with a brand the query names (the 2026-10-29 targeted brand fixes, see
+    /// ``FoodBrandAgreement``). Inert — nothing marked, the order unchanged — when the query names no
+    /// brand. Typed surface only: `scoredResults` and the resolver never pass `brandAware`.
+    ///
+    /// The brand fields are normalized here, over the rows that survived the gate, and only when the
+    /// query could name a brand at all (two or more words, or a chain) — not in ``Index``, which would
+    /// pay for every hydrated row of every broad one-word prefix.
+    /// R2: two bounded passes over `rows`.
+    fileprivate static func markingTypedBrand(_ rows: [RankedRow], query: SearchQuery) -> [RankedRow] {
+        guard query.tokens.count >= 2 || FoodBrandLexicon.queryContainsBrandToken(query.normalized) else { return rows }
+        let texts = rows.map {
+            FoodBrandAgreement.Row(normalizedName: $0.normalizedName, normalizedBrand: normalized($0.foodItem.brandSource ?? ""))
+        }
+        guard let typed = FoodBrandAgreement.typedBrand(
+            tokens: query.tokens, normalizedQuery: query.normalized, matched: texts
+        ) else { return rows }
+        return zip(rows, texts).map { row, text in
+            var marked = row
+            marked.brandAgrees = typed.agrees(text)
+            return marked
         }
     }
 
@@ -374,11 +413,12 @@ public nonisolated enum FoodItemSearch {
         stripsStopwords: Bool = true,
         history: FoodSearchHistory = .empty,
         now: Date = Date(),
-        ranking: FoodSearchRanking = .standard
+        ranking: FoodSearchRanking = .standard,
+        brandAware: Bool = false
     ) -> [FoodItem] {
         results(
             for: query, in: Index(foodItems: foodItems), limit: limit,
-            stripsStopwords: stripsStopwords, history: history, now: now, ranking: ranking
+            stripsStopwords: stripsStopwords, history: history, now: now, ranking: ranking, brandAware: brandAware
         )
     }
 
@@ -395,6 +435,8 @@ public nonisolated enum FoodItemSearch {
     ///   `FoodCatalog` passes a real profile ONLY on the typed-query surface — see its `results`.
     /// - Parameter ranking: ``FoodSearchRanking/ingredientIdentity`` puts the rows that ARE the typed
     ///   ingredient first (F5, the recipe surfaces only); the default keeps the standard order.
+    /// - Parameter brandAware: The typed surface only (2026-10-29 brand fixes): rows agreeing with a brand
+    ///   the query names rank first, above history (``FoodBrandAgreement``). False everywhere else.
     public static func results(
         for query: String,
         in index: Index,
@@ -402,12 +444,13 @@ public nonisolated enum FoodItemSearch {
         stripsStopwords: Bool = true,
         history: FoodSearchHistory = .empty,
         now: Date = Date(),
-        ranking: FoodSearchRanking = .standard
+        ranking: FoodSearchRanking = .standard,
+        brandAware: Bool = false
     ) -> [FoodItem] {
         // R5: `limit` reaches `prefix(_:)`, which traps on a negative length. Asking for no results
         // is answered with no results.
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.matches(prepared, limit: limit, history: history, now: now, ranking: ranking)
+        return index.matches(prepared, limit: limit, history: history, now: now, ranking: ranking, brandAware: brandAware)
     }
 
     /// Bounded leave-one-out fallback for a typed query whose normal AND result was empty.
@@ -422,7 +465,8 @@ public nonisolated enum FoodItemSearch {
         stripsStopwords: Bool,
         history: FoodSearchHistory,
         now: Date,
-        ranking: FoodSearchRanking = .standard
+        ranking: FoodSearchRanking = .standard,
+        brandAware: Bool = false
     ) -> [FoodItem] {
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords),
               partialQueryVariants(for: prepared).isEmpty == false else { return [] }
@@ -438,7 +482,8 @@ public nonisolated enum FoodItemSearch {
             )
             return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
         }
-        let ranked = markingIdentity(scored, query: prepared, ranking: ranking, isBrandQuery: isBrandQuery)
+        let branded = brandAware ? markingTypedBrand(scored, query: prepared) : scored
+        let ranked = markingIdentity(branded, query: prepared, ranking: ranking, isBrandQuery: isBrandQuery)
         .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
         .map { (foodItem: $0.foodItem, score: $0.score) }
         let window = ranked.prefix(max(limit, demotionWindow))
@@ -483,7 +528,7 @@ public nonisolated enum FoodItemSearch {
     /// argument, but a signature that will not accept the profile.
     public static func scoredResults(for query: String, in index: Index, limit: Int = 6, stripsStopwords: Bool = true) -> [(item: FoodItem, score: Int)] {
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.scoredMatches(prepared, limit: limit, history: .empty, now: Date(), ranking: .standard)
+        return index.scoredMatches(prepared, limit: limit, history: .empty, now: Date(), ranking: .standard, brandAware: false)
             .map { (item: $0.foodItem, score: $0.score) }
     }
 
@@ -556,6 +601,7 @@ public nonisolated enum FoodItemSearch {
     /// sources. Under ``FoodSearchRanking/standard`` every row carries 0, both identity comparisons are
     /// equal, and this function is the one it was before.
     fileprivate static func ranksAhead(_ first: RankedRow, _ second: RankedRow, isBrandQuery: Bool) -> Bool {
+        if first.brandAgrees != second.brandAgrees { return first.brandAgrees }
         let firstIsIngredient = first.identity > 0, secondIsIngredient = second.identity > 0
         if firstIsIngredient != secondIsIngredient { return firstIsIngredient }
         if first.history != second.history { return first.history > second.history }

@@ -693,6 +693,32 @@ struct FernletLockServiceTests {
         #expect(serviceB.passcodeUnlockedThisProcess)
         #expect(serviceB.isBiometricUnlockAvailable)
     }
+
+    /// Before the process's first passcode success the offer is decided by the in-memory flags alone:
+    /// the lock screen reads it on every render, and the first unlock is when a per-tap `LAContext`
+    /// evaluation (and keychain read) helped bunch taps until the full-PIN change was lost (owner's
+    /// report 2026-10-29).
+    @Test func theBiometricOfferAsksNoBiometryBeforeTheFirstPasscodeSuccess() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let setup = harness.makeService()
+        try await setup.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        try await setup.setBiometricEnabled(true, passcode: "123456")
+        setup.lock(reason: .manual)
+
+        var biometryQueries = 0
+        let relaunched = harness.makeService(biometricTypeOverride: {
+            biometryQueries += 1
+            return .faceID
+        })
+        for _ in 0..<5 { #expect(!relaunched.isBiometricUnlockAvailable) }
+        #expect(biometryQueries == 0, "no LAContext evaluation before a passcode success")
+
+        _ = try await relaunched.unlock(passcode: "123456", for: .privateHub)
+        relaunched.lock(reason: .manual)
+        #expect(relaunched.isBiometricUnlockAvailable)
+        #expect(biometryQueries == 1, "after it, the offer asks again as before")
+    }
 }
 
 /// Configures a lock on a fresh harness and then replaces the live wrap with a registered

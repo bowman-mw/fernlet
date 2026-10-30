@@ -440,6 +440,10 @@ struct OnboardingCoordinator: View {
         switch model.step {
         case .welcome:
             OnboardingWelcomeView(stepText: model.step.indexText, continueAction: model.advance)
+                // R8: the App Review demo build's one extra button, under Continue (`ReviewDemo`).
+                #if FERNLET_DEMO
+                .safeAreaInset(edge: .bottom, spacing: 0) { ReviewDemoStartLink(start: model.startReviewDemo) }
+                #endif
         case .lockSetup:
             OnboardingLockSetupView(
                 stepText: model.step.indexText,
@@ -962,3 +966,37 @@ nonisolated enum OnboardingMeasureText {
         return imperial ? "\(whole / 12) ft \(whole % 12) in" : "\(whole) cm"
     }
 }
+
+// R8: the one custom condition — the App Review demo build only (`ReviewDemo`).
+#if FERNLET_DEMO
+extension OnboardingCoordinatorModel {
+    /// Welcome's "Look around with sample data": commits the demo persona the way ``complete()``
+    /// commits a real answer set, plants the sample data under the demo passcode, and hands over to
+    /// the app. Nothing here exists in a normal build.
+    ///
+    /// - Returns: false when the demo passcode could not be set up; nothing is committed then, and the
+    ///   person stays on Welcome.
+    func startReviewDemo(lockService: FernletLockService) async -> Bool {
+        guard let key = await ReviewDemo.configureLock(lockService) else { return false }
+        profile = ReviewDemo.persona(from: profile)
+        store.completeOnboarding(profile: profile, preferences: nutritionPreferences, goal: goal)
+        store.replaceGoals(WorkoutPlanner.defaultGoals(
+            level: goalPlanningLevel,
+            interests: goalPlanningInterests,
+            constraints: goalPlanningConstraints
+        ))
+        store.setWorkoutProfile(WorkoutProfile.fromOnboarding(
+            level: goalPlanningLevel,
+            interests: goalPlanningInterests,
+            constraints: goalPlanningConstraints
+        ))
+        store.setProximityDisplayName(ReviewDemo.personaName)
+        store.setCompanionName(starterName)
+        await ReviewDemo.seed(store: store, lockService: lockService, key: key)
+        defaults.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
+        FernletFeedback.system.play(.done)
+        onComplete()
+        return true
+    }
+}
+#endif

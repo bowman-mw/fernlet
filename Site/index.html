@@ -15,7 +15,7 @@
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="assets/favicon-16.png" sizes="16x16" type="image/png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=5da1d22e">
+<link rel="stylesheet" href="style.css?v=dec34826">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
       <source srcset="assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
       <img class="brand-mark" src="assets/fernlet-mark-header.svg" width="25" height="30" alt="">
     </picture>
-    <span class="wordmark">Fernlet</span>
+    <span class="wordmark">Fernlet<span aria-hidden="true">™</span></span>
   </a>
   <div class="navlinks">
     <a href="#companion">The companion</a>
@@ -188,7 +188,7 @@
         <div class="feature"><span class="swatch" style="--c:#C9964A"></span><div><h3>Homes and a hotel</h3><p>Mark up to two homes and a hotel you're staying at. The map uncovers around them, and your companion welcomes you back.</p></div></div>
         <div class="feature"><span class="swatch" style="--c:#94AEBF"></span><div><h3>Walk or run together</h3><p>Start one from the blue button and your companion comes along. While “Save new routes” is on, the line is kept on your map, and it's logged as a walk or a run from its pace.</p></div></div>
         <div class="feature"><span class="swatch" style="--c:#C0674A"></span><div><h3>Your photos on the map</h3><p>A photo you take on your own at one of those everyday places sits on the map where you took it, and you can put others there yourself. Only your own photos are ever on your map — never your friends'.</p></div></div>
-        <div class="note-lichen"><p>All of your map — the patches you've uncovered, your routes, places, homes and photo places — is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. Apple Maps draws the map and receives only the area on your screen, never your history or your walks. Fernlet uses location in the background only during a walk you started, or if you turn on low-power background mapping. Delete a day, a photo or all of it at any time, in Settings → Home map.</p></div>
+        <div class="note-lichen"><p>All of your map — the patches you've uncovered, your routes, places, homes and photo places — is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. Apple Maps draws the map and receives only the area on your screen, never your history or your walks. Fernlet uses location in the background only during a walk you started, or if you turn on background mapping, which notes the places you stop at and, while you're driving, the road you take. Delete a day, a photo or all of it at any time, in Settings → Home map.</p></div>
       </div>
     </div>
   </div>
@@ -452,12 +452,12 @@
   <div class="wrap narrow">
     <h2>Questions people actually ask</h2>
     <div class="faq">
-      <details open><summary>Is it free?</summary><p>Yes, permanently &mdash; no price, no subscription, no in-app purchases, no ads. There is no business model that needs your data, because there is no business model that touches your data. Fernlet is also open source under Apache&nbsp;2.0: every line, including the cryptography, is published at <a href="https://github.com/bowman-mw/fernlet">github.com/bowman-mw/fernlet</a>, so you don&rsquo;t have to take any of this on trust.</p></details>
+      <details open><summary>Is it free?</summary><p>Yes, permanently &mdash; no price, no subscription, no in-app purchases, no ads. There is no business model that needs your data, because there is no business model that touches your data. Fernlet is also open source under Apache&nbsp;2.0: every line, including the cryptography, is published at <a href="https://github.com/bowman-mw/fernlet">github.com/bowman-mw/fernlet</a>, so you don&rsquo;t have to take any of this on trust. The code is yours to fork; the Fernlet name and logo stay with the official app.</p></details>
       <details><summary>Do I need an account?</summary><p>No. There is no sign-up, no login, no email, no password. The app works the moment you open it.</p></details>
       <details><summary>What happens if I miss a day?</summary><p>That day scores lower. That is all. There are no streaks to break, and every unlock you have earned is cumulative and can never be taken back.</p></details>
       <details><summary>Does it count calories?</summary><p>Never. You get macro goals — protein, carbs, fat — and nothing else. No calorie ring, no weight target, no body-composition anything.</p></details>
       <details><summary>Can my friends see my numbers?</summary><p>No. Friends exchange display names, companion appearances and a fuzzy vibe — thriving, okay, struggling. Your score, goals, cycle data and raw health data never leave your phone, and friends never see your map, your places or your walks.</p></details>
-      <details><summary>Does Fernlet track where I go?</summary><p>Only if you let it, and only for you. Location is optional. With it, Fernlet places your companion on the map and uncovers the map as you go. What it keeps — the patches you've uncovered, the routes you choose to save, the everyday places you stopped at — is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. It uses location in the background only during a walk you started, or if you turn on low-power background mapping. Apple Maps draws the map and receives only the area on your screen.</p></details>
+      <details><summary>Does Fernlet track where I go?</summary><p>Only if you let it, and only for you. Location is optional. With it, Fernlet places your companion on the map and uncovers the map as you go. What it keeps — the patches you've uncovered, the routes you choose to save, the everyday places you stopped at — is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. It uses location in the background only during a walk you started, or if you turn on background mapping, which notes the places you stop at and, while you're driving, the road you take. Apple Maps draws the map and receives only the area on your screen.</p></details>
       <details><summary>What if I lose my phone?</summary><p>If you turned on iCloud sync, your core data restores from your own iCloud. Sealed categories — cycle data, journal text, intimate logs, your own photos — work differently: their key is locked to this phone's Secure Enclave, so no device backup can bring them back on a new phone. The only way to recover them is the optional encrypted sealed backup, which uses a key stored in your iCloud Keychain. If you lose access to that Keychain everywhere, that data is gone for good — the app tells you this before you turn the backup on. Your map, places and routes are never backed up at all, so a new phone starts a fresh map.</p></details>
       <details><summary>Which iPhones does it need?</summary><p>iOS 26 or later; iPhone 15 Pro or newer for the full on-device AI features. The 15 cm friend handshake needs a phone with precise ranging — on other phones you confirm on screen instead.</p></details>
     </div>
@@ -514,7 +514,7 @@
         <img class="brand-mark sm" src="assets/fernlet-mark-header.svg" width="20" height="24" alt="">
       </picture>
       <span class="wordmark sm">Fernlet</span>
-      <span class="tiny">© 2026 Michael Bowman Olay</span>
+      <span class="tiny">© 2026 Michael Bowman Olay. Fernlet™ is a trademark of Michael Bowman Olay.</span>
     </div>
     <nav class="foot-nav"><a href="/privacy/">Privacy policy</a><a href="/technical/">Technical details</a><a href="/support/">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
     <p class="ital muted foot-note">No cookies, no analytics, no tracking on this site. Fernlet is a self-care companion, not a medical device — if you are in crisis, contact your local emergency services, or in the US call or text 988.</p>

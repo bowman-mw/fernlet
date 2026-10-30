@@ -53,6 +53,24 @@ protocol SealedBackupV2Adapter: AnyObject {
     /// so a retry after a later step failed is harmless). Throws for a failure a later pass retries.
     /// Gated; never in a decoy.
     func restoreBodyTallies(_ tallies: SealedBackupBodyTallies) throws
+    /// The World passport's bytes this payload's head carries beside its records (round 7), or nil for
+    /// none. Only the journal's carries one (``JournalBackupAdapter``); every other payload answers nil.
+    /// Gated like a decrypt, and it THROWS — never nil — when the passport can't be read right now, so
+    /// a head is never written without the passport it should hold.
+    func headPassport() throws -> Data?
+    /// Merges the passport a restored head carried, BEFORE its records merge (an idempotent merge, so a
+    /// retry after a later step failed is harmless). Throws
+    /// ``SealedBackupV2FormatError/unreadableRecords`` for bytes this build cannot read (a newer
+    /// Fernlet's) and any other error for a failure a later pass retries. Gated; never in a decoy.
+    func restorePassport(_ data: Data) throws
+}
+
+extension SealedBackupV2Adapter {
+    /// No passport rides this payload's head.
+    func headPassport() throws -> Data? { nil }
+
+    /// A passport on this payload's head is not this payload's to keep: it is ignored.
+    func restorePassport(_ data: Data) throws {}
 }
 
 /// One export chunk's records, classified (§4.1).

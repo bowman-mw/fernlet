@@ -139,6 +139,15 @@ public nonisolated protocol BundledFoodSource: Sendable {
     /// Point lookup by NORMALIZED GTIN (see `FoodBarcode.normalized`). Returns nil when the backing
     /// file predates the v2 `gtin_upc` column (the shipped v1 database) or carries no barcode data.
     func item(barcode: String) -> FoodItem?
+    /// Rows whose BRAND FIELD has a word starting with `brandWord` and whose name, category or tags pass
+    /// the gate for `productQuery` — the typed surface's zero-result brand route (2026-10-29 brand
+    /// fixes), for products like Quest bars whose brand is stored only in `brandSource`. A candidate
+    /// pool, not an answer: ``FoodCatalog`` checks the whole brand run and the scorer gates the product
+    /// words on the NAME. Bounded by `limit`.
+    func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem]
+    /// The words this source's search index knows, with their food counts, for the offered spelling
+    /// suggestion (``FoodSearchVocabulary``). At most `limit` words; empty when the index cannot say.
+    func searchVocabulary(limit: Int) -> [FoodSearchTerm]
     var count: Int { get }
 }
 
@@ -153,6 +162,19 @@ public extension BundledFoodSource {
         guard limit > 0 else { return [] }
         return Array(candidates(forQuery: query, stripsStopwords: stripsStopwords).prefix(limit))
     }
+
+    /// The array-backed form: the product candidates filtered to a brand field with a word starting
+    /// with `brandWord`.
+    func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
+        guard limit > 0, !brandWord.isEmpty else { return [] }
+        let matching = candidates(forQuery: productQuery, stripsStopwords: stripsStopwords).filter { item in
+            FoodItemSearch.normalized(item.brandSource ?? "").split(separator: " ").contains { $0.hasPrefix(brandWord) }
+        }
+        return Array(matching.prefix(limit))
+    }
+
+    /// No index to read: no vocabulary, so no suggestion.
+    func searchVocabulary(limit: Int) -> [FoodSearchTerm] { [] }
 }
 
 // MARK: - SQLite-backed source
@@ -262,8 +284,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 
     public func candidates(forQuery query: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
         guard limit > 0 else { return [] }
-        let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
-        guard !tokens.isEmpty else { return [] }
+        guard let match = Self.matchExpression(for: query, stripsStopwords: stripsStopwords) else { return [] }
         // Prefix-AND across all FTS columns mirrors the scorer's hard gate exactly — including the
         // stopword rules, which live inside `searchTokens` so both sides inherit them from one place
         // AND take the same `stripsStopwords` (sharing the function was necessary and, as the
@@ -274,12 +295,6 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         // The variants are OR'd (a token passes on any form) and the tokens AND'd, matching the gate's
         // "every query token must match" semantics. FTS5 requires an explicit `AND` between grouped
         // terms. Tokens/variants are normalized to letters/digits, so none collide with FTS syntax.
-        let match = tokens
-            .map { token -> String in
-                let terms = FoodItemSearch.matchVariants(for: token).map { "\($0)*" }
-                return terms.count == 1 ? terms[0] : "(" + terms.joined(separator: " OR ") + ")"
-            }
-            .joined(separator: " AND ")
         // Canonical FTS5 form: match against the virtual table directly (its rowid is the food_id),
         // then resolve the rows. More portable than a JOIN+MATCH across SQLite versions.
         // ORDER BY de-biases the LIMIT truncation: without it SQLite returns the lowest food_ids, and
@@ -305,6 +320,60 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     }
 
     /// Point lookup by the food's stable UUID (stored as its string form in the indexed `id` column).
+    /// The FTS5 prefix-AND expression `candidates` matches with (see its in-body comments), or nil when
+    /// `query` has no search token.
+    private static func matchExpression(for query: String, stripsStopwords: Bool) -> String? {
+        let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
+        guard !tokens.isEmpty else { return nil }
+        return tokens
+            .map { token -> String in
+                let terms = FoodItemSearch.matchVariants(for: token).map { "\($0)*" }
+                return terms.count == 1 ? terms[0] : "(" + terms.joined(separator: " OR ") + ")"
+            }
+            .joined(separator: " AND ")
+    }
+
+    /// The product words' FTS gate, narrowed to rows whose `brand_source` has a word starting with
+    /// `brandWord` (a `LIKE` over the rows the gate already chose, so no full-table scan). `brandWord` is
+    /// a normalized search token — letters and digits only — so it carries no `LIKE` wildcard.
+    public func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
+        guard limit > 0, !brandWord.isEmpty,
+              let match = Self.matchExpression(for: productQuery, stripsStopwords: stripsStopwords) else { return [] }
+        let sql = """
+        SELECT \(selectColumns) FROM food \
+        WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ?) \
+        AND (lower(brand_source) LIKE ? OR lower(brand_source) LIKE ?) \
+        LIMIT \(min(limit, candidateCap));
+        """
+        return fetchRows(sql) { stmt in
+            sqliteBindText(stmt, 1, match)
+            sqliteBindText(stmt, 2, brandWord + "%")
+            sqliteBindText(stmt, 3, "% " + brandWord + "%")
+        }
+    }
+
+    /// The index's own word list through an `fts5vocab` table in the connection's TEMP schema (writable
+    /// even on this read-only file), most common words first. Empty on any SQLite failure.
+    public func searchVocabulary(limit: Int) -> [FoodSearchTerm] {
+        guard limit > 0 else { return [] }
+        return queue.sync {
+            guard let db, sqlite3_exec(db, Self.vocabularyTableSQL, nil, nil, nil) == SQLITE_OK else { return [] }
+            var stmt: OpaquePointer?
+            let sql = "SELECT term, doc FROM temp.food_vocab ORDER BY doc DESC LIMIT \(limit);"
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+            defer { sqlite3_finalize(stmt) }
+            var terms: [FoodSearchTerm] = []
+            while terms.count < limit, sqlite3_step(stmt) == SQLITE_ROW {
+                guard let term = sqliteColumnText(stmt, 0) else { continue }
+                terms.append(FoodSearchTerm(term: term, documents: Int(sqlite3_column_int64(stmt, 1))))
+            }
+            return terms
+        }
+    }
+
+    private static let vocabularyTableSQL =
+        "CREATE VIRTUAL TABLE IF NOT EXISTS temp.food_vocab USING fts5vocab(main, 'food_fts', 'row');"
+
     public func item(id: UUID) -> FoodItem? {
         let sql = "SELECT \(selectColumns) FROM food WHERE id = ? LIMIT 1;"
         return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, id.uuidString) }.first

@@ -7,10 +7,11 @@ of them roughly 4:3, and App Store Connect refuses the upload without it. The fi
 canvas. The owner approved purpose-made art on 2026-09-24 and chose the Home Screen icon's own
 fern sprig, re-framed for the wider canvas. This script makes the set, so the art can be
 re-derived instead of being twelve PNGs nobody knows how to remake. THIS FILE IS THE SOURCE OF
-TRUTH for the set. If the Home Screen icon changes, re-run it. Never hand-edit the PNGs.
+TRUTH for the set. Never hand-edit the PNGs.
 
-SOURCE. `App/Fernlet/Assets.xcassets/AppIcon.appiconset/fernlet-icon-1024.png`, the only art
-there is. Its background is a soft cream radial gradient, measured on 2026-09-24 (BACKGROUND_*
+SOURCE. `Scripts/art/fern-sprig-icon-1024.png`, the smooth fern Home Screen icon as it stood until
+2026-10-29, kept byte for byte. The Home Screen icon is now pixel Sprout (`Scripts/render-pixel-icons.py`)
+and this set still shows the fern, so it no longer follows the Home Screen icon. Its background is a soft cream radial gradient, measured on 2026-09-24 (BACKGROUND_*
 below). The fit's RMS residual, about 0.8 of 255, is the PNG's own dither, so the model is exact
 to the noise. The sprig is flat ink in three colours (INKS). Each pixel is un-composited
 against the modelled background: alpha is taken from whichever ink explains the pixel best,
@@ -64,7 +65,7 @@ except ImportError as missing:
     sys.exit(f"render-imessage-icon: {missing}. Install with: python3 -m pip install pillow numpy")
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE_ICON = os.path.join(REPO, "App/Fernlet/Assets.xcassets/AppIcon.appiconset/fernlet-icon-1024.png")
+SOURCE_ICON = os.path.join(REPO, "Scripts/art/fern-sprig-icon-1024.png")
 ICON_SET = os.path.join(REPO, "App/FernletMessagesExtension/Assets.xcassets/iMessage App Icon.stickersiconset")
 
 # --- measured from the source icon (2026-09-24) ------------------------------------------------

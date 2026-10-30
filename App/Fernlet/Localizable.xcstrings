@@ -4175,11 +4175,22 @@
       }
     },
     "Always, in low power. Fills the fog along your day." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Siempre, con bajo consumo. Llena la niebla durante tu día."
+          }
+        }
+      }
+    },
+    "Always. Low power, except while driving." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siempre. Bajo consumo, salvo cuando conduces."
           }
         }
       }
@@ -4602,6 +4613,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Te pregunta antes; tus fotos se revelan como siempre"
+          }
+        }
+      }
+    },
+    "Asks for Motion & Fitness when you turn it on." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pide acceso a Movimiento y forma física cuando lo activas."
           }
         }
       }
@@ -10705,7 +10726,7 @@
       }
     },
     "Fernlet modifies the data Apple provides into its own gentle signals, never a forecast." : {
-      "comment" : "Settings, under the weather switch and the Apple Weather mark: the notice Apple's terms ask for, that Fernlet changes Apple's weather data. 'Gentle signals' are the sky behind the companion, the gentler-day note and the short-walk idea.",
+      "comment" : "Settings, under the weather switch and the Apple Weather mark: the notice Apple's terms ask for, that Fernlet changes Apple's weather data. 'Gentle signals' are the weather on the map, the gentler-day note and the short-walk idea.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15004,6 +15025,16 @@
         }
       }
     },
+    "Log my bike rides" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar mis salidas en bici"
+          }
+        }
+      }
+    },
     "Log period" : {
       "localizations" : {
         "es" : {
@@ -15516,6 +15547,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El intercambio manual de planes está desactivado"
+          }
+        }
+      }
+    },
+    "Map data" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Datos del mapa"
           }
         }
       }
@@ -26599,6 +26640,16 @@
         }
       }
     },
+    "The World map's land, seas, countries and cities come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tierra, los mares, los países y las ciudades del mapa del Mundo vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Las dos fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+          }
+        }
+      }
+    },
     "The bar, and how many pairs of each plate." : {
       "comment" : "Location editor, Weights I have: what the barbell block asks for",
       "localizations" : {
@@ -26656,6 +26707,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El censo de arriba cuenta bytes marcadores y no escribe nada. Esta lectura también lee los indicadores de finalización, puede obtener y descifrar tres manifiestos de iCloud si lo pides, puede ejecutar una conversión de medios en reposo y puede borrar un indicador para preparar una pasada con clave en el próximo desbloqueo de Privado."
+          }
+        }
+      }
+    },
+    "The climate zones that pick the map's terrain and plants come from this work, under the Creative Commons Attribution 4.0 International license (CC BY 4.0). Fernlet changed the data: it reduced the map to cells a tenth of a degree wide and turned its climate classes into terrain." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las zonas climáticas que eligen el terreno y las plantas del mapa vienen de esta obra, con la licencia Creative Commons Atribución 4.0 Internacional (CC BY 4.0). Fernlet cambió los datos: redujo el mapa a celdas de una décima de grado y convirtió sus clases de clima en terreno."
           }
         }
       }
@@ -27345,6 +27406,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Este iPhone no puede abrir la copia de seguridad del diario que está en iCloud. Una copia nueva la reemplaza para siempre, para todos los iPhone que la usan. Si su clave aún no llegó a través del Llavero de iCloud, espérala: normalmente llega, aunque ya no tengas el iPhone que la guardó. Empieza de cero solo si restableciste el Llavero de iCloud o si la copia de seguridad está dañada."
+          }
+        }
+      }
+    },
+    "This iPhone isn't signed in to iCloud, so nothing can sync yet. If you choose Sync to iCloud, your logs stay on this iPhone and start syncing once you sign in to iCloud in the Settings app." : {
+      "comment" : "Onboarding storage step: shown when no iCloud account is signed in on this device.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este iPhone no tiene una sesión de iCloud iniciada, así que todavía no se puede sincronizar nada. Si eliges Sincronizar con iCloud, tus registros se quedan en este iPhone y empiezan a sincronizarse cuando inicies sesión en iCloud en la app Ajustes."
           }
         }
       }
@@ -29791,11 +29863,22 @@
       }
     },
     "When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cuando las sugerencias de recuperación según el clima están activadas, Fernlet pide a Apple Weather las condiciones actuales cerca de ti, como máximo diez veces al día. Fernlet modifica los datos que proporciona Apple: se convierten en el cielo detrás de tu compañero, la nota de un día más tranquilo y la idea de un paseo corto, nunca en un pronóstico."
+          }
+        }
+      }
+    },
+    "When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the weather on your map, the gentler-day note and the short-walk idea, never a forecast." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuando las sugerencias de recuperación según el clima están activadas, Fernlet pide a Apple Weather las condiciones actuales cerca de ti, como máximo diez veces al día. Fernlet modifica los datos que proporciona Apple: se convierten en el tiempo de tu mapa, la nota de un día más tranquilo y la idea de un paseo corto, nunca en un pronóstico."
           }
         }
       }
@@ -45799,6 +45882,270 @@
         }
       }
     },
+    "privatePlaces.deletePlace" : {
+      "comment" : "Private, Places: deletes one of Places you return to, with every stop there (Spanish: Borrar este lugar)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete this place"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar este lugar"
+          }
+        }
+      }
+    },
+    "privatePlaces.deletePlace.confirm" : {
+      "comment" : "Private, Places: the destructive button confirming one place's delete (Spanish: Borrar, as Places says it)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar"
+          }
+        }
+      }
+    },
+    "privatePlaces.deletePlace.message" : {
+      "comment" : "Private, Places: what deleting one place does. Plural on the number (its 1 visit)",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "It leaves Places you return to with its %lld visit, and its stops leave the last 30 days. Anything you logged there stays."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "It leaves Places you return to with its %lld visits, and its stops leave the last 30 days. Anything you logged there stays."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Sale de Lugares a los que vuelves con su %lld visita, y sus paradas salen de los últimos 30 días. Lo que registraste allí se queda."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Sale de Lugares a los que vuelves con sus %lld visitas, y sus paradas salen de los últimos 30 días. Lo que registraste allí se queda."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "privatePlaces.deletePlace.title" : {
+      "comment" : "Private, Places: the title confirming one place's delete; the name is the one its row shows",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete %@?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Borrar %@?"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop" : {
+      "comment" : "Private, Places: deletes one stop on a day's timeline (Spanish: Borrar esta parada)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete this stop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar esta parada"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.home" : {
+      "comment" : "Private, Places: deleting a 'you left' or 'you got back' stop at a home; the home is not deleted",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Only this stop goes. Your home stays: change or remove it in Settings › Home map."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo se borra esta parada. Tu casa se queda: cámbiala o quítala en Configuración › Mapa de inicio."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.hotel" : {
+      "comment" : "Private, Places: deleting a 'you left' or 'you got back' stop at the hotel; the hotel is not deleted",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Only this stop goes. Your hotel stays: change or remove it in Settings › Home map."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo se borra esta parada. Tu hotel se queda: cámbialo o quítalo en Configuración › Mapa de inicio."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.lastVisit" : {
+      "comment" : "Private, Places: deleting a place's only visit from the timeline; the place leaves Places you return to",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Takes 1 visit off %@. It has no other visits, so it leaves Places you return to too."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quita 1 visita a %@. No tiene otras, así que también sale de Lugares a los que vuelves."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.line" : {
+      "comment" : "Private, Places: deleting a walk or run from a day's timeline; its saved line goes, the workout stays",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Its line leaves the day's sketch. The workout stays in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Su línea sale del dibujo del día. El entrenamiento se queda en Moverse."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.title" : {
+      "comment" : "Private, Places: the title of one stop's delete dialog: the stop's name, a middle dot, its time (e.g. 'Burger Barn · 8:52')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.visitsStay" : {
+      "comment" : "Private, Places: deleting one visit from the timeline; the number is the visits the place keeps. Plural on the number (1 stays, 2 stay)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Takes 1 visit off %1$@; %#@left@."
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg stays"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg stay"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quita 1 visita a %1$@; %#@left@."
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "queda %arg"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "quedan %arg"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "privatePlaces.empty" : {
       "comment" : "Private, Places: the day card before anything is collected",
       "extractionState" : "extracted_with_value",
@@ -46065,6 +46412,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un lugar"
+          }
+        }
+      }
+    },
+    "privatePlaces.rename.action" : {
+      "comment" : "Private, Places, VoiceOver and Voice Control: the action on a place you return to that renames it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rename"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambiar nombre"
           }
         }
       }
@@ -48488,6 +48853,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mapear el mundo en segundo plano"
+          }
+        }
+      }
+    },
+    "settings.search.title.bikeRides" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log my bike rides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar mis salidas en bici"
           }
         }
       }
@@ -52647,6 +53030,42 @@
         }
       }
     },
+    "worldCloseUp.houseHere" : {
+      "comment" : "World companion up close, at a home: the companion's name, then the home's name, e.g. 'Sprout's house is here · Home'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s house is here · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La casa de %1$@ está aquí · %2$@"
+          }
+        }
+      }
+    },
+    "worldCloseUp.manage" : {
+      "comment" : "World companion up close, at a home or hotel: opens Settings, Home map, Homes and hotels",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Manage"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gestionar"
+          }
+        }
+      }
+    },
     "worldCloseUp.petInput" : {
       "comment" : "World companion up close: the Voice Control name for petting it; the companion's name follows 'Pet'",
       "extractionState" : "extracted_with_value",
@@ -52679,6 +53098,60 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "worldCloseUp.stayingAt" : {
+      "comment" : "World companion up close, at the hotel of a stay: the hotel's name, e.g. 'Staying at the Ace'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Staying at the %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estancia en el %@"
+          }
+        }
+      }
+    },
+    "worldCloseUp.thisIsHome" : {
+      "comment" : "World companion up close: the button that makes where the person stands a home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This is home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mi casa es aquí"
+          }
+        }
+      }
+    },
+    "worldCloseUp.thisIsHome.hint" : {
+      "comment" : "World companion up close, VoiceOver: after 'This is home, button'; the companion's name, e.g. 'Makes where you are Sprout's home.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Makes where you are %@'s home."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace de donde estás la casa de %@."
           }
         }
       }
@@ -53237,6 +53710,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un lugar"
+          }
+        }
+      }
+    },
+    "worldHome.kind.position" : {
+      "comment" : "Remember this place sheet, VoiceOver: a This is choice's place in the row, e.g. 'A place, selected, 1 of 3'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld"
           }
         }
       }
@@ -53926,6 +54417,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Las caminatas se siguen grabando. El mapa vuelve con la señal."
+          }
+        }
+      }
+    },
+    "worldNotice.ridingAlong" : {
+      "comment" : "World Home notice while Fernlet sees the person driving or riding in a car or bus",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Riding along"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De copiloto"
+          }
+        }
+      }
+    },
+    "worldNotice.ridingAlong.detail" : {
+      "comment" : "World Home notice under 'Riding along': the blue button and banners wait until the person is walking again",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick starts and banners pause until you're on foot."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los inicios rápidos y los avisos esperan hasta que vayas a pie."
           }
         }
       }
@@ -55256,6 +55783,78 @@
         }
       }
     },
+    "worldRide.bubble" : {
+      "comment" : "World Home: the companion's speech bubble while the note that a bike ride logged itself shows",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wheee! That was a ride."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Yuju! ¡Qué paseo!"
+          }
+        }
+      }
+    },
+    "worldRide.logged" : {
+      "comment" : "World Home: the note after a bike ride logged itself; its distance and minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bike ride logged · %1$@ · %2$lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Paseo en bici registrado · %1$@ · %2$lld min"
+          }
+        }
+      }
+    },
+    "worldRide.logged.noDistance" : {
+      "comment" : "World Home: the note after a bike ride logged itself, without a distance; its minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bike ride logged · %lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Paseo en bici registrado · %lld min"
+          }
+        }
+      }
+    },
+    "worldRide.undone" : {
+      "comment" : "World Home, VoiceOver: said after the bike-ride note's Undo removed the ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bike ride removed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Paseo en bici eliminado."
+          }
+        }
+      }
+    },
     "worldStatus.a11y.bottles" : {
       "comment" : "World Home status plate, VoiceOver: bottles of water today. Plural on the number",
       "localizations" : {
@@ -55680,6 +56279,42 @@
         }
       }
     },
+    "worldTag.named.line" : {
+      "comment" : "Remember this place sheet, at a named place: under the name field, filled in from Apple Maps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The name from Apple Maps. Change it if you like."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El nombre de Mapas de Apple. Cámbialo si quieres."
+          }
+        }
+      }
+    },
+    "worldTag.notHere" : {
+      "comment" : "World Home, VoiceOver: the small ✕ beside Remember this place; Fernlet stops asking at this spot",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí no"
+          }
+        }
+      }
+    },
     "worldTag.note" : {
       "comment" : "Remember this place sheet: the lock note",
       "extractionState" : "extracted_with_value",
@@ -55694,6 +56329,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet no le puso nombre a este sitio, por prudencia. Si lo añades, se une a tus lugares solo en este iPhone, y puedes borrarlo en Dónde has estado."
+          }
+        }
+      }
+    },
+    "worldTag.note.icon" : {
+      "comment" : "Remember this place sheet, at a restaurant: the lock note",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept on this iPhone only. A restaurant you remember gets its icon on your map straight away."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se guarda solo en este iPhone. Un restaurante que recuerdes tiene su icono en tu mapa enseguida."
+          }
+        }
+      }
+    },
+    "worldTag.note.kept" : {
+      "comment" : "Remember this place sheet, at a spot Fernlet could name: the lock note",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept on this iPhone only, like your other places. Rename or delete it any time in Where you've been."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se guarda solo en este iPhone, como tus otros lugares. Cámbiale el nombre o bórralo cuando quieras en Dónde has estado."
           }
         }
       }
@@ -55788,6 +56459,42 @@
         }
       }
     },
+    "worldTag.prompt.refused" : {
+      "comment" : "Remember this place sheet, at a spot Fernlet won't name: the empty name field's prompt",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ponle nombre"
+          }
+        }
+      }
+    },
+    "worldTag.prompt.unnamed" : {
+      "comment" : "Remember this place sheet, at a spot with no Apple name: the empty name field's prompt (Spanish: Ponle nombre, como «Nuestro piso»)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name it, like “Our flat”"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ponle nombre, como «Nuestro piso»"
+          }
+        }
+      }
+    },
     "worldTag.remember" : {
       "comment" : "World Home: the quiet button beside the blue button at a spot Fernlet didn't name; opens the naming sheet",
       "extractionState" : "extracted_with_value",
@@ -55802,24 +56509,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Recordar este lugar"
-          }
-        }
-      }
-    },
-    "worldTag.remember.hint" : {
-      "comment" : "World Home, VoiceOver: after 'Remember this place, button'",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet didn't name this spot."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Fernlet no le puso nombre a este sitio."
           }
         }
       }
@@ -55856,6 +56545,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Recordar este lugar"
+          }
+        }
+      }
+    },
+    "worldTag.unnamed.line" : {
+      "comment" : "Remember this place sheet, at a spot with no Apple name: under the name field; Home is a choice below it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet has no name for this spot. Is it home? Pick Home below."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no tiene nombre para este sitio. ¿Es tu casa? Elige Casa abajo."
           }
         }
       }

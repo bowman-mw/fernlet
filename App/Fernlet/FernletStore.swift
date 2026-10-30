@@ -771,6 +771,8 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var worldFog: WorldFogKeeper = {
         let keeper = WorldFogKeeper(vault: worldMapVault)
         keeper.widgetMap = WorldWidgetMapFile(directory: appGroupDirectory)
+        // Round 7: a new passport discovery rides the journal's sealed iCloud backup set, so it owes an upload.
+        keeper.atlas.onPassportChanged = { [weak self] in self?.markSealedBackupDirty(.journalNarratives) }
         return keeper
     }()
     /// The World map's location (`WorldLocationSource`), following the permission the person gave.

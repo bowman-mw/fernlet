@@ -29,6 +29,10 @@ struct OnboardingStorageChoiceView: View {
     /// Set when the iCloud probe threw. Distinguishes "this account has no Fernlet data" from
     /// "we couldn't check", so the fresh-install copy is never shown on the strength of a failure.
     @State private var detectionFailed = false
+    /// Set when the probe failed because no iCloud account is signed in — a failure with a known cause
+    /// and a different answer: picking iCloud here keeps logs on this iPhone until the user signs in,
+    /// so "choose Sync to iCloud to restore it" would promise a restore that cannot happen yet.
+    @State private var notSignedIn = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -140,9 +144,17 @@ struct OnboardingStorageChoiceView: View {
 
     /// Shown when the iCloud probe failed: the choices below are being offered without knowing
     /// whether this account already holds Fernlet data, and the user is told so rather than being
-    /// quietly handed the fresh-install copy.
+    /// quietly handed the fresh-install copy. With no account signed in it says that instead — iCloud
+    /// is still a valid pick, but it means "sync once signed in", not "sync now".
     private var detectionFailedNote: some View {
-        Text("Couldn't check this iCloud account for existing Fernlet data — if you used Fernlet before, choose Sync to iCloud to restore it.")
+        Group {
+            if notSignedIn {
+                Text("This iPhone isn't signed in to iCloud, so nothing can sync yet. If you choose Sync to iCloud, your logs stay on this iPhone and start syncing once you sign in to iCloud in the Settings app.",
+                     comment: "Onboarding storage step: shown when no iCloud account is signed in on this device.")
+            } else {
+                Text("Couldn't check this iCloud account for existing Fernlet data — if you used Fernlet before, choose Sync to iCloud to restore it.")
+            }
+        }
             .font(.fernlet(.bodySmall))
             .foregroundStyle(WorldPalette.dim)
             .fernletWrappingText()
@@ -187,12 +199,14 @@ struct OnboardingStorageChoiceView: View {
         do {
             existingDataSummary = try await detector.detectExistingData()
             detectionFailed = false
+            notSignedIn = false
         } catch {
             // A failed probe is NOT "no data": treating it as such would show a returning user the
             // fresh-install copy and no local-only warning — the exact mistake the spinner gate
             // above exists to prevent. Say so, and log it.
             existingDataSummary = nil
             detectionFailed = true
+            notSignedIn = (error as? CloudKitDataServiceError) == .notSignedIn
             FernletAuditLog.log(
                 "onboarding.storage.detectFailed",
                 context: ["errorType": "\(type(of: error))"]

@@ -111,14 +111,64 @@ private final class SpokenLog {
         let source = try RepoRoot.source("FernletKit/Sources/FernletLockUI/FernletLockView.swift")
         #expect(source.contains("""
             private func handleKey(_ key: String) {
-                    Self.press(key, into: &value, maxLength: maxLength)
+                    if Self.press(key, into: &value, maxLength: maxLength) { onFilled?() }
                 }
             """), "every pad's keys go through the one seam")
         #expect(source.contains("""
-            ) {
+            ) -> Bool {
                     (feedback ?? .system).play(.tick, preferences: preferences ?? .resolved())
                     if key == backspaceKey {
             """), "the tick is the seam's first, unconditional statement")
+    }
+
+    /// The press that fills the pad says so, and only that press: it is what submits an unlock or
+    /// advances a setup step, from the tap itself rather than an `onChange` that a busy first unlock
+    /// could coalesce away and leave a full, inert pad (owner's report 2026-10-29).
+    @Test func onlyThePressThatFillsThePadReportsIt() {
+        // One log for the whole test: the player holds it unowned, so an inline `CueLog()` is gone
+        // before the tick plays.
+        let log = CueLog()
+        for maxLength in [4, 6] {
+            var value = ""
+            var fills: [Int] = []
+            for index in 1...(maxLength + 2) where FernletNumericPad.press("5", into: &value, maxLength: maxLength, feedback: log.feedback, preferences: all) {
+                fills.append(index)
+            }
+            #expect(fills == [maxLength], "the digit that fills a \(maxLength)-digit pad, never one past it")
+            #expect(!FernletNumericPad.press(FernletNumericPad.backspaceKey, into: &value, maxLength: maxLength, feedback: log.feedback, preferences: all))
+            #expect(FernletNumericPad.press("0", into: &value, maxLength: maxLength, feedback: log.feedback, preferences: all),
+                    "a retype after a backspace fills it again")
+        }
+    }
+
+    /// Every pad host that advances on a full entry hands the pad its `onFilled`, and none watches its
+    /// own value with `onChange` to do it: the unlock screen, passcode setup, the duress setup and
+    /// Settings' verify and change-passcode steps.
+    @Test func theLockPadsSubmitFromTheFillingTap() throws {
+        let lock = try RepoRoot.source("FernletKit/Sources/FernletLockUI/FernletLockView.swift")
+        #expect(lock.contains("FernletNumericPad(value: $passcode, maxLength: total, onFilled: attemptUnlock)"))
+        for watched in ["onChange(of: passcode)", "onChange(of: confirmation)"] {
+            #expect(!lock.contains(watched), "\(watched) submitting a pad is the coalescible path")
+        }
+        let duress = try RepoRoot.source("App/Fernlet/DuressPINSetupView.swift")
+        #expect(duress.contains("FernletNumericPad(value: activeEntry, maxLength: pinLength) { advance() }"))
+        for watched in ["onChange(of: current)", "onChange(of: entry)", "onChange(of: confirmation)"] {
+            #expect(!duress.contains(watched), "\(watched) submitting a pad is the coalescible path")
+        }
+        let settings = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
+        for filled in [
+            "FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total, onFilled: commitPasscodeVerify)",
+            "FernletNumericPad(value: $currentPasscode, maxLength: total, onFilled: advanceFromVerifyOld)",
+            "FernletNumericPad(value: $newPasscode, maxLength: total) { step = .confirmNew }",
+            "FernletNumericPad(value: $confirmPasscode, maxLength: total, onFilled: commitChange)",
+        ] {
+            #expect(settings.contains(filled), "change-passcode pad submits from the filling tap: \(filled)")
+        }
+        #expect(settings.components(separatedBy: "FernletNumericPad(").count - 1 == 4, "a new pad here needs pinning above")
+        for watched in ["onChange(of: verifyCurrentPasscode)", "onChange(of: currentPasscode)",
+                        "onChange(of: newPasscode)", "onChange(of: confirmPasscode)"] {
+            #expect(!settings.contains(watched), "\(watched) submitting a pad is the coalescible path")
+        }
     }
 
     // MARK: B6, custom pickers and chips

@@ -89,8 +89,9 @@ struct EnhancedSecurityConfigurationTests {
         let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
         let configurations = project.components(separatedBy: "isa = XCBuildConfiguration;").dropFirst()
         let enabled = configurations.filter { $0.contains("ENABLE_ENHANCED_SECURITY = YES;") }
-        // Exactly the project's own Debug and Release: those carry no PRODUCT_NAME, every target's do.
-        #expect(enabled.count == 2, "ENABLE_ENHANCED_SECURITY = YES appears in \(enabled.count) configurations, expected the project's two")
+        // Exactly the project's own Debug, Release and Demo (the App Review build, a copy of Release):
+        // those carry no PRODUCT_NAME, every target's do.
+        #expect(enabled.count == 3, "ENABLE_ENHANCED_SECURITY = YES appears in \(enabled.count) configurations, expected the project's three")
         #expect(enabled.allSatisfy { !$0.contains("PRODUCT_NAME") }, "ENABLE_ENHANCED_SECURITY belongs at the project level, not on one target")
         for override in ["ENABLE_ENHANCED_SECURITY = NO;", "ENABLE_POINTER_AUTHENTICATION = NO;", "\tARCHS = "] {
             #expect(!project.contains(override), "a configuration overrides the inherited hardening with `\(override)`")

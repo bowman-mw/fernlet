@@ -9,6 +9,7 @@ import FernletDomainModel
 import PrivateHealthStore
 import PrivateMemoryStore
 import HealthKitGateway
+import WorldMapStore
 
 /// Per-payload wording for the Privacy & Data surfaces (toggle confirmations, the restore-status
 /// banner, the audit log). One definition so the settings screen and the coordinator never drift into
@@ -181,6 +182,15 @@ protocol SealedBackupContext: AnyObject {
     /// - Returns: False when any day write failed: the restore then stays unresolved, and the next
     ///   session's idempotent merge re-adds the missing skeletons (R1-BR-6).
     func reinstateJournalEntries(from skeletons: [JournalNarrativeSkeleton]) -> Bool
+    /// The World passport the journal's backup carries on its head (round 7; ``JournalBackupAdapter``):
+    /// the person's whole passport, empty when nothing has been visited. Throws — never an empty one in
+    /// its place — in a decoy and while it can't be read (the phone locked), so the export fails rather
+    /// than write a head without it.
+    func sealedBackupWorldPassport() throws -> PassportBook
+    /// Merges a passport the journal's restore carried into this iPhone's (by token, the earliest date
+    /// kept, nothing local removed) and saves it. Throws in a decoy and when it was not saved: the
+    /// restore then stays unresolved and a later pass merges again.
+    func restoreSealedBackupWorldPassport(_ book: PassportBook) throws
 }
 
 /// The result of a single sealed-backup restore attempt, rich enough that the UI can show an honest,
@@ -414,8 +424,9 @@ final class SealedBackupCoordinator {
     /// The journal adapter over the repository `repository` answers (design 2026-09-30, §7): its seam
     /// is `!duress`, its snapshot the ids the host's days reference, its device key read without
     /// minting from ``journalDeviceKeyService``, its skeletons rebuilt by the host, and the body tallies
-    /// on its head read and merged by the host (round 7 piece B2). Fail closed when the coordinator is
-    /// gone (the seam shut, the referenced ids unknown, no skeleton written, no tally read or merged).
+    /// (round 7 piece B2) and the World passport (round 7) on its head read and merged by the host. Fail
+    /// closed when the coordinator is gone (the seam shut, the referenced ids unknown, no skeleton written,
+    /// no tally or passport read or merged).
     private func makeJournalAdapter(_ repository: @escaping @MainActor () -> JournalNarrativeRepository) -> JournalBackupAdapter {
         let service = journalDeviceKeyService
         return JournalBackupAdapter(
@@ -433,7 +444,15 @@ final class SealedBackupCoordinator {
                     guard let self else { throw JournalBackupSeamClosedError() }
                     try self.host.restoreSealedBackupBodyTallies(tallies)
                 }
-            )
+            ),
+            passport: { [weak self] in
+                guard let self else { throw JournalBackupSeamClosedError() }
+                return try self.host.sealedBackupWorldPassport()
+            },
+            mergePassport: { [weak self] book in
+                guard let self else { throw JournalBackupSeamClosedError() }
+                try self.host.restoreSealedBackupWorldPassport(book)
+            }
         )
     }
 

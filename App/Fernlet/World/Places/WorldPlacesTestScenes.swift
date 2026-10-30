@@ -8,7 +8,8 @@ import WorldMapStore
 ///   presence), `asleep`: the z's by the house, `greeting`: Sprout's welcome-home line.
 /// - `places`: a favourite place to eat with three photos, a gym and a café with one, round the person.
 /// - `restaurant`: the blue button's card at a favourite place to eat (`b1-qs-food`).
-/// - `refused`: "Remember this place" where the person stands (`ref-tag-home`).
+/// - `refused`, `unnamedSpot`, `namedSpot`: "Remember this place" where the person stands (`ref-tag-home`),
+///   at a spot Fernlet won't name, one with no Apple name, or Hoshi Noodle Bar (round 7).
 /// - `where`: a day of Where you've been with Home left and got back (`ref-home-where`).
 /// - `tagSheet`, `homeSheet`, `photoSheet`: the Remember this place / Put on the map sheet, open.
 enum WorldPlacesTestScenes {
@@ -21,6 +22,17 @@ enum WorldPlacesTestScenes {
     /// The blue button's card at Hoshi Noodle Bar, as `b1-qs-food` draws it.
     static let restaurant = WorldQuickStartContext.EatingOut(id: UUID(uuidString: "6C000000-0000-0000-0000-000000000001") ?? UUID(),
                                                              name: "Hoshi Noodle Bar", meals: 4, usual: "tonkotsu ramen")
+
+    /// The offered spot a scene stands in at `point`, stayed at for five minutes; nil without one.
+    static func rememberSpot(at point: GeoPoint, now: Date) -> WorldRememberSpot? {
+        let since = now.addingTimeInterval(-5 * 60)
+        let id = UUID(uuidString: "6C000000-0000-0000-0000-000000000004") ?? UUID()
+        if scenes.contains("refused") { return WorldRememberSpot(id: id, point: point, since: since, kind: .refused) }
+        if scenes.contains("unnamedSpot") { return WorldRememberSpot(id: id, point: point, since: since, kind: .unnamed) }
+        guard scenes.contains("namedSpot") else { return nil }
+        return WorldRememberSpot(id: id, point: point, since: since,
+                                 kind: .named(placeID: "I-test-hoshi", name: "Hoshi Noodle Bar", category: .foodAndDrink))
+    }
 
     /// With `home` a home where the person stands; with `hotel` a stay at the Ace (where the person stands
     /// when there is no home, else 1.5 km east).

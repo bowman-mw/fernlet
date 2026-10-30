@@ -25,7 +25,7 @@ struct AppleWeatherAttributionTests {
     private static let servicesCatalog = "FernletKit/Sources/AppServices/Localizable.xcstrings"
 
     /// The Acknowledgments weather paragraph, exactly as the screen draws it.
-    private static let acknowledgmentsParagraph = "When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast."
+    private static let acknowledgmentsParagraph = "When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the weather on your map, the gentler-day note and the short-walk idea, never a forecast."
 
     /// Every display string this credit added, with the catalog it must reach.
     private static let newCopy: [(catalog: String, key: String)] = [
@@ -75,19 +75,25 @@ struct AppleWeatherAttributionTests {
     }
 
     /// Settings draws the notice inside the AI card, after the weather switch; Acknowledgments draws
-    /// the weather section after the food data, with the mark, the paragraph and the link.
+    /// the weather section after the food data and the map data, with the mark, the paragraph and the link.
     @Test func settingsAndAcknowledgmentsCarryTheNoticeAndTheLink() throws {
         let sheet = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
         let aiCard = try Self.section(of: sheet, from: #"Toggle("Weather-aware recovery prompts""#, to: "private var webNutritionLookupBinding")
         #expect(aiCard.contains("AppleWeatherNotice()"), "the Apple Weather notice left its place under the weather switch")
         let acknowledgments = try RepoRoot.source("App/Fernlet/AcknowledgmentsView.swift")
-        #expect(acknowledgments.contains("foodDataSection\n                weatherSection"), "the weather section left its place after the food data")
+        // Round 7: the World atlas's "Map data" credit sits between the food data and the weather.
+        #expect(acknowledgments.contains("foodDataSection\n                mapDataSection\n                weatherSection"),
+                "the weather section left its place after the food data and the map data")
         let section = try Self.section(of: acknowledgments, from: "private var weatherSection: some View", to: "// MARK: - Pieces")
         #expect(section.contains("AppleWeatherAttribution.markText("), "the weather section lost the Apple Weather mark")
         #expect(section.contains(Self.acknowledgmentsParagraph), "the weather section's paragraph changed; update this suite and its Spanish draft")
         #expect(section.contains("AppleWeatherSourcesLink()"), "the weather section lost Apple's legal page")
         let notice = try RepoRoot.source("App/Fernlet/AppleWeatherAttribution.swift")
         #expect(notice.contains("AppleWeatherSourcesLink()"), "the Settings notice lost Apple's legal page")
+        // Main-merge-2 follow-up 3: framed rows like the switches above it, the link in a row of its own.
+        let row = try Self.section(of: notice, from: "struct AppleWeatherNotice: View", to: "struct AppleWeatherSourcesLink: View")
+        #expect(row.contains("FernletRowLabel(title: AppleWeatherAttribution.markText("), "the Settings notice left the framed row's words")
+        #expect(!row.contains("VStack"), "the Settings notice wraps its rows in one container again, so the section draws no hairline between them")
     }
 
     /// Acknowledgments says Fernlet asks Apple Weather "at most ten times a day": that is the budget.

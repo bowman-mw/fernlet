@@ -5,7 +5,7 @@ import WorldMapStore
 /// Draws a ``NatureFogLayout`` into a y-down `CGContext` whose top-left sits at `origin` (global points).
 /// Coordinates are made local before Core Graphics sees them, so the map's large global positions never
 /// lose precision.
-enum NatureFogDrawer {
+nonisolated enum NatureFogDrawer {
     /// The ground, back to front: every hex filled (one path a colour) with its seam, the specks, then the
     /// water (R + 0.5, covering the seams), its shores, ripples, lilies and far-off flowers.
     static func drawGround(_ layout: NatureFogLayout, scale: NatureFogScale, palette: NatureFogPalette,
@@ -105,14 +105,34 @@ struct NatureFogPicturePainter {
 
     /// Paints the fog over the whole of `size`.
     func paint(_ context: inout GraphicsContext, size: CGSize) {
-        guard let scale = scale(in: size) else { return }
+        guard let grown = grow(in: size) else { return }
+        context.withCGContext { cgContext in
+            NatureFogDrawer.drawGround(grown.layout, scale: grown.scale, palette: palette, in: cgContext, origin: grown.origin)
+            NatureFogDrawer.drawPieces(grown.layout, atlas: grown.atlas, in: cgContext, origin: grown.origin)
+        }
+    }
+
+    /// The fogged hexes over `size` as outlines alone, in the picture's own points: no fill, no seam colour,
+    /// no grass, trees or ponds (the map widget's one-colour picture, phone test W-11). Nil when the hexes
+    /// would be too small to draw.
+    func outlines(in size: CGSize) -> Path? {
+        guard let grown = grow(in: size) else { return nil }
+        var path = Path()
+        for hex in grown.layout.hexes {
+            let centre = CGPoint(x: hex.centre.x - grown.origin.x, y: hex.centre.y - grown.origin.y)
+            path.addPath(Path(NatureFogDrawer.hexPath(centre, radius: grown.scale.radius)))
+        }
+        return path
+    }
+
+    /// The layout the picture draws over `size`, at its scale, from its global origin, with the atlas it
+    /// grew from; nil when the hexes would be too small.
+    private func grow(in size: CGSize) -> (layout: NatureFogLayout, scale: NatureFogScale, origin: CGPoint, atlas: NatureFogAtlas)? {
+        guard let scale = scale(in: size) else { return nil }
         let perUnit = scale.pointsPerUnit
         let origin = CGPoint(x: viewport.minX * perUnit, y: viewport.minY * perUnit)
         let atlas = NatureFogAtlas(palette: palette)
         let layout = NatureFogGrower(scale: scale, clearing: clearing, atlas: atlas).layout(in: CGRect(origin: origin, size: size))
-        context.withCGContext { cgContext in
-            NatureFogDrawer.drawGround(layout, scale: scale, palette: palette, in: cgContext, origin: origin)
-            NatureFogDrawer.drawPieces(layout, atlas: atlas, in: cgContext, origin: origin)
-        }
+        return (layout, scale, origin, atlas)
     }
 }

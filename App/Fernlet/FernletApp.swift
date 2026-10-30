@@ -569,11 +569,22 @@ struct FernletApp: App {
         .environment(storagePreferencesStore)
     }
 
+    /// The post-load surface (``readyContentSurface(store:)``) plus the iCloud-account watcher, kept
+    /// apart so each stays inside the 60-line rule. An iCloud sign-in or sign-out while Fernlet runs:
+    /// the stack attached CloudKit — or didn't — from the account present when it loaded, so a user
+    /// who chose iCloud before signing in would otherwise wait for the next cold launch to sync.
+    private func readyContent(store: FernletStore) -> some View {
+        readyContentSurface(store: store)
+            .onReceive(NotificationCenter.default.publisher(for: .NSUbiquityIdentityDidChange)) { _ in
+                Task { await reloadPersistenceForICloudAccountChange() }
+            }
+    }
+
     /// The post-load surface: onboarding until it completes, then ``ContentView``. Also watches
     /// storage-preference changes (reloading persistence / stopping workout observation) and kicks
     /// the delayed startup CloudKit-sync activation.
     @ViewBuilder
-    private func readyContent(store: FernletStore) -> some View {
+    private func readyContentSurface(store: FernletStore) -> some View {
         Group {
             if hasCompletedOnboarding {
                 ContentView(store: store, healthKitService: healthKitService)
@@ -662,6 +673,20 @@ struct FernletApp: App {
             return
         }
         let current = storagePreferencesStore.preferences
+        guard current.iCloudSyncEnabled else { return }
+        await reloadPersistenceForPreferenceChange(current)
+    }
+
+    /// Re-loads the Core Data stack after the iCloud account changed, when sync is chosen — the same
+    /// reload a sync toggle performs, so `Persistence` re-reads the account and attaches (or drops)
+    /// CloudKit. With sync off there is nothing to attach, and the account change is only logged.
+    @MainActor
+    private func reloadPersistenceForICloudAccountChange() async {
+        let current = storagePreferencesStore.preferences
+        FernletAuditLog.log("cloudkit.account.changed", context: [
+            "signedIn": FileManager.default.ubiquityIdentityToken != nil ? "true" : "false",
+            "iCloudSync": current.iCloudSyncEnabled ? "enabled" : "disabled"
+        ])
         guard current.iCloudSyncEnabled else { return }
         await reloadPersistenceForPreferenceChange(current)
     }

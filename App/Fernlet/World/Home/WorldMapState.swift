@@ -67,6 +67,11 @@ final class WorldTileStatus {
 /// The plate under the status plate that names the map's state (the design kit's `.ntc` notice), one at
 /// a time, most important first.
 nonisolated enum WorldMapNoticeKind: Equatable, Sendable {
+    /// "Riding along · Quick starts and banners pause until you're on foot." (`b1-home-car`, round 7), while
+    /// car detection says the person is driving. First of all: it is what explains Home's paused controls,
+    /// offline's line is about walks (none record in a car) and approximate's Use precise is no control to
+    /// reach for on the road, so the other plates wait until the person is on foot.
+    case ridingAlong
     /// "Offline · Walks still record. The map returns with signal." (`b1-home-offline`)
     case offline
     /// "Approximate location · The companion stands in your area, not on your street." with Use precise
@@ -79,10 +84,13 @@ nonisolated enum WorldMapNoticeKind: Equatable, Sendable {
     case firstDay
 
     /// The notice for these facts, or nil for none. A decoy never shows the first-day plate (it must look
-    /// like any day), and neither does a walk under way, or a map set not to uncover as you go.
+    /// like any day), and neither does a walk under way, or a map set not to uncover as you go. While
+    /// `isDriving` (``WorldRideKeeper/isDriving``) the riding-along plate stands in for every other one.
     static func make(presence: WorldMapPresence, tiles: WorldTileState, loadingLong: Bool,
-                     liftedCells: Int, uncovers: Bool = true, isDecoy: Bool, isWalking: Bool) -> WorldMapNoticeKind? {
+                     liftedCells: Int, uncovers: Bool = true, isDecoy: Bool, isWalking: Bool,
+                     isDriving: Bool = false) -> WorldMapNoticeKind? {
         guard presence != .off else { return nil }
+        if isDriving { return .ridingAlong }
         if tiles == .failed { return .offline }
         if presence == .approximate { return .approximate }
         if tiles == .loading && loadingLong { return .loading }

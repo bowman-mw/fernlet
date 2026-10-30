@@ -11,6 +11,10 @@ import WorldMapStore
 /// reading is accurate to ``maxAccuracy``. Approximate location places the companion in the area and
 /// lifts nothing.
 ///
+/// **In a car** (round 7, `nf-car`, approved) a reading lifts only the cell under it, not the 50-m circle,
+/// so a drive uncovers a thin line along the road (``handle(_:saveNow:thinLine:)``; the store passes
+/// whether car detection says the person is driving).
+///
 /// **Duress.** In a decoy session nothing is read from or written to the store: the map shows only the
 /// cells lifted during the decoy itself, held in memory and dropped when the decoy ends, so a coerced
 /// unlock reveals no history and leaves none behind. The silent wipe and Delete everything reach
@@ -20,6 +24,15 @@ import WorldMapStore
 /// the recovery lock and "Delete map history") and entering a decoy delete it and reload the widget, which
 /// then draws no map (a decoy's map is none). ``widgetMapGeneration`` moves each time, so a picture rendered
 /// across one of them is never written (`WorldWidgetMapWriter`).
+///
+/// **The passport and the odd hidden tiles** (round 7). ``atlas`` reads only the readings this keeper accepts,
+/// only while the phone is unlocked and never in a decoy, and goes with every wipe through ``clearAll()``.
+/// A lift also lifts any single cell it left fogged with all six neighbours open (`FogGapCloser`), in a
+/// decoy's own cells too.
+///
+/// **The week's new corner** (round 7, spec §5). ``cornerNudge`` picks it only from the loaded history, through
+/// ``currentCorner(home:now:)``, hears every lift (its gap closings included) so a corner walked into goes at
+/// once, shows none in a decoy, and goes with every wipe through ``clearAll()``.
 ///
 /// **A locked phone.** The store's key works only while the phone is unlocked, so readings that
 /// arrive while it is locked (a walk with the screen off, Always mode's visits) go into the
@@ -39,6 +52,10 @@ final class WorldFogKeeper {
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
 
+    /// The World passport (round 7): the first visits the accepted readings make, sealed in the vault.
+    @ObservationIgnored let atlas: WorldAtlasKeeper
+    /// The weekly new corner (round 7, spec §5), sealed in the vault; Home asks ``currentCorner(home:now:)``.
+    @ObservationIgnored let cornerNudge: WorldCornerNudgeKeeper
     @ObservationIgnored private let store: FogCellStore
     @ObservationIgnored private let vault: WorldMapVault
     @ObservationIgnored private let defaults: UserDefaults
@@ -58,6 +75,9 @@ final class WorldFogKeeper {
          isProtectedDataAvailable: (@MainActor () -> Bool)? = nil) {
         self.vault = vault
         self.store = FogCellStore(vault: vault)
+        self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) },
+                                      openLandmarks: WorldAtlasKeeper.bundledLandmarks())
+        self.cornerNudge = WorldCornerNudgeKeeper(vault: vault)
         self.defaults = defaults
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
         self.widgetMap = WorldWidgetMapFile()
@@ -66,8 +86,17 @@ final class WorldFogKeeper {
 
     /// Reads the lifted history (and merges the locked-phone buffer) when the phone is unlocked and no
     /// decoy is showing. Safe to call on every foreground.
+    ///
+    /// The history is read once. Each later call keeps the cells in memory: it saves any not yet written
+    /// and merges the buffer. Cells lifted under a panel are therefore never thrown back to the disk copy
+    /// (location keeps running under panels, W-09), and Home coming to the front decrypts nothing.
     func load() {
         guard !isDecoy, isProtectedDataAvailable() else { return }
+        guard !store.isLoaded else {
+            mergeWhileLoaded()
+            atlas.load()
+            return
+        }
         do {
             try store.load()
         } catch {
@@ -75,26 +104,30 @@ final class WorldFogKeeper {
             return
         }
         visibleCells = store.cells
+        atlas.load()
     }
 
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
     /// (a reading delivered while the app isn't active: background mapping, a walk with Maps in front) new
     /// cells are written at once rather than at the next 40, since iOS may end a suspended app first (W-09 B2).
+    /// With `thinLine` (driving, `nf-car`) only the cell under the reading lifts.
     @discardableResult
-    func handle(_ fix: WorldFix, saveNow: Bool = false) -> Int {
-        let added = lift(fix)
+    func handle(_ fix: WorldFix, saveNow: Bool = false, thinLine: Bool = false) -> Int {
+        let added = lift(fix, within: thinLine ? 0 : Self.liftRadius)
         if saveNow, added > 0 { flush() }
         return added
     }
 
-    /// Lifts the fog around `fix` when the rules allow; returns how many cells were new.
-    private func lift(_ fix: WorldFix) -> Int {
+    /// Lifts the fog within `radius` metres of `fix` (0: the cell under it alone) when the rules allow;
+    /// returns how many cells were new.
+    private func lift(_ fix: WorldFix, within radius: Double) -> Int {
         guard WorldMapPreferences.uncoverAsYouGo(in: defaults), fix.isPrecise,
               fix.accuracy <= Self.maxAccuracy, fix.point.isValid else { return 0 }
-        let cells = MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius)
+        let cells = MercatorHexGrid.cells(around: fix.point, within: radius)
         if isDecoy {
             let before = decoyCells.count
             decoyCells.formUnion(cells)
+            decoyCells.formUnion(FogGapCloser.closing(around: cells, in: decoyCells))
             visibleCells = decoyCells
             return decoyCells.count - before
         }
@@ -102,7 +135,11 @@ final class WorldFogKeeper {
             bufferWhileLocked(cells)
             return 0
         }
-        let added = store.lift(cells)
+        let lifted = store.lift(cells)
+        let gaps = FogGapCloser.closing(around: cells, in: store.cells)
+        let added = lifted + store.lift(gaps)
+        atlas.observe(point: fix.point, at: fix.at)
+        cornerNudge.noteRevealed(cells + gaps)
         visibleCells = store.cells
         sinceSave += added
         if sinceSave >= Self.saveEvery { flush() }
@@ -130,6 +167,8 @@ final class WorldFogKeeper {
             if !removeWidgetMap() { FernletAuditLog.log("worldMap.widgetMap.decoyDeleteFailed") }
         }
         isDecoy = on
+        atlas.setDecoy(on)
+        cornerNudge.setDecoy(on)
         decoyCells = []
         visibleCells = on ? [] : store.cells
     }
@@ -142,8 +181,17 @@ final class WorldFogKeeper {
         visibleCells = []
         sinceSave = 0
         let pictureGone = removeWidgetMap()
+        let passportGone = atlas.clearAll()
+        let cornerGone = cornerNudge.clearAll()
         let vaultGone = vault.clearAll()
-        return vaultGone && pictureGone
+        return vaultGone && pictureGone && passportGone && cornerGone
+    }
+
+    /// This week's new corner near `home` (the person's first home, `HomeBook.homes.first?.point`), picked
+    /// from the loaded history; nil in a decoy, before the history is read, or with no home.
+    func currentCorner(home: GeoPoint?, now: Date = Date()) -> HexCell? {
+        guard !isDecoy, store.isLoaded else { return nil }
+        return cornerNudge.current(home: home, revealed: store.cells, now: now)
     }
 
     /// Deletes the map widget's picture and reloads the widget; whether the picture is gone.
@@ -152,6 +200,18 @@ final class WorldFogKeeper {
         let removed = widgetMap.delete()
         widgetMapReload()
         return removed
+    }
+
+    /// ``load()`` once the history is read: saves the unsaved cells, merges the locked-phone buffer, and
+    /// shows what it added.
+    private func mergeWhileLoaded() {
+        flush()
+        do {
+            guard try store.drainPending() > 0 else { return }
+            visibleCells = store.cells
+        } catch {
+            FernletAuditLog.log("worldMap.fog.loadDeferred")
+        }
     }
 
     /// Puts cells lifted while the phone is locked into the buffer for the next unlock.

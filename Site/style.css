@@ -68,14 +68,15 @@ section.wrap,section.band>.wrap{padding-top:clamp(44px,6vw,88px);padding-bottom:
 #nav.compact{padding-top:8px;padding-bottom:8px;box-shadow:0 2px 14px rgba(61,46,30,.09)}
 #nav.hidden{transform:translate3d(0,-105%,0)}
 #nav.compact .wordmark{font-size:20px}
-#nav.compact .brand-mark{height:25px}
+#nav.compact .brand-mark{height:22.5px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--color-bark)}
-/* The brand mark ships as two files — the bark-brown branch is invisible on the dark ground, so
-   the <picture> swaps in the pale-sage variant. Height drives it; the width attribute only
-   reserves the right box before load (the mark is 708×850). */
+/* The brand mark is the pixel fern (Scripts/render-pixel-icons.py), 15×15 pixels. It ships as two
+   files — the bark-brown stem is invisible on the dark ground, so the <picture> swaps in the
+   pale-sage variant. Height drives it, at 30 and 22.5 px: whole device pixels per fern pixel on a
+   2x screen. aspect-ratio keeps the box square before load, whatever the width attribute says. */
 .brand picture,.foot-brand picture{display:flex;flex:none}
-.brand-mark{display:block;height:30px;width:auto;transition:height .26s cubic-bezier(.22,.61,.36,1)}
-.brand-mark.sm{height:24px}
+.brand-mark{display:block;height:30px;width:auto;aspect-ratio:1;transition:height .26s cubic-bezier(.22,.61,.36,1)}
+.brand-mark.sm{height:22.5px}
 .wordmark{font-family:var(--font-wordmark);font-style:italic;font-size:24px;letter-spacing:-.01em;
   transition:font-size .26s cubic-bezier(.22,.61,.36,1)}
 .wordmark.sm{font-size:19px}

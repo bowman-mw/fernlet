@@ -74,6 +74,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// user rows. It is intentionally smaller than the normal FTS cap: partial matching is a
     /// zero-result aid.
     private static let partialUserCandidateLimit = 72
+    /// Rows each source may hand the brand route for one reading of the query.
+    private static let brandFieldCandidateLimit = 400
+    /// The most index words read per source for the spelling suggestion.
+    private static let vocabularyLimit = 250_000
+    private var _searchVocabulary: FoodSearchVocabulary?
 
     /// Creates a catalog over `source` with an empty user-items snapshot and no branded source.
     public init(source: BundledFoodSource) {
@@ -188,12 +193,12 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// Attaches the optional branded catalog (e.g. once the On-Demand Resource has downloaded).
     /// Replaces any previously attached source. Every read unions base + branded + user items.
     public func attachBrandedSource(_ source: BundledFoodSource) {
-        lock.lock(); _brandedSource = source; lock.unlock()
+        lock.lock(); _brandedSource = source; _searchVocabulary = nil; lock.unlock()
     }
 
     /// Drops the branded catalog (e.g. when the ODR is purged). Reads fall back to base + user items.
     public func detachBrandedSource() {
-        lock.lock(); _brandedSource = nil; lock.unlock()
+        lock.lock(); _brandedSource = nil; _searchVocabulary = nil; lock.unlock()
     }
 
     /// Whether a branded source is currently attached.
@@ -290,24 +295,13 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
             stripsStopwords: stripsStopwords,
             history: typed ? searchHistory : .empty,
             now: rankingNow,
-            ranking: ranking
+            ranking: ranking,
+            brandAware: typed
         )
         guard !isSuperseded(typed) else { return [] }
-        let ranked: [FoodItem]
-        if normal.isEmpty, typed,
-           mayRelaxOneToken(of: query, stripsStopwords: stripsStopwords) {
-            ranked = FoodItemSearch.partialResults(
-                for: query,
-                in: partialIndex(for: query, stripsStopwords: stripsStopwords),
-                limit: fetchLimit,
-                stripsStopwords: stripsStopwords,
-                history: searchHistory,
-                now: rankingNow,
-                ranking: ranking
-            )
-        } else {
-            ranked = normal
-        }
+        let ranked = normal.isEmpty && typed
+            ? typedFallback(for: query, limit: fetchLimit, stripsStopwords: stripsStopwords, now: rankingNow, ranking: ranking)
+            : normal
         guard typed else { return promotingCorrection(ranked, for: query, limit: limit, ranking: ranking) }
         let ownIDs = Set(userItems.map(\.id))
         let history = searchHistory
@@ -317,6 +311,80 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit, isProtected: isPersonal)
         let aliased = insertingCuratedAlias(into: shown, for: query, limit: limit, isPersonal: isPersonal)
         return promotingCorrection(aliased, for: query, limit: limit, ranking: ranking)
+    }
+
+    /// A typed query's answer when the full gate presented nothing: first the brand-field route
+    /// (``brandFieldResults(for:limit:stripsStopwords:now:ranking:)``), then the leave-one-out fallback.
+    private func typedFallback(
+        for query: String, limit: Int, stripsStopwords: Bool, now: Date, ranking: FoodSearchRanking
+    ) -> [FoodItem] {
+        let byBrand = brandFieldResults(for: query, limit: limit, stripsStopwords: stripsStopwords, now: now, ranking: ranking)
+        guard byBrand.isEmpty, mayRelaxOneToken(of: query, stripsStopwords: stripsStopwords) else { return byBrand }
+        return FoodItemSearch.partialResults(
+            for: query,
+            in: partialIndex(for: query, stripsStopwords: stripsStopwords),
+            limit: limit,
+            stripsStopwords: stripsStopwords,
+            history: searchHistory,
+            now: now,
+            ranking: ranking,
+            brandAware: true
+        )
+    }
+
+    /// The zero-result brand route (2026-10-29 brand fixes): reads the query as brand + product
+    /// (``FoodBrandAgreement/splits(of:)``, leading runs first) and answers the first reading whose
+    /// brand the rows' BRAND FIELD states as whole words and whose product words their NAMES carry —
+    /// "quest protein bar" finds Quest's bars, whose names never say "Quest".
+    ///
+    /// Typed surface only and only after the full gate presented nothing, so it never reorders a query
+    /// that already had answers and never reaches the resolver or a confidence gate. Bounded: at most
+    /// four readings, each fetching at most ``brandFieldCandidateLimit`` rows per source.
+    private func brandFieldResults(
+        for query: String, limit: Int, stripsStopwords: Bool, now: Date, ranking: FoodSearchRanking
+    ) -> [FoodItem] {
+        let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
+        let branded = brandedSource
+        for split in FoodBrandAgreement.splits(of: tokens) {
+            guard let word = split.brand.first, !Task.isCancelled else { continue }
+            let product = split.product.joined(separator: " ")
+            let pool = (source.brandFieldCandidates(
+                brandWord: word, productQuery: product, stripsStopwords: stripsStopwords, limit: Self.brandFieldCandidateLimit
+            ) + (branded?.brandFieldCandidates(
+                brandWord: word, productQuery: product, stripsStopwords: stripsStopwords, limit: Self.brandFieldCandidateLimit
+            ) ?? [])).filter { FoodBrandAgreement.states(split.brand, in: FoodItemSearch.normalized($0.brandSource ?? "")) }
+            guard !pool.isEmpty else { continue }
+            let found = FoodItemSearch.results(
+                for: product, in: FoodItemSearch.Index(foodItems: pool), limit: limit,
+                stripsStopwords: stripsStopwords, history: searchHistory, now: now, ranking: ranking
+            )
+            if !found.isEmpty { return found }
+        }
+        return []
+    }
+
+    /// A spelling to OFFER for a typed query ("chobanni yogurt" → "chobani yogurt"), or nil — the
+    /// 2026-10-29 brand fixes' labelled suggestion. Never applied by the catalog: the search surface shows
+    /// it and runs it only when the person taps it. Reads the base and branded indexes' own vocabulary
+    /// (``FoodSearchVocabulary``), built on first use and rebuilt when the branded catalog attaches or
+    /// detaches.
+    public func spellingSuggestion(for query: String) -> String? {
+        let vocabulary = searchVocabulary()
+        guard !vocabulary.isEmpty else { return nil }
+        return vocabulary.suggestion(for: query)
+    }
+
+    private func searchVocabulary() -> FoodSearchVocabulary {
+        lock.lock()
+        let cached = _searchVocabulary
+        let branded = _brandedSource
+        lock.unlock()
+        if let cached { return cached }
+        let terms = source.searchVocabulary(limit: Self.vocabularyLimit)
+            + (branded?.searchVocabulary(limit: Self.vocabularyLimit) ?? [])
+        let built = FoodSearchVocabulary(terms: terms)
+        lock.lock(); _searchVocabulary = built; lock.unlock()
+        return built
     }
 
     /// Whether a TYPED search has been superseded: the task running it was cancelled because a newer

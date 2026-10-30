@@ -194,7 +194,12 @@ so the review column carries the real weight: does every boundary function valid
 
 Swift's `#if` is the only preprocessor. Allowed conditions: `DEBUG`, `canImport(...)`, `os(...)`,
 `targetEnvironment(...)`, `swift(...)`/`compiler(...)`, `arch(...)`, optionally negated or combined.
-No custom compilation conditions (feature flags are runtime values), and **no nesting** — a nested
+No custom compilation conditions (feature flags are runtime values) with **one named exception,
+`FERNLET_DEMO`**: the App Review demo mode (sample data, a pretend friend, a fixed demo passcode) is
+compiled only into the `Demo` build configuration (`Fernlet Demo` scheme) — owner's call, 2026-10-29:
+normal builds neither show the demo button nor carry the sample data, so a runtime flag would not do.
+Each demo file is wrapped whole in `#if FERNLET_DEMO`, and every call site is one flat `#if FERNLET_DEMO`
+— never nested, never combined with `DEBUG`. And **no nesting** — a nested
 `#if` produces 2ⁿ build variants that are never all compiled. Macros: Apple's only (`#Preview`,
 `#expect`, `@Observable`, …); a macro package is also a new SPM dependency, which the no-tracking
 wall forbids without allowlisting.
@@ -210,6 +215,11 @@ seams. An allowlist entry is per **file** and its reason names the seam (CommonC
 framework / Core Data / BLE bridging / a documented single-writer static) and the invariant that
 keeps it safe. Prefer `Data`, `ContiguousBytes`, `withContiguousStorageIfAvailable`; prefer real
 actor isolation over `nonisolated(unsafe)`.
+
+Round 7 (2026-10-29) added two seams: the exercise animations' raster
+(`App/Fernlet/ExerciseAnimationRasterFill.swift`, three narrowed `line_contains` entries: the pixel and
+depth buffers' pointer loops and the frame's one copy into `Data`) and the World atlas pack's DEFLATE
+inflate (`FernletKit/Sources/WorldMapStore/WorldAtlasInflate.swift`, `compression_decode_buffer`).
 
 The dereference-depth half of the rule becomes: keep optional chains shallow (`a?.b?.c?.d` is a
 sign the type model is wrong), and closures stored in tables keyed by strings are dispatch you

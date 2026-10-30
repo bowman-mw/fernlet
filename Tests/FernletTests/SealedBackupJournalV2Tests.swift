@@ -23,6 +23,7 @@ import LocalPersistence
 import PrivateMemoryStore
 import PrivateStoreCore
 import Testing
+import WorldMapStore
 @testable import Fernlet
 
 /// One iPhone for the journal v2 tests: its own sealed journal store (in memory, with an isolated
@@ -874,7 +875,8 @@ struct SealedBackupJournalV2Tests {
             repository: { narratives }, isOpen: { true },
             references: { store.sealedBackupJournalReferences },
             deviceKey: { .absent }, reinstate: { _ in true },
-            bodyTallies: SealedBackupBodyTallyBridge(export: { [] }, merge: { _ in })
+            bodyTallies: SealedBackupBodyTallyBridge(export: { [] }, merge: { _ in }),
+            passport: { PassportBook() }, mergePassport: { _ in }
         )
     }
 

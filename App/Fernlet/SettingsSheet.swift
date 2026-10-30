@@ -396,6 +396,10 @@ struct SettingsSheet: View {
 
     private var settingsForm: some View {
         Form {
+            // R8: the App Review demo build's "sample data / Leave demo" section (`ReviewDemo`).
+            #if FERNLET_DEMO
+            ReviewDemoSettingsSection(store: store)
+            #endif
             yourDaySection
             homeMapSection
             friendsSection
@@ -2341,11 +2345,10 @@ struct AppLockSettingsView: View {
 
                         Spacer(minLength: 12)
 
-                        FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total)
+                        // Submits from the tap that fills it (`onFilled`), never from an `onChange` on
+                        // the entry, which a busy main thread can coalesce away and strand a full pad.
+                        FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total, onFilled: commitPasscodeVerify)
                             .frame(maxWidth: .infinity)
-                            .onChange(of: verifyCurrentPasscode) { _, new in
-                                if new.count == total { commitPasscodeVerify() }
-                            }
                     }
                 }
                 .padding(24)
@@ -2551,11 +2554,9 @@ private struct FernletLockChangePasscodeView: View {
                 pinDotsRow(current: currentPasscode, total: total)
                     .frame(maxWidth: .infinity)
                 Spacer(minLength: 12)
-                FernletNumericPad(value: $currentPasscode, maxLength: total)
+                // Each step's pad advances from the tap that fills it (`onFilled`), not an `onChange`.
+                FernletNumericPad(value: $currentPasscode, maxLength: total, onFilled: advanceFromVerifyOld)
                     .frame(maxWidth: .infinity)
-                    .onChange(of: currentPasscode) { _, new in
-                        if new.count == total { advanceFromVerifyOld() }
-                    }
             }
         }
     }
@@ -2611,11 +2612,8 @@ private struct FernletLockChangePasscodeView: View {
                 pinDotsRow(current: newPasscode, total: total)
                     .frame(maxWidth: .infinity)
                 Spacer(minLength: 12)
-                FernletNumericPad(value: $newPasscode, maxLength: total)
+                FernletNumericPad(value: $newPasscode, maxLength: total) { step = .confirmNew }
                     .frame(maxWidth: .infinity)
-                    .onChange(of: newPasscode) { _, new in
-                        if new.count == total { step = .confirmNew }
-                    }
             }
         }
         .onChange(of: selectedKind) { _, _ in newPasscode = "" }
@@ -2680,11 +2678,8 @@ private struct FernletLockChangePasscodeView: View {
                 pinDotsRow(current: confirmPasscode, total: total)
                     .frame(maxWidth: .infinity)
                 Spacer(minLength: 12)
-                FernletNumericPad(value: $confirmPasscode, maxLength: total)
+                FernletNumericPad(value: $confirmPasscode, maxLength: total, onFilled: commitChange)
                     .frame(maxWidth: .infinity)
-                    .onChange(of: confirmPasscode) { _, new in
-                        if new.count == total { commitChange() }
-                    }
             }
         }
     }

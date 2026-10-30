@@ -6,6 +6,12 @@ you may not use this work except in compliance with the License.
 You may obtain a copy of the License in the LICENSE file at the root
 of this repository or at http://www.apache.org/licenses/LICENSE-2.0
 
+Trademarks
+
+Fernlet is a trademark of Michael Bowman Olay. The License grants no
+right to use the Fernlet name, the fern logo or the app icon (Section 6);
+see TRADEMARKS.md for what a fork may and may not call itself.
+
 Exercise demonstrations
 
 The exercise demonstrations licensed from Gym Visual (gymvisual.com)
@@ -65,3 +71,21 @@ This product includes software developed by the "Marcin Krzyzanowski"
   - Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
   - This notice may not be removed or altered from any source or binary distribution.
   - Redistributions of any form whatsoever must retain the following acknowledgment: 'This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/).'
+
+Map data (the World atlas, App/Fernlet/World/Atlas/WorldAtlas.pack)
+
+The atlas is built on the build machine by Scripts/world-atlas/ and ships
+inside the app; the app never downloads map data.
+
+Land, minor islands, marine areas, countries, populated places and urban
+areas: Natural Earth (https://www.naturalearthdata.com/), 1:10m, in the
+public domain. No credit is required; Fernlet gives it anyway.
+
+Climate zones: Beck, H. E., Zimmermann, N. E., McVicar, T. R., Vergopolan,
+N., Berg, A., & Wood, E. F. (2018). Present and future Koppen-Geiger
+climate classification maps at 1-km resolution. Scientific Data, 5,
+180214. https://doi.org/10.1038/sdata.2018.214. Licensed under Creative
+Commons Attribution 4.0 International
+(https://creativecommons.org/licenses/by/4.0/). Fernlet changed the data:
+the present-day 0.083-degree map was reduced to 0.1-degree cells (the
+majority class of each) and its classes turned into terrain.

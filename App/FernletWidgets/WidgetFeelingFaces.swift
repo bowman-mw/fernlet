@@ -7,16 +7,25 @@
 // hungry and with a drop of water for thirsty. Widget-only: the map's companion draws the state face, and
 // the painter between the twin markers (WidgetPixelCompanion.swift) stays the map's word for word, so this
 // runs after it. The Lock Screen still draws the state face only (`FernletWidgetEmotionPolicy`).
+//
+// Where each face goes is the twin's rule (group 17, approved 2026-10-26): `WidgetCompanionFaceLayout`
+// fits the state's face and the feeling's to the body's shape, and `WidgetCompanionBody.pixelColor` is the
+// body's own colour, so both painters place and erase a face the same way.
 
 import SwiftUI
 
 /// Swaps the state's face for a feeling's on a painted companion (owner's Q37).
 ///
 /// Only cells of bare body are touched: the state's face is erased back to the body's own colour (the
-/// painter's per-pixel rule), and the feeling's cells are drawn only where the body is bare, so glasses,
-/// the scarf, the cap and a drawn Creation Studio piece stay on top, whatever the shape. With glasses on,
-/// the eyes stay inside the lenses. Every drawn cell is part of the face, so a one-colour rendering cuts
-/// the feeling out of the silhouette, as it cuts the state's face.
+/// twin's ``WidgetCompanionBody/pixelColor(_:_:sick:)``), and the feeling's cells are drawn only where
+/// the body is bare, so glasses, the scarf, the cap and a drawn Creation Studio piece stay on top,
+/// whatever the shape. With glasses on, the eyes stay inside the lenses. Both faces sit where the twin's
+/// ``WidgetCompanionFaceLayout`` puts them on the body's shape (group 17): a row lower on Pear, a row
+/// higher on Puddle, clear of the outline, with the cheeks and the tear stepping inward. A sick day's
+/// feeling keeps its mouth a row up, clear of the blanket. Each cell is tagged as the twin's painter tags
+/// a face (an erased one as body; a drawn one as an eye, the mouth, blush or the tear), so the one-colour
+/// rule cuts the feeling out of the silhouette, as it cuts the state's face, and a motif's placement
+/// counts it as the bare body.
 enum WidgetFeelingFace {
     /// The feelings drawn on the face; the others (tired, sleepy, asleep) keep the state's face or the
     /// night's, as before.
@@ -31,83 +40,81 @@ enum WidgetFeelingFace {
         return emotion
     }
 
-    /// Draws `emotion`'s face on `grid`, painted for `state`, `look` and `pose`, in place of the state's.
-    static func apply(_ emotion: WidgetCompanionEmotion, to grid: inout WidgetCompanionGrid, state: WidgetCompanionMood,
-                      look: WidgetPixelLook, pose: WidgetCompanionPose, increasedContrast: Bool) {
-        guard drawn.contains(emotion), !pose.asleep else { return }
-        let body = WidgetCompanionBody(state: state, shape: look.shape, color: look.body, pose: pose,
-                                       increasedContrast: increasedContrast)
-        let eye = Int((body.cy - 1).rounded()), mouth = Int((body.cy + 2).rounded()) - (state == .sick ? 1 : 0)
-        for (x, y) in stateFaceCells(state: state, pose: pose, body: body) {
-            guard let bare = bodyColour(x, y, body: body, sick: state == .sick),
-                  grid.isFace(frameX: x + WidgetCompanionGrid.frameX, y: y + WidgetCompanionGrid.frameY)
-                    || grid.color(x: x, y: y) == body.dark else { continue }
-            grid.put(x, y, bare)
-        }
-        for cell in cells(for: emotion, eye: eye, mouth: mouth) {
-            guard let bare = bodyColour(cell.x, cell.y, body: body, sick: state == .sick),
-                  grid.color(x: cell.x, y: cell.y) == bare else { continue }
-            grid.put(cell.x, cell.y, cell.hex, face: true)
+    /// The twin's face for a drawn feeling, which the shared layout places; nil for the others.
+    static func layoutFace(for emotion: WidgetCompanionEmotion) -> WidgetCompanionFace? {
+        switch emotion {
+        case .happy: .happy
+        case .sad: .sad
+        case .hungry: .hungry
+        case .thirsty: .thirsty
+        case .tired, .sleepy, .asleep: nil
         }
     }
 
-    /// One drawn cell: where, and its colour.
+    /// Draws `emotion`'s face on `grid`, painted for `state`, `look` and `pose`, in place of the state's.
+    static func apply(_ emotion: WidgetCompanionEmotion, to grid: inout WidgetCompanionGrid, state: WidgetCompanionMood,
+                      look: WidgetPixelLook, pose: WidgetCompanionPose, increasedContrast: Bool) {
+        guard drawn.contains(emotion), !pose.asleep, let face = layoutFace(for: emotion) else { return }
+        let body = WidgetCompanionBody(state: state, shape: look.shape, color: look.body, pose: pose,
+                                       increasedContrast: increasedContrast)
+        let sick = state == .sick
+        for (x, y) in stateFaceCells(state: state, pose: pose, body: body) {
+            guard let bare = body.pixelColor(x, y, sick: sick),
+                  grid.isFace(frameX: x + WidgetCompanionGrid.frameX, y: y + WidgetCompanionGrid.frameY)
+                    || grid.color(x: x, y: y) == body.dark else { continue }
+            grid.put(x, y, bare, as: .body)
+        }
+        let layout = WidgetCompanionFaceLayout(body: body, face: face)
+        for cell in cells(for: emotion, layout: layout, mouth: layout.mouth - (sick ? 1 : 0)) {
+            guard let bare = body.pixelColor(cell.x, cell.y, sick: sick),
+                  grid.color(x: cell.x, y: cell.y) == bare else { continue }
+            grid.put(cell.x, cell.y, cell.hex, as: cell.piece)
+        }
+    }
+
+    /// One drawn cell: where, its colour, and the part of the face it is (the eyes and brows, the mouth,
+    /// the blush or the tear), as the twin's grid records it.
     struct Cell: Equatable {
         let x: Int
         let y: Int
         let hex: UInt32
+        let piece: WidgetCompanionPiece
     }
 
-    /// `emotion`'s face, its eyes on row `eye` and its mouth on row `mouth`, at body coordinates.
-    static func cells(for emotion: WidgetCompanionEmotion, eye: Int, mouth: Int) -> [Cell] {
-        let ink = WidgetCompanionPainter.ink
-        let inked = { (points: [(Int, Int)]) in points.map { Cell(x: $0.0, y: $0.1, hex: ink) } }
-        switch emotion {
+    /// `emotion`'s face at `layout`, its mouth on row `mouth` (the layout's, or a row up on a sick day), at
+    /// body coordinates: the twin's ink cells, then a happy face's blush where the layout found room, and a
+    /// sad face's tear in the layout's column.
+    static func cells(for emotion: WidgetCompanionEmotion, layout: WidgetCompanionFaceLayout, mouth: Int) -> [Cell] {
+        guard let face = layoutFace(for: emotion) else { return [] }
+        // The eyes and brows sit on the eye rows and above; the mouth below them, a sick day's included.
+        let ink = face.cells(eye: layout.eye, mouth: mouth, lowered: layout.lowered)
+            .map { Cell(x: $0.0, y: $0.1, hex: WidgetCompanionPainter.ink, piece: $0.1 <= layout.eye + 1 ? .eye : .mouth) }
+        switch face {
         case .happy:
             // Eyes bowed up like "^", a wide smile, a blush.
-            let eyes = [7, 12].flatMap { x in [(x - 1, eye + 1), (x, eye), (x + 1, eye + 1)] }
-            let smile = [(7, mouth), (8, mouth + 1), (9, mouth + 1), (10, mouth + 1), (11, mouth + 1), (12, mouth)]
-            return inked(eyes + smile) + [Cell(x: 5, y: mouth - 1, hex: WidgetCompanionPainter.blush),
-                                          Cell(x: 14, y: mouth - 1, hex: WidgetCompanionPainter.blush)]
+            guard let cheeks = layout.cheeks else { return ink }
+            return ink + [Cell(x: cheeks.left, y: mouth + cheeks.rowOffset, hex: WidgetCompanionPainter.blush, piece: .blush),
+                          Cell(x: cheeks.right, y: mouth + cheeks.rowOffset, hex: WidgetCompanionPainter.blush, piece: .blush)]
         case .sad:
             // Brows lifted at the inner ends (sad with the person, never disappointed), a soft frown and a tear.
-            let eyes = [7, 12].flatMap { x in [(x, eye), (x, eye + 1)] }
-            let brows = [(6, eye - 1), (7, eye - 2), (13, eye - 1), (12, eye - 2)]
-            let frown = [(8, mouth + 1), (9, mouth), (10, mouth), (11, mouth + 1)]
-            return inked(eyes + brows + frown) + [Cell(x: 5, y: eye + 2, hex: tear.top), Cell(x: 5, y: eye + 3, hex: tear.bottom)]
-        case .hungry, .thirsty:
-            // Eyes raised toward the thought bubble; an open "o" (a smaller one when thirsty).
-            let eyes = [7, 12].flatMap { x in [(x, eye - 1), (x, eye)] }
-            let open = emotion == .hungry ? [(9, mouth), (10, mouth), (9, mouth + 1), (10, mouth + 1)] : [(9, mouth), (10, mouth)]
-            return inked(eyes + open)
-        case .tired, .sleepy, .asleep:
-            return []
+            return ink + [Cell(x: layout.tear, y: layout.eye + 2, hex: tear.top, piece: .tear),
+                          Cell(x: layout.tear, y: layout.eye + 3, hex: tear.bottom, piece: .tear)]
+        case .hungry, .thirsty, .thriving, .okay, .tired, .resting, .sick:
+            // Eyes raised toward the thought bubble (level where there's no room); an open "o".
+            return ink
         }
     }
 
     /// The cells the painter's state face covers (the twin's `paintFace`, for the widget's poses): the eyes,
-    /// open or closed, the band's mouth and a thriving day's blush.
+    /// open or closed, the band's mouth and a thriving day's blush, on the twin's layout for the state's face.
+    /// Awake poses only, as ``apply(_:to:state:look:pose:increasedContrast:)`` draws no feeling asleep (the
+    /// painter's asleep face keeps the band's mouth under closed eyes).
     static func stateFaceCells(state: WidgetCompanionMood, pose: WidgetCompanionPose, body: WidgetCompanionBody) -> [(Int, Int)] {
-        let eye = Int((body.cy - 1).rounded()), mouthRow = Int((body.cy + 2).rounded())
-        let eyes = WidgetCompanionPainter.closesEyes(state: state, pose: pose)
-            ? [(6, eye + 1), (7, eye + 1), (12, eye + 1), (13, eye + 1)]
-            : [(7, eye), (7, eye + 1), (12, eye), (12, eye + 1)]
-        let face = pose.drowsy && state != .sick ? WidgetCompanionMood.resting : state
-        let row = state == .sick ? mouthRow - 1 : mouthRow
-        let mouth = WidgetCompanionPainter.mouth(for: face).map { ($0.0, row + $0.1) }
-        let blush = face == .thriving ? [(5, mouthRow - 1), (14, mouthRow - 1)] : []
-        return eyes + mouth + blush
-    }
-
-    /// The body's own colour at (`x`, `y`) as the painter fills it (outline, highlight, lower shade, a
-    /// sick day's blanket), or nil outside the body — the twin's `paintBody` rule for one pixel.
-    static func bodyColour(_ x: Int, _ y: Int, body: WidgetCompanionBody, sick: Bool) -> UInt32? {
-        guard body.contains(x, y) else { return nil }
-        let edge = !body.contains(x - 1, y) || !body.contains(x + 1, y) || !body.contains(x, y - 1) || !body.contains(x, y + 1)
-        let hy = Double(y) - (body.cy - 3.5)
-        let inHighlight = Double((x - 7) * (x - 7)) + hy * hy <= 2.3
-        if sick && !edge && Double(y) >= (body.cy + 1.5).rounded() { return x % 3 == 0 ? 0xD9A57E : 0xF3E6CB }
-        return edge ? body.dark : (inHighlight ? body.light : (Double(y) >= body.cy + body.ry - 2.2 ? body.low : body.base))
+        let face = WidgetCompanionFace.state(state, pose: pose)
+        let layout = WidgetCompanionFaceLayout(body: body, face: face)
+        guard face == .thriving, let cheeks = layout.cheeks else { return layout.cells(for: face) }
+        let row = layout.mouth + cheeks.rowOffset
+        return layout.cells(for: face) + [(cheeks.left, row), (cheeks.right, row)]
     }
 }
 

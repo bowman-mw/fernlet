@@ -1472,10 +1472,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// PIN-before-biometrics guarantee is identical; the second one is what keeps the biometric
     /// repair path reachable when a hard-bound unlock fails at key recovery *after* the passcode
     /// proved correct.
+    ///
+    /// The in-memory conjuncts are evaluated FIRST so they short-circuit the costly ones: the lock
+    /// screen reads this on every render, and `biometricEnabled` is a keychain query and
+    /// `biometricType` an `LAContext` evaluation. Before the process's first passcode success —
+    /// exactly the first unlock, when the main thread is busiest — neither runs. Order only; the
+    /// conjunction is unchanged.
     public var isBiometricUnlockAvailable: Bool {
-        biometricEnabled && biometricType != .none
-            && (passcodeUnlockedThisProcess || passcodeVerifiedThisProcess)
+        (passcodeUnlockedThisProcess || passcodeVerifiedThisProcess)
             && !isDuressSessionActive
+            && biometricEnabled && biometricType != .none
     }
 
     /// Whether this device can hard-bind the content key to a Secure Enclave — i.e. whether a

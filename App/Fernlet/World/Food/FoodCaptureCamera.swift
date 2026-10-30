@@ -400,7 +400,9 @@ struct FoodScanWindow: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-                    .frame(maxWidth: geo.size.width - 48)
+                    // Floored at zero: the first layout pass can hand the reader a zero size, and a negative
+                    // width logs "Invalid frame dimension".
+                    .frame(maxWidth: max(0, geo.size.width - 48))
                     .position(x: geo.size.width / 2, y: window.maxY + 56)
             }
         }

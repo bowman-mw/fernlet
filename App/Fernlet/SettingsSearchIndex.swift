@@ -497,6 +497,16 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: .homeMap,
             route: .homeMap
         ),
+        // Round 7 (car and bike detection): Home map's "Log my bike rides".
+        SettingsSearchEntry(
+            title: "Log my bike rides",
+            display: LocalizedStringResource(
+                "settings.search.title.bikeRides", defaultValue: "Log my bike rides",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["bike", "bike rides", "cycling", "bicycle", "motion", "motion and fitness"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
         SettingsSearchEntry(
             title: "Remember places I stop at",
             display: LocalizedStringResource(

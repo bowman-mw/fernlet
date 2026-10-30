@@ -8,8 +8,8 @@ nonisolated enum WorldHomeCopy {
 
     static let rememberButton = LocalizedStringResource("worldTag.remember", defaultValue: "Remember this place",
                                                         comment: "World Home: the quiet button beside the blue button at a spot Fernlet didn't name; opens the naming sheet")
-    static let rememberButtonHint = LocalizedStringResource("worldTag.remember.hint", defaultValue: "Fernlet didn't name this spot.",
-                                                            comment: "World Home, VoiceOver: after 'Remember this place, button'")
+    static let notHere = LocalizedStringResource("worldTag.notHere", defaultValue: "Not here",
+                                                 comment: "World Home, VoiceOver: the small ✕ beside Remember this place; Fernlet stops asking at this spot")
     static let sheetTitle = LocalizedStringResource("worldTag.sheet.title", defaultValue: "Remember this place",
                                                     comment: "Sheet title: naming a place yourself")
     static let pinHint = LocalizedStringResource("worldTag.pin.hint",
@@ -24,6 +24,24 @@ nonisolated enum WorldHomeCopy {
                                                  comment: "Remember this place sheet: the lock note")
     static let rememberIt = LocalizedStringResource("worldTag.save", defaultValue: "Remember it",
                                                     comment: "Remember this place sheet: the main button")
+
+    // MARK: The sheet's three cases (round 7: ref-tag-name d2, ref-tag-unnamed, ref-tag-named)
+
+    static let promptRefused = LocalizedStringResource("worldTag.prompt.refused", defaultValue: "Name it",
+                                                       comment: "Remember this place sheet, at a spot Fernlet won't name: the empty name field's prompt")
+    static let promptUnnamed = LocalizedStringResource("worldTag.prompt.unnamed", defaultValue: "Name it, like “Our flat”",
+                                                       comment: "Remember this place sheet, at a spot with no Apple name: the empty name field's prompt (Spanish: Ponle nombre, como «Nuestro piso»)")
+    static let unnamedLine = LocalizedStringResource("worldTag.unnamed.line",
+                                                     defaultValue: "Fernlet has no name for this spot. Is it home? Pick Home below.",
+                                                     comment: "Remember this place sheet, at a spot with no Apple name: under the name field; Home is a choice below it")
+    static let namedLine = LocalizedStringResource("worldTag.named.line", defaultValue: "The name from Apple Maps. Change it if you like.",
+                                                   comment: "Remember this place sheet, at a named place: under the name field, filled in from Apple Maps")
+    static let keptNote = LocalizedStringResource("worldTag.note.kept",
+                                                  defaultValue: "Kept on this iPhone only, like your other places. Rename or delete it any time in Where you've been.",
+                                                  comment: "Remember this place sheet, at a spot Fernlet could name: the lock note")
+    static let iconNote = LocalizedStringResource("worldTag.note.icon",
+                                                  defaultValue: "Kept on this iPhone only. A restaurant you remember gets its icon on your map straight away.",
+                                                  comment: "Remember this place sheet, at a restaurant: the lock note")
 
     // MARK: A photo with no place (ref-tag-photo)
 
@@ -63,6 +81,12 @@ nonisolated enum WorldHomeCopy {
         case .home: LocalizedStringResource("worldHome.kind.home", defaultValue: "Home", comment: "Remember this place sheet: This is · Home")
         case .hotel: LocalizedStringResource("worldHome.kind.hotel", defaultValue: "Hotel", comment: "Remember this place sheet: This is · Hotel")
         }
+    }
+
+    /// "1 of 3": a This is chip's place in the row, read by VoiceOver after its name and "selected".
+    static func kindPosition(_ index: Int, of count: Int) -> String {
+        String(localized: "worldHome.kind.position", defaultValue: "\(index) of \(count)",
+               comment: "Remember this place sheet, VoiceOver: a This is choice's place in the row, e.g. 'A place, selected, 1 of 3'")
     }
 
     /// "Up to 2 homes. This is your first." under the choice.

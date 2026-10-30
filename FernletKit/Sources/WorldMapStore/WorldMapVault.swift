@@ -93,7 +93,10 @@ public nonisolated struct WorldMapKeys: Sendable {
 /// (complete for the store, until-first-unlock for the locked-phone buffer), and kept in a folder
 /// excluded from device backup. Nothing here is synced, exported, shared, given to the AI, or written to
 /// Apple Health, and nothing in `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` or
-/// `FernletConnections` can import this module (the strict build fails them).
+/// `FernletConnections` can import this module (the strict build fails them). The one exception is the
+/// passport's book (``PassportBook``, round 7): the app's journal Sealed backup carries its versioned
+/// bytes inside the journal set's sealed head, sealed under the backup's own key before anything
+/// reaches CloudKit; the file itself, and every other file here, never leaves the iPhone.
 ///
 /// `clearAll()` is the wipe: Delete everything and the silent wipe reach it through `FernletStore`'s
 /// funnel, and the recovery lock through its own purge hook.
@@ -153,9 +156,22 @@ public final class WorldMapVault {
         /// matched against. Under the buffer key, because Always mode's visits arrive with the phone locked.
         public static let placesDevice = File(name: "places-device.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
                                               role: .buffer)
+        /// What "Remember this place" keeps beside the device side (round 7): the spots the person said "Not
+        /// here" to and the places they remembered themselves (the app's `WorldPlaceMarksStore`). The device
+        /// side's purpose and key (Always mode's visits read it with the phone locked), bound to its own
+        /// context, so neither file ever opens as the other.
+        public static let placeMarks = File(name: "places-marks.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
+                                            role: .buffer, context: Data("placeMarks".utf8))
         /// Where each solo camera photo was taken (`PhotoPlaceStore`), by photo id.
         public static let photoPlaces = File(name: "photo-places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
                                              role: .store)
+        /// The World passport (`PassportStore`, round 7): each first visit by kind and token, with its date.
+        public static let passport = File(name: "passport.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPassportV1,
+                                          role: .store)
+        /// The week's new corner (`FogCornerStore`, round 7): one week start, one cell and whether it was
+        /// reached, so the week's pick survives a relaunch.
+        public static let corner = File(name: "corner.bin", purpose: FernletCryptoPurpose.AEAD.worldMapCornerV1,
+                                        role: .store)
     }
 
     /// The folder the files live in.

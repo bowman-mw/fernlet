@@ -36,8 +36,10 @@ extension FernletStore {
     }
 
     /// A reading for the fog: lifted, and saved at once when it arrived while the app isn't active (W-09 B2).
+    /// While driving only the cell under it lifts, a thin line along the road (round 7, `nf-car`).
     func liftWorldFog(_ fix: WorldFix) {
-        worldFog.handle(fix, saveNow: UIApplication.shared.applicationState != .active)
+        worldFog.handle(fix, saveNow: UIApplication.shared.applicationState != .active,
+                        thinLine: worldLocation.rides.isDriving)
     }
 
     /// Arms background mapping when the person turned it on and Always is allowed, or turns it off.
@@ -51,13 +53,17 @@ extension FernletStore {
     /// without Home ever drawing. With the switch off nothing is built (CoreLocation waits for the map).
     func armWorldBackgroundMappingAtLaunch() {
         guard WorldMapPreferences.alwaysLowPower() else { return }
+        wireWorldRides()
         applyWorldBackgroundMapping()
     }
 
     /// The map's location while Fernlet is open (W-09 (i)), from the app's own edges (the launch screen
     /// lifting, the app back in front), so it runs even when Home isn't drawn (a launch straight into a
-    /// panel). A no-op without permission or when already running.
+    /// panel). A no-op without permission or when already running. Each edge also looks for bike rides the
+    /// motion history holds from while the app was closed (round 7).
     func startWorldMapLocation() {
+        wireWorldRides()
+        Task { await catchUpWorldBikeRides() }
         worldFog.load()
         worldLocation.startForeground()
     }
@@ -163,7 +169,9 @@ extension FernletStore {
             for id in log.stops.compactMap(\.workoutID) { worldRoutes.delete(for: id) }
         }
         worldPlaces.forget()
-        let deleted = worldPlaces.store.deleteAll()
+        // Round 7: the "Not here" spots and the places remembered go with Where you've been.
+        let marksGone = worldPlaces.removeMarks()
+        let deleted = worldPlaces.store.deleteAll() && marksGone
         // The homes and hotel stay (removed in Settings › Home map); the map reads them again.
         worldPlaces.reloadDeviceSide()
         return deleted
@@ -190,6 +198,8 @@ extension FernletStore {
             if let eating = worldPlaces.eatingPlaces.first(where: { $0.id == id || ($0.placeID == reference && reference != nil) }) {
                 worldPlaces.renameEatingPlace(eating.id, to: name)
             }
+            // Round 7: a remembered restaurant's or gym's icon takes the name too.
+            worldPlaces.renameKeptPlace(id, to: name)
             return log
         } catch {
             FernletAuditLog.log("worldMap.places.renameFailed")

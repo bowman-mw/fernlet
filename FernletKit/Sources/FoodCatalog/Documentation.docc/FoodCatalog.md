@@ -155,6 +155,24 @@ store. Note the deliberate exclusion: `DishTemplateLexicon`/`DishTemplates.json`
 the app target because dish resolution goes through the `@MainActor`, AI-coupled
 `MealBuilder`.
 
+**Typed brand searches (2026-10-29).** Three targeted fixes, all on the TYPED surface only, all
+measured against `Docs/Food-Search-Phase0-Baseline-2026-10-29.md`:
+- **The brand field is searched when the full gate finds nothing.** Many branded rows keep the brand
+  only in `brandSource`: 285 of 288 Quest rows never say "Quest". So a typed query with no presented
+  rows first reads itself as brand + product and asks each source for
+  ``BundledFoodSource/brandFieldCandidates(brandWord:productQuery:stripsStopwords:limit:)``. Only
+  then does the leave-one-out fallback run. The SQLite form narrows the product words' FTS gate with
+  a `LIKE` on `brand_source`, so it never scans the table.
+- **Rows agreeing with a typed brand rank first, above history.** The scorer decides this
+  (`FernletDomainModel`'s `FoodBrandAgreement`).
+- **A misspelling gets an offered suggestion.** ``FoodCatalog/spellingSuggestion(for:)`` reads each
+  index's own words through an `fts5vocab` table in the connection's TEMP schema
+  (``BundledFoodSource/searchVocabulary(limit:)``), caches them, and rebuilds when the branded
+  catalog attaches or detaches. The catalog never applies a suggestion.
+
+None of the three reaches ``FoodCatalog/candidates(for:limit:ranking:)``,
+``FoodCatalog/scoredResults(for:limit:stripsStopwords:)`` or any confidence gate.
+
 **Concurrency.** The target has no `defaultIsolation(MainActor.self)` — everything is
 nonisolated pure service code. ``FoodCatalog`` is `@unchecked Sendable` behind one
 `NSLock` (user items + branded-source slot); ``SQLiteBundledFoodSource`` serializes its
