@@ -341,7 +341,28 @@ entry point defaults to ``FoodSearchRanking/standard``, and
 meal composer, Adjust meal, the resolver and every confidence gate rank exactly as before. The key is
 off, and the order standard, while the head noun is still being typed.
 
+A typed query that names a brand ranks that brand's rows first (2026-10-29, the targeted brand
+fixes). The top key of the comparator is ``FoodBrandAgreement``, above history, so a bar the person
+once logged cannot outrank the brand they typed.
+
+What counts as a brand:
+- **A restaurant chain from ``FoodBrandLexicon``.** It agrees with a row whose name or brand field
+  says it.
+- **A leading or trailing run of the query's words.** It agrees with a row whose BRAND FIELD states
+  the run as whole words. The run is only a brand when at least two matched rows, and a fifth of
+  them, carry it there, so a generic word that happens to sit in a few brand names ("olive") is not
+  one.
+
+The key is set only when a caller passes `brandAware` (``FoodItemSearch/results(for:in:limit:stripsStopwords:history:now:ranking:brandAware:)``,
+the typed surface). Everywhere else it stays false and the order is unchanged.
+
+``FoodSearchVocabulary`` turns the catalog index's words (``FoodSearchTerm``) into an OFFERED
+spelling suggestion ("chobanni" → "chobani", "chickfila" → "chick fil a"), never a silent rewrite.
+
 - ``FoodItemSearch``
+- ``FoodBrandAgreement``
+- ``FoodSearchVocabulary``
+- ``FoodSearchTerm``
 - ``FoodSearchRanking``
 - ``FoodIngredientIdentity``
 - ``FoodSearchHistory``
