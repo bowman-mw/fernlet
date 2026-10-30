@@ -86,6 +86,15 @@ struct PassportIndexRow<Stamp: View, Line: View>: View {
     let count: Text
     let open: () -> Void
     @ViewBuilder let line: Line
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var nameText: some View {
+        name.font(PassportBookType.rowName).foregroundStyle(PassportBookPalette.text)
+    }
+
+    private var countText: some View {
+        count.font(PassportBookType.rowName.weight(.semibold)).foregroundStyle(PassportBookPalette.dim)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -93,9 +102,14 @@ struct PassportIndexRow<Stamp: View, Line: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 Button(action: open) {
                     HStack(spacing: 6) {
-                        name.font(PassportBookType.rowName).foregroundStyle(PassportBookPalette.text)
-                        Spacer(minLength: 4)
-                        count.font(PassportBookType.rowName.weight(.semibold)).foregroundStyle(PassportBookPalette.dim)
+                        if dynamicTypeSize.isAccessibilitySize {
+                            VStack(alignment: .leading, spacing: 0) { nameText; countText }
+                        } else {
+                            nameText
+                            Spacer(minLength: 4)
+                            countText
+                        }
+                        Spacer(minLength: 0)
                         WorldSpriteView(sprite: WorldSprites.chevR, scale: 2, tint: WorldPalette.iconInk)
                     }
                     .frame(minHeight: 26)

@@ -7,14 +7,20 @@ import WorldMapStore
 struct PassportPageHeader: View {
     let title: Text
     var detail: Text?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
         VStack(spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            layout {
                 title.foregroundStyle(PassportBookPalette.moss).tracking(1.5)
-                Spacer(minLength: 4)
-                detail?.foregroundStyle(PassportBookPalette.dim).tracking(0.9).multilineTextAlignment(.trailing)
+                if !stacked { Spacer(minLength: 4) }
+                detail?.foregroundStyle(PassportBookPalette.dim).tracking(0.9)
+                    .multilineTextAlignment(stacked ? .leading : .trailing)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .font(PassportBookType.header)
             .textCase(.uppercase)
             PassportBookPalette.rule.frame(height: 1.5)

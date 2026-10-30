@@ -126,6 +126,8 @@ struct PassportPageScroll<Content: View>: View {
     var body: some View {
         ScrollView(.vertical) {
             content
+                // The largest the page's words grow (the mockup's largest-text drawing): past it words break.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .padding(EdgeInsets(top: 12, leading: 23, bottom: 34, trailing: 12))
                 .frame(maxWidth: .infinity, alignment: .topLeading)
         }
