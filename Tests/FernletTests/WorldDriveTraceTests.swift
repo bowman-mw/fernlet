@@ -100,35 +100,57 @@ struct WorldDriveTraceTests {
         return (keeper, vault)
     }
 
-    /// In a car a reading lifts exactly the cell under it; on foot the same reading lifts the 50-m circle.
-    @Test func aReadingInACarLiftsOnlyTheCellUnderIt() throws {
+    /// In a car a reading lifts the 25 m either side of the road (owner 2026-10-30, option B): more than the
+    /// one cell `nf-car` first drew, less than the walk's 50-m circle, which the same reading lifts on foot.
+    @Test func aReadingInACarLiftsTheDrivesWidth() throws {
         let (keeper, vault) = try Self.keeper()
         defer { _ = vault.clearAll() }
         let fix = WorldFix(point: Self.here, accuracy: 8, at: Self.now, isPrecise: true, speed: 20)
-        #expect(keeper.handle(fix, thinLine: true) == 1)
-        #expect(keeper.visibleCells == [MercatorHexGrid.cell(containing: Self.here)])
+        let band = Set(MercatorHexGrid.cells(around: Self.here, within: WorldFogKeeper.driveRadius))
+        #expect(WorldFogKeeper.driveRadius == 25)
+        #expect(keeper.handle(fix, thinLine: true) == band.count && band.count > 1)
+        #expect(keeper.visibleCells == band)
         let onFoot = WorldFix(point: Self.here.offset(east: 800, north: 0), accuracy: 8, at: Self.now, isPrecise: true)
         let circle = Set(MercatorHexGrid.cells(around: onFoot.point, within: WorldFogKeeper.liftRadius))
-        #expect(circle.count > 1)
+        #expect(circle.count > band.count)
         #expect(keeper.handle(onFoot) == circle.count)
-        #expect(keeper.visibleCells == circle.union([MercatorHexGrid.cell(containing: Self.here)]))
+        #expect(keeper.visibleCells == circle.union(band))
     }
 
-    /// A drive's readings a few cells apart draw a line one cell wide, and a background one is written at
-    /// once as before (W-09 B2).
-    @Test func aDriveDrawsALineOneCellWideAndSavesInTheBackground() throws {
+    /// A drive's readings 120 m apart (15 m/s, eight seconds) draw one lane with no gaps: every point of the road
+    /// is uncovered, and the lane is narrower than the walk's circles along the same road. A background reading is
+    /// written at once as before (W-09 B2).
+    @Test func aDriveDrawsAJoinedLaneAndSavesInTheBackground() throws {
         let (keeper, vault) = try Self.keeper()
         defer { _ = vault.clearAll() }
-        let road = (0..<6).map { step in Self.here.offset(east: Double(step) * 25, north: 0) }
+        let road = (0..<6).map { step in Self.here.offset(east: Double(step) * 120, north: Double(step) * 40) }
         for point in road {
-            keeper.handle(WorldFix(point: point, accuracy: 8, at: Self.now, isPrecise: true, speed: 25),
+            keeper.handle(WorldFix(point: point, accuracy: 8, at: Self.now, isPrecise: true, speed: 15),
                           saveNow: true, thinLine: true)
         }
-        let line = Set(road.map { MercatorHexGrid.cell(containing: $0) })
-        #expect(keeper.visibleCells == line)
+        let along = (0...120).map { road[0].lerp(to: road[5], Double($0) / 120) }
+        #expect(along.allSatisfy { keeper.visibleCells.contains(MercatorHexGrid.cell(containing: $0)) }, "a gap in the lane")
+        let walked = Set(along.flatMap { MercatorHexGrid.cells(around: $0, within: WorldFogKeeper.liftRadius) })
+        #expect(keeper.visibleCells.count < walked.count * 2 / 3)
         let reopened = WorldFogKeeper(vault: vault, isProtectedDataAvailable: { true })
         reopened.load()
-        #expect(reopened.visibleCells == line, "each background reading was saved at once")
+        #expect(reopened.visibleCells == keeper.visibleCells, "each background reading was saved at once")
+    }
+
+    /// Drive readings 2 km apart (a tunnel), or either side of a stretch on foot, are not joined.
+    @Test func farOrInterruptedDriveReadingsAreNotJoined() throws {
+        let (keeper, vault) = try Self.keeper()
+        defer { _ = vault.clearAll() }
+        let car = { (point: GeoPoint) in WorldFix(point: point, accuracy: 8, at: Self.now, isPrecise: true, speed: 20) }
+        let far = Self.here.offset(east: 2_000, north: 0)
+        keeper.handle(car(Self.here), thinLine: true)
+        keeper.handle(car(far), thinLine: true)
+        #expect(!keeper.visibleCells.contains(MercatorHexGrid.cell(containing: Self.here.offset(east: 1_000, north: 0))))
+        let walkedTo = far.offset(east: 0, north: 300)
+        keeper.handle(WorldFix(point: walkedTo, accuracy: 8, at: Self.now, isPrecise: true))
+        keeper.handle(car(walkedTo.offset(east: 300, north: 0)), thinLine: true)
+        #expect(!keeper.visibleCells.contains(MercatorHexGrid.cell(containing: far.offset(east: 150, north: 150))),
+                "the drive after the walk joins nothing from before it")
     }
 
     // MARK: Delivery
@@ -152,14 +174,14 @@ struct WorldDriveTraceTests {
         #expect(!source.isTracingDrive)
     }
 
-    /// Readings at a car's speed, delivered as CoreLocation hands them on, start a drive: the fog's thin line
-    /// and Home's riding along follow it. Without Always nothing is traced.
+    /// Readings at a car's speed for half a minute, delivered as CoreLocation hands them on, start a drive: the
+    /// fog's lane and Home's riding along follow it. Without Always nothing is traced.
     @Test func deliveredReadingsAtCarSpeedStartADrive() {
         let source = WorldLocationSource()
         var changes: [Bool] = []
         let traced = source.rides.onDrivingChanged
         source.rides.onDrivingChanged = { driving in changes.append(driving); traced?(driving) }
-        for step in 0..<3 {
+        for step in 0..<4 {
             source.deliver(WorldFix(point: Self.here.offset(east: Double(step) * 200, north: 0), accuracy: 8,
                                     at: Self.now.addingTimeInterval(Double(step) * 10), isPrecise: true, speed: 20))
         }

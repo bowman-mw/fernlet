@@ -36,7 +36,7 @@ extension FernletStore {
     }
 
     /// A reading for the fog: lifted, and saved at once when it arrived while the app isn't active (W-09 B2).
-    /// While driving only the cell under it lifts, a thin line along the road (round 7, `nf-car`).
+    /// While driving the drive's lane lifts, 25 m either side of the road and joined (round 7, `nf-car`; owner 2026-10-30).
     func liftWorldFog(_ fix: WorldFix) {
         worldFog.handle(fix, saveNow: UIApplication.shared.applicationState != .active,
                         thinLine: worldLocation.rides.isDriving)
