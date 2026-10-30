@@ -154,3 +154,21 @@ struct PassportPageScroll<Content: View>: View {
         }
     }
 }
+
+/// A page that scrolls and pads itself (page 1), with the book's page number centred at its foot.
+struct PassportPageNumber<Content: View>: View {
+    let number: Int
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content.overlay(alignment: .bottom) {
+            Text(verbatim: "\(number)")
+                .font(PassportBookType.pageNumber)
+                .foregroundStyle(PassportBookPalette.dim)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .padding(.bottom, 7)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
