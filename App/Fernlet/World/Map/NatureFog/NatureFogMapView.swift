@@ -41,6 +41,13 @@ final class NatureFogMapView: UIView {
         var trees: [NatureStandingTree]
     }
 
+    /// A drawn tile kept on screen after a zoom step, with the scale it was drawn at.
+    private struct HeldTile {
+        let scale: NatureFogScale
+        let key: NatureTileKey
+        let layers: TileLayers
+    }
+
     /// Where tile space (global points at the book's scale) falls on screen.
     private struct Mapping {
         let originX: Double
@@ -60,6 +67,13 @@ final class NatureFogMapView: UIView {
     /// How long after a camera request its end keeps the first claim on the painters, in seconds (a glide).
     static let glideWindow = 6.0
 
+    /// The most outgoing tiles kept across quick zoom steps.
+    static let outgoingLimit = 96
+    /// How far the current scale's tiles may be stretched while the map moves before the fog switches scale
+    /// (W-20 allows 0.25–4): a pinch keeps drawing into one scale instead of dropping half-drawn tiles at
+    /// every half octave (the owner's zoom artifact, 2026-10-30).
+    static let holdRange = 0.6...1.7
+
     private static let swayKey = "nf.sway"
     /// Core Animation files every transition under `kCATransition`, whatever key it is added with.
     private static let clearKey = kCATransition
@@ -72,11 +86,14 @@ final class NatureFogMapView: UIView {
     private var waiting: Set<NatureTileKey> = []
     /// Shown tiles a clearing reached, keeping their old picture until the new one arrives; true to crossfade.
     private var redrawing: [NatureTileKey: Bool] = [:]
-    /// The last scale's tiles after a zoom step, moved with the map until the new scale's are all in.
-    private var outgoing: [NatureTileKey: TileLayers] = [:]
-    private var outgoingScale: NatureFogScale?
-    /// Where the outgoing tiles cover the screen now; a waiting tile wholly inside shows them, not the fog's colour.
-    private var outgoingBounds: CGRect?
+    /// The drawn tiles of the scales left behind by zoom steps, newest first, each moved with the map at its
+    /// own scale until the new scale's tiles are all in (at most ``outgoingLimit``).
+    private var outgoing: [HeldTile] = []
+    /// Where the outgoing tiles sit on screen now; a waiting tile they cover all of shows them, not the fog's colour.
+    private var outgoingFrames: [CGRect] = []
+    /// Whether the map has sat still since it last moved (``settle(now:)``): only then does the fog switch to
+    /// the scale that fits exactly.
+    private var isSettled = false
     private var lastMap: Mapping?
     /// The scales the map just left, most recent first, each keeping its nearest tiles (map-perf P2): zooming
     /// back finds them drawn. At most ``spareBookLimit``, all in the current palette, each holding the tiles
@@ -131,11 +148,13 @@ final class NatureFogMapView: UIView {
     private func apply() {
         guard let scene, bounds.width > 0, bounds.height > 0, scene.viewport.isUsable else { return }
         let viewport = scene.viewport, size = bounds.size
-        guard let scale = NatureFogScale.tiles(forScreenRadius: MercatorHexGrid.radius * viewport.pointsPerUnit(in: size)) else {
+        let screenRadius = MercatorHexGrid.radius * viewport.pointsPerUnit(in: size)
+        guard let ideal = NatureFogScale.tiles(forScreenRadius: screenRadius) else {
             dropAll()
             book = nil
             return
         }
+        let scale = heldScale(screenRadius, viewport: viewport, palette: scene.palette) ?? ideal
         let map = Self.mapping(viewport, size: size, scale: scale)
         // W-20: a stretch out of proportion (a skewed viewport, a size mid-change) drops this frame; the tiles
         // keep the last good one.
@@ -149,6 +168,14 @@ final class NatureFogMapView: UIView {
         placeOutgoing(viewport, size: size)
         place(map, size: size)
         CATransaction.commit()
+    }
+
+    /// The current book's scale while the map moves and its tiles show at ``holdRange`` of their size, in the
+    /// same palette; nil once the map has settled, or past that range.
+    private func heldScale(_ screenRadius: Double, viewport: MapViewport, palette: NatureFogPalette) -> NatureFogScale? {
+        guard let book, book.palette == palette, !isSettled || viewport != lastViewport else { return nil }
+        let shownAt = screenRadius / book.scale.radius
+        return Self.holdRange.contains(shownAt) ? book.scale : nil
     }
 
     /// Where tile space at `scale` falls on screen for `viewport`.
@@ -209,6 +236,7 @@ final class NatureFogMapView: UIView {
             guard let self, let next, self.book === next else { return }
             self.arrived(tile)
         }
+        if let book, book.palette == scene.palette { next.borrowPlaceholder(book.placeholder) }
         return next
     }
 
@@ -240,7 +268,7 @@ final class NatureFogMapView: UIView {
             let frame = CGRect(origin: corner, size: side)
             let layers = shown[key] ?? build(key, from: book)
             shown[key] = layers
-            if waiting.contains(key) { layers.container.backgroundColor = placeholderColor(covering: frame, book: book) }
+            if waiting.contains(key) { cover(layers.container, at: frame, book: book) }
             layers.container.position = corner
             layers.container.transform = CATransform3DMakeScale(map.stretchX, map.stretchY, 1)
         }
@@ -268,7 +296,9 @@ final class NatureFogMapView: UIView {
         } else {
             wanted = NatureFogRing.keys(low: low, high: high, centre: centre, motion: motion, limit: limit)
         }
-        book.want(wanted)
+        // A tile showing the fog's colour (nothing older under it) is drawn before the rest.
+        let bare = Set(waiting.filter { shown[$0]?.container.backgroundColor != nil })
+        book.want(wanted.filter { bare.contains($0) } + wanted.filter { !bare.contains($0) })
         book.evict(around: centre, keeping: Set(wanted))
         if waiting.isEmpty { dropOutgoing() }
     }
@@ -303,46 +333,67 @@ final class NatureFogMapView: UIView {
         return current.gliding ? (endLow, endHigh, endCentre) : nil
     }
 
-    /// Moves the old scale's tiles with the map; a stretch or a frame out of proportion drops them (W-20).
+    /// Moves the outgoing tiles with the map, each at its own scale; a scale whose stretch, or a tile whose
+    /// frame, is out of proportion goes (W-20).
     private func placeOutgoing(_ viewport: MapViewport, size: CGSize) {
-        guard let old = outgoingScale, !outgoing.isEmpty else { return }
-        let map = Self.mapping(viewport, size: size, scale: old)
-        guard rejections.note(WorldLayerGuard.accepts(stretchX: map.stretchX, stretchY: map.stretchY), at: .fogStretch) else {
-            dropOutgoing()
-            return
-        }
-        let side = CGSize(width: NatureFogTileBook.tileSize * map.stretchX, height: NatureFogTileBook.tileSize * map.stretchY)
+        guard !outgoing.isEmpty else { return }
+        var maps: [NatureFogScale: Mapping?] = [:]
+        var kept: [HeldTile] = []
         var rejected = 0
-        for (key, tile) in outgoing {
-            let corner = map.screen(NatureFogTileBook.area(of: key).origin)
-            guard WorldLayerGuard.accepts(CGRect(origin: corner, size: side), in: size) else {
+        for held in outgoing {
+            let map = maps[held.scale] ?? Self.acceptedMapping(viewport, size: size, scale: held.scale)
+            maps[held.scale] = map
+            let frame = map.map { CGRect(origin: $0.screen(NatureFogTileBook.area(of: held.key).origin),
+                                         size: CGSize(width: NatureFogTileBook.tileSize * $0.stretchX,
+                                                      height: NatureFogTileBook.tileSize * $0.stretchY)) }
+            guard let map, let frame, WorldLayerGuard.accepts(frame, in: size) else {
                 rejected += 1
-                tile.container.removeFromSuperlayer()
-                outgoing[key] = nil
+                held.layers.container.removeFromSuperlayer()
                 continue
             }
-            tile.container.position = corner
-            tile.container.transform = CATransform3DMakeScale(map.stretchX, map.stretchY, 1)
+            held.layers.container.position = frame.origin
+            held.layers.container.transform = CATransform3DMakeScale(map.stretchX, map.stretchY, 1)
+            kept.append(held)
         }
         rejections.note(rejected == 0, at: .fogTile)
-        outgoingBounds = outgoing.values.reduce(nil) { bounds, tile in bounds?.union(tile.container.frame) ?? tile.container.frame }
+        outgoing = kept
+        outgoingFrames = kept.map(\.layers.container.frame)
     }
 
-    /// The fog's colour for a waiting tile at `frame` on screen; none where the outgoing tiles cover all of it.
+    /// Where tile space at `scale` falls on screen, if its stretch passes ``WorldLayerGuard`` (W-20).
+    private static func acceptedMapping(_ viewport: MapViewport, size: CGSize, scale: NatureFogScale) -> Mapping? {
+        let map = mapping(viewport, size: size, scale: scale)
+        return WorldLayerGuard.accepts(stretchX: map.stretchX, stretchY: map.stretchY) ? map : nil
+    }
+
+    /// The fog's colour for a waiting tile at `frame` on screen; none where the outgoing tiles cover all of it
+    /// (its corners and middle each under one of them, so a gap between them never shows the bare map).
+    /// A waiting tile's look: wild fog (``NatureFogTileBook/placeholder``, the fog's colour until that's
+    /// drawn), or nothing where the outgoing tiles cover all of it.
+    private func cover(_ container: CALayer, at frame: CGRect, book: NatureFogTileBook) {
+        let colour = placeholderColor(covering: frame, book: book)
+        container.backgroundColor = colour
+        container.contents = colour == nil ? nil : book.placeholder
+    }
+
     private func placeholderColor(covering frame: CGRect, book: NatureFogTileBook) -> CGColor? {
-        outgoingBounds?.contains(frame) == true ? nil : book.palette.color(.grassB)
+        let inset = frame.insetBy(dx: 1, dy: 1)
+        let probes = [CGPoint(x: inset.minX, y: inset.minY), CGPoint(x: inset.maxX, y: inset.minY),
+                      CGPoint(x: inset.minX, y: inset.maxY), CGPoint(x: inset.maxX, y: inset.maxY),
+                      CGPoint(x: inset.midX, y: inset.midY)]
+        let covered = !outgoingFrames.isEmpty && probes.allSatisfy { probe in outgoingFrames.contains { $0.contains(probe) } }
+        return covered ? nil : book.palette.color(.grassB)
     }
 
-    /// After a zoom step: the drawn tiles stay as the outgoing ones (only one scale's worth is ever kept); the
-    /// ones still waiting go.
+    /// After a zoom step: the drawn tiles join the outgoing ones, newest on top, at most ``outgoingLimit`` (the
+    /// oldest scale's go first); the ones still waiting go.
     private func keepOutgoing(scale: NatureFogScale) {
-        if outgoing.isEmpty {
-            outgoing = shown.filter { !waiting.contains($0.key) }
-            outgoingScale = scale
-            for key in waiting { shown[key]?.container.removeFromSuperlayer() }
-        } else {
-            for tile in shown.values { tile.container.removeFromSuperlayer() }
-        }
+        let drawn = shown.filter { !waiting.contains($0.key) }.map { HeldTile(scale: scale, key: $0.key, layers: $0.value) }
+        for key in waiting { shown[key]?.container.removeFromSuperlayer() }
+        outgoing = drawn + outgoing
+        for held in outgoing.dropFirst(Self.outgoingLimit) { held.layers.container.removeFromSuperlayer() }
+        outgoing = Array(outgoing.prefix(Self.outgoingLimit))
+        outgoingFrames = []
         shown.removeAll()
         waiting.removeAll()
         redrawing.removeAll()
@@ -395,6 +446,7 @@ final class NatureFogMapView: UIView {
     private func fill(_ container: CALayer, with tile: NatureFogTile) -> [(layer: CALayer, group: Int)] {
         container.sublayers?.forEach { $0.removeFromSuperlayer() }
         container.backgroundColor = nil
+        container.contents = nil
         let ground = CALayer()
         ground.frame = container.bounds
         ground.contents = tile.ground
@@ -425,10 +477,9 @@ final class NatureFogMapView: UIView {
     }
 
     private func dropOutgoing() {
-        for tile in outgoing.values { tile.container.removeFromSuperlayer() }
+        for held in outgoing { held.layers.container.removeFromSuperlayer() }
         outgoing.removeAll()
-        outgoingScale = nil
-        outgoingBounds = nil
+        outgoingFrames = []
     }
 
     /// A tile that left the screen.
@@ -465,6 +516,46 @@ extension NatureFogMapView {
     /// How many scales the map left are kept, and their tiles.
     var spareTileCounts: [Int] { spareBooks.map(\.cachedKeys.count) }
 
+    /// The share of the screen, sampled on a 12 × 24 grid, where the fog shows nothing of its own: no drawn
+    /// tile, no outgoing tile and no fog-coloured placeholder, so the bare map shows where fog may belong (tests).
+    var bareScreenShare: Double {
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else { return 0 }
+        let covering = shown.filter { !waiting.contains($0.key) || $0.value.container.backgroundColor != nil }.map(\.value.container.frame)
+            + outgoingFrames
+        var bare = 0
+        for column in 0..<12 {
+            for row in 0..<24 {
+                let point = CGPoint(x: (Double(column) + 0.5) * size.width / 12, y: (Double(row) + 0.5) * size.height / 24)
+                if !covering.contains(where: { $0.contains(point) }) { bare += 1 }
+            }
+        }
+        return Double(bare) / (12 * 24)
+    }
+
+    /// The share of the screen, sampled the same way, showing a fog-coloured placeholder (tests).
+    var placeholderScreenShare: Double {
+        let size = bounds.size
+        guard size.width > 0, size.height > 0 else { return 0 }
+        let coloured = shown.filter { waiting.contains($0.key) && $0.value.container.backgroundColor != nil }.map(\.value.container.frame)
+        var count = 0
+        for column in 0..<12 {
+            for row in 0..<24 {
+                let point = CGPoint(x: (Double(column) + 0.5) * size.width / 12, y: (Double(row) + 0.5) * size.height / 24)
+                if coloured.contains(where: { $0.contains(point) }) { count += 1 }
+            }
+        }
+        return Double(count) / (12 * 24)
+    }
+
+    /// How many waiting tiles show the wild-fog placeholder rather than a flat colour (tests).
+    var texturedPlaceholderCount: Int {
+        waiting.filter { shown[$0]?.container.contents != nil }.count
+    }
+
+    /// The radius of the scale the fog's tiles are drawn at now (tests).
+    var tileScaleRadius: Double? { book?.scale.radius }
+
     /// How many of the last scale's tiles are still on screen after a zoom step.
     var outgoingTileCount: Int { outgoing.count }
 
@@ -482,6 +573,7 @@ extension NatureFogMapView {
         guard viewport != lastViewport else { return }
         lastViewport = viewport
         lastMove = CACurrentMediaTime()
+        isSettled = false
         setSway(false)
         scheduleSettle()
     }
@@ -500,16 +592,21 @@ extension NatureFogMapView {
         }
     }
 
-    /// Resumes the sway once the map has sat still for ``NatureFogMotion/settleDelay`` (never with Reduce
-    /// Motion), and sweeps away finished blades.
+    /// Once the map has sat still for ``NatureFogMotion/settleDelay``: the fog takes the scale that fits
+    /// exactly (held while it moved, ``holdRange``) and the sway resumes (never with Reduce Motion). Sweeps
+    /// away finished blades.
     func settle(now: CFTimeInterval = CACurrentMediaTime()) {
         settlePending = false
         sweepEffects()
-        guard let scene, scene.motion.sways else { return }
         guard now - lastMove >= NatureFogMotion.settleDelay - 0.05 else {
             scheduleSettle()
             return
         }
+        if !isSettled {
+            isSettled = true
+            apply()
+        }
+        guard let scene, scene.motion.sways else { return }
         setSway(true)
     }
 
@@ -562,6 +659,7 @@ extension NatureFogMapView {
         guard var layers = shown[key] else { return }
         layers.container.sublayers?.forEach { $0.removeFromSuperlayer() }
         layers.container.backgroundColor = book.palette.color(.grassB)
+        layers.container.contents = book.placeholder
         layers.swaying = []
         layers.trees = []
         shown[key] = layers
