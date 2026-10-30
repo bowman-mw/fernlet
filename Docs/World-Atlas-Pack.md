@@ -232,9 +232,13 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   MM, FM and VE "State", SG "Community Development Council"; a trailing one only when the rest is the feature's
   own short name) and `EVERYDAY_NAMES` (by code: Madrid, Bremen, Crimea, Chechnya, Chuvashia, Udmurtia, Yakutia
   and others, plus four of Natural Earth's broken names repaired from the feature's own fields: "Jewish", "of
-  Bougainville", "Archipelago of Saint Andréws", and "Altai Republic" on Altai Krai). A Spanish name that is a
+  Bougainville", "Archipelago of Saint Andréws", and "Altai Republic" on Altai Krai). The owner's American-style
+  picks (2026-10-30: "Go with Valencia and Kyiv city"): "Valencia" (not "Valencian Community"), "Kyiv City" and
+  "Kyiv Oblast" (Natural Earth names both "Kyiv"), "Cordillera", "Yakutia", and Japan's names without the Hepburn
+  macrons, in English and Spanish ("Kyoto", "Osaka", "Hokkaido"; `MACRONS_DROPPED`). A macron that is a letter of
+  the place's own language stays (Latvian "Jūrmala", Māori "Manawatū-Whanganui"). A Spanish name that is a
   designation and then the English name ("Municipio de Wandsworth", "Krai de Krasnodar") becomes the name alone.
-  The 2026-10-29 pack shortens 172 English and 360 Spanish entry names.
+  The 2026-10-30 pack changes 175 English and 366 Spanish entry names.
 - **Plate groups** (coordinator, 2026-10-29). Where Natural Earth's admin-1 is a second-level unit, the plate and the
   state lines use the first-level region; the polygons are not dissolved, each entry just names its group. The
   generator's `PLATE_GROUPS` table gives, per country, the source field naming the region and each value's ISO
@@ -275,7 +279,7 @@ malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
 ### `META`
 
-UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names), the generation date, both simplification tolerances, and each
+UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names, 7 since Kyiv's pair and Japan's names without macrons), the generation date, both simplification tolerances, and each
 source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies

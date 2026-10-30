@@ -27,7 +27,7 @@ build. The coastline zip is for reference and QA only: the generator does not ne
 ```sh
 python3 -I Scripts/world-atlas/build_world_atlas.py \
     --sources ~/Library/Caches/Fernlet/atlas-sources \
-    --out App/Fernlet/World/Atlas/WorldAtlas.pack --date 2026-10-29
+    --out App/Fernlet/World/Atlas/WorldAtlas.pack --date 2026-10-30
 ```
 
 - Python 3.9 standard library, numpy and Pillow only. Under `-I`, the scripts add the user site-packages

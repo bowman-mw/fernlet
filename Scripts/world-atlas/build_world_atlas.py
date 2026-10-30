@@ -49,7 +49,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 6
+GENERATOR_VERSION = 7
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -1303,7 +1303,17 @@ EVERYDAY_NAMES = {
     "SG-04": (None, "Sudeste"),  # NE: "Consejo del Sudeste"
     "SG-05": (None, "Sudoeste"),  # NE: "Consejo del Sudoeste"
     "UA-43": ("Crimea", None),  # NE: "Autonomous Republic of Crimea"; NAME Crimea
+    # Kyiv the city and Kyiv the oblast both read "Kyiv" in NE (NAME "Kiev City" / "Kiev"); the owner chose the
+    # American-style pair, the label telling them apart (2026-10-30: "Go with Valencia and Kyiv city").
+    "UA-30": ("Kyiv City", "Ciudad de Kiev"),
+    "UA-32": ("Kyiv Oblast", "Óblast de Kiev"),
 }
+
+# American everyday spelling (owner, 2026-10-30): Japanese names are written without the Hepburn macrons
+# ("Kyoto", "Osaka", "Hokkaido", not "Kyōto"), in English and Spanish. Only Japan's: elsewhere a macron is a
+# letter of the place's own language (Latvian "Jūrmala", Māori "Manawatū-Whanganui") and stays.
+MACRONS_DROPPED = {"JP"}
+MACRON_LETTERS = str.maketrans("ĀāĒēĪīŌōŪū", "AaEeIiOoUu")
 
 # The Spanish half of the rule: a NAME_ES that is one of these designations and then the English name ("Municipio
 # de Wandsworth", "Krai de Krasnodar", "República autónoma de Crimea") becomes the name alone (and is then stored
@@ -1358,6 +1368,8 @@ def everyday_names(attrs, country, iso, report):
     spanish = text_field(attrs, "NAME_ES")
     short = everyday_english(attrs, country, iso, english)
     short_spanish = everyday_spanish(iso, spanish, short)
+    if country in MACRONS_DROPPED:
+        short, short_spanish = short.translate(MACRON_LETTERS), short_spanish.translate(MACRON_LETTERS)
     if short != english:
         key = "admin-1 English names made everyday"
         report.counts[key] = report.counts.get(key, 0) + 1
