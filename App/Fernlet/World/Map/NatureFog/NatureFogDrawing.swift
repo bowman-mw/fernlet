@@ -5,7 +5,7 @@ import WorldMapStore
 /// Draws a ``NatureFogLayout`` into a y-down `CGContext` whose top-left sits at `origin` (global points).
 /// Coordinates are made local before Core Graphics sees them, so the map's large global positions never
 /// lose precision.
-enum NatureFogDrawer {
+nonisolated enum NatureFogDrawer {
     /// The ground, back to front: every hex filled (one path a colour) with its seam, the specks, then the
     /// water (R + 0.5, covering the seams), its shores, ripples, lilies and far-off flowers.
     static func drawGround(_ layout: NatureFogLayout, scale: NatureFogScale, palette: NatureFogPalette,

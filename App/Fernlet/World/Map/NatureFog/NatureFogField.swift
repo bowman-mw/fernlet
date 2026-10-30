@@ -62,7 +62,7 @@ nonisolated enum NatureCellState: Equatable {
 }
 
 /// One growing piece placed on the map: a sprite, its frame in global points, and its place in the depth sort.
-struct NaturePiece {
+nonisolated struct NaturePiece {
     let sprite: NatureSprite
     let frame: CGRect
     /// Sorted by y then x (spec "Draw order").
@@ -73,13 +73,13 @@ struct NaturePiece {
 }
 
 /// A filled block of the ground: a speck, a ripple, a lily pad or a far-off flower.
-struct NatureFogBlock {
+nonisolated struct NatureFogBlock {
     let rect: CGRect
     let paint: NaturePaint
 }
 
 /// A tree that stands, for the leaves it scatters when it lifts.
-struct NatureStandingTree: Hashable {
+nonisolated struct NatureStandingTree: Hashable {
     let anchor: HexCell
     /// The canopy's centre, in global points.
     let canopy: CGPoint
@@ -90,7 +90,7 @@ struct NatureStandingTree: Hashable {
 
 /// Everything one area of fog draws, back to front (spec "Draw order"): ground hexes with their seams and
 /// specks, water with its shores, ripples and lilies, then the growing pieces sorted top of screen to bottom.
-struct NatureFogLayout {
+nonisolated struct NatureFogLayout {
     var hexes: [(centre: CGPoint, paint: NaturePaint)] = []
     var specks: [NatureFogBlock] = []
     var ponds: [CGPoint] = []
@@ -101,7 +101,7 @@ struct NatureFogLayout {
 }
 
 /// A tree a hex may stand: its sprite, root and canopy, before the wildness check.
-struct NatureTreePlan {
+nonisolated struct NatureTreePlan {
     let anchor: HexCell
     let sprite: NatureSprite
     /// Where the sprite's anchor sits (the snapped hex centre, 3 units down), in global points.

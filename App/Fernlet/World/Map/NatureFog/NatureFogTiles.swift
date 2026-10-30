@@ -10,7 +10,7 @@ nonisolated struct NatureTileKey: Hashable {
 
 /// A rendered tile: its ground picture, the pieces drawn over it as sprites (none in reduced detail, where they
 /// are baked into the picture), and the trees that stand on it.
-struct NatureFogTile {
+nonisolated struct NatureFogTile {
     let key: NatureTileKey
     /// Ground and water (and, in reduced detail, the trees), drawn back to front.
     let ground: CGImage?
@@ -27,28 +27,53 @@ struct NatureFogChange {
     var dirty: Set<NatureTileKey> = []
     /// Cells uncovered by the change (for the blades that scatter).
     var cleared: [HexCell] = []
+    /// Whether the change fogged any cell again (a decoy session, Delete map history): the reached tiles stop
+    /// showing their old picture at once rather than when the new one arrives, so no history lingers.
+    var covers = false
 }
 
-/// The fog's cached map tiles at one scale and palette (spec "Performance", `nf-tiles`): ground and pieces
-/// are drawn back to front into 256-pt tiles, and a tile is redrawn only when a hex in its reach clears.
+/// The fog's map tiles at one scale and palette (spec "Performance", `nf-tiles`): ground and pieces are drawn
+/// back to front into 256-pt tiles, and a tile is redrawn only when a hex in its reach clears.
+///
+/// **Off the main thread** (owner's go 2026-10-29, map-perf P1). The view says which tiles it wants, nearest
+/// first (``want(_:)``: the screen, then ``NatureFogRing``'s ring round it); the book hands at most
+/// ``painterCount`` of them at a time to its ``NatureFogTilePainter``s and calls ``onReady`` with each one
+/// as it arrives. Nothing here ever draws on the main thread, so a tile not yet ready is the view's to cover
+/// with the fog's colour. A tile drawn from a clearing that has since changed under it is thrown away and
+/// asked for again; a reset drops everything held or on its way.
+///
+/// **Bounded** (Power of 10): at most ``cacheLimit`` tiles kept (the farthest from the middle of the screen go
+/// first), ``cacheLimit`` wanted, ``painterCount`` drawing.
 ///
 /// A cleared hex can change everything within about 6 R of it: its neighbours become plain edges, a pond's
 /// shore moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
 /// tile within 6 R.
 final class NatureFogTileBook {
     /// A tile's side, in points.
-    static let tileSize = 256.0
+    nonisolated static let tileSize = 256.0
     /// A change of more cells than this redraws everything without animating.
     static let resetThreshold = 600
-    /// The most tiles kept.
-    static let cacheLimit = 40
+    /// The most tiles kept, and wanted: the screen and its ring.
+    static let cacheLimit = 72
+    /// How many tiles draw at once, one painter each.
+    static let painterCount = 2
 
     let scale: NatureFogScale
     let palette: NatureFogPalette
+    /// The sprites the view's layers show (the painters keep their own).
     let atlas: NatureFogAtlas
     private(set) var clearing: NatureFogClearing
-    private var grower: NatureFogGrower
+    /// Moves with every change of clearing.
+    private(set) var generation = 0
+    /// Called on the main thread with each tile as it arrives.
+    var onReady: ((NatureFogTile) -> Void)?
     private var tiles: [NatureTileKey: NatureFogTile] = [:]
+    private var wanted: [NatureTileKey] = []
+    private var drawing: [NatureTileKey: Task<Void, Never>] = [:]
+    /// Tiles on their way that a change has since reached: thrown away when they arrive.
+    private var outdated: Set<NatureTileKey> = []
+    private let painters: [NatureFogTilePainter]
+    private var nextPainter = 0
     private let pixelScale: CGFloat
 
     /// A book drawing `clearing` at `scale` in `palette`, its pictures at `pixelScale` pixels a point.
@@ -58,19 +83,27 @@ final class NatureFogTileBook {
         self.clearing = clearing
         self.pixelScale = max(1, min(pixelScale, 3))
         atlas = NatureFogAtlas(palette: palette)
-        grower = NatureFogGrower(scale: scale, clearing: clearing, atlas: atlas)
+        painters = (0..<Self.painterCount).map { _ in NatureFogTilePainter(palette: palette) }
+    }
+
+    /// The tiles still drawing end with the book (the memory wall's ML1); at most ``painterCount``.
+    isolated deinit {
+        for task in drawing.values { task.cancel() }
     }
 
     /// The tiles held now.
     var cachedKeys: Set<NatureTileKey> { Set(tiles.keys) }
 
+    /// Whether a tile is drawing.
+    var isDrawing: Bool { !drawing.isEmpty }
+
     /// A tile's area in global points.
-    static func area(of key: NatureTileKey) -> CGRect {
+    nonisolated static func area(of key: NatureTileKey) -> CGRect {
         CGRect(x: Double(key.x) * tileSize, y: Double(key.y) * tileSize, width: tileSize, height: tileSize)
     }
 
     /// The tile containing global point `point`.
-    static func key(at point: CGPoint) -> NatureTileKey {
+    nonisolated static func key(at point: CGPoint) -> NatureTileKey {
         NatureTileKey(x: Int((point.x / tileSize).rounded(.down)), y: Int((point.y / tileSize).rounded(.down)))
     }
 
@@ -90,27 +123,56 @@ final class NatureFogTileBook {
         return keys
     }
 
-    /// The tile at `key`, drawn now if it isn't cached.
-    func tile(_ key: NatureTileKey) -> NatureFogTile {
-        if let cached = tiles[key] { return cached }
-        let drawn = render(key)
-        tiles[key] = drawn
+    /// The tile at `key` if it's ready.
+    func cached(_ key: NatureTileKey) -> NatureFogTile? {
+        tiles[key]
+    }
+
+    /// Wants `keys`, most wanted first (at most ``cacheLimit``), in place of what was wanted before, and starts
+    /// drawing the first ones not ready.
+    func want(_ keys: [NatureTileKey]) {
+        wanted = Array(keys.prefix(Self.cacheLimit))
+        pump()
+    }
+
+    /// The tile at `key`, waiting for it to draw if it isn't ready (tests). It's kept only if the clearing
+    /// didn't change meanwhile; the view never uses this, it asks with ``want(_:)``.
+    func tile(_ key: NatureTileKey) async -> NatureFogTile {
+        if let ready = tiles[key] { return ready }
+        let asked = generation
+        let drawn = await painters[0].paint(order(key))
+        if generation == asked { tiles[key] = drawn }
         return drawn
     }
 
-    /// Moves the book to `next`, dropping the tiles the change reaches.
+    /// Waits until nothing is drawing (bounded: at most twice ``cacheLimit`` tiles awaited).
+    func finishDrawing() async {
+        for _ in 0..<(Self.cacheLimit * 2) {
+            guard let next = drawing.values.first else { return }
+            await next.value
+        }
+    }
+
+    /// Moves the book to `next`, dropping the tiles the change reaches (ready or on their way).
     func change(to next: NatureFogClearing) -> NatureFogChange {
         guard next != clearing else { return NatureFogChange() }
         let changed = Array(clearing.lifted.symmetricDifference(next.lifted).union(clearing.uncovered.symmetricDifference(next.uncovered)))
+        let covers = changed.contains { !next.isClear($0) }
         clearing = next
-        grower = NatureFogGrower(scale: scale, clearing: next, atlas: atlas)
+        generation &+= 1
         guard changed.count <= Self.resetThreshold else {
             tiles.removeAll()
-            return NatureFogChange(reset: true)
+            outdated = Set(drawing.keys)
+            pump()
+            return NatureFogChange(reset: true, covers: covers)
         }
-        let dirty = Self.keys(touching: changed, scale: scale).intersection(tiles.keys)
+        let reached = Self.keys(touching: changed, scale: scale)
+        let dirty = reached.intersection(tiles.keys)
         for key in dirty { tiles[key] = nil }
-        return NatureFogChange(dirty: dirty, cleared: changed.filter(next.isClear))
+        outdated.formUnion(reached.intersection(drawing.keys))
+        pump()
+        return NatureFogChange(dirty: dirty.union(reached.intersection(drawing.keys)), cleared: changed.filter(next.isClear),
+                               covers: covers)
     }
 
     /// How far past a tile's edge a piece may start and still be kept (W-20), in points.
@@ -136,26 +198,41 @@ final class NatureFogTileBook {
         return (kept, rejected)
     }
 
-    /// Forgets the tiles farthest from `keep` once more than ``cacheLimit`` are held.
-    func evict(keeping keep: Set<NatureTileKey>) {
-        guard tiles.count > Self.cacheLimit, let anchor = keep.first else { return }
+    /// Forgets the tiles farthest from `centre` (tile units: the middle of the screen) once more than `limit`
+    /// (at most ``cacheLimit``) are held, never one in `keep`.
+    func evict(around centre: CGPoint, keeping keep: Set<NatureTileKey>, limit: Int = cacheLimit) {
+        let limit = max(0, min(limit, Self.cacheLimit))
+        guard tiles.count > limit else { return }
         let spare = tiles.keys.filter { !keep.contains($0) }
-            .sorted { abs($0.x - anchor.x) + abs($0.y - anchor.y) > abs($1.x - anchor.x) + abs($1.y - anchor.y) }
-        for key in spare.prefix(tiles.count - Self.cacheLimit) { tiles[key] = nil }
+            .sorted { NatureFogRing.distance($0, centre) > NatureFogRing.distance($1, centre) }
+        for key in spare.prefix(tiles.count - limit) { tiles[key] = nil }
     }
 
-    /// Draws one tile: ground and water into a picture, and in reduced detail the trees too.
-    private func render(_ key: NatureTileKey) -> NatureFogTile {
-        let area = Self.area(of: key)
-        let layout = grower.layout(in: area)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = pixelScale
-        format.opaque = false
-        let picture = UIGraphicsImageRenderer(size: area.size, format: format).image { drawing in
-            NatureFogDrawer.drawGround(layout, scale: scale, palette: palette, in: drawing.cgContext, origin: area.origin)
-            if scale.reduced { NatureFogDrawer.drawPieces(layout, atlas: atlas, in: drawing.cgContext, origin: area.origin) }
+    /// Starts drawing the most wanted tiles that are neither ready nor on their way, up to ``painterCount``.
+    private func pump() {
+        for key in wanted where drawing.count < Self.painterCount && tiles[key] == nil && drawing[key] == nil {
+            let painter = painters[nextPainter]
+            nextPainter = (nextPainter + 1) % painters.count
+            let order = order(key)
+            drawing[key] = Task { [weak self] in
+                let tile = await painter.paint(order)
+                self?.arrived(tile)
+            }
         }
-        return NatureFogTile(key: key, ground: layout.hexes.isEmpty ? nil : picture.cgImage,
-                             pieces: scale.reduced ? [] : layout.pieces, trees: layout.trees)
+    }
+
+    /// Keeps a tile that came back (unless a change reached it on the way) and draws the next.
+    private func arrived(_ tile: NatureFogTile) {
+        drawing[tile.key] = nil
+        if outdated.remove(tile.key) == nil {
+            tiles[tile.key] = tile
+            onReady?(tile)
+        }
+        pump()
+    }
+
+    private func order(_ key: NatureTileKey) -> NatureFogTileOrder {
+        NatureFogTileOrder(key: key, scale: scale, palette: palette, clearing: clearing, generation: generation,
+                           pixelScale: pixelScale)
     }
 }

@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import WorldMapStore
 
-extension NatureFogGrower {
+nonisolated extension NatureFogGrower {
     /// Everything that draws inside `area` (global points), in draw order: the ground of every hex that
     /// reaches into it, then the pieces whose frames cross it, sorted by y then x. Pieces from hexes just
     /// outside are included, so a tree or tuft spanning two tiles is drawn in both (each clipped to its own).
