@@ -27,7 +27,7 @@ nonisolated enum WorldRideMode: Equatable, Sendable {
     /// Walking, running, or standing: the map as usual.
     case onFoot
     /// In a car or bus since `since`: the companion rides along, quick starts and banners pause, only a
-    /// thin line of fog lifts, and with background mapping the road is traced.
+    /// lane of fog lifts along the road, and with background mapping the road is traced.
     case driving(since: Date)
     /// On a bike since `since` (only with Motion: "Log my bike rides" on and allowed).
     case cycling(since: Date)

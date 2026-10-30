@@ -11,9 +11,10 @@ import WorldMapStore
 /// reading is accurate to ``maxAccuracy``. Approximate location places the companion in the area and
 /// lifts nothing.
 ///
-/// **In a car** (round 7, `nf-car`, approved) a reading lifts only the cell under it, not the 50-m circle,
-/// so a drive uncovers a thin line along the road (``handle(_:saveNow:thinLine:)``; the store passes
-/// whether car detection says the person is driving).
+/// **In a car** (round 7, `nf-car`; width the owner's pick 2026-10-30, option B) a reading lifts ``driveRadius``
+/// either side of the road, joined to the drive's last reading every ``joinStep`` so the lane has no gaps (up to
+/// ``maxJoin`` apart), not the 50-m circle (``handle(_:saveNow:thinLine:)``; the store passes whether car
+/// detection says the person is driving). Walks and bike rides keep the circle.
 ///
 /// **Duress.** In a decoy session nothing is read from or written to the store: the map shows only the
 /// cells lifted during the decoy itself, held in memory and dropped when the decoy ends, so a coerced
@@ -42,6 +43,16 @@ import WorldMapStore
 final class WorldFogKeeper {
     /// How far around a precise reading the fog lifts, in metres.
     static let liftRadius = 50.0
+    /// How far either side of the road a drive lifts, in metres (owner 2026-10-30: "~50–60 m", option B; the
+    /// one cell under each reading was too small).
+    static let driveRadius = 25.0
+    /// How far apart the points joining two drive readings are, in metres (closer than ``driveRadius``, so the
+    /// circles overlap into one lane).
+    static let joinStep = 15.0
+    /// Drive readings further apart than this are not joined (a tunnel, a jump), in metres.
+    static let maxJoin = 500.0
+    /// The most joining points between two readings (a bound; ``maxJoin`` ÷ ``joinStep`` is fewer).
+    static let maxJoinSteps = 40
     /// The worst accuracy a reading may have and still lift the fog, in metres.
     static let maxAccuracy = 65.0
     /// New cells between saves while the app is open (saves also happen on ``flush()``).
@@ -51,6 +62,8 @@ final class WorldFogKeeper {
     private(set) var visibleCells: Set<HexCell> = []
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
+    /// The drive's last lifted reading, which the next joins; nil off a drive.
+    @ObservationIgnored private var laneFrom: GeoPoint?
 
     /// The World passport (round 7): the first visits the accepted readings make, sealed in the vault.
     @ObservationIgnored let atlas: WorldAtlasKeeper
@@ -110,20 +123,46 @@ final class WorldFogKeeper {
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
     /// (a reading delivered while the app isn't active: background mapping, a walk with Maps in front) new
     /// cells are written at once rather than at the next 40, since iOS may end a suspended app first (W-09 B2).
-    /// With `thinLine` (driving, `nf-car`) only the cell under the reading lifts.
+    /// With `thinLine` (driving, `nf-car`) the drive's lane lifts: ``driveRadius`` around the reading, joined
+    /// to the drive's last reading.
     @discardableResult
     func handle(_ fix: WorldFix, saveNow: Bool = false, thinLine: Bool = false) -> Int {
-        let added = lift(fix, within: thinLine ? 0 : Self.liftRadius)
+        let added: Int
+        if thinLine {
+            let accepted = accepts(fix)
+            added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point))
+            if accepted { laneFrom = fix.point }
+        } else {
+            laneFrom = nil
+            added = lift(fix, cells: MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius))
+        }
         if saveNow, added > 0 { flush() }
         return added
     }
 
-    /// Lifts the fog within `radius` metres of `fix` (0: the cell under it alone) when the rules allow;
-    /// returns how many cells were new.
-    private func lift(_ fix: WorldFix, within radius: Double) -> Int {
-        guard WorldMapPreferences.uncoverAsYouGo(in: defaults), fix.isPrecise,
-              fix.accuracy <= Self.maxAccuracy, fix.point.isValid else { return 0 }
-        let cells = MercatorHexGrid.cells(around: fix.point, within: radius)
+    /// The cells a drive reading at `point` lifts: ``driveRadius`` around it and around the points every
+    /// ``joinStep`` back to `from` (the drive's last reading) when that is within ``maxJoin``.
+    static func lane(from: GeoPoint?, to point: GeoPoint) -> [HexCell] {
+        guard let from, from.distance(to: point) <= maxJoin else {
+            return MercatorHexGrid.cells(around: point, within: driveRadius)
+        }
+        let steps = max(1, min(maxJoinSteps, Int((from.distance(to: point) / joinStep).rounded(.up))))
+        var cells = Set<HexCell>()
+        for step in 1...steps {
+            cells.formUnion(MercatorHexGrid.cells(around: from.lerp(to: point, Double(step) / Double(steps)), within: driveRadius))
+        }
+        return cells.sorted()
+    }
+
+    /// Whether the rules let `fix` lift the fog: "Uncover the map as you go" on, precise, accurate enough.
+    private func accepts(_ fix: WorldFix) -> Bool {
+        WorldMapPreferences.uncoverAsYouGo(in: defaults) && fix.isPrecise && fix.accuracy <= Self.maxAccuracy
+            && fix.point.isValid
+    }
+
+    /// Lifts `cells` (around `fix`) when the rules allow `fix`; returns how many cells were new.
+    private func lift(_ fix: WorldFix, cells: [HexCell]) -> Int {
+        guard accepts(fix) else { return 0 }
         if isDecoy {
             let before = decoyCells.count
             decoyCells.formUnion(cells)

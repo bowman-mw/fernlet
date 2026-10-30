@@ -52,7 +52,7 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 /// What the World map's continuous background updates follow, with Always and background mapping on
 /// (round 7): a drive's road (`nf-car`), or a bike ride's line (Refinements group 19, `ref-ride-line`).
 nonisolated enum WorldTrace: Equatable, Sendable {
-    /// A drive car detection found: traced as a thin line of fog.
+    /// A drive car detection found: traced as a lane of fog 25 m either side of the road.
     case drive
     /// A bike ride Motion found: followed closely for its line, lifting the fog like a walk.
     case ride
@@ -71,7 +71,7 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   driving even if it's in the background"):** with Always and background mapping on, a drive that car
 ///   detection finds (``WorldRideKeeper/onDrivingChanged``) switches to continuous updates that keep running
 ///   in the background (the `location` background mode, automotive navigation, paused by iOS at a long
-///   stop), so the map uncovers the road driven as a thin line (`nf-car`). When the drive ends, or iOS pauses
+///   stop), so the map uncovers the road driven as a lane (`nf-car`, 25 m either side). When the drive ends, or iOS pauses
 ///   the updates, exactly what ran before comes back: the low-power mode stays, a walk or the map in front
 ///   keep their updates, and otherwise the updates stop. This widens the `location` background mode's use
 ///   beyond a walk the person started; the approved privacy sentence says so ("…and, while you're driving or

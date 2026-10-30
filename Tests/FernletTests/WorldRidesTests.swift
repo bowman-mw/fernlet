@@ -22,16 +22,23 @@ struct WorldRidesTests {
             watch.usesMotion = usesMotion
         }
 
-        /// A precise reading `east` metres along at `second`, with CoreLocation's `speed` when given.
-        mutating func read(_ east: Double, _ second: Double, speed: Double? = nil, accuracy: Double = 8) {
-            let fix = WorldFix(point: Self.here.offset(east: east, north: 0), accuracy: accuracy,
+        /// A precise reading `east` (and `north`) metres along at `second`, with CoreLocation's `speed` when given.
+        mutating func read(_ east: Double, _ second: Double, speed: Double? = nil, accuracy: Double = 8, north: Double = 0) {
+            let fix = WorldFix(point: Self.here.offset(east: east, north: north), accuracy: accuracy,
                                at: Self.start.addingTimeInterval(second), isPrecise: true, speed: speed)
             events += watch.observe(fix)
         }
 
-        /// A motion sample of `kind` from `second`.
-        mutating func motion(_ kind: WorldMotionKind, _ second: Double, confident: Bool = true) {
-            events += watch.observe([WorldMotionSample(kind: kind, isConfident: confident, at: Self.start.addingTimeInterval(second))])
+        /// A motion sample of `kind` from `second`, the activity known through `through` when given.
+        mutating func motion(_ kind: WorldMotionKind, _ second: Double, confident: Bool = true, through: Double? = nil) {
+            let sample = WorldMotionSample(kind: kind, isConfident: confident, at: Self.start.addingTimeInterval(second))
+            events += watch.observe([sample], through: through.map { Self.start.addingTimeInterval($0) })
+        }
+
+        /// A motion query's samples (`kind`, second, confident) as the keeper hands them on, known through `through`.
+        mutating func query(_ samples: [(WorldMotionKind, Double, Bool)], through: Double) {
+            let batch = samples.map { WorldMotionSample(kind: $0.0, isConfident: $0.2, at: Self.start.addingTimeInterval($0.1)) }
+            events += watch.observe(batch, through: Self.start.addingTimeInterval(through))
         }
 
         mutating func tick(_ second: Double) {
@@ -84,13 +91,17 @@ struct WorldRidesTests {
         }
     }
 
-    /// Stop-and-go traffic (twenty seconds moving, forty crawling, half a minute standing, eight times) stays
-    /// one drive by speed alone; with Motion saying car, three minutes of crawling at walking pace is still
+    /// Stop-and-go traffic after pulling away (forty seconds at speed, then twenty seconds moving, forty
+    /// crawling, half a minute standing, eight times) stays one drive by speed alone; with Motion saying car, three minutes of crawling at walking pace is still
     /// the drive, and a confident walking sample ends it.
     @Test func stopAndGoTrafficIsOneDrive() {
         var stream = Stream()
         var second = 0.0, east = 0.0
-        stream.read(east, second, speed: 15)
+        for _ in 0...8 {
+            stream.read(east, second, speed: 15)
+            second += 5
+            east += 75
+        }
         for _ in 0..<8 {
             for _ in 0..<4 {
                 second += 5
@@ -109,7 +120,8 @@ struct WorldRidesTests {
         #expect(stream.drivesStarted == 1 && stream.drivesEnded == 0)
 
         var jam = Stream(usesMotion: true)
-        jam.motion(.automotive, 0)
+        jam.motion(.automotive, 0, through: WorldRideWatch.motionHold)
+        #expect(jam.watch.isDriving, "a minute of the car's activity is the drive")
         jam.read(0, 5, speed: 15)
         for step in 1...18 {
             jam.read(Double(step) * 15, 5 + Double(step) * 10, speed: 1.5)
@@ -119,8 +131,9 @@ struct WorldRidesTests {
         #expect(!jam.watch.isDriving && jam.drivesEnded == 1, "walking away ends it")
     }
 
-    /// Without Motion a drive starts by speed: two readings at a car's speed within a minute (one alone, or two
-    /// further apart, is not), or one at highway speed; it ends on foot after a minute at walking pace.
+    /// Without Motion a drive starts by speed: readings at a car's speed spanning half a minute, each within a
+    /// minute of the last (two further apart are not), and one alone never, even at highway speed; it ends on
+    /// foot after a minute at walking pace.
     @Test func aSpeedOnlyDriveStartsAndEndsOnFoot() {
         var stream = Stream()
         stream.read(0, 0, speed: 8)
@@ -137,7 +150,96 @@ struct WorldRidesTests {
 
         var highway = Stream()
         highway.read(0, 0, speed: 13)
-        #expect(highway.drivesStarted == 1)
+        highway.read(260, 20, speed: 13)
+        #expect(highway.drivesStarted == 0, "twenty seconds at highway speed")
+        highway.read(390, 30, speed: 13)
+        #expect(highway.events == [.driveStarted(Stream.start)])
+    }
+
+    // MARK: Walking is never the car (owner's phone test 2026-10-30)
+
+    /// Ten minutes on foot with GPS jitter of ±10 m every second, readings 20–25 m out, and two 80 m jumps, with
+    /// no CoreLocation speed: the pace is never a car's (a second's jitter once read as 20 m/s, past highway
+    /// speed), with Motion saying walking or without Motion.
+    @Test func gpsJitterAndJumpsOnFootAreNoDrive() {
+        for usesMotion in [false, true] {
+            var stream = Stream(usesMotion: usesMotion)
+            if usesMotion { stream.motion(.walking, 0) }
+            for step in 0...600 {
+                let second = Double(step)
+                let jitter = Double((step * 37) % 21) - 10
+                let jump = step == 150 || step == 420 ? 80.0 : 0
+                stream.read(second * 1.4 + jump, second, accuracy: [10, 15, 20, 25][step % 4], north: jitter)
+            }
+            stream.tick(900)
+            #expect(stream.drivesStarted == 0 && !stream.watch.isDriving, "usesMotion \(usesMotion): \(stream.events)")
+        }
+    }
+
+    /// CoreLocation speed spikes on a walk (15 m/s once, 12 two seconds later, 13 half a minute after with
+    /// walking readings between) are no drive: one fast reading, or a burst shorter than half a minute, never is.
+    @Test func aSpeedSpikeOnFootIsNoDrive() {
+        var stream = Stream()
+        var east = 0.0
+        for step in 0...300 {
+            let second = Double(step) * 2
+            east += 2.8
+            let speed: Double = switch second {
+            case 100: 15
+            case 102: 12
+            case 140: 13
+            case 400, 404, 410, 420: 9
+            default: 1.4
+            }
+            stream.read(east, second, speed: speed)
+        }
+        #expect(stream.events.isEmpty, "\(stream.events)")
+    }
+
+    /// Motion flickering on a walk, fed as the keeper feeds it (a query each half minute): a confident car
+    /// sample for 30 s between walking, one for 30 s between standing and walking, a long low-confidence car,
+    /// and a confident car for two minutes while the readings walk (the speed floor) are all no drive; the
+    /// flickers are none even with no readings at all.
+    @Test func motionFlickerWhileWalkingIsNoDrive() {
+        let flicker: [(WorldMotionKind, Double, Bool)] = [
+            (.walking, 0, true), (.automotive, 50, true), (.walking, 80, true),
+            (.stationary, 120, true), (.automotive, 200, true), (.stationary, 230, true), (.walking, 260, true),
+            (.automotive, 300, false), (.walking, 500, false), (.walking, 520, true)
+        ]
+        for withReadings in [true, false] {
+            let script = flicker + (withReadings ? [(.automotive, 600, true), (.walking, 720, true)] : [])
+            var stream = Stream(usesMotion: true)
+            for step in 0...160 {
+                let second = Double(step) * 5
+                if withReadings { stream.read(second * 1.4, second, speed: 1.4) }
+                guard step % 6 == 0 else { continue }
+                stream.query(script.filter { $0.1 > second - 30 && $0.1 <= second }, through: second)
+            }
+            #expect(stream.drivesStarted == 0 && !stream.watch.isDriving, "withReadings \(withReadings): \(stream.events)")
+        }
+    }
+
+    /// A real drive still starts: after a walk with Motion saying walking, the car pulls away at 12 m/s (no
+    /// CoreLocation speed, the pace alone) and the coprocessor says car from then; within a minute and a half
+    /// it is the drive, once. Without Motion the pace alone starts it within the same.
+    @Test func aRealDriveAfterAWalkStillStarts() {
+        for usesMotion in [true, false] {
+            var stream = Stream(usesMotion: usesMotion)
+            var east = 0.0
+            for step in 0...60 {
+                let second = Double(step) * 5
+                east += second <= 100 ? 7 : 60
+                stream.read(east, second)
+                guard usesMotion, step % 6 == 0 else { continue }
+                let script: [(WorldMotionKind, Double, Bool)] = [(.walking, 0, true), (.automotive, 100, true)]
+                stream.query(script.filter { $0.1 > second - 30 && $0.1 <= second }, through: second)
+                if second == 180 { #expect(stream.watch.isDriving, "usesMotion \(usesMotion)") }
+            }
+            #expect(stream.drivesStarted == 1 && stream.watch.isDriving, "usesMotion \(usesMotion)")
+            if case .driving(let since) = stream.watch.mode {
+                #expect(since.timeIntervalSince(Stream.start) <= 140, "usesMotion \(usesMotion)")
+            }
+        }
     }
 
     // MARK: Cycling
@@ -254,6 +356,8 @@ struct WorldRidesTests {
     @Test func theInCarFlagFollowsMotion() {
         let keeper = WorldRideKeeper(motion: ScriptedMotion())
         keeper.handle(WorldFix(point: Stream.here, accuracy: 8, at: Stream.start, isPrecise: true, speed: 14))
+        keeper.handle(WorldFix(point: Stream.here.offset(east: 420, north: 0), accuracy: 8,
+                               at: Stream.start.addingTimeInterval(30), isPrecise: true, speed: 14))
         #expect(keeper.isDriving && keeper.inCarFlag == nil)
         keeper.usesMotion = true
         #expect(keeper.inCarFlag == true)
@@ -291,8 +395,9 @@ struct WorldRidesTests {
         #expect(stream.watch.ridePoints.isEmpty && !stream.watch.isCycling)
 
         var drive = Stream()
-        drive.read(0, 0, speed: 14)
-        drive.read(150, 10, speed: 14)
+        for step in 0...3 {
+            drive.read(Double(step) * 140, Double(step) * 10, speed: 14)
+        }
         #expect(drive.watch.isDriving && drive.watch.ridePoints.isEmpty, "a drive has no ride line")
     }
 

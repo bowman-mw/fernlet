@@ -120,12 +120,13 @@ final class WorldRideKeeper {
         }
     }
 
-    /// Feeds a query's samples to the watch (dropped when Motion went off meanwhile).
+    /// Feeds a query's samples to the watch, the activity known through the query's end (a car's activity
+    /// that has held long enough starts a drive there); dropped when Motion went off meanwhile.
     private func took(_ samples: [WorldMotionSample], through end: Date) {
         motionQuery = nil
         guard usesMotion else { return }
         queryEnd = end
-        apply(watch.observe(samples))
+        apply(watch.observe(samples, through: end))
         apply(watch.tick(at: end))
     }
 
