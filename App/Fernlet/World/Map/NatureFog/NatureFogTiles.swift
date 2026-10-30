@@ -86,6 +86,11 @@ final class NatureFogTileBook {
         painters = (0..<Self.painterCount).map { _ in NatureFogTilePainter(palette: palette) }
     }
 
+    /// The tiles still drawing end with the book (the memory wall's ML1); at most ``painterCount``.
+    isolated deinit {
+        for task in drawing.values { task.cancel() }
+    }
+
     /// The tiles held now.
     var cachedKeys: Set<NatureTileKey> { Set(tiles.keys) }
 
