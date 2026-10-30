@@ -2727,6 +2727,8 @@ struct MealSheet: View {
     /// Toggled by the explicit Change selection action to re-run the unchanged selected name.
     @State private var catalogSearchRestart = false
     @State private var mealType: MealType?
+    /// The Bodybuilding goal's Free meal tag (`bb-free`): sealed for the logged meals when Save lands.
+    @State private var isFreeMeal = false
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
     /// The typed product query held while the user reads the one-time egress disclosure.
@@ -2826,8 +2828,17 @@ struct MealSheet: View {
         }
     }
 
+    /// The host's reporter, sealing the Free meal tag first for exactly the meals logged when the chip
+    /// is on and the Bodybuilding goal is chosen (`bb-free`), on the day they landed.
+    private var logReporter: MealLogReporter {
+        guard isFreeMeal, store.isBathroomTileAvailable else { return onLogged }
+        return onLogged.first { [store] meals, dayKey in _ = store.tagFreeMeals(meals, loggedTo: dayKey) }
+    }
+
     /// Opens with the seed's description and by-hand macros, once (a later appear keeps the edits).
     private func applySeed() {
+        // DEBUG screenshot run (`bb-free`): `FERNLET_UI_TEST_BB_SCENARIO=free` opens with the tag on.
+        if UITestSupport.bodybuildingScenario == "free" { isFreeMeal = true }
         guard let seed, description.isEmpty else { return }
         description = seed.description
         if let macros = seed.macros {
@@ -3007,7 +3018,7 @@ struct MealSheet: View {
         RecentMealsSheet(store: store) { meal in
             let copiedMeal = store.copyMeal(
                 meal, mealType: mealType ?? MealParser.classifyMealType(meal.name))
-            onLogged([copiedMeal])
+            logReporter([copiedMeal])
             didLogFromRecent = true
             showingRecentMeals = false
         }
@@ -3054,7 +3065,7 @@ struct MealSheet: View {
         let photoAttached = true
         #endif
         reviewContext = nil
-        onLogged(committed, landedWithCaveat: !photoAttached)
+        logReporter(committed, landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3151,7 +3162,7 @@ struct MealSheet: View {
             meal = store.logLabelScannedFoodItem(pending.item, mealType: mealType, servings: servings)
         }
         BarcodeServingMemory.setLastServings(servings, for: pending.item.barcode)
-        onLogged([meal])
+        logReporter([meal])
         // Clearing the pending food dismisses this sheet; the sheet's `onDismiss` then exits the
         // scan-log flow (same net effect as the old explicit `dismiss()` here).
         pendingScannedFood = nil
@@ -3178,6 +3189,10 @@ struct MealSheet: View {
                     }
 
                     FoodMealTypeDropdown(selection: $mealType, inferred: inferredMealType)
+
+                    if store.isBathroomTileAvailable {
+                        FreeMealTagRow(isFreeMeal: $isFreeMeal)
+                    }
 
                     if isEnteringMacrosByHand {
                         manualMacrosSection
@@ -3464,7 +3479,7 @@ struct MealSheet: View {
         if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
             if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
                 let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
-                onLogged([meal])
+                logReporter([meal])
                 dismiss()
                 return
             }
@@ -3502,7 +3517,7 @@ struct MealSheet: View {
         #else
         let photoAttached = true
         #endif
-        onLogged([meal], landedWithCaveat: !photoAttached)
+        logReporter([meal], landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3515,7 +3530,7 @@ struct MealSheet: View {
         #else
         let photoAttached = true
         #endif
-        onLogged([meal], landedWithCaveat: !photoAttached)
+        logReporter([meal], landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3557,7 +3572,7 @@ struct MealSheet: View {
             #else
             let photoAttached = true
             #endif
-            onLogged(meals, landedWithCaveat: !photoAttached)
+            logReporter(meals, landedWithCaveat: !photoAttached)
             closeAfterLogging(photoAttached: photoAttached)
         }
     }
@@ -4535,6 +4550,8 @@ nonisolated struct MealComponentCorrectionInput: Identifiable {
 /// a real field, or added to via the same debounced catalog typeahead the recipe editor uses.
 /// Persists through `FernletStore.updateMealCorrection` with totals recomputed from the corrected
 /// snapshots; template chrome — Cancel + pinned title via the draft guard, Save bottom-right.
+/// With the Bodybuilding goal chosen it also carries Log meal's Free meal tag (owner's answer 10,
+/// 2026-10-30), sealed for the meal on today's tallies when Save lands.
 struct MealCorrectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -4545,6 +4562,8 @@ struct MealCorrectionSheet: View {
     @State private var carbs: Int
     @State private var fat: Int
     @State private var components: [MealComponentCorrectionInput]
+    /// The Bodybuilding goal's Free meal tag, read from today's sealed tallies at open.
+    @State private var isFreeMeal: Bool
     /// Research §26 fix 1.10: the search-text → chosen-food pairs this sheet's Replace picks have
     /// produced, held until Save. Held rather than written at the pick because a correction the user
     /// CANCELS out of must teach the app nothing — see ``FoodSearchCorrectionDraft``.
@@ -4562,6 +4581,7 @@ struct MealCorrectionSheet: View {
         _carbs = State(initialValue: meal.macros.carbs)
         _fat = State(initialValue: meal.macros.fat)
         _components = State(initialValue: meal.componentSnapshots.map(MealComponentCorrectionInput.init(snapshot:)))
+        _isFreeMeal = State(initialValue: store.isFreeMeal(meal.id, on: store.todayKey))
         lowConfidenceComponentIDs = Self.lowConfidenceComponentIDs(for: meal)
     }
 
@@ -4578,6 +4598,10 @@ struct MealCorrectionSheet: View {
 
                     FernletDropdown("Meal type", selection: $mealType, options: MealType.allCases) {
                         Text(verbatim: $0.displayName)
+                    }
+
+                    if store.isBathroomTileAvailable {
+                        FreeMealTagRow(isFreeMeal: $isFreeMeal)
                     }
 
                     if components.isEmpty {
@@ -4617,6 +4641,9 @@ struct MealCorrectionSheet: View {
                 // remembered on THIS device only, so the same search answers with the user's own pick
                 // first next time. A no-op when nothing was replaced.
                 store.rememberFoodSearchCorrections(correctionDraft.corrections)
+                if store.isBathroomTileAvailable, isFreeMeal != store.isFreeMeal(meal.id, on: store.todayKey) {
+                    store.setFreeMeal(isFreeMeal, mealID: meal.id, on: store.todayKey)
+                }
                 dismiss()
             }
         }
@@ -4637,6 +4664,7 @@ struct MealCorrectionSheet: View {
     /// prompt in the template chrome.
     private var isDirty: Bool {
         if name != meal.name || mealType != meal.mealType { return true }
+        if store.isBathroomTileAvailable, isFreeMeal != store.isFreeMeal(meal.id, on: store.todayKey) { return true }
         if components.isEmpty {
             // Remove-all (FOOD-05): every matched item was removed — an unsaved edit in itself,
             // even though the macro fields still hold the values they were seeded with at init.

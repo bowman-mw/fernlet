@@ -51,7 +51,17 @@ struct GoalTickBox: View {
     }
 }
 
-/// One selectable goal card: the goal's name and tagline plus its nutrition and training summary rows.
+/// The pixel picture on a goal card's third line (`bb-goal`, approved 2026-10-29): four small framed
+/// squares, the day calendar Bodybuilding turns on. One-colour ink, so it follows the ink token on dark
+/// paper like the kit's other `.pk` icons.
+nonisolated enum GoalPresetSprites {
+    /// The day calendar's grid: two rows of two hollow squares.
+    static let calendarGrid = WorldSprite(rows: ["kkk.kkk", "k.k.k.k", "kkk.kkk", ".......", "kkk.kkk", "k.k.k.k", "kkk.kkk"],
+                                          palette: ["k": WorldSprite.ink])
+}
+
+/// One selectable goal card: the goal's name and tagline plus its nutrition and training summary rows
+/// (and, for Bodybuilding, the line that says it turns on the day calendar).
 ///
 /// Rendered by ``GoalPresetCards`` for each `GoalType`; selection state draws the checkmark and moss
 /// outline, and the card carries its own `goalPreset.<goal>` accessibility identifier (which is why
@@ -103,6 +113,9 @@ private struct GoalPresetCard: View {
                 .fernletWrappingText()
             summaryRow(icon: "fork.knife", text: nutritionSummary)
             summaryRow(icon: "figure.run", text: goal.trainingSummary)
+            if let calendarSummary = goal.calendarSummary {
+                summaryRow(icon: "calendar", text: calendarSummary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
@@ -134,6 +147,9 @@ private struct GoalPresetCard: View {
             framedSummaryRow(WorldSprites.onigiri, text: nutritionSummary, look: look)
             if !goal.trainingSummary.isEmpty {
                 framedSummaryRow(WorldSprites.shoe, text: goal.trainingSummary, look: look)
+            }
+            if let calendarSummary = goal.calendarSummary {
+                framedSummaryRow(GoalPresetSprites.calendarGrid, text: calendarSummary, look: look)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

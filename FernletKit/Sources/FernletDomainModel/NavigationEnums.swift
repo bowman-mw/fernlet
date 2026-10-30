@@ -219,6 +219,10 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
     case breathing
     case grounding
     case worryBox
+    /// The Bodybuilding goal's bathroom count (World round 7, `bb-bowel`). Shown only while that goal
+    /// is chosen (``visibleQuickLog(_:visibility:bathroomAvailable:)``), never a default or a filler
+    /// tile; an older build parks the token in `unknownQuickLogTokens` and writes it back.
+    case bathroom
 
     nonisolated public static let defaultQuickLog: [FernletShortcut] = [.meal, .water, .move, .sleep, .journal, .care]
 
@@ -269,6 +273,9 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .worryBox:
             String(localized: "quickLog.worryBox", defaultValue: "Worry box", bundle: .module,
                    comment: "Home quick-log tile and its editor: open the worry box")
+        case .bathroom:
+            String(localized: "quickLog.bathroom", defaultValue: "Bathroom", bundle: .module,
+                   comment: "Log panel tile and the quick-log editor, Bodybuilding goal only: a count of today's bathroom visits")
         }
     }
 
@@ -287,6 +294,7 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .breathing: "wind"
         case .grounding: "leaf"
         case .worryBox: "archivebox"
+        case .bathroom: "toilet"
         }
     }
 
@@ -297,7 +305,7 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         case .periodTracking: .periodTracking
         case .intimacyTracking: .intimacyTracking
         case .friends: .friends
-        case .meal, .water, .sleep, .care, .logPeriod, .breathing, .grounding, .worryBox:
+        case .meal, .water, .sleep, .care, .logPeriod, .breathing, .grounding, .worryBox, .bathroom:
             nil
         }
     }
@@ -311,7 +319,8 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
         for item in defaultQuickLog where result.count < 6 && !result.contains(item) {
             result.append(item)
         }
-        for item in allCases where result.count < 6 && !result.contains(item) {
+        // Bathroom is never a filler: it belongs to the Bodybuilding goal and joins only by choice.
+        for item in allCases where result.count < 6 && !result.contains(item) && item != .bathroom {
             result.append(item)
         }
         return Array(result.prefix(6))
@@ -323,12 +332,18 @@ public nonisolated enum FernletShortcut: String, Codable, CaseIterable, Identifi
     /// IMPORTANT: filtering by this is DISPLAY-ONLY. Never persist a filtered list back to settings —
     /// hiding a surface would then permanently destroy the user's own quick-log layout, and un-hiding
     /// would not restore it. The stored array keeps every choice; only rendering filters.
-    public static func visibleQuickLog(_ items: [FernletShortcut], visibility: SensitiveSurfaceVisibility) -> [FernletShortcut] {
-        normalizedQuickLog(items.filter { visibility.allows($0) })
+    ///
+    /// `bathroomAvailable` is whether the Bodybuilding goal is chosen: without it a stored Bathroom
+    /// tile shows as Care in its place (``hidingBathroom(_:)``), display only, like the gates above.
+    public static func visibleQuickLog(_ items: [FernletShortcut], visibility: SensitiveSurfaceVisibility,
+                                       bathroomAvailable: Bool = false) -> [FernletShortcut] {
+        let shown = bathroomAvailable ? items : hidingBathroom(items)
+        return normalizedQuickLog(shown.filter { visibility.allows($0) })
     }
 
-    public static func selectableQuickLogItems(visibility: SensitiveSurfaceVisibility) -> [FernletShortcut] {
-        allCases.filter { visibility.allows($0) }
+    public static func selectableQuickLogItems(visibility: SensitiveSurfaceVisibility,
+                                               bathroomAvailable: Bool = false) -> [FernletShortcut] {
+        allCases.filter { visibility.allows($0) && (bathroomAvailable || $0 != .bathroom) }
     }
 }
 
@@ -355,7 +370,8 @@ public nonisolated struct SensitiveSurfaceVisibility: Equatable, Sendable {
         case .intimacyTracking: intimacy
         // `.logPeriod` writes cycle data; it is gated with the period surfaces, not merely hidden.
         case .periodTracking, .logPeriod: period
-        case .meal, .water, .move, .sleep, .journal, .care, .friends, .breathing, .grounding, .worryBox: true
+        // `.bathroom` is not a sensitive surface: the Bodybuilding goal gates it (`visibleQuickLog`).
+        case .meal, .water, .move, .sleep, .journal, .care, .friends, .breathing, .grounding, .worryBox, .bathroom: true
         }
     }
 

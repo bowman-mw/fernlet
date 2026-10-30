@@ -136,7 +136,7 @@ enum TierTwoMemoryEngine {
 
         let verdict: GapVerdict
         switch primary.type {
-        case .strength, .sportsPrep:
+        case .strength, .sportsPrep, .bodybuilding:
             verdict = strengthVerdict(workoutDays: workoutDays, n: n, workoutRate: workoutRate)
         case .weightManagement:
             verdict = weightManagementVerdict(mealDays: mealDays, workoutDays: workoutDays, n: n,

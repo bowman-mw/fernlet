@@ -205,6 +205,15 @@ SDK-`Sendable` context, and the thread-safe `UserDefaults` latch, `@unchecked` o
 un-annotated Foundation type, and why ``MenstrualNarrative``/``IntimacyLog`` are `Sendable` value
 types), and the prediction engine is `nonisolated` pure math callable from any executor.
 
+**Body tallies (World bodybuilding, round 7).** ``BodyTallyRepository`` keeps the Bodybuilding goal's
+bathroom-visit counts and free-meal tags sealed, one ``BodyDayTally`` blob per day in the `BodyTally`
+entity (no plaintext day key), under `ColumnCrypto` purpose `fernlet.body-tally.v1`. The counts show
+on the Log panel and in Move, outside the Private tab, so the app seals them under the journal's
+device fallback key rather than the tab's content key (the repository's documentation gives the
+whole argument); the repository is key-agnostic, keyless for ``BodyTallyRepository/rowCount()`` and
+``BodyTallyRepository/deleteAll()``, and bounded at ``BodyTallyRepository/maxStoredRows`` rows. The
+app's `@MainActor` funnel (`BodyTallyStore`, app target) adds the decoy gate and the cache.
+
 ## Topics
 
 ### Cycle Tracking
@@ -244,6 +253,13 @@ types), and the prediction engine is `nonisolated` pure math callable from any e
 - ``CycleRecordRepositoryError``
 - ``CycleRecordStore``
 - ``CycleRecordBackupPrePass``
+
+### Sealed Body Tallies
+
+- ``BodyDayTally``
+- ``BodyTallyRepository``
+- ``BodyTallyPage``
+- ``BodyTallyRepositoryError``
 
 ### Intimacy Logs
 

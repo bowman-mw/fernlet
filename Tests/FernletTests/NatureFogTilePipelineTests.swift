@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import QuartzCore
 import Testing
 import WorldMapStore
@@ -98,13 +99,15 @@ struct NatureFogTilePipelineTests {
         let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
         view.show(scene())
         await view.finishDrawing()
-        let firstScreen = view.shownTileCount
+        let first = view.tileScaleRadius
         view.show(scene(heightMetres: 1_700 * 0.57 / 1.5))
+        view.settle(now: CACurrentMediaTime() + 60)
         await view.finishDrawing()
-        let bound = max(NatureFogMapView.spareTileLimit, firstScreen) + NatureFogTileBook.painterCount
-        #expect(view.spareTileCounts == view.spareTileCounts.filter { $0 <= bound } && view.spareTileCounts.count == 1,
-                "the scale it left is kept, with only its screen and nearest tiles")
+        #expect(first.map { view.spareScales[$0] != nil } == true, "the scale it left is kept")
+        #expect(view.spareTileCounts.count <= NatureFogMapView.spareBookLimit
+                && view.spareTileCounts.allSatisfy { $0 <= NatureFogTileBook.cacheLimit + NatureFogTileBook.painterCount })
         view.show(scene())
+        view.settle(now: CACurrentMediaTime() + 60)
         #expect(view.waitingTileCount == 0, "every tile on screen is there at once")
         #expect(view.outgoingTileCount == 0, "so nothing needs holding over")
     }
@@ -147,13 +150,127 @@ struct NatureFogTilePipelineTests {
         #expect(!view.isGliding, "the person took the map the other way: the glide is over")
     }
 
+    /// The owner's pinch on the phone (2026-10-30): in from today's zoom to the nearest and back out to the
+    /// farthest, a frame at a time, the painters getting only a moment between frames.
+    @Test func aPinchNeverShowsBareMapWhereTheFogBelongs() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        view.settle(now: CACurrentMediaTime() + 60)
+        let today = 1_700 * 0.57, nearest = 300 * 0.57, farthest = 7_000 * 0.57
+        let inward = (0...45).map { today * pow(nearest / today, Double($0) / 45) }
+        let outward = (0...90).map { nearest * pow(farthest / nearest, Double($0) / 90) }
+        var bare = 0.0, placeholder = 0.0
+        for (frame, height) in (inward + outward).enumerated() {
+            view.show(scene(heightMetres: height))
+            bare = max(bare, view.bareScreenShare)
+            placeholder = max(placeholder, view.placeholderScreenShare)
+            if frame % 3 == 0 { await Task.yield() }
+        }
+        #expect(bare == 0, "bare map showed on \(Int(bare * 100)) % of the screen mid-pinch (fog colour peaked at \(Int(placeholder * 100)) %)")
+        // Settles first, so the scale is final: under load the real settle can otherwise land mid-wait and
+        // snap a stepped scale to the ideal one.
+        view.settle(now: CACurrentMediaTime() + 60)
+        await view.finishDrawing()
+        #expect(view.bareScreenShare == 0 && view.waitingTileCount == 0)
+    }
+
+    @Test func newGroundShowsWildFogWhileItsTilesDraw() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        let far = MapViewport.around(Self.park.offset(east: 20_000, north: 0), heightMetres: 1_700 * 0.57, size: Self.size)
+        view.show(NatureFogScene(viewport: far, clearing: scene().clearing, palette: Self.light, motion: NatureFogMotion(reduceMotion: true)))
+        #expect(view.waitingTileCount > 0)
+        #expect(view.texturedPlaceholderCount == view.waitingTileCount, "the ground a fling reaches looks like fog, not a flat band")
+        await view.finishDrawing()
+        #expect(view.waitingTileCount == 0 && view.bareScreenShare == 0)
+    }
+
+    @Test func aZoomOutHoldsTheDrawnRingOverItsEdges() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        view.settle(now: CACurrentMediaTime() + 60)
+        let before = view.shownTileCount
+        view.show(scene(heightMetres: 1_700 * 0.57 * 2.2))
+        #expect(view.outgoingTileCount > before, "the ring round the old screen comes along, covering the new edges")
+    }
+
+    @Test func aStillMapDrawsTheScalesEitherSideAhead() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        view.settle(now: CACurrentMediaTime() + 60)
+        await view.finishDrawingNeighbours()
+        let here = view.tileScaleRadius ?? 0
+        let up = here * 2.0.squareRoot(), down = here / 2.0.squareRoot()
+        #expect(view.spareScales.keys.contains { abs($0 - up) < 0.001 } && view.spareScales.keys.contains { abs($0 - down) < 0.001 },
+                "a half octave up and down are drawn")
+        view.show(scene(heightMetres: 1_700 * 0.57 / 1.8))
+        #expect(view.tileScaleRadius.map { abs($0 - up) < 0.001 } == true, "the pinch steps to the scale drawn ahead")
+        #expect(view.waitingTileCount == 0, "so every tile on screen is there at once")
+    }
+
+    @Test func aWaitingTileOverUncoveredGroundShowsTheMapNotFog() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        let home = NatureFogClearing(uncovered: Set(MercatorHexGrid.disc(around: Self.park, radius: 1_000)))
+        func scene(east: Double) -> NatureFogScene {
+            NatureFogScene(viewport: MapViewport.around(Self.park.offset(east: east, north: 0), heightMetres: 1_700 * 0.57, size: Self.size),
+                           clearing: home, palette: Self.light, motion: NatureFogMotion(reduceMotion: true))
+        }
+        // A band of home circles wide enough that the tiles past the drawn ring still lie on uncovered ground.
+        let band = NatureFogClearing(uncovered: Set([0.0, 800, 1_600].flatMap {
+            MercatorHexGrid.disc(around: Self.park.offset(east: $0, north: 0), radius: 1_000)
+        }))
+        func banded(east: Double) -> NatureFogScene {
+            NatureFogScene(viewport: MapViewport.around(Self.park.offset(east: east, north: 0), heightMetres: 1_700 * 0.57, size: Self.size),
+                           clearing: band, palette: Self.light, motion: NatureFogMotion(reduceMotion: true))
+        }
+        view.show(banded(east: 0))
+        await view.finishDrawing()
+        view.show(banded(east: 650))
+        #expect(view.waitingTileCount > 0)
+        #expect(view.mapShowingPlaceholderCount == view.waitingTileCount,
+                "on the person's own ground a tile still drawing shows the map, never wild fog")
+        await view.finishDrawing()
+        #expect(view.waitingTileCount == 0)
+        let edge = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        edge.show(scene(east: 1_000))
+        #expect(edge.maskedPlaceholderCount > 0, "a tile across the circle's edge shows fog only on its fogged hexes")
+        await edge.finishDrawing()
+        #expect(edge.waitingTileCount == 0 && edge.maskedPlaceholderCount == 0)
+    }
+
+    @Test func aPinchHoldsItsScaleUntilTheMapSettles() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        view.settle(now: CACurrentMediaTime() + 60)
+        let today = view.tileScaleRadius
+        view.show(scene(heightMetres: 1_700 * 0.57 / 1.2))
+        #expect(view.tileScaleRadius == today && view.outgoingTileCount == 0, "mid-pinch the tiles stretch rather than start again")
+        view.show(scene(heightMetres: 1_700 * 0.57 / 1.4))
+        #expect(view.tileScaleRadius == today, "still within the hold")
+        let fits = NatureFogScale.tiles(forScreenRadius: MercatorHexGrid.radius * scene(heightMetres: 1_700 * 0.57 / 1.4).viewport.pointsPerUnit(in: Self.size))?.radius
+        #expect(fits != today)
+        view.settle(now: CACurrentMediaTime() + 60)
+        #expect(view.tileScaleRadius == fits, "once the map sits still the fog takes the scale that fits")
+        view.show(scene(heightMetres: 1_700 * 0.57 / 3.2))
+        #expect(view.tileScaleRadius != fits, "past the hold the fog switches scale even mid-pinch")
+        let ideal = NatureFogScale.tiles(forScreenRadius: MercatorHexGrid.radius * scene(heightMetres: 1_700 * 0.57 / 3.2).viewport.pointsPerUnit(in: Self.size))?.radius
+        #expect(view.tileScaleRadius.flatMap { held in ideal.map { held < $0 } } == true,
+                "it steps a half octave at a time, to a scale the still map drew ahead, not straight to the ideal")
+    }
+
     @Test func aZoomStepKeepsTheOldTilesUntilTheNewOnesAreIn() async {
         let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
         view.show(scene())
         await view.finishDrawing()
         let before = view.shownTileCount
         view.show(scene(heightMetres: 1_700 * 0.57 / 1.5))
-        #expect(view.outgoingTileCount == before, "the old scale's tiles stay on screen")
+        view.settle(now: CACurrentMediaTime() + 60)
+        #expect(view.outgoingTileCount >= before, "the old scale's tiles stay on screen, its drawn ring with them")
         #expect(view.waitingTileCount > 0)
         await view.finishDrawing()
         #expect(view.waitingTileCount == 0 && view.outgoingTileCount == 0, "they go once the new scale's are in")
@@ -164,6 +281,7 @@ struct NatureFogTilePipelineTests {
         view.show(scene())
         await view.finishDrawing()
         view.show(scene(heightMetres: 1_700 * 0.57 / 1.5))
+        view.settle(now: CACurrentMediaTime() + 60)
         #expect(view.outgoingTileCount > 0)
         let zoomed = MapViewport.around(Self.park, heightMetres: 1_700 * 0.57 / 1.5, size: Self.size)
         view.show(NatureFogScene(viewport: zoomed, clearing: NatureFogClearing(), palette: Self.light,

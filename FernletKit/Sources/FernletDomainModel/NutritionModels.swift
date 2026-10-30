@@ -3563,6 +3563,9 @@ public nonisolated enum NutritionTargetCalculator {
             adjusted = base * 1.08
         case .sportsPrep:
             adjusted = base * 1.05
+        case .bodybuilding:
+            // A small surplus, never more than Strength's (`bb-goal`: "A small surplus · high protein").
+            adjusted = base * 1.05
         case .recovery:
             adjusted = base * 0.98
         case .wellness, .mentalHealth, .exploring:
@@ -3580,6 +3583,9 @@ public nonisolated enum NutritionTargetCalculator {
         let kilograms = settings.userProfile.weightKilograms
         let gramsPerKilogram: Double
         switch (settings.selectedGoal, settings.nutritionPreferences.dietaryPattern) {
+        case (.bodybuilding, _):
+            // At least Strength's: muscle gain is this goal's whole point.
+            gramsPerKilogram = 1.8
         case (.strength, _):
             gramsPerKilogram = 1.7
         case (.sportsPrep, _):

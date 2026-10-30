@@ -871,6 +871,17 @@
         }
       }
     },
+    "%@, earned" : {
+      "comment" : "VoiceOver: a passport special, earned",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, conseguido"
+          }
+        }
+      }
+    },
     "%@, equipped" : {
       "comment" : "Customize sheet, VoiceOver: one of the user's own companion items, currently worn. The placeholder is the item's name.",
       "localizations" : {
@@ -892,6 +903,17 @@
         }
       }
     },
+    "%@, not earned yet" : {
+      "comment" : "VoiceOver: a passport special, not earned yet",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, aún sin conseguir"
+          }
+        }
+      }
+    },
     "%@, not equipped" : {
       "comment" : "Customize sheet, VoiceOver: one of the user's own companion items, not worn right now. The placeholder is the item's name.",
       "localizations" : {
@@ -899,6 +921,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@, sin equipar"
+          }
+        }
+      }
+    },
+    "%@, page %@" : {
+      "comment" : "VoiceOver: a place in the passport index and the pages its stamps are on",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, page %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, página %2$@"
           }
         }
       }
@@ -965,6 +1004,51 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@, precio"
+          }
+        }
+      }
+    },
+    "%@, stamp" : {
+      "comment" : "VoiceOver: a passport stamp, by the place's name\nVoiceOver: an earned country in the A to Z view",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, sello"
+          }
+        }
+      }
+    },
+    "%@, stamp, %@" : {
+      "comment" : "VoiceOver: a stamp on a passport page: the place's name, then the stamp's date",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, stamp, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, sello, %2$@"
+          }
+        }
+      }
+    },
+    "%@, stamp, %lld trips" : {
+      "comment" : "VoiceOver: an earned country in the A to Z view, with its trips",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, stamp, %2$lld trips"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, sello, %2$lld viajes"
           }
         }
       }
@@ -1235,6 +1319,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Coincidencias: %1$lld · %2$@"
+          }
+        }
+      }
+    },
+    "%lld countries" : {
+      "comment" : "Stamp book: Sprout's passport row, countries found (not one)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld países"
           }
         }
       }
@@ -1582,7 +1677,7 @@
       }
     },
     "%lld of %lld" : {
-      "comment" : "How many Health kinds are shared",
+      "comment" : "How many Health kinds are shared\nSprout's passport index: a row's count, found out of how many",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1594,6 +1689,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$lld de %2$lld"
+          }
+        }
+      }
+    },
+    "%lld of %lld countries" : {
+      "comment" : "Sprout's passport index: countries found out of how many",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld countries"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld países"
           }
         }
       }
@@ -2125,6 +2237,44 @@
         }
       }
     },
+    "%lld to %lld · %@ to %@" : {
+      "comment" : "Sprout's passport contents: the stamp pages' numbers, then their first and last stamp days",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld to %2$lld · %3$@ to %4$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld a %2$lld · %3$@ a %4$@"
+          }
+        }
+      }
+    },
+    "%lld to go" : {
+      "comment" : "Sprout's passport page 2: how many more for a special stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Faltan %lld"
+          }
+        }
+      }
+    },
+    "%lld today" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld hoy"
+          }
+        }
+      }
+    },
     "%lld tracked" : {
       "localizations" : {
         "es" : {
@@ -2143,6 +2293,17 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld trips" : {
+      "comment" : "Sprout's passport: how many trips to a country (always more than one)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld viajes"
           }
         }
       }
@@ -2389,6 +2550,17 @@
         }
       }
     },
+    "1 country" : {
+      "comment" : "Stamp book: Sprout's passport row, one country found",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 país"
+          }
+        }
+      }
+    },
     "1 exercise · ~%lld min" : {
       "localizations" : {
         "es" : {
@@ -2543,6 +2715,17 @@
         }
       }
     },
+    "A continent not reached yet" : {
+      "comment" : "VoiceOver: an empty passport space for a continent",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un continente aún sin visitar"
+          }
+        }
+      }
+    },
     "A cookie! Respect." : {
       "comment" : "Companion line when the Crumb Goblin stamp is earned (first cookie)",
       "localizations" : {
@@ -2550,6 +2733,27 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¡Una galleta! Respeto."
+          }
+        }
+      }
+    },
+    "A count for today." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una cuenta para hoy."
+          }
+        }
+      }
+    },
+    "A country not reached yet" : {
+      "comment" : "VoiceOver: an empty passport space for a country",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un país aún sin visitar"
           }
         }
       }
@@ -2674,6 +2878,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un espacio amable y seguro"
+          }
+        }
+      }
+    },
+    "A line, not a goal: it's there to read, never to beat." : {
+      "comment" : "Day calendar weight line: the weight is shown to read, never as a target to beat",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una línea, no una meta: está para leerla, nunca para batirla."
           }
         }
       }
@@ -2816,6 +3031,17 @@
         }
       }
     },
+    "A sea not reached yet" : {
+      "comment" : "VoiceOver: an empty passport space for a sea",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un mar aún sin visitar"
+          }
+        }
+      }
+    },
     "A second code you can give away" : {
       "localizations" : {
         "es" : {
@@ -2928,6 +3154,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un toque cuando termina un descanso o un ejercicio por tiempo. Los sonidos son discretos, respetan el interruptor de tono/silencio y suenan sobre tu música sin pausarla. La pantalla se mantiene encendida durante el entrenamiento. Si bloqueas el celular, el final de un descanso o de un ejercicio por tiempo te llega como notificación si las notificaciones de Fernlet están permitidas, y el entrenamiento espera en ese paso hasta que vuelvas a abrir Fernlet."
+          }
+        }
+      }
+    },
+    "A to Z" : {
+      "comment" : "Sprout's passport: a continent's countries in alphabetical order",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De la A a la Z"
           }
         }
       }
@@ -3484,6 +3721,16 @@
         }
       }
     },
+    "Add one" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añadir uno"
+          }
+        }
+      }
+    },
     "Add personal details" : {
       "localizations" : {
         "es" : {
@@ -3587,6 +3834,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Agregar a este iPhone la copia de seguridad más antigua del diario?"
+          }
+        }
+      }
+    },
+    "Add the older passport backup to this iPhone?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Añades la copia anterior del pasaporte a este iPhone?"
+          }
+        }
+      }
+    },
+    "Add the passport backup to this iPhone?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Añades la copia del pasaporte a este iPhone?"
           }
         }
       }
@@ -3797,6 +4064,16 @@
         }
       }
     },
+    "Adds one." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Suma uno."
+          }
+        }
+      }
+    },
     "Adds the backup's entries to this iPhone the next time you open Private." : {
       "comment" : "Accessibility hint for Restore it here on the journal Sealed backup.",
       "localizations" : {
@@ -3819,6 +4096,17 @@
         }
       }
     },
+    "Adds the backup's places to this iPhone the next time you open Private." : {
+      "comment" : "Accessibility hint for Restore it here on the World passport Sealed backup.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añade los lugares de la copia a este iPhone la próxima vez que abras Privado."
+          }
+        }
+      }
+    },
     "Adds the older backup's entries to this iPhone." : {
       "comment" : "Accessibility hint for Restore anyway on the journal Sealed backup.",
       "localizations" : {
@@ -3837,6 +4125,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Agrega a este iPhone los registros de la copia de seguridad más antigua."
+          }
+        }
+      }
+    },
+    "Adds the older backup's places to this iPhone." : {
+      "comment" : "Accessibility hint for Restore anyway on the World passport Sealed backup.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añade a este iPhone los lugares de la copia anterior."
           }
         }
       }
@@ -3943,6 +4242,17 @@
         }
       }
     },
+    "Africa" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "África"
+          }
+        }
+      }
+    },
     "Age" : {
       "localizations" : {
         "es" : {
@@ -4023,6 +4333,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Todo listo."
+          }
+        }
+      }
+    },
+    "All five oceans" : {
+      "comment" : "Passport: the special stamp for every ocean",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los cinco océanos"
+          }
+        }
+      }
+    },
+    "All seven continents" : {
+      "comment" : "Passport: the special stamp for every continent",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los siete continentes"
           }
         }
       }
@@ -4185,12 +4517,12 @@
         }
       }
     },
-    "Always. Low power, except while driving." : {
+    "Always. Low power, except while driving or riding." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Siempre. Bajo consumo, salvo cuando conduces."
+            "value" : "Siempre. Bajo consumo, salvo al conducir o ir en bici."
           }
         }
       }
@@ -4232,6 +4564,17 @@
         }
       }
     },
+    "An ocean not reached yet" : {
+      "comment" : "VoiceOver: an empty passport space for an ocean",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un océano aún sin visitar"
+          }
+        }
+      }
+    },
     "Analyzing" : {
       "localizations" : {
         "es" : {
@@ -4258,6 +4601,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Galletas de animalitos, cada una"
+          }
+        }
+      }
+    },
+    "Antarctica" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Antártida"
           }
         }
       }
@@ -4460,6 +4814,28 @@
         }
       }
     },
+    "Arctic" : {
+      "comment" : "Passport: an ocean's name on its stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ártico"
+          }
+        }
+      }
+    },
+    "Arctic Ocean" : {
+      "comment" : "Passport: the name under an ocean's stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Océano Ártico"
+          }
+        }
+      }
+    },
     "Areas to work around" : {
       "localizations" : {
         "es" : {
@@ -4503,6 +4879,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Según el plan: %@"
+          }
+        }
+      }
+    },
+    "Asia" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Asia"
           }
         }
       }
@@ -4637,6 +5024,28 @@
         }
       }
     },
+    "Atlantic" : {
+      "comment" : "Passport: an ocean's name on its stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atlántico"
+          }
+        }
+      }
+    },
+    "Atlantic Ocean" : {
+      "comment" : "Passport: the name under an ocean's stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Océano Atlántico"
+          }
+        }
+      }
+    },
     "Authenticated heartbeats" : {
       "localizations" : {
         "es" : {
@@ -4736,6 +5145,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Volver a las recetas"
+          }
+        }
+      }
+    },
+    "Back to the index" : {
+      "comment" : "VoiceOver: leaves a continent's A to Z view",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volver al índice"
           }
         }
       }
@@ -4899,6 +5319,36 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Temperatura corporal basal: %@ °F"
+          }
+        }
+      }
+    },
+    "Bathroom" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baño"
+          }
+        }
+      }
+    },
+    "Bathroom today" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baño hoy"
+          }
+        }
+      }
+    },
+    "Bathroom, %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baño, %@"
           }
         }
       }
@@ -5323,6 +5773,27 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Calcio"
+          }
+        }
+      }
+    },
+    "Calendar signals" : {
+      "comment" : "Title of the Day calendar's page that chooses which signals it shows; also the label of the card that opens it",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Señales del calendario"
+          }
+        }
+      }
+    },
+    "Calendar view" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vista del calendario"
           }
         }
       }
@@ -5921,6 +6392,17 @@
         }
       }
     },
+    "Checks the places again, then deletes those that still can't be opened." : {
+      "comment" : "Accessibility hint for Remove them on the World passport Sealed backup.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisa los lugares otra vez y borra los que aún no se abren."
+          }
+        }
+      }
+    },
     "Cholesterol" : {
       "localizations" : {
         "es" : {
@@ -6095,7 +6577,19 @@
         }
       }
     },
+    "Clear the deload week" : {
+      "comment" : "Day calendar, VoiceOver action on a day: stop marking its week as a deload week",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar la semana de descarga"
+          }
+        }
+      }
+    },
     "Close" : {
+      "comment" : "Voice Control: the passport's close button",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6112,6 +6606,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cerrar el visor de fotos"
+          }
+        }
+      }
+    },
+    "Close the passport" : {
+      "comment" : "VoiceOver: the passport's close button",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cerrar el pasaporte"
           }
         }
       }
@@ -6551,6 +7056,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Contacto"
+          }
+        }
+      }
+    },
+    "Contents" : {
+      "comment" : "Sprout's passport: the list of its pages",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contenido"
+          }
+        }
+      }
+    },
+    "Continents" : {
+      "comment" : "VoiceOver: the passport's continent bar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Continentes"
           }
         }
       }
@@ -7854,6 +8381,17 @@
         }
       }
     },
+    "Day calendar" : {
+      "comment" : "Title of the Bodybuilding goal's day calendar in Move; also the label of the Move card that opens it",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Calendario de días"
+          }
+        }
+      }
+    },
     "Day summary" : {
       "localizations" : {
         "es" : {
@@ -8255,6 +8793,17 @@
         }
       }
     },
+    "Deload week" : {
+      "comment" : "Day calendar: a deload week (a planned lighter training week): the hold menu's switch, the legend's name for its stripes, a day's chip",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana de descarga"
+          }
+        }
+      }
+    },
     "Demonstration" : {
       "comment" : "Exercise how-to sheet: short Voice Control name of the demonstration picture",
       "localizations" : {
@@ -8420,6 +8969,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Descartar"
+          }
+        }
+      }
+    },
+    "Discovered" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descubierta"
           }
         }
       }
@@ -9194,6 +9753,17 @@
         }
       }
     },
+    "Edit the day" : {
+      "comment" : "Day calendar day card: opens the Edit day sheet for this day",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Editar el día"
+          }
+        }
+      }
+    },
     "Edit workout" : {
       "localizations" : {
         "es" : {
@@ -9741,6 +10311,17 @@
         }
       }
     },
+    "Europe" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Europa"
+          }
+        }
+      }
+    },
     "Even just the inside of your mouth counts." : {
       "localizations" : {
         "es" : {
@@ -9789,6 +10370,38 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cada gesto de cuidado, convertido en un recuerdo. Solo crecen: nada se reinicia ni expira."
+          }
+        }
+      }
+    },
+    "Every country, continent and ocean you reach gets a stamp. It only adds up, and it stays on this iPhone." : {
+      "comment" : "Sprout's passport page 2: what the passport is",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada país, continente y océano al que llegas recibe un sello. Solo suma, y se queda en este iPhone."
+          }
+        }
+      }
+    },
+    "Every place your passport keeps, sealed so only your devices can read it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada lugar que guarda tu pasaporte, sellado para que solo tus dispositivos puedan leerlo."
+          }
+        }
+      }
+    },
+    "Every stamp found" : {
+      "comment" : "Sprout's passport: the chip on a full passport",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos los sellos"
           }
         }
       }
@@ -11289,6 +11902,16 @@
         }
       }
     },
+    "Fix the count" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corregir la cuenta"
+          }
+        }
+      }
+    },
     "Floss Boss" : {
       "comment" : "Silly stats stamp name, earned when Floss Rope first appears",
       "localizations" : {
@@ -11582,6 +12205,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Encontrado en Open Food Facts. Revisa el nombre y los macros de abajo antes de guardarlo: vienen de una base de datos compartida, creada por la comunidad."
+          }
+        }
+      }
+    },
+    "Free meal" : {
+      "comment" : "Day calendar: a meal tagged as a free meal (a planned, relaxed meal; never 'cheat'): the legend's name for the F, the day card's row\nLog meal sheet, Bodybuilding goal: the chip that tags this meal as a free meal (never 'cheat meal')",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comida libre"
+          }
+        }
+      }
+    },
+    "Free meal, tag" : {
+      "comment" : "VoiceOver name of Log meal's Free meal chip (Bodybuilding goal); 'tag' says what kind of control it is",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comida libre, etiqueta"
           }
         }
       }
@@ -13576,6 +14221,39 @@
         }
       }
     },
+    "Index" : {
+      "comment" : "Sprout's passport: the index page's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Índice"
+          }
+        }
+      }
+    },
+    "Indian" : {
+      "comment" : "Passport: an ocean's name on its stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Índico"
+          }
+        }
+      }
+    },
+    "Indian Ocean" : {
+      "comment" : "Passport: the name under an ocean's stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Océano Índico"
+          }
+        }
+      }
+    },
     "Info" : {
       "localizations" : {
         "es" : {
@@ -13899,6 +14577,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Sus registros se agregan aquí. A partir de ahora, este iPhone hará la copia de seguridad de tus registros íntimos."
+          }
+        }
+      }
+    },
+    "Its places are added here, each with the earliest date either iPhone has. Places deleted since that backup was made may come back. After this, this iPhone backs up your passport, and your other iPhone will show that its backup was replaced." : {
+      "comment" : "Privacy & Data: confirmation body for adding another iPhone's World passport Sealed backup here.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sus lugares se añaden aquí, cada uno con la fecha más antigua de los dos iPhone. Los lugares que borraste desde esa copia pueden volver. Después, este iPhone copia tu pasaporte, y tu otro iPhone mostrará que su copia se reemplazó."
+          }
+        }
+      }
+    },
+    "Its places are added here, each with the earliest date either iPhone has. Places deleted since that backup was made may come back. After this, this iPhone backs up your passport." : {
+      "comment" : "Privacy & Data: confirmation body for restoring an older World passport Sealed backup anyway.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sus lugares se añaden aquí, cada uno con la fecha más antigua de los dos iPhone. Los lugares que borraste desde esa copia pueden volver. Después, este iPhone copia tu pasaporte."
           }
         }
       }
@@ -14256,6 +14956,16 @@
         }
       }
     },
+    "Kept on this iPhone only, like Where you've been." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se guarda solo en este iPhone, como Dónde has estado."
+          }
+        }
+      }
+    },
     "Kettlebell weight" : {
       "comment" : "Location editor, Weights I have: field for a kettlebell size not offered as a chip",
       "localizations" : {
@@ -14316,6 +15026,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Puestos en fila: %@ de plátano."
+          }
+        }
+      }
+    },
+    "Landmarks" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugares emblemáticos"
           }
         }
       }
@@ -15418,6 +16138,17 @@
         }
       }
     },
+    "Make next week a deload" : {
+      "comment" : "Day calendar: the deload suggestion's primary button, marks next week as a deload week",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hacer descarga la próxima"
+          }
+        }
+      }
+    },
     "Make part %lld earlier" : {
       "localizations" : {
         "es" : {
@@ -15587,6 +16318,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Completar %@"
+          }
+        }
+      }
+    },
+    "Mark as a deload week" : {
+      "comment" : "Day calendar, VoiceOver action on a day: mark its whole week as a deload week (a planned lighter training week)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marcar como semana de descarga"
           }
         }
       }
@@ -16613,6 +17355,34 @@
         }
       }
     },
+    "New stamp · %@" : {
+      "comment" : "Sprout's passport: the chip when a new stamp lands: its place's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo · %@"
+          }
+        }
+      }
+    },
+    "New stamp, %@, %@" : {
+      "comment" : "VoiceOver: announced when a new stamp lands in the passport: the place, then the date",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp, %1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo, %1$@, %2$@"
+          }
+        }
+      }
+    },
     "New stamp: %@" : {
       "comment" : "Banner when a silly stats stamp is earned; the value is the stamp's name",
       "localizations" : {
@@ -16662,12 +17432,45 @@
         }
       }
     },
+    "Newest stamp" : {
+      "comment" : "Voice Control: the passport's ribbon",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello más reciente"
+          }
+        }
+      }
+    },
+    "Newest stamp, page %lld" : {
+      "comment" : "VoiceOver: the passport's ribbon, which turns to the newest stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello más reciente, página %lld"
+          }
+        }
+      }
+    },
     "Next" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Siguiente"
+          }
+        }
+      }
+    },
+    "Next continent" : {
+      "comment" : "Sprout's passport: steps to the next continent's A to Z",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Continente siguiente"
           }
         }
       }
@@ -16714,6 +17517,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mes siguiente"
+          }
+        }
+      }
+    },
+    "Next page" : {
+      "comment" : "Sprout's passport: turns on a page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Página siguiente"
           }
         }
       }
@@ -17309,6 +18123,17 @@
         }
       }
     },
+    "No stamps yet" : {
+      "comment" : "Sprout's passport: a fresh passport's stamp page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay sellos"
+          }
+        }
+      }
+    },
     "No tier 2 memories yet. They are extracted from journals when Foundation Models are available." : {
       "localizations" : {
         "es" : {
@@ -17325,6 +18150,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Sin respuesta útil — Fernlet usó su propia lógica"
+          }
+        }
+      }
+    },
+    "No weight from Health this month." : {
+      "comment" : "Day calendar weight line: Health has no weight readings for this month, or Health is off",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salud no tiene peso de este mes."
           }
         }
       }
@@ -17464,6 +18300,28 @@
         }
       }
     },
+    "None yet" : {
+      "comment" : "Sprout's passport index: a continent with no countries found",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ninguno aún"
+          }
+        }
+      }
+    },
+    "North America" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "América del Norte"
+          }
+        }
+      }
+    },
     "Not Now" : {
       "localizations" : {
         "es" : {
@@ -17545,11 +18403,23 @@
       }
     },
     "Not now" : {
+      "comment" : "Day calendar: the deload suggestion's secondary button, hides the suggestion",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "Not now hides it; Fernlet asks again only after two more hard weeks." : {
+      "comment" : "Day calendar: under the deload suggestion's buttons, what Not now does",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no lo oculta; Fernlet vuelve a preguntar solo tras dos semanas duras más."
           }
         }
       }
@@ -18024,6 +18894,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Comprobaciones observadas"
+          }
+        }
+      }
+    },
+    "Oceania" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Oceanía"
+          }
+        }
+      }
+    },
+    "Oceans" : {
+      "comment" : "Sprout's passport index: the oceans row",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Océanos"
           }
         }
       }
@@ -18604,6 +19496,27 @@
         }
       }
     },
+    "Opens its countries A to Z." : {
+      "comment" : "VoiceOver hint: a passport index row opens the continent's countries",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre sus países de la A a la Z."
+          }
+        }
+      }
+    },
+    "Opens on" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se abre en"
+          }
+        }
+      }
+    },
     "Opens where you train" : {
       "localizations" : {
         "es" : {
@@ -18813,6 +19726,17 @@
         }
       }
     },
+    "PASSPORT" : {
+      "comment" : "Sprout's passport: the word on its cover",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PASAPORTE"
+          }
+        }
+      }
+    },
     "PER SERVING" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -18820,6 +19744,90 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "POR PORCIÓN"
+          }
+        }
+      }
+    },
+    "Pacific" : {
+      "comment" : "Passport: an ocean's name on its stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pacífico"
+          }
+        }
+      }
+    },
+    "Pacific Ocean" : {
+      "comment" : "Passport: the name under an ocean's stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Océano Pacífico"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld, %@" : {
+      "comment" : "VoiceOver: read when a passport page turns: number, count, name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Página %1$lld de %2$lld, %3$@"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld, %@, %@ to %@" : {
+      "comment" : "VoiceOver: read when a passport stamp page turns: number, count, name, first and last stamp dates",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld, %3$@, %4$@ to %5$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Página %1$lld de %2$lld, %3$@, %4$@ a %5$@"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld, %@. Contents" : {
+      "comment" : "VoiceOver: the passport page bar's name button, which opens the contents",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld, %3$@. Contents"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Página %1$lld de %2$lld, %3$@. Contenido"
+          }
+        }
+      }
+    },
+    "Pages" : {
+      "comment" : "VoiceOver: the passport's page bar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Páginas"
           }
         }
       }
@@ -18991,6 +19999,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Código"
+          }
+        }
+      }
+    },
+    "Passport" : {
+      "comment" : "Sprout's passport: Back on a page pushed from page 1",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasaporte"
           }
         }
       }
@@ -19297,6 +20316,7 @@
       }
     },
     "Pet" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -19647,6 +20667,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Lugares marcados"
+          }
+        }
+      }
+    },
+    "Places that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los lugares que solo están en la copia ya no estarán en ella. Si tu otro iPhone aún los tiene, se quedan en ese iPhone."
           }
         }
       }
@@ -20108,12 +21138,34 @@
         }
       }
     },
+    "Previous continent" : {
+      "comment" : "Sprout's passport: steps to the previous continent's A to Z",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Continente anterior"
+          }
+        }
+      }
+    },
     "Previous month" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mes anterior"
+          }
+        }
+      }
+    },
+    "Previous page" : {
+      "comment" : "Sprout's passport: turns back a page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Página anterior"
           }
         }
       }
@@ -21316,6 +22368,16 @@
         }
       }
     },
+    "Remove %lld places this iPhone can't open?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Quitas %lld lugares que este iPhone no puede abrir?"
+          }
+        }
+      }
+    },
     "Remove a bottle" : {
       "localizations" : {
         "es" : {
@@ -21392,6 +22454,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Quitar participante?"
+          }
+        }
+      }
+    },
+    "Remove one" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar uno"
           }
         }
       }
@@ -21688,6 +22760,17 @@
         }
       }
     },
+    "Replace it with this iPhone's passport" : {
+      "comment" : "Privacy & Data: back up this iPhone over the World passport Sealed backup in iCloud.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reemplazarla con el pasaporte de este iPhone"
+          }
+        }
+      }
+    },
     "Replace planned" : {
       "localizations" : {
         "es" : {
@@ -21724,6 +22807,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Reemplazar la copia de seguridad del diario con el diario de este iPhone?"
+          }
+        }
+      }
+    },
+    "Replace the passport backup with this iPhone's passport?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Reemplazas la copia del pasaporte con el de este iPhone?"
           }
         }
       }
@@ -22073,6 +23166,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Día de descanso"
+          }
+        }
+      }
+    },
+    "Rest defaults come from your bodybuilding goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los descansos por defecto vienen de tu objetivo de culturismo y del movimiento; ajústalos aquí. Los cambios se aplican la próxima vez que empieces este entrenamiento."
           }
         }
       }
@@ -23230,6 +24333,16 @@
         }
       }
     },
+    "Sealed backup for your passport" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Copia sellada del pasaporte"
+          }
+        }
+      }
+    },
     "Sealed backup for your photos" : {
       "localizations" : {
         "es" : {
@@ -23416,6 +24529,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Buscar tipo de entrenamiento"
+          }
+        }
+      }
+    },
+    "Seas" : {
+      "comment" : "Sprout's passport index: the seas row",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mares"
           }
         }
       }
@@ -24481,6 +25605,16 @@
         }
       }
     },
+    "Shown on the calendar" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se muestra en el calendario"
+          }
+        }
+      }
+    },
     "Shows the connection inspector button and a Force override on Album › Friends nearby that bypasses distance requirements." : {
       "localizations" : {
         "es" : {
@@ -24581,6 +25715,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Estadísticas absurdas y sellos"
+          }
+        }
+      }
+    },
+    "Since %@" : {
+      "comment" : "Sprout's passport page 2: since the first stamp's date",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desde %@"
+          }
+        }
+      }
+    },
+    "Six hard weeks in a row. A deload week next week gives your body time to catch up. It's your call." : {
+      "comment" : "Day calendar: the deload suggestion card's text. A deload week is a planned lighter training week; the person decides.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seis semanas duras seguidas. Una semana de descarga la próxima semana le da a tu cuerpo tiempo para recuperarse. Tú decides."
           }
         }
       }
@@ -24789,6 +25945,17 @@
         }
       }
     },
+    "Sleep, 8 h full" : {
+      "comment" : "Day calendar legend: the blue bar is sleep, and it is full at 8 hours",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sueño, 8 h lleno"
+          }
+        }
+      }
+    },
     "Sleep, heart and temperature signals, for recovery context." : {
       "localizations" : {
         "es" : {
@@ -24993,6 +26160,17 @@
         }
       }
     },
+    "Some places in your passport can't be opened on this iPhone, so your passport backup is paused." : {
+      "comment" : "Privacy & Data: places this iPhone cannot open pause the World passport Sealed backup.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Algunos lugares de tu pasaporte no se pueden abrir en este iPhone, así que la copia de tu pasaporte está en pausa."
+          }
+        }
+      }
+    },
     "Some shared items couldn't be kept just now. Fernlet makes room as items finish or expire." : {
       "localizations" : {
         "es" : {
@@ -25113,6 +26291,39 @@
         }
       }
     },
+    "South America" : {
+      "comment" : "Passport: a continent's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "América del Sur"
+          }
+        }
+      }
+    },
+    "Southern" : {
+      "comment" : "Passport: an ocean's name on its stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Austral"
+          }
+        }
+      }
+    },
+    "Southern Ocean" : {
+      "comment" : "Passport: the name under an ocean's stamp",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Océano Austral"
+          }
+        }
+      }
+    },
     "Space" : {
       "localizations" : {
         "es" : {
@@ -25217,6 +26428,56 @@
         }
       }
     },
+    "Sprout" : {
+      "comment" : "Sprout's passport: page 1's name, the companion's own page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sprout"
+          }
+        }
+      }
+    },
+    "Sprout's passport" : {
+      "comment" : "Stamp book: the row that opens Sprout's passport",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasaporte de Sprout"
+          }
+        }
+      }
+    },
+    "Sprout's passport, closed" : {
+      "comment" : "VoiceOver: Sprout's passport, before it opens",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasaporte de Sprout, cerrado"
+          }
+        }
+      }
+    },
+    "Sprout's passport, page %lld of %lld, %@" : {
+      "comment" : "VoiceOver: the passport's open page: its number, the page count, its name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sprout's passport, page %1$lld of %2$lld, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasaporte de Sprout, página %1$lld de %2$lld, %3$@"
+          }
+        }
+      }
+    },
     "Stacked up, your cups stand %@ tall." : {
       "comment" : "Silly stat: stacked cups compared with a height",
       "localizations" : {
@@ -25268,6 +26529,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Álbum de sellos"
+          }
+        }
+      }
+    },
+    "Stamps" : {
+      "comment" : "Sprout's passport: a stamp page's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sellos"
+          }
+        }
+      }
+    },
+    "Stamps come from where you go, so they need location. While Using is enough." : {
+      "comment" : "Sprout's passport: a fresh passport, stamps need location access While Using",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los sellos salen de donde vas, así que necesitan la ubicación. Basta con «Al usar la app»."
           }
         }
       }
@@ -25356,6 +26639,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Crear una copia de seguridad nueva del diario?"
+          }
+        }
+      }
+    },
+    "Start a new passport backup?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Empiezas una copia nueva del pasaporte?"
           }
         }
       }
@@ -25673,6 +26966,17 @@
         }
       }
     },
+    "Still to come" : {
+      "comment" : "Day calendar week list: a day that has not happened yet",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún por venir"
+          }
+        }
+      }
+    },
     "Stop" : {
       "localizations" : {
         "es" : {
@@ -25720,6 +27024,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Dejar de hacer copia de seguridad del diario de este iPhone?"
+          }
+        }
+      }
+    },
+    "Stop backing up this iPhone's passport?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Dejas de copiar el pasaporte de este iPhone?"
           }
         }
       }
@@ -25949,6 +27263,17 @@
         }
       }
     },
+    "Suggested deload week" : {
+      "comment" : "Day calendar: the week Fernlet suggests as a deload week, drawn dashed with faint stripes until the person decides",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana de descarga sugerida"
+          }
+        }
+      }
+    },
     "Suggested weight %@" : {
       "comment" : "VoiceOver, Live Activity: the weight Fernlet suggests for this set, e.g. 'Suggested weight 105 pounds'.",
       "localizations" : {
@@ -26167,6 +27492,16 @@
         }
       }
     },
+    "Tag" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Etiqueta"
+          }
+        }
+      }
+    },
     "Take 15 seconds off the rest" : {
       "comment" : "Workout rest: the '−15 s' button's spoken name and its Shortcuts action title — takes 15 seconds off the rest timer.",
       "localizations" : {
@@ -26247,6 +27582,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Quita 15 segundos a tu descanso actual y siempre deja al menos 5 segundos."
+          }
+        }
+      }
+    },
+    "Tap a day for its details. Hold a day to mark its week as a deload week." : {
+      "comment" : "Day calendar: how to open a day and how to mark a deload week (a planned lighter training week)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca un día para ver detalles. Mantén pulsado un día para marcar su semana como semana de descarga."
           }
         }
       }
@@ -26641,11 +27987,22 @@
       }
     },
     "The World map's land, seas, countries and cities come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La tierra, los mares, los países y las ciudades del mapa del Mundo vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Las dos fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+          }
+        }
+      }
+    },
+    "The World map's land, seas, countries, states and provinces, cities and major roads come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tierra, los mares, los países, los estados y provincias, las ciudades y las carreteras principales del mapa del Mundo vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Las dos fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
           }
         }
       }
@@ -26738,6 +28095,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La conexión con %@ se cortó durante el envío, así que puede que no le haya llegado. Puedes intentarlo de nuevo."
+          }
+        }
+      }
+    },
+    "The continent itself, south of 60°S" : {
+      "comment" : "Sprout's passport index: what counts as Antarctica",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El continente, al sur de 60°S"
           }
         }
       }
@@ -26856,6 +28224,38 @@
         }
       }
     },
+    "The month grid has room for four; the week list shows all you turn on." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La cuadrícula del mes tiene sitio para cuatro; la lista semanal muestra todas las que actives."
+          }
+        }
+      }
+    },
+    "The newest places in your passport will be added to Sealed backup the next time you open Private." : {
+      "comment" : "Privacy & Data: World passport changes the next Private visit backs up.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los lugares más nuevos de tu pasaporte se añadirán a la copia sellada la próxima vez que abras Privado."
+          }
+        }
+      }
+    },
+    "The next stamp lands here" : {
+      "comment" : "Sprout's passport: the dotted spot where the next stamp lands",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El próximo sello cae aquí"
+          }
+        }
+      }
+    },
     "The other phone is now showing a code of its own. Scan it." : {
       "localizations" : {
         "es" : {
@@ -26882,6 +28282,38 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El bloqueo con código usa el scrypt de CryptoSwift para convertir tu código en una clave. Fernlet lo compila a partir de una copia que cambia una línea de su archivo de paquete (la versión de iOS más antigua para la que se compila) y nada de su código. Su licencia pide que cada copia de Fernlet diga:"
+          }
+        }
+      }
+    },
+    "The passport backup in iCloud is damaged and can't be opened." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup will not authenticate.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia del pasaporte en iCloud está dañada y no se puede abrir."
+          }
+        }
+      }
+    },
+    "The passport backup in iCloud is older than one this iPhone has already seen, so it wasn't added." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup restore refused a set older than one this iPhone has seen.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia del pasaporte en iCloud es más antigua que una que este iPhone ya vio, así que no se añadió."
+          }
+        }
+      }
+    },
+    "The passport backup saved from your other iPhone stays in iCloud." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia del pasaporte de tu otro iPhone se queda en iCloud."
           }
         }
       }
@@ -27200,6 +28632,16 @@
         }
       }
     },
+    "They'll be checked again first, and only places that still can't be opened are removed. This can't be undone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Primero se revisan otra vez, y solo se quitan los que aún no se abren. No se puede deshacer."
+          }
+        }
+      }
+    },
     "They're recovering — scan their next code" : {
       "localizations" : {
         "es" : {
@@ -27410,6 +28852,16 @@
         }
       }
     },
+    "This iPhone can't open the passport backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este iPhone no puede abrir la copia del pasaporte en iCloud. Una copia nueva la reemplaza para siempre, para cada iPhone que la usa. Si su clave aún no llegó por el Llavero de iCloud, espérala: suele llegar, aunque ya no tengas el iPhone que la guardó. Empieza de cero solo si restableciste el Llavero de iCloud o la copia está dañada."
+          }
+        }
+      }
+    },
     "This iPhone isn't signed in to iCloud, so nothing can sync yet. If you choose Sync to iCloud, your logs stay on this iPhone and start syncing once you sign in to iCloud in the Settings app." : {
       "comment" : "Onboarding storage step: shown when no iCloud account is signed in on this device.",
       "localizations" : {
@@ -27537,6 +28989,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Esto elimina para siempre de iCloud la copia de seguridad del diario, para todos los iPhone que la usan. Si pierdes o reemplazas este iPhone, tu diario no se podrá recuperar."
+          }
+        }
+      }
+    },
+    "This permanently deletes the passport backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your passport can't be recovered." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esto borra para siempre la copia del pasaporte de iCloud, para cada iPhone que la usa. Si pierdes o cambias este iPhone, no podrás recuperar tu pasaporte."
           }
         }
       }
@@ -27719,7 +29181,7 @@
       }
     },
     "This week" : {
-      "comment" : "Weekly totals screen: caption under the date range when it is the current week.",
+      "comment" : "Day calendar: the week view's heading\nWeekly totals screen: caption under the date range when it is the current week.",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -27818,6 +29280,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hora"
+          }
+        }
+      }
+    },
+    "Time for a lighter week?" : {
+      "comment" : "Day calendar: the deload suggestion card's title, shown after six hard training weeks in a row",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Una semana más ligera?"
           }
         }
       }
@@ -28174,6 +29647,17 @@
         }
       }
     },
+    "Trained" : {
+      "comment" : "Day calendar legend: the dumbbell means a workout was logged that day",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrenó"
+          }
+        }
+      }
+    },
     "Trainer summaries" : {
       "localizations" : {
         "es" : {
@@ -28357,6 +29841,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Desactivar la copia de seguridad sellada de las entradas del diario?"
+          }
+        }
+      }
+    },
+    "Turn off Sealed backup for your passport?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Desactivas la copia sellada del pasaporte?"
           }
         }
       }
@@ -28551,6 +30045,17 @@
         }
       }
     },
+    "Turns to its page." : {
+      "comment" : "VoiceOver hint: a passport index name turns to its stamp's page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasa a su página."
+          }
+        }
+      }
+    },
     "Two minutes per brushing." : {
       "comment" : "Silly stat: how brushing time is counted",
       "localizations" : {
@@ -28575,6 +30080,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Dos o tres series más ligeras que van subiendo hasta el peso de trabajo en la barra y otros levantamientos grandes. Nunca en un día ligero, ni antes de que un levantamiento tenga un peso al que llegar."
+          }
+        }
+      }
+    },
+    "Two to aim for" : {
+      "comment" : "Sprout's passport page 2: the two special stamps",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dos para soñar"
           }
         }
       }
@@ -28655,6 +30171,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Descubrir el mapa mientras vas"
+          }
+        }
+      }
+    },
+    "Uncovered" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descubierto"
           }
         }
       }
@@ -29556,6 +31082,7 @@
       }
     },
     "Weight" : {
+      "comment" : "Day calendar: the weight line's title under the month grid",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -29889,6 +31416,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La primera vez que lo uses, Fernlet te preguntará antes de enviar a DuckDuckGo el producto que escribiste. Una vez que lo permitas, también podrás tocar para buscar en Open Food Facts un código de barras escaneado que Fernlet no reconozca — solo se envía el número del código de barras. Desactívalo aquí cuando quieras para retirar el permiso."
+          }
+        }
+      }
+    },
+    "When you reach a new country, continent, ocean or sea, its stamp lands here with the date, in the order you visit. Your own country is usually the first." : {
+      "comment" : "Sprout's passport: a fresh passport, where stamps come from",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuando llegues a un país, continente, océano o mar nuevo, su sello cae aquí con la fecha, en el orden en que los visitas. Tu propio país suele ser el primero."
           }
         }
       }
@@ -31849,6 +33387,105 @@
         }
       }
     },
+    "Your passport backup didn't finish. It will try again when you next open Private." : {
+      "comment" : "Privacy & Data: the last World passport Sealed backup export failed.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte no terminó. Lo intentará de nuevo la próxima vez que abras Privado."
+          }
+        }
+      }
+    },
+    "Your passport backup in iCloud was saved by an earlier version of Fernlet, which didn't record which iPhone saved it. Backing up this iPhone would replace it." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup was written by an earlier Fernlet that named no iPhone.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte en iCloud la guardó una versión anterior de Fernlet, que no anotó desde qué iPhone. Copiar este iPhone la reemplazaría."
+          }
+        }
+      }
+    },
+    "Your passport backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup export waits for its key from iCloud Keychain.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte espera su clave del Llavero de iCloud. Asegúrate de que el Llavero de iCloud esté activado."
+          }
+        }
+      }
+    },
+    "Your passport backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on. New places aren't backed up until it arrives." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup restore waits for its key from iCloud Keychain.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte espera su clave del Llavero de iCloud. Asegúrate de que el Llavero de iCloud esté activado. Los lugares nuevos no se copian hasta que llegue."
+          }
+        }
+      }
+    },
+    "Your passport backup needs a newer version of Fernlet. Update Fernlet to keep backing up your passport." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup needs a newer Fernlet.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte necesita una versión más nueva de Fernlet. Actualiza Fernlet para seguir copiando tu pasaporte."
+          }
+        }
+      }
+    },
+    "Your passport backup was saved from another iPhone. Backing up this iPhone would replace it." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup belongs to another iPhone.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte se guardó desde otro iPhone. Copiar este iPhone la reemplazaría."
+          }
+        }
+      }
+    },
+    "Your passport backup was saved with a key this iPhone doesn't have yet. It usually arrives through iCloud Keychain." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup is sealed with a key this iPhone lacks.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte se guardó con una clave que este iPhone aún no tiene. Suele llegar por el Llavero de iCloud."
+          }
+        }
+      }
+    },
+    "Your passport backup will be added to this iPhone the next time you open Private. New places are backed up after that." : {
+      "comment" : "Privacy & Data: this iPhone has not added its World passport Sealed backup yet.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La copia de tu pasaporte se añadirá a este iPhone la próxima vez que abras Privado. Después se copian los lugares nuevos."
+          }
+        }
+      }
+    },
+    "Your passport is too large for Sealed backup." : {
+      "comment" : "Privacy & Data: the World passport Sealed backup is over its size bound.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu pasaporte es demasiado grande para la copia sellada."
+          }
+        }
+      }
+    },
     "Your period and intimacy data stay on this device, behind your app lock." : {
       "localizations" : {
         "es" : {
@@ -32136,6 +33773,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tu código de verificación, como código QR para que lo escanee la persona con la que te conectas"
+          }
+        }
+      }
+    },
+    "Your world" : {
+      "comment" : "Sprout's passport: page 2's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu mundo"
           }
         }
       }
@@ -33532,12 +35180,562 @@
         }
       }
     },
+    "bathroom.notSaved" : {
+      "comment" : "Log panel, Bathroom tile (Bodybuilding goal): spoken when a tap or a fixed count could not be saved on the device",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That bathroom count didn't save. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se guardó esa cuenta del baño. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
     "black bean bowls" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "tazones de frijoles negros"
+          }
+        }
+      }
+    },
+    "bodybuilding.bathroom.spoken" : {
+      "comment" : "Day calendar, spoken: how many bathroom visits were counted that day. Needs a plural variation; English also needs '1 bathroom visit'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld bathroom visit"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld bathroom visits"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld ida al baño"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld idas al baño"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "bodybuilding.day.freeMeal" : {
+      "comment" : "Day calendar day card: the row saying whether a meal that day is tagged Free meal (a planned, relaxed meal; never 'cheat')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Free meal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comida libre"
+          }
+        }
+      }
+    },
+    "bodybuilding.day.macros" : {
+      "comment" : "Day calendar day card: the row with grams of protein, carbs and fat eaten that day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein · carbs · fat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Proteína · carbohidratos · grasa"
+          }
+        }
+      }
+    },
+    "bodybuilding.day.shortTitle" : {
+      "comment" : "Day calendar week list: a day's short name, the short weekday then the day of the month, e.g. 'Mon 26'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "bodybuilding.day.title" : {
+      "comment" : "Day calendar: a day's name, the weekday then the day of the month, e.g. 'Wednesday 21'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "bodybuilding.freeMeal.mark" : {
+      "comment" : "Day calendar: the one-letter mark for a free meal, drawn in a small square on a day. The first letter of the translation of 'Free meal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "F"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "F"
+          }
+        }
+      }
+    },
+    "bodybuilding.macros.short" : {
+      "comment" : "Day calendar: grams of protein, carbs and fat eaten that day, in that order, e.g. '142 · 260 · 71 g'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ · %3$@ g"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@ · %3$@ g"
+          }
+        }
+      }
+    },
+    "bodybuilding.macros.spoken" : {
+      "comment" : "Day calendar, spoken: grams of protein, carbs and fat eaten that day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ grams of protein, %2$@ grams of carbs, %3$@ grams of fat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ gramos de proteína, %2$@ gramos de carbohidratos, %3$@ gramos de grasa"
+          }
+        }
+      }
+    },
+    "bodybuilding.sleep.short" : {
+      "comment" : "Day calendar: hours slept, short, e.g. '7.5 h'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ h"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ h"
+          }
+        }
+      }
+    },
+    "bodybuilding.sleep.spoken" : {
+      "comment" : "Day calendar, spoken: hours slept, e.g. '8 hours of sleep'. The hours arrive already formatted with their unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ of sleep"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ de sueño"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.deload" : {
+      "comment" : "Day calendar, spoken after a day's name: the day is in a deload week (a planned lighter training week)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "deload week"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "semana de descarga"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.freeMeal" : {
+      "comment" : "Day calendar, spoken: a meal that day carries the Free meal tag (a planned, relaxed meal; never 'cheat')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "free meal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "comida libre"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.future" : {
+      "comment" : "Day calendar, spoken after a day's name: the day has not happened yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "still to come"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "aún por venir"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.rest" : {
+      "comment" : "Day calendar, spoken: no workout was logged that day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "rest day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "día de descanso"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.suggestedDeload" : {
+      "comment" : "Day calendar, spoken after a day's name: Fernlet suggests this week as a deload week; nothing is decided yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "suggested deload week"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "semana de descarga sugerida"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.today" : {
+      "comment" : "Day calendar, spoken after a day's name: the day is today",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hoy"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.trained" : {
+      "comment" : "Day calendar, spoken: a workout was logged that day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "trained"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "entrenó"
+          }
+        }
+      }
+    },
+    "bodybuilding.spoken.trainedName" : {
+      "comment" : "Day calendar, spoken: the workout logged that day, e.g. 'trained legs'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "trained %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "entrenó %@"
+          }
+        }
+      }
+    },
+    "bodybuilding.steps.spoken" : {
+      "comment" : "Day calendar, spoken: steps walked that day. Needs a plural variation; English also needs '1 step'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld step"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld steps"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld paso"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld pasos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "bodybuilding.training.lighter" : {
+      "comment" : "Day calendar: the day's training in a deload week, e.g. 'Legs, lighter'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, lighter"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, más ligero"
+          }
+        }
+      }
+    },
+    "bodybuilding.training.rest" : {
+      "comment" : "Day calendar: a day with no workout logged (a rest day)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descanso"
+          }
+        }
+      }
+    },
+    "bodybuilding.training.trained" : {
+      "comment" : "Day calendar: a day with a workout that has no name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trained"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrenó"
+          }
+        }
+      }
+    },
+    "bodybuilding.value.no" : {
+      "comment" : "Day calendar day card: no meal that day is tagged Free meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No"
+          }
+        }
+      }
+    },
+    "bodybuilding.value.none" : {
+      "comment" : "Day calendar day card, spoken: nothing is logged for this signal that day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nada"
+          }
+        }
+      }
+    },
+    "bodybuilding.value.yes" : {
+      "comment" : "Day calendar day card: a meal that day is tagged Free meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sí"
+          }
+        }
+      }
+    },
+    "bodybuilding.weight.onDay" : {
+      "comment" : "Day calendar weight line: the latest weight and its day, e.g. '178.1 lb on Oct 27'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ on %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ el %2$@"
+          }
+        }
+      }
+    },
+    "bodybuilding.weight.today" : {
+      "comment" : "Day calendar weight line: today's weight, e.g. '178.4 lb today'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ hoy"
           }
         }
       }
@@ -40430,6 +42628,24 @@
         }
       }
     },
+    "homeMap.bikeRides.noMotion" : {
+      "comment" : "Settings, Home map: under Log my bike rides on an iPhone without motion activity, so it stays off; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This iPhone can't tell a bike from a bench. %@ is staying put."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este iPhone no distingue una bici de un banco. %@ se queda donde está."
+          }
+        }
+      }
+    },
     "homeMap.delete.history.message" : {
       "comment" : "Settings, Home map: what deleting the map history does",
       "extractionState" : "stale",
@@ -44991,6 +47207,50 @@
         }
       }
     },
+    "of %lld" : {
+      "comment" : "Sprout's passport page bar: of how many pages, after the page number",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "de %lld"
+          }
+        }
+      }
+    },
+    "of %lld continents" : {
+      "comment" : "Sprout's passport: after the continents found, out of how many",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "de %lld continentes"
+          }
+        }
+      }
+    },
+    "of %lld countries" : {
+      "comment" : "Sprout's passport: after the countries found, out of how many",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "de %lld países"
+          }
+        }
+      }
+    },
+    "of %lld oceans" : {
+      "comment" : "Sprout's passport: after the oceans found, out of how many",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "de %lld océanos"
+          }
+        }
+      }
+    },
     "of %lldg" : {
       "localizations" : {
         "es" : {
@@ -45313,6 +47573,654 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Blanco"
+          }
+        }
+      }
+    },
+    "passport.appColors" : {
+      "comment" : "Sprout's passport, page 1: the row opening App colors (paper, wood and accent). Spanish: Colores de la app",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App colors"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Colores de la app"
+          }
+        }
+      }
+    },
+    "passport.care.a11y" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver: the hearts as a care score",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care %lld percent."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuidado %lld por ciento."
+          }
+        }
+      }
+    },
+    "passport.care.a11y.gold" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver: the care score with two gold hearts friends gave in person",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care %1$lld percent, %2$lld gold hearts from friends."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuidado %1$lld por ciento, %2$lld corazones dorados de amigos."
+          }
+        }
+      }
+    },
+    "passport.care.a11y.oneGold" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver: the care score with one gold heart a friend gave in person",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care %lld percent, one gold heart from a friend."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuidado %lld por ciento, un corazón dorado de un amigo."
+          }
+        }
+      }
+    },
+    "passport.feeling" : {
+      "comment" : "Sprout's passport, page 1, the Feeling field: the companion's state, then its feeling in a word, e.g. 'Thriving · happy' (Spanish: 'Radiante · contento')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "passport.feeling.calm" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "calm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tranquilo"
+          }
+        }
+      }
+    },
+    "passport.feeling.comforted" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "comforted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "reconfortado"
+          }
+        }
+      }
+    },
+    "passport.feeling.frazzled" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little frazzled"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un poco agobiado"
+          }
+        }
+      }
+    },
+    "passport.feeling.happy" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "happy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "contento"
+          }
+        }
+      }
+    },
+    "passport.feeling.hungry" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "hungry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "con hambre"
+          }
+        }
+      }
+    },
+    "passport.feeling.loved" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "loved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "querido"
+          }
+        }
+      }
+    },
+    "passport.feeling.playful" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "playful"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "juguetón"
+          }
+        }
+      }
+    },
+    "passport.feeling.sad" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "sad"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "triste"
+          }
+        }
+      }
+    },
+    "passport.feeling.sleepy" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "sleepy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "con sueño"
+          }
+        }
+      }
+    },
+    "passport.feeling.thirsty" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "thirsty"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "con sed"
+          }
+        }
+      }
+    },
+    "passport.feeling.tired" : {
+      "comment" : "Sprout's passport, Feeling field: the feeling in a word after the state, lower case mid-phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "tired"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "cansado"
+          }
+        }
+      }
+    },
+    "passport.field.care" : {
+      "comment" : "Sprout's passport, page 1: the six hearts and gold hearts. Spanish: Cuidado",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuidado"
+          }
+        }
+      }
+    },
+    "passport.field.feeling" : {
+      "comment" : "Sprout's passport, page 1: the companion's state and feeling. Spanish: Ánimo",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ánimo"
+          }
+        }
+      }
+    },
+    "passport.field.name" : {
+      "comment" : "Sprout's passport, page 1: the companion's name field. Spanish: Nombre",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombre"
+          }
+        }
+      }
+    },
+    "passport.field.shape" : {
+      "comment" : "Sprout's passport, page 1: the companion's body shape. Spanish: Forma",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shape"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Forma"
+          }
+        }
+      }
+    },
+    "passport.friendShops" : {
+      "comment" : "Sprout's passport, page 1: the gold row opening friends' shops, for the hour after a session. Spanish: Tiendas de amigos",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friend shops"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiendas de amigos"
+          }
+        }
+      }
+    },
+    "passport.friendShops.a11y" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver: the Friend shops row. Spanish: 'Tiendas de amigos, abiertas, quedan N minutos'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friend shops, open, %lld minutes left"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiendas de amigos, abiertas, quedan %lld minutos"
+          }
+        }
+      }
+    },
+    "passport.friendShops.open" : {
+      "comment" : "Sprout's passport, page 1, Friend shops row: the shops are open, minutes left. Spanish: 'Abiertas · quedan N min'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open · %lld min left"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abiertas · quedan %lld min"
+          }
+        }
+      }
+    },
+    "passport.listed" : {
+      "comment" : "Sprout's passport, page 1, Your shop row: items in the shop of its six spots. Spanish: 'N de 6 a la venta'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld listed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld a la venta"
+          }
+        }
+      }
+    },
+    "passport.listed.none" : {
+      "comment" : "Sprout's passport, page 1, Your shop row: no items in the shop. Spanish: Nada a la venta",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing listed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nada a la venta"
+          }
+        }
+      }
+    },
+    "passport.newStampBanner.detail" : {
+      "comment" : "Home banner's second line when a passport stamp is earned; the companion's name (Spanish: Está en el pasaporte de Sprout.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's in %@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Está en el pasaporte de %@."
+          }
+        }
+      }
+    },
+    "passport.newStampBanner.hint" : {
+      "comment" : "VoiceOver hint on the Home banner for a new passport stamp",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens the passport on its page."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre el pasaporte en su página."
+          }
+        }
+      }
+    },
+    "passport.newStampBanner.spoken" : {
+      "comment" : "VoiceOver: the Home banner for a new passport stamp: the place, the date, then the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp, %1$@, %2$@. It's in %3$@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo, %1$@, %2$@. Está en el pasaporte de %3$@."
+          }
+        }
+      }
+    },
+    "passport.newStampBanner.title" : {
+      "comment" : "Home banner when a passport stamp is earned; the stamp's place (Spanish: Sello nuevo: Mar del Japón)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo: %@"
+          }
+        }
+      }
+    },
+    "passport.photo.a11y" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver: the companion's photo, its name then its state, e.g. 'Sprout, thriving.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@."
+          }
+        }
+      }
+    },
+    "passport.photo.hint" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver hint on the companion's photo. Spanish: Toca para acariciar.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap to pet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca para acariciar."
+          }
+        }
+      }
+    },
+    "passport.shop" : {
+      "comment" : "Sprout's passport, page 1: heading over the shop rows. Spanish: Tienda",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tienda"
+          }
+        }
+      }
+    },
+    "passport.title" : {
+      "comment" : "Sprout's passport: the book's name, shown in capitals on page 1's header and read by Back on the pages it opens. Spanish: Pasaporte",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasaporte"
+          }
+        }
+      }
+    },
+    "passport.wearing" : {
+      "comment" : "Sprout's passport, page 1: heading over the four slot buttons; the companion's name. Spanish: 'Lo que lleva Sprout'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What %@'s wearing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo que lleva %@"
+          }
+        }
+      }
+    },
+    "passport.yourShop" : {
+      "comment" : "Sprout's passport, page 1: the row that opens the person's own shop. Spanish: Tu tienda",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your shop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu tienda"
+          }
+        }
+      }
+    },
+    "passport.yourShop.a11y" : {
+      "comment" : "Sprout's passport, page 1, VoiceOver: 'Your shop', how many are listed, then the coin balance ('25 coins')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, %3$@"
           }
         }
       }
@@ -45666,6 +48574,24 @@
         }
       }
     },
+    "privacy.sealedBackup.disclosure.passport" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the World passport backup (the places first visited).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The places in your passport are uploaded only in this encrypted form."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los lugares de tu pasaporte solo se suben así, cifrados."
+          }
+        }
+      }
+    },
     "privacy.sealedBackup.disclosure.period" : {
       "comment" : "Encrypted backup consent alert, last paragraph when turning on the cycle backup.",
       "extractionState" : "extracted_with_value",
@@ -45716,6 +48642,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Quitarlas"
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.passport.removeThem" : {
+      "comment" : "Privacy & Data: remove the passport places this iPhone cannot open from the World passport Sealed backup. 'Them' is the places.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitarlos"
           }
         }
       }
@@ -46063,6 +49007,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Su línea sale del dibujo del día. El entrenamiento se queda en Moverse."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteStop.line.ride" : {
+      "comment" : "Private, Places: deleting a bike ride from a day's timeline; its saved line goes, the cycling workout stays in Move (Spanish draft: Su línea sale del dibujo del día. El paseo en bici se queda en Moverse.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Its line leaves the day's sketch. The ride stays in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Su línea sale del dibujo del día. El paseo en bici se queda en Moverse."
           }
         }
       }
@@ -46484,6 +49446,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Lugares a los que vuelves"
+          }
+        }
+      }
+    },
+    "privatePlaces.ride" : {
+      "comment" : "Private, Places: a bike ride Fernlet logged, on the timeline, beside 'A walk' and 'A run' (Spanish draft: Un paseo en bici)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A bike ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un paseo en bici"
+          }
+        }
+      }
+    },
+    "privatePlaces.ride.detail" : {
+      "comment" : "Private, Places: under 'A bike ride' on the timeline: its distance, a middle dot, its minutes (e.g. '4.2 km · 18 min'; Spanish draft keeps the order: '4,2 km · 18 min')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
           }
         }
       }
@@ -47484,6 +50482,17 @@
         }
       }
     },
+    "sea, each its own stamp" : {
+      "comment" : "Sprout's passport: after one sea found",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mar, cada uno con su sello"
+          }
+        }
+      }
+    },
     "sealedBackup.noun.intimacyLogs" : {
       "comment" : "Mid-sentence noun for the sealed backup of intimate-activity logs.",
       "extractionState" : "extracted_with_value",
@@ -47570,6 +50579,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "notas privadas"
+          }
+        }
+      }
+    },
+    "sealedBackup.noun.worldPassport" : {
+      "comment" : "Mid-sentence noun for the sealed backup of the World passport (the places first visited), e.g. 'the encrypted passport backup'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "passport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pasaporte"
           }
         }
       }
@@ -47678,6 +50705,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La copia de seguridad de %@ en iCloud es más antigua que una que este dispositivo ya tiene, así que Fernlet no la restauró; eso no debería pasar por sí solo. No se cambió nada. Si todavía tienes estos datos en otro dispositivo, vuelve a hacer la copia de seguridad desde ahí."
+          }
+        }
+      }
+    },
+    "seas, each its own stamp" : {
+      "comment" : "Sprout's passport: after the seas found (not one)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mares, cada uno con su sello"
           }
         }
       }
@@ -53012,9 +56050,225 @@
         }
       }
     },
+    "worldCity.card.kind" : {
+      "comment" : "World city card: under the city's name, its size class (City) and its country",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "worldCity.card.landmarksFound" : {
+      "comment" : "World city card: how many of the city's landmarks have been found, of how many",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld encontrados"
+          }
+        }
+      }
+    },
+    "worldCity.card.moreNotFound" : {
+      "comment" : "World city card, VoiceOver: the question marks of the city's landmarks not found yet; how many",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld more not found yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld más aún sin encontrar"
+          }
+        }
+      }
+    },
+    "worldCity.card.uncovered" : {
+      "comment" : "World city card: how much of the city's urban area the person has uncovered, a whole per cent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld%% of the city"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "el %lld %% de la ciudad"
+          }
+        }
+      }
+    },
+    "worldCity.card.uncoveredUnderOne" : {
+      "comment" : "World city card: less than one per cent of the city is uncovered, but some",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Under 1% of the city"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "menos del 1 % de la ciudad"
+          }
+        }
+      }
+    },
+    "worldCity.marker.spoken" : {
+      "comment" : "World Home, VoiceOver: a found city's marker zoomed out, a button that opens its card; its name and size class",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "worldCity.plate.landmarks" : {
+      "comment" : "World Home, the city view's plate after the city's name: landmarks found of the city's list",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld landmarks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld lugares"
+          }
+        }
+      }
+    },
+    "worldCity.size.bigCity" : {
+      "comment" : "World: a city's size class, a million to ten million people",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Big city"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gran ciudad"
+          }
+        }
+      }
+    },
+    "worldCity.size.city" : {
+      "comment" : "World: a city's size class, 100,000 to a million people",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "City"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ciudad"
+          }
+        }
+      }
+    },
+    "worldCity.size.megacity" : {
+      "comment" : "World: a city's size class, ten million people or more",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Megacity"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Megaciudad"
+          }
+        }
+      }
+    },
+    "worldCity.size.town" : {
+      "comment" : "World: a city's size class, under 100,000 people",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Town"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Villa"
+          }
+        }
+      }
+    },
+    "worldCity.size.village" : {
+      "comment" : "World: a city's size class, the smallest (a town under 20,000 people)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Village"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pueblo"
+          }
+        }
+      }
+    },
     "worldCloseUp.hint" : {
       "comment" : "World companion up close: how to pet it and how to open Customize",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53170,6 +56424,204 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¡Me haces cosquillas!"
+          }
+        }
+      }
+    },
+    "worldCorner.bubble" : {
+      "comment" : "World Home: Sprout's speech once a week, pointing at a patch of fog near home the person hasn't walked yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "There's a new corner nearby. Fancy a look?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hay un rincón nuevo cerca. ¿Le echamos un vistazo?"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.e" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres east)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "east"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al este"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.n" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres north)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "north"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al norte"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.ne" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres north-east)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "north-east"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al noreste"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.nw" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres north-west)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "north-west"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al noroeste"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.s" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres south)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "south"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al sur"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.se" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres south-east)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "south-east"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al sureste"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.sw" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres south-west)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "south-west"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al suroeste"
+          }
+        }
+      }
+    },
+    "worldCorner.compass.w" : {
+      "comment" : "World Home, VoiceOver: a compass point after a distance (300 metres west)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "west"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "al oeste"
+          }
+        }
+      }
+    },
+    "worldCorner.inputLabel" : {
+      "comment" : "World Home, Voice Control: the short name of the dashed hex marking this week's new corner",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New corner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rincón nuevo"
+          }
+        }
+      }
+    },
+    "worldCorner.spoken" : {
+      "comment" : "World Home, VoiceOver: the dashed hex of this week's new corner; how far from home in metres and towards which compass point (north-east)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A new corner, %1$lld metres %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un rincón nuevo, a %1$lld metros %2$@"
           }
         }
       }
@@ -53338,7 +56790,7 @@
     },
     "worldHint.companionHint" : {
       "comment" : "World Home, VoiceOver: what the companion does when activated or held",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53368,6 +56820,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¡Tócame para saludar!"
+          }
+        }
+      }
+    },
+    "worldHint.opensPassport" : {
+      "comment" : "World Home, VoiceOver: what tapping or holding the companion does; the companion's name (Spanish: Abre el pasaporte de Sprout.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens %@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre el pasaporte de %@."
           }
         }
       }
@@ -53822,6 +57292,132 @@
         }
       }
     },
+    "worldLandmark.card.foundOn" : {
+      "comment" : "World landmark card: when it was found, another day; the day and month (12 October)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Found on your walk on %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encontrado en tu paseo el %@."
+          }
+        }
+      }
+    },
+    "worldLandmark.card.foundToday" : {
+      "comment" : "World landmark card: the landmark was found today",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Found on your walk today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encontrado hoy en tu paseo."
+          }
+        }
+      }
+    },
+    "worldLandmark.card.keeps" : {
+      "comment" : "World landmark card: the passport keeps the landmark with its city; the city's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your passport keeps it with %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu pasaporte lo guarda con %@."
+          }
+        }
+      }
+    },
+    "worldLandmark.card.kind" : {
+      "comment" : "World landmark card: the line under the landmark's name; its city's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Landmark · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugar emblemático · %@"
+          }
+        }
+      }
+    },
+    "worldLandmark.card.kindAlone" : {
+      "comment" : "World landmark card: the line under a landmark's name when its city is unknown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Landmark"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugar emblemático"
+          }
+        }
+      }
+    },
+    "worldLandmark.found.spoken" : {
+      "comment" : "World Home, VoiceOver: a found landmark on the map, a button that opens its card; its name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, landmark, found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, lugar emblemático, encontrado"
+          }
+        }
+      }
+    },
+    "worldLandmark.notFound.spoken" : {
+      "comment" : "World Home, VoiceOver: a landmark not found yet, drawn grey and unnamed through the fog",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Landmark, not found yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugar emblemático, aún sin encontrar"
+          }
+        }
+      }
+    },
     "worldLine.approximate" : {
       "comment" : "World Home with approximate location: the companion's speech",
       "extractionState" : "extracted_with_value",
@@ -53962,6 +57558,1194 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hoy me quedo en casa. El mapa espera."
+          }
+        }
+      }
+    },
+    "worldLines.allContinents.1" : {
+      "comment" : "Sprout's line on first reaching a new place: all seven continents, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All seven continents. You did that!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los siete continentes. ¡Lo hiciste!"
+          }
+        }
+      }
+    },
+    "worldLines.allContinents.2" : {
+      "comment" : "Sprout's line on first reaching a new place: all seven continents, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Every continent. I'm so proud of us."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos los continentes. Qué orgullo."
+          }
+        }
+      }
+    },
+    "worldLines.allContinents.3" : {
+      "comment" : "Sprout's line on first reaching a new place: all seven continents, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The whole world, one step at a time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El mundo entero, paso a paso."
+          }
+        }
+      }
+    },
+    "worldLines.allOceans.1" : {
+      "comment" : "Sprout's line on first reaching a new place: all five oceans, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All five oceans. That's all the sea!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los cinco océanos. ¡Eso es todo el mar!"
+          }
+        }
+      }
+    },
+    "worldLines.allOceans.2" : {
+      "comment" : "Sprout's line on first reaching a new place: all five oceans, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Every ocean. My feet are salty."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos los océanos. Tengo los pies salados."
+          }
+        }
+      }
+    },
+    "worldLines.allOceans.3" : {
+      "comment" : "Sprout's line on first reaching a new place: all five oceans, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The whole world's water. Wow."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toda el agua del mundo. Guau."
+          }
+        }
+      }
+    },
+    "worldLines.bigCity.1" : {
+      "comment" : "Sprout's line on first reaching a new place: big city, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! It goes on and on."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! No se acaba nunca."
+          }
+        }
+      }
+    },
+    "worldLines.bigCity.2" : {
+      "comment" : "Sprout's line on first reaching a new place: big city, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "So many people. Hi, everyone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuánta gente. Hola a todos."
+          }
+        }
+      }
+    },
+    "worldLines.bigCity.3" : {
+      "comment" : "Sprout's line on first reaching a new place: big city, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A big city. One street at a time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una gran ciudad. Calle a calle."
+          }
+        }
+      }
+    },
+    "worldLines.borealForest.1" : {
+      "comment" : "Sprout's line on first reaching a new place: boreal forest, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pines everywhere. It smells like winter."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pinos por todas partes. Huele a invierno."
+          }
+        }
+      }
+    },
+    "worldLines.borealForest.2" : {
+      "comment" : "Sprout's line on first reaching a new place: boreal forest, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A quiet forest. Let's whisper."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un bosque tranquilo. Hablemos bajito."
+          }
+        }
+      }
+    },
+    "worldLines.borealForest.3" : {
+      "comment" : "Sprout's line on first reaching a new place: boreal forest, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "So many needles, all pointing up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuántas agujas, todas hacia arriba."
+          }
+        }
+      }
+    },
+    "worldLines.city.1" : {
+      "comment" : "Sprout's line on first reaching a new place: city, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! So many streets to learn."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! Cuántas calles por aprender."
+          }
+        }
+      }
+    },
+    "worldLines.city.2" : {
+      "comment" : "Sprout's line on first reaching a new place: city, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A city. Stay close."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una ciudad. No te alejes."
+          }
+        }
+      }
+    },
+    "worldLines.city.3" : {
+      "comment" : "Sprout's line on first reaching a new place: city, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Look up: buildings!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mira arriba: ¡edificios!"
+          }
+        }
+      }
+    },
+    "worldLines.continent.1" : {
+      "comment" : "Sprout's line on first reaching a new place: new continent, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A whole new continent!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Todo un continente nuevo!"
+          }
+        }
+      }
+    },
+    "worldLines.continent.2" : {
+      "comment" : "Sprout's line on first reaching a new place: new continent, line 2 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! We came so far."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! Hemos llegado tan lejos."
+          }
+        }
+      }
+    },
+    "worldLines.continent.3" : {
+      "comment" : "Sprout's line on first reaching a new place: new continent, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Another continent. Look at us."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Otro continente. Míranos."
+          }
+        }
+      }
+    },
+    "worldLines.country.1" : {
+      "comment" : "Sprout's line on first reaching a new place: new country, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A new country! %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Un país nuevo! %@."
+          }
+        }
+      }
+    },
+    "worldLines.country.2" : {
+      "comment" : "Sprout's line on first reaching a new place: new country, line 2 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@. Everything's a little different."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@. Todo es un poco distinto."
+          }
+        }
+      }
+    },
+    "worldLines.country.3" : {
+      "comment" : "Sprout's line on first reaching a new place: new country, line 3 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp! Welcome to %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Sello nuevo! Bienvenido a %@."
+          }
+        }
+      }
+    },
+    "worldLines.cropland.1" : {
+      "comment" : "Sprout's line on first reaching a new place: cropland, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fields! Someone grew all this."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Campos! Alguien cultivó todo esto."
+          }
+        }
+      }
+    },
+    "worldLines.cropland.2" : {
+      "comment" : "Sprout's line on first reaching a new place: cropland, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rows and rows. I counted three."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hileras y más hileras. Conté tres."
+          }
+        }
+      }
+    },
+    "worldLines.cropland.3" : {
+      "comment" : "Sprout's line on first reaching a new place: cropland, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It smells like bread out here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí huele a pan."
+          }
+        }
+      }
+    },
+    "worldLines.desert.1" : {
+      "comment" : "Sprout's line on first reaching a new place: desert, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sand! Everything's so quiet here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Arena! Aquí todo está tan tranquilo."
+          }
+        }
+      }
+    },
+    "worldLines.desert.2" : {
+      "comment" : "Sprout's line on first reaching a new place: desert, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A desert. I'll stay in your shadow."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un desierto. Me quedo a tu sombra."
+          }
+        }
+      }
+    },
+    "worldLines.desert.3" : {
+      "comment" : "Sprout's line on first reaching a new place: desert, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's warm right down to my roots."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace calor hasta en mis raíces."
+          }
+        }
+      }
+    },
+    "worldLines.grassland.1" : {
+      "comment" : "Sprout's line on first reaching a new place: grassland, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grass as far as I can see."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hierba hasta donde alcanzo a ver."
+          }
+        }
+      }
+    },
+    "worldLines.grassland.2" : {
+      "comment" : "Sprout's line on first reaching a new place: grassland, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Room to roll around in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sitio para rodar."
+          }
+        }
+      }
+    },
+    "worldLines.grassland.3" : {
+      "comment" : "Sprout's line on first reaching a new place: grassland, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wildflowers! Don't step on them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Flores silvestres! No las pises."
+          }
+        }
+      }
+    },
+    "worldLines.ice.1" : {
+      "comment" : "Sprout's line on first reaching a new place: ice, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ice! My feet are cold."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Hielo! Tengo los pies fríos."
+          }
+        }
+      }
+    },
+    "worldLines.ice.2" : {
+      "comment" : "Sprout's line on first reaching a new place: ice, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Everything's sparkling."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todo brilla."
+          }
+        }
+      }
+    },
+    "worldLines.ice.3" : {
+      "comment" : "Sprout's line on first reaching a new place: ice, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Careful, it's slippy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuidado, resbala."
+          }
+        }
+      }
+    },
+    "worldLines.landmark.1" : {
+      "comment" : "Sprout's line on first reaching a new place: landmark, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! I've heard about this."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! He oído hablar de esto."
+          }
+        }
+      }
+    },
+    "worldLines.landmark.2" : {
+      "comment" : "Sprout's line on first reaching a new place: landmark, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Let's remember this one."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordemos este."
+          }
+        }
+      }
+    },
+    "worldLines.landmark.3" : {
+      "comment" : "Sprout's line on first reaching a new place: landmark, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A famous spot. Smile!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un sitio famoso. ¡Sonríe!"
+          }
+        }
+      }
+    },
+    "worldLines.megacity.1" : {
+      "comment" : "Sprout's line on first reaching a new place: megacity, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! I don't think it ends."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! Creo que no termina."
+          }
+        }
+      }
+    },
+    "worldLines.megacity.2" : {
+      "comment" : "Sprout's line on first reaching a new place: megacity, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This is the biggest place I've seen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Es el sitio más grande que he visto."
+          }
+        }
+      }
+    },
+    "worldLines.megacity.3" : {
+      "comment" : "Sprout's line on first reaching a new place: megacity, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lights everywhere. Wow."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Luces por todas partes. Guau."
+          }
+        }
+      }
+    },
+    "worldLines.mountain.1" : {
+      "comment" : "Sprout's line on first reaching a new place: mountain, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A mountain! I can see so far."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Una montaña! Veo tan lejos."
+          }
+        }
+      }
+    },
+    "worldLines.mountain.2" : {
+      "comment" : "Sprout's line on first reaching a new place: mountain, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up we go, one step at a time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arriba, paso a paso."
+          }
+        }
+      }
+    },
+    "worldLines.mountain.3" : {
+      "comment" : "Sprout's line on first reaching a new place: mountain, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The air tastes different up here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí arriba el aire sabe distinto."
+          }
+        }
+      }
+    },
+    "worldLines.ocean.1" : {
+      "comment" : "Sprout's line on first reaching a new place: new ocean, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The %@! Hello, big water."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡El %@! Hola, agua grande."
+          }
+        }
+      }
+    },
+    "worldLines.ocean.2" : {
+      "comment" : "Sprout's line on first reaching a new place: new ocean, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A new ocean. It's very blue."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un océano nuevo. Es muy azul."
+          }
+        }
+      }
+    },
+    "worldLines.ocean.3" : {
+      "comment" : "Sprout's line on first reaching a new place: new ocean, line 3 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The %@. Listen to it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El %@. Escúchalo."
+          }
+        }
+      }
+    },
+    "worldLines.sea.1" : {
+      "comment" : "Sprout's line on first reaching a new place: new sea, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The %@! A whole new sea."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡El %@! Todo un mar nuevo."
+          }
+        }
+      }
+    },
+    "worldLines.sea.2" : {
+      "comment" : "Sprout's line on first reaching a new place: new sea, line 2 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@. The water feels different here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@. Aquí el agua se siente distinta."
+          }
+        }
+      }
+    },
+    "worldLines.sea.3" : {
+      "comment" : "Sprout's line on first reaching a new place: new sea, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A new sea. Hello, waves."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un mar nuevo. Hola, olas."
+          }
+        }
+      }
+    },
+    "worldLines.shore.1" : {
+      "comment" : "Sprout's line on first reaching a new place: sea or lake shore, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The water! It's bigger than I thought."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡El agua! Es más grande de lo que pensaba."
+          }
+        }
+      }
+    },
+    "worldLines.shore.2" : {
+      "comment" : "Sprout's line on first reaching a new place: sea or lake shore, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Waves keep coming back to say hi."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las olas no paran de venir a saludar."
+          }
+        }
+      }
+    },
+    "worldLines.shore.3" : {
+      "comment" : "Sprout's line on first reaching a new place: sea or lake shore, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Salt in the air. I like it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sal en el aire. Me gusta."
+          }
+        }
+      }
+    },
+    "worldLines.temperateForest.1" : {
+      "comment" : "Sprout's line on first reaching a new place: temperate forest, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trees all around. I feel tiny."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Árboles por todas partes. Me siento diminuto."
+          }
+        }
+      }
+    },
+    "worldLines.temperateForest.2" : {
+      "comment" : "Sprout's line on first reaching a new place: temperate forest, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Listen: leaves."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escucha: hojas."
+          }
+        }
+      }
+    },
+    "worldLines.temperateForest.3" : {
+      "comment" : "Sprout's line on first reaching a new place: temperate forest, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A forest! Let's go slowly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Un bosque! Vamos despacio."
+          }
+        }
+      }
+    },
+    "worldLines.town.1" : {
+      "comment" : "Sprout's line on first reaching a new place: town, line 1 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! Let's find the bakery."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! Busquemos la panadería."
+          }
+        }
+      }
+    },
+    "worldLines.town.2" : {
+      "comment" : "Sprout's line on first reaching a new place: town, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A new town. I like the windows."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una villa nueva. Me gustan las ventanas."
+          }
+        }
+      }
+    },
+    "worldLines.town.3" : {
+      "comment" : "Sprout's line on first reaching a new place: town, line 3 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@. Busy, but friendly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@. Con prisa, pero amable."
+          }
+        }
+      }
+    },
+    "worldLines.tropicalForest.1" : {
+      "comment" : "Sprout's line on first reaching a new place: tropical forest, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's so green it's almost loud."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Es tan verde que casi hace ruido."
+          }
+        }
+      }
+    },
+    "worldLines.tropicalForest.2" : {
+      "comment" : "Sprout's line on first reaching a new place: tropical forest, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Everything here is growing at once."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí todo crece a la vez."
+          }
+        }
+      }
+    },
+    "worldLines.tropicalForest.3" : {
+      "comment" : "Sprout's line on first reaching a new place: tropical forest, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Palms! I'd like to be one."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Palmeras! Me gustaría ser una."
+          }
+        }
+      }
+    },
+    "worldLines.tundra.1" : {
+      "comment" : "Sprout's line on first reaching a new place: tundra, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wide and windy. Hold on to me."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amplio y con viento. Agárrame."
+          }
+        }
+      }
+    },
+    "worldLines.tundra.2" : {
+      "comment" : "Sprout's line on first reaching a new place: tundra, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tiny flowers, brave ones."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Flores diminutas, valientes."
+          }
+        }
+      }
+    },
+    "worldLines.tundra.3" : {
+      "comment" : "Sprout's line on first reaching a new place: tundra, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's very open up here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí arriba está muy abierto."
+          }
+        }
+      }
+    },
+    "worldLines.village.1" : {
+      "comment" : "Sprout's line on first reaching a new place: village, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little village. Everyone waves here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un pueblito. Aquí todos saludan."
+          }
+        }
+      }
+    },
+    "worldLines.village.2" : {
+      "comment" : "Sprout's line on first reaching a new place: village, line 2 of 3; the place's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@! Small and sweet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@! Pequeño y dulce."
+          }
+        }
+      }
+    },
+    "worldLines.village.3" : {
+      "comment" : "Sprout's line on first reaching a new place: village, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A few roofs and a lot of sky."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unos tejados y mucho cielo."
           }
         }
       }
@@ -54435,6 +59219,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "De copiloto"
+          }
+        }
+      }
+    },
+    "worldNotice.ridingAlong.bike" : {
+      "comment" : "World Home notice while Fernlet sees the person riding a bike (its own key: the Spanish names the bike where the car's names the car)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Riding along"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De paseo en bici"
+          }
+        }
+      }
+    },
+    "worldNotice.ridingAlong.bike.spoken" : {
+      "comment" : "World Home, VoiceOver: said once as a bike ride starts, before the plate's line 'Quick starts and banners pause until you're on foot.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Riding along on your bike"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De paseo en tu bici"
           }
         }
       }
@@ -55783,6 +60603,24 @@
         }
       }
     },
+    "worldRide.bikeRider" : {
+      "comment" : "World Home, VoiceOver: the companion and its bike during a bike ride, one image; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, riding a bike"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, montando en bici"
+          }
+        }
+      }
+    },
     "worldRide.bubble" : {
       "comment" : "World Home: the companion's speech bubble while the note that a bike ride logged itself shows",
       "extractionState" : "extracted_with_value",
@@ -56639,6 +61477,456 @@
         }
       }
     },
+    "worldView.back" : {
+      "comment" : "World view: the back chip's word, top left, which returns to the passport's world page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasaporte"
+          }
+        }
+      }
+    },
+    "worldView.back.spoken" : {
+      "comment" : "World view: VoiceOver name of the back chip, top left",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to Passport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volver a Pasaporte"
+          }
+        }
+      }
+    },
+    "worldView.cities.one" : {
+      "comment" : "World view plate: one city found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 city"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 ciudad"
+          }
+        }
+      }
+    },
+    "worldView.cities.other" : {
+      "comment" : "World view plate: the number of cities found (never one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld cities"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld ciudades"
+          }
+        }
+      }
+    },
+    "worldView.countries.one" : {
+      "comment" : "World view plate: one country found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 country"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 país"
+          }
+        }
+      }
+    },
+    "worldView.countries.other" : {
+      "comment" : "World view plate: the number of countries found (never one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld countries"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld países"
+          }
+        }
+      }
+    },
+    "worldView.level.city" : {
+      "comment" : "World view: the closest zoom level, about 270 km top to bottom",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "City"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ciudad"
+          }
+        }
+      }
+    },
+    "worldView.level.country" : {
+      "comment" : "World view: the zoom level showing a country, with country lines",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Country"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "País"
+          }
+        }
+      }
+    },
+    "worldView.level.state" : {
+      "comment" : "World view: the zoom level showing a state or province, with its lines",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "State"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estado"
+          }
+        }
+      }
+    },
+    "worldView.level.world" : {
+      "comment" : "World view: the zoom level showing the whole world",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "World"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mundo"
+          }
+        }
+      }
+    },
+    "worldView.marker.hint.open" : {
+      "comment" : "World view: VoiceOver hint of a city marker at the closest zoom",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens the city"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre la ciudad"
+          }
+        }
+      }
+    },
+    "worldView.marker.hint.zoom" : {
+      "comment" : "World view: VoiceOver hint of a city marker before the closest zoom",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zooms in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acerca el mapa"
+          }
+        }
+      }
+    },
+    "worldView.marker.plate" : {
+      "comment" : "World view: a marker shared by nearby cities, named for the biggest, then how many more",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ +%2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ +%2$lld"
+          }
+        }
+      }
+    },
+    "worldView.marker.spoken.one" : {
+      "comment" : "World view: VoiceOver name of a marker shared by two cities",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ and 1 more city"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ y 1 ciudad más"
+          }
+        }
+      }
+    },
+    "worldView.marker.spoken.other" : {
+      "comment" : "World view: VoiceOver name of a marker shared by several cities",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ and %2$lld more cities"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ y %2$lld ciudades más"
+          }
+        }
+      }
+    },
+    "worldView.plate.found" : {
+      "comment" : "World view plate: the cities and the countries found, e.g. 4 cities, 3 countries found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@ found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "worldView.plate.place" : {
+      "comment" : "World view plate: the state or province, then the country, at the view's centre",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "worldView.preview.open" : {
+      "comment" : "Passport, Your world page: the chip on the small world map that opens it full screen",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open the map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir el mapa"
+          }
+        }
+      }
+    },
+    "worldView.preview.spoken" : {
+      "comment" : "Passport, Your world page: VoiceOver name of the small world map, one button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your world map. Opens full screen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa de tu mundo. Se abre a pantalla completa."
+          }
+        }
+      }
+    },
+    "worldView.title" : {
+      "comment" : "World view: the title chip of the full-screen map of every city the person has found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your world"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu mundo"
+          }
+        }
+      }
+    },
+    "worldView.zoom.in" : {
+      "comment" : "World view: the + button of the zoom control",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zoom in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acercar"
+          }
+        }
+      }
+    },
+    "worldView.zoom.level" : {
+      "comment" : "World view: VoiceOver name of the zoom control's level; swipe up or down to change it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zoom level"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nivel de zoom"
+          }
+        }
+      }
+    },
+    "worldView.zoom.out" : {
+      "comment" : "World view: the − button of the zoom control",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zoom out"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alejar"
+          }
+        }
+      }
+    },
+    "worldView.zoom.value.country" : {
+      "comment" : "World view: the zoom level then the country, spoken, e.g. Country, United States",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "worldView.zoom.value.region" : {
+      "comment" : "World view: the zoom level, the state, then the country, spoken, e.g. City, Oregon, United States",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, %3$@"
+          }
+        }
+      }
+    },
     "worldWalk.end" : {
       "comment" : "World Home walk bar, VoiceOver: the End button stops and logs the walk",
       "extractionState" : "extracted_with_value",
@@ -56936,6 +62224,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "~%lld min"
+          }
+        }
+      }
+    },
+    "· %lld of %lld" : {
+      "comment" : "Sprout's passport: which continent of the seven, in the continent bar",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "· %1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "· %1$lld de %2$lld"
           }
         }
       }

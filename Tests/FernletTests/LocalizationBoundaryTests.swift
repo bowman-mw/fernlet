@@ -1802,7 +1802,8 @@ struct LocalizationBoundaryTests {
 
         #expect(
             GoalType.allCases.map(\.rawValue) == [
-                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep"
+                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep",
+                "bodybuilding"
             ],
             """
             GoalType raw values changed. They are the CURRENT persisted tokens (exported to the coach \
@@ -3989,6 +3990,13 @@ struct LocalizationBoundaryTests {
                      source: "Private, Places: a day's stop count on the delete list ('1 stop')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "worldQuickStart.note.ranFromHere",
                      source: "World Home quick-start card at a saved run route ('run this route once')"),
+        // World round 7, Bodybuilding piece C (2026-10-29): the Day calendar's spoken counts, which would
+        // read "1 bathroom visits" and "1 steps". Moved here from the awaiting list by the round 7
+        // second integration's catalog commit, which authored their plural blocks.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "bodybuilding.bathroom.spoken",
+                     source: "Day calendar, spoken: a day's bathroom visits ('1 bathroom visit')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "bodybuilding.steps.spoken",
+                     source: "Day calendar, spoken: a day's steps ('1 step')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

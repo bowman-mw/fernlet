@@ -21,6 +21,12 @@ enum MoveRoute: Hashable {
     case exerciseHistory
     /// One week's sets per muscle and aerobic minutes, ``WeeklyTotalsView``.
     case weeklyTotals
+    /// The Bodybuilding goal's Day calendar, ``BodybuildingCalendarPage`` (World round 7).
+    case dayCalendar
+    /// The Day calendar's Calendar signals page, ``BodybuildingSignalsPage``.
+    case dayCalendarSignals
+    /// One day's card on the Day calendar, ``BodybuildingDayCard``: the day's `yyyy-MM-dd` key.
+    case dayCalendarDay(String)
 }
 
 /// Display half of the Exercise history screen's "best" line, beside

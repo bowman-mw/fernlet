@@ -196,7 +196,7 @@ struct SealedBackupWorldPassportTests {
         await phone.coordinator.settleV2Backup(.worldPassport)
         #expect(phone.host.worldPassport.book == travelled)
         #expect(phone.host.worldPassport.book.lastSeen(inCountry: "US") == Self.t2.addingTimeInterval(week + 3_600))
-        #expect(phone.host.worldPassport.book.count(of: .country) == 2, "the counts count each country once")
+        #expect(phone.host.worldPassport.book.discoveries(of: .country) == 2, "the counts count each country once")
     }
 
     // MARK: - What it never does

@@ -93,11 +93,29 @@ final class NatureFogTileBook {
         self.pixelScale = max(1, min(pixelScale, 3))
         atlas = NatureFogAtlas(palette: palette)
         painters = (0..<Self.painterCount).map { _ in NatureFogTilePainter(palette: palette) }
+        let first = painters[0], wild = NatureFogTileOrder(key: NatureTileKey(x: 0, y: 0), scale: scale, palette: palette,
+                                                          clearing: NatureFogClearing(), generation: -1, pixelScale: self.pixelScale)
+        placeholderDrawing = Task { [weak self] in
+            let tile = await first.paint(wild)
+            self?.placeholder = tile.ground
+        }
     }
 
-    /// The tiles still drawing end with the book (the memory wall's ML1); at most ``painterCount``.
+    /// The tiles still drawing, and the placeholder, end with the book (the memory wall's ML1).
     isolated deinit {
+        placeholderDrawing?.cancel()
         for task in drawing.values { task.cancel() }
+    }
+
+    /// Wild fog at this scale and palette, drawn once from an empty clearing (so it shows no history): what a
+    /// tile shows until its own picture arrives, so a fling or a zoom out shows fog, not a flat band (the
+    /// owner's zoom artifact, 2026-10-30). Nil until it's drawn.
+    private(set) var placeholder: CGImage?
+    private var placeholderDrawing: Task<Void, Never>?
+
+    /// Borrows `image` (the last scale's wild fog, same palette) until this book's own is drawn.
+    func borrowPlaceholder(_ image: CGImage?) {
+        if placeholder == nil { placeholder = image }
     }
 
     /// The tiles held now.
@@ -105,6 +123,10 @@ final class NatureFogTileBook {
 
     /// Whether a tile is drawing.
     var isDrawing: Bool { !drawing.isEmpty }
+
+    /// Whether every wanted tile is ready and none is on its way (between two arrivals ``isDrawing`` can read
+    /// false while wanted tiles still wait for a painter).
+    var isCaughtUp: Bool { drawing.isEmpty && !wanted.contains { tiles[$0] == nil } }
 
     /// A tile's area in global points.
     nonisolated static func area(of key: NatureTileKey) -> CGRect {
@@ -156,6 +178,7 @@ final class NatureFogTileBook {
 
     /// Waits until nothing is drawing (bounded: at most twice ``cacheLimit`` tiles awaited).
     func finishDrawing() async {
+        await placeholderDrawing?.value
         for _ in 0..<(Self.cacheLimit * 2) {
             guard let next = drawing.values.first else { return }
             await next.value

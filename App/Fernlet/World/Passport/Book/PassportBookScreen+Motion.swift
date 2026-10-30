@@ -142,7 +142,7 @@ extension PassportBookScreen {
         } else {
             words = PassportBookCopy.turned(page, of: book.pageCount, named: name)
         }
-        AccessibilityNotification.Announcement(String(localized: words)).post()
+        FernletAnnouncer.system.announce(.status, resolved: String(localized: words))
     }
 
     /// A name tapped in the index or the A to Z view: turn to its page and wiggle its stamp.
