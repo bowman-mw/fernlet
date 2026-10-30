@@ -157,6 +157,76 @@ struct WorldPassportTripTests {
         #expect(keeper.book.returnCount == 0 && reopened.book.trips(inCountry: "US").isEmpty)
     }
 
+    // MARK: The new-trip event
+
+    /// Seattle: the United States again, with a city not visited yet.
+    nonisolated static let seattlePoint = GeoPoint(47.6062, -122.3321)
+    nonisolated static let seattle = AtlasVisit(
+        countryCode: "US", sovereignCode: "US", continent: .northAmerica,
+        city: AtlasCity(token: "Q5083", countryCode: "US", size: .city, population: 750_000, point: seattlePoint,
+                        names: AtlasCityNames(english: "Seattle")),
+        terrain: .temperateForest)
+
+    /// A keeper over `vault` whose atlas also knows Seattle.
+    static func keeper(_ vault: WorldMapVault) -> WorldAtlasKeeper {
+        var visits = WorldPassportTests.atlas.visits
+        visits[seattlePoint] = seattle
+        let atlas = WorldPassportTests.FakeAtlas(visits: visits)
+        return WorldAtlasKeeper(vault: vault, openAtlas: { atlas })
+    }
+
+    /// Everything `stream` held once ended.
+    static func drain(_ stream: AsyncStream<PassportEvent>) async -> [PassportEvent] {
+        var heard: [PassportEvent] = []
+        for await event in stream.prefix(64) { heard.append(event) }
+        return heard
+    }
+
+    /// A return trip is announced once, with its country, start and trip number, before the first visits the
+    /// same fix makes; a first visit is never also a new trip, and staying on announces nothing more.
+    @Test func aNewTripIsAnnouncedOnceWithItsNumber() async {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = Self.keeper(vault)
+        let stream = keeper.discoveries()
+        keeper.observe(point: WorldPassportTests.portlandPoint, at: Self.t0)
+        keeper.observe(point: WorldPassportTests.caribbeanPoint, at: Self.at(1))
+        keeper.observe(point: Self.seattlePoint, at: Self.at(9))
+        keeper.observe(point: WorldPassportTests.portlandPoint, at: Self.at(10))
+        keeper.observe(point: WorldPassportTests.caribbeanPoint, at: Self.at(11))
+        keeper.observe(point: WorldPassportTests.portlandPoint, at: Self.at(20))
+        keeper.endDiscoveries()
+        let heard = await Self.drain(stream)
+        let trips = heard.compactMap(\.trip)
+        #expect(trips == [PassportStamp(kind: .country, token: "US", date: Self.at(9), trip: 2),
+                          PassportStamp(kind: .country, token: "US", date: Self.at(20), trip: 3)])
+        let seattleFix = heard.drop { $0.trip?.trip != 2 }.prefix(2)
+        #expect(seattleFix.last?.discovery?.token == "Q5083", "the trip, then the new city, from the same fix")
+        #expect(heard.first?.discovery?.kind == .country, "the first visit is announced as a first visit only")
+        #expect(heard.filter { $0.discovery?.kind == .country }.count == 1)
+    }
+
+    /// A decoy's fix starts no trip and announces nothing; a restore that brings trips announces nothing; a trip
+    /// is announced only for the accepted fix that starts it, once.
+    @Test func aNewTripIsNeverAnnouncedInADecoyOrForARestore() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = Self.keeper(vault)
+        keeper.observe(point: WorldPassportTests.portlandPoint, at: Self.t0)
+        let stream = keeper.discoveries()
+        keeper.setDecoy(true)
+        keeper.observe(point: Self.seattlePoint, at: Self.at(9))
+        keeper.setDecoy(false)
+        try keeper.restore(Self.book([(Self.us, Self.at(-30)), (Self.us, Self.at(-20))]))
+        #expect(keeper.book.trips(inCountry: "US").count == 3, "the restore brought two trips, quietly")
+        keeper.observe(point: Self.seattlePoint, at: Self.at(9))
+        keeper.observe(point: Self.seattlePoint, at: Self.at(9.5))
+        keeper.endDiscoveries()
+        let heard = await Self.drain(stream)
+        #expect(heard.compactMap(\.trip) == [PassportStamp(kind: .country, token: "US", date: Self.at(9), trip: 4)])
+        #expect(heard.compactMap(\.discovery).map(\.token) == ["Q5083"], "the decoy's fix announced nothing")
+    }
+
     // MARK: The sealed backup
 
     /// The backup carries a record per trip (the latest with the clock) and reads back the same book; an old

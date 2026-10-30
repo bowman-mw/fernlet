@@ -40,6 +40,29 @@ public nonisolated struct PassportStamp: Hashable, Sendable {
     }
 }
 
+/// One thing the passport announces once it is saved (the app's `WorldAtlasKeeper` stream, for Sprout's lines and
+/// the passport opening on a new stamp, World-Passport-Spec §6): a first visit, or a new trip to a country that
+/// was visited before (owner 2026-10-29, "Stamp each trip": a return trip is a new stamp).
+public nonisolated enum PassportEvent: Hashable, Sendable {
+    /// A place visited for the first time (a country's first visit is its first trip, announced here only).
+    case firstVisit(AtlasDiscovery)
+    /// A new trip to a country after 7 or more days away: kind `country`, its token, the trip's start and its
+    /// trip number (2 or more).
+    case newTrip(PassportStamp)
+
+    /// The first visit, or nil for a new trip.
+    public var discovery: AtlasDiscovery? {
+        guard case .firstVisit(let discovery) = self else { return nil }
+        return discovery
+    }
+
+    /// The new trip's stamp, or nil for a first visit.
+    public var trip: PassportStamp? {
+        guard case .newTrip(let stamp) = self else { return nil }
+        return stamp
+    }
+}
+
 /// The World passport's contents (round 7, idea 4; owner 2026-10-29): every country or territory, continent,
 /// ocean, sea, city, landmark and terrain class the person has been to, each by its frozen token
 /// (``AtlasDiscovery/token``) with the date of the first visit, and every trip to each country. A value type with

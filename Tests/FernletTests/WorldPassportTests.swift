@@ -269,7 +269,7 @@ struct WorldPassportTests {
         keeper.observe(point: Self.caribbeanPoint.offset(east: 10, north: 0), at: Self.t3)
         keeper.endDiscoveries()
         var heard: [AtlasDiscovery] = []
-        for await discovery in stream.prefix(32) { heard.append(discovery) }
+        for await event in stream.prefix(32) { if let discovery = event.discovery { heard.append(discovery) } }
         #expect(heard.map(\.kind) == [.country, .continent, .city, .terrain, .terrain, .sea])
         #expect(heard.map(\.token) == ["US", "northAmerica", "Q6106", "temperateForest", "water", "Q1247"])
         #expect(!heard.contains { $0.token == "pacific" }, "a decoy's fix announces nothing")

@@ -39,9 +39,11 @@ import WorldMapStore
 /// ``onPassportChanged`` tells the store
 /// the passport's backup owes an upload.
 ///
-/// **Discoveries for Sprout** (idea B). ``discoveries()`` is a stream of each first visit, announced only
-/// after it is saved, at most ``eventBufferSize`` held for a slow reader (the newest kept). The companion
-/// hooks in later; nothing reads it yet.
+/// **Discoveries for Sprout** (idea B) and new stamps for the passport. ``discoveries()`` is a stream of
+/// ``PassportEvent``s: each first visit, and each new trip to a country visited before (owner 2026-10-29, "Stamp
+/// each trip": a return trip is a new stamp, and the passport opens on its page). Each is announced once, only
+/// after it is saved, only for an accepted fix (never in a decoy, never for a restore), at most
+/// ``eventBufferSize`` held for a slow reader (the newest kept). Nothing in the app reads it yet.
 @MainActor
 @Observable
 final class WorldAtlasKeeper {
@@ -81,7 +83,7 @@ final class WorldAtlasKeeper {
     @ObservationIgnored private var lastRead: GeoPoint?
     /// What the atlas said about ``lastRead``.
     @ObservationIgnored private var lastVisit: AtlasVisit?
-    @ObservationIgnored private var subscriber: AsyncStream<AtlasDiscovery>.Continuation?
+    @ObservationIgnored private var subscriber: AsyncStream<PassportEvent>.Continuation?
     /// Runs after the passport on disk changed for the sealed backup's sake: a first visit or a trip was saved,
     /// or ``clearAll()`` removed it (a fix that only moved a country's clock on does not run it; the backup
     /// carries the clock with the next change). The store sets it to mark the passport's own backup owed
@@ -164,7 +166,7 @@ final class WorldAtlasKeeper {
     }
 
     /// Reads one accepted fix at `point`, taken at `date`, and records its first visits and any trip it starts;
-    /// each first visit is announced on ``discoveries()`` once saved. A fix within ``minimumSpacing`` of the last
+    /// each first visit and new trip is announced on ``discoveries()`` once saved. A fix within ``minimumSpacing`` of the last
     /// one read records that visit again at `date` without asking the atlas. Nothing in a decoy, before the
     /// passport can be read, or without an atlas.
     func observe(point: GeoPoint, at date: Date) {
@@ -184,10 +186,11 @@ final class WorldAtlasKeeper {
             lastRead = point
             lastVisit = visit
         }
-        guard !found.isEmpty || store.book.returnCount != tripsBefore else { return }
+        let trip = store.book.returnCount != tripsBefore ? newTrip(in: visit) : nil
+        guard !found.isEmpty || trip != nil else { return }
         book = store.book
         onPassportChanged?()
-        announce(found)
+        announce(found, trip: trip)
     }
 
     /// Enters or leaves a decoy session: entering shows an empty passport, leaving shows the person's again.
@@ -250,11 +253,12 @@ final class WorldAtlasKeeper {
 
     // MARK: Discoveries
 
-    /// A stream of each first visit, announced once it is saved, holding at most ``eventBufferSize`` for a
-    /// slow reader. One reader at a time (Sprout's lines): asking again ends the previous stream.
-    func discoveries() -> AsyncStream<AtlasDiscovery> {
+    /// A stream of each first visit and each new trip, announced once it is saved, holding at most
+    /// ``eventBufferSize`` for a slow reader. One reader at a time (Sprout's lines and the passport): asking again
+    /// ends the previous stream.
+    func discoveries() -> AsyncStream<PassportEvent> {
         subscriber?.finish()
-        let (stream, continuation) = AsyncStream<AtlasDiscovery>.makeStream(
+        let (stream, continuation) = AsyncStream<PassportEvent>.makeStream(
             bufferingPolicy: .bufferingNewest(Self.eventBufferSize))
         subscriber = continuation
         return stream
@@ -320,11 +324,21 @@ final class WorldAtlasKeeper {
         return true
     }
 
-    /// Announces `found` to the current reader, in order.
-    private func announce(_ found: [AtlasDiscovery]) {
+    /// The trip `visit`'s fix just started: its country's latest trip, with its number (a visit names one country,
+    /// so a fix starts at most one trip).
+    private func newTrip(in visit: AtlasVisit) -> PassportStamp? {
+        guard let code = visit.countryCode else { return nil }
+        let trips = store.book.trips(inCountry: code)
+        guard trips.count > 1, let start = trips.last else { return nil }
+        return PassportStamp(kind: .country, token: code, date: start, trip: trips.count)
+    }
+
+    /// Announces `trip` (the country comes first in the fixed order), then `found`, to the current reader.
+    private func announce(_ found: [AtlasDiscovery], trip: PassportStamp?) {
         guard let subscriber else { return }
+        if let trip { subscriber.yield(.newTrip(trip)) }
         for discovery in found.prefix(PassportBook.maxDiscoveriesPerVisit) {
-            subscriber.yield(discovery)
+            subscriber.yield(.firstVisit(discovery))
         }
     }
 }
