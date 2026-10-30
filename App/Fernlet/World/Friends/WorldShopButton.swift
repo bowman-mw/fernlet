@@ -23,7 +23,7 @@ struct WorldShopButton: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             ZStack(alignment: .bottomLeading) {
-                if let minutes = minutesLeft(at: context.date) {
+                if let minutes = Self.minutesLeft(store: store, at: context.date) {
                     button(minutes: minutes)
                 }
             }
@@ -31,8 +31,9 @@ struct WorldShopButton: View {
         }
     }
 
-    /// Minutes left in the shop window, or nil when the button hides.
-    private func minutesLeft(at date: Date) -> Int? {
+    /// Minutes left in the shop window, or nil when the button hides. Page 1 of Sprout's passport reads the
+    /// same answer for its gold Friend shops row.
+    static func minutesLeft(store: FernletStore, at date: Date) -> Int? {
         let manager = store.meshNetworkManager
         guard !manager.isInSession, !store.duressSessionActive else { return nil }
         if let staged = FriendsUITestHooks.shopWindowMinutes { return staged }

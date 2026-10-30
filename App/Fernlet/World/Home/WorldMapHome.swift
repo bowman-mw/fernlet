@@ -27,6 +27,9 @@ import WorldMapStore
 /// records, the person's pinned workout spaces (``WorldMapMarker``), a friend the presence radio hears
 /// nearby (first name only, never where they are), rain or snow (``WorldWeatherLayer``), and the time of
 /// day's tint (`CompanionDayPhase`; night dims the light map under a navy tint, and only Dark Mode turns it dark).
+/// Round 7 (World-Exploration-Spec §2, ``WorldExploreLayer``): the atlas's landmarks stand big over the fog, grey
+/// and unnamed until the passport finds them; zoomed out a step, the passport's cities get skyline markers; zoomed
+/// in on a found city, the city view's plate.
 ///
 /// **The companion** (``WorldMapCompanion``) is Home's: tap to pet, hold (or VoiceOver's "Edit your
 /// companion") for the customize sheet. Its line is the map's own when it has one (``WorldMapLine``).
@@ -97,6 +100,8 @@ struct WorldMapHome: View {
     @State private var geometry = WorldMapGeometry()
     /// The land under the fog (round 7, World-Exploration-Spec §1), once the bundled atlas is open; nil: nature fog.
     @State private var terrain: NatureFogTerrain?
+    /// Cities and landmarks (round 7, World-Exploration-Spec §2): the open cards, the viewport's memo, the art.
+    @State private var explore = WorldExploreState()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -130,6 +135,8 @@ struct WorldMapHome: View {
         .modifier(WorldPhotoPlacePresenter(store: store, place: $openPhotoPlace))
         // Round 6: Remember this place, and a place to eat's menu search.
         .modifier(WorldPlacesPresenter(store: store, placeSheet: $placeSheet, menuSearch: $menuSearch, onMealsLogged: onMealsLogged))
+        // Round 7: a found landmark's card and a found city's card (World-Exploration-Spec §2).
+        .modifier(WorldExplorePresenter(store: store, explore: explore))
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
         .task { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
@@ -199,6 +206,8 @@ struct WorldMapHome: View {
         let point = companionPoint(viewport: viewport, size: size)
         return ZStack(alignment: .topLeading) {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
+            WorldExploreLayer(store: store, explore: explore, viewport: viewport, size: size,
+                              showsCityPlate: !isWalking && loggedWalk == nil)
             ForEach(shownMarkers) { marker in
                 WorldMapMarkerView(marker: marker, resolvedName: store.worldPlaces.eatingNames[marker.id]) { open(marker) }
                     .fixedSize()
@@ -813,6 +822,7 @@ extension WorldMapHome {
         if UITestSupport.shouldOpenCustomize { isCustomizing = true }
         // The camera on your own, as the blue button opens it (`FERNLET_UI_TEST_SOLO_CAMERA`).
         if FriendsUITestHooks.opensSoloCamera, !store.meshNetworkManager.isInSession { cameraMode = .solo(placeName: nil) }
+        if let distance = UITestSupport.exploreCameraDistance { camera.distance = distance }
         let scenes = testScenes
         guard !scenes.isEmpty else { return }
         if scenes.contains("sick") != store.isSick(on: store.todayKey) { store.setSick(scenes.contains("sick"), on: store.todayKey) }
