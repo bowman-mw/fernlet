@@ -299,7 +299,7 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   117 groups holding 887 entries.
 
 The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
-points; `ADM1` stores 2.02 MB of the pack (6,818,846 bytes since the roads, lakes and regional lake supplements, 0.5 MB under the 7 MiB cap). A reader refuses a
+points; `ADM1` stores 2.02 MB of the pack (6,818,962 bytes since the roads, lakes and regional lake supplements, 0.5 MB under the 7 MiB cap). A reader refuses a
 count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
 malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
@@ -323,7 +323,10 @@ roadCount × { u32 number · u8 kind (1 highway, 2 main road) · u16 lineCount �
 - **What a road is.** It is what turns amber "whole" once crossed: the touching pieces of one named route
   (`PREFIX` + `NAME`, else `LABEL`, at one `LEVEL`: Interstate 5 and a state's route 5 stay apart), or, unnamed, the
   pieces chained through every point where exactly two meet (a stretch between junctions). A source feature's parts
-  are always one road. Its kind is highway when any piece is.
+  are always one road. Its kind is highway when any piece is. Where three or more ends of one named route meet (it
+  branches: a wrong name, or a spur sharing it), only the two whose lines leave most nearly opposite join, the
+  route going straight on; the others go on as their own roads (owner 2026-10-30). The 2026-10-30 pack has 28 such
+  points (Portland's, the 29th, is fixed by its name override below) and 9,026 roads.
 - **Name overrides.** Where Natural Earth has a route's name wrong, `ROAD_NAME_OVERRIDES` in the generator gives
   the right one, by `UIDENT`, level and the old name (`UIDENT` alone repeats); the run stops unless each rule meets
   exactly one record, so a new source version is looked at again. Portland's Banfield Freeway and its run east to

@@ -255,13 +255,14 @@ def write_sources(folder, crimea_in_russia=True):
 # where only they do (one road); 5, 6 and 4 meeting at a junction (5 and 6 their own); 7 a minor road, 8 a ferry
 # and 9 a track (left out); 10 an expressway of a low rank (a highway); 11 one feature in two parts (one road);
 # 12 Natural Earth's misnamed Banfield (UIDENT 20905, "Interstate 5" touching 1's end): its override makes it
-# Interstate 84, its own road (the second override, UIDENT 23805, is met by 13).
+# Interstate 84, its own road (the second override, UIDENT 23805, is met by 13); 14, 15 and 16 one named route
+# branching three ways at (61, 0): 14 and 15 run straight on (one road), 16 turns off (its own).
 ROAD_FIELDS = [("FEATURECLA", "C", 10), ("TYPE", "C", 20), ("SCALERANK", "N", 4), ("EXPRESSWAY", "N", 2),
                ("PREFIX", "C", 4), ("NAME", "C", 10), ("LABEL", "C", 10), ("LEVEL", "C", 12), ("UIDENT", "N", 8)]
 
 
 def write_roads(folder):
-    """ne_10m_roads: the fourteen pieces above."""
+    """ne_10m_roads: the seventeen pieces above."""
     def road(kind="Major Highway", rank=3, name="", level="", cla="Road", express=0, uident=0):
         return {"FEATURECLA": cla, "TYPE": kind, "SCALERANK": rank, "EXPRESSWAY": express, "NAME": name,
                 "LEVEL": level, "UIDENT": uident}
@@ -280,6 +281,9 @@ def write_roads(folder):
         ([[(40, 40), (41, 40)], [(42, 40), (43, 40)]], road()),
         ([[(2, 0), (2, 1)]], road(name="5", level="Interstate", uident=20905)),
         ([[(2, 1), (2, 2)]], road(name="5", level="Interstate", uident=23805)),
+        ([[(60, 0), (61, 0)]], road(name="9", level="Interstate")),
+        ([[(62, 0.1), (61, 0)]], road(name="9", level="Interstate")),
+        ([[(61, 0), (61, 1)]], road(name="9", level="Interstate")),
     ]
     write_layer(folder, "ne_10m_roads", 3, [p[0] for p in pieces], ROAD_FIELDS, [p[1] for p in pieces])
 
@@ -702,8 +706,11 @@ def check_admin1(c, atlas):
 def check_roads(c, atlas):
     """ROAD: which pieces count, how they join into roads, their kinds and lines."""
     roads = atlas["roads"]
-    c.equal("road numbers", sorted(roads), [0, 2, 3, 5, 6, 10, 11, 12])
-    c.equal("road kinds", [roads[n]["kind"] for n in sorted(roads)], [1, 2, 2, 2, 2, 1, 1, 1])
+    c.equal("road numbers", sorted(roads), [0, 2, 3, 5, 6, 10, 11, 12, 14, 16])
+    c.equal("road kinds", [roads[n]["kind"] for n in sorted(roads)], [1, 2, 2, 2, 2, 1, 1, 1, 1, 1])
+    c.equal("a branching route joins its straightest pair", len(roads.get(14, {}).get("lines", [])), 2)
+    c.equal("the branch that turns off is its own road", roads.get(16, {}).get("lines"),
+            [[(6100000, 0), (6100000, 100000)]])
     c.equal("a named route that touches is one road", len(roads.get(0, {}).get("lines", [])), 2)
     c.equal("corrected names are their own road", roads.get(12, {}).get("lines"),
             [[(200000, 0), (200000, 100000)], [(200000, 100000), (200000, 200000)]])

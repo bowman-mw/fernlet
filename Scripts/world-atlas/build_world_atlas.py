@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import struct
@@ -1849,10 +1850,27 @@ def road_pieces(features, report):
     return pieces
 
 
-def road_groups(pieces):
+def straightest_pair(entries):
+    """Of the piece ends meeting at one point, the two whose lines leave it most nearly opposite (the route going
+    straight on), as indexes into `entries`; each entry is (piece index, the line's next point from the end)."""
+    best, pair = None, (0, 1)
+    for a in range(len(entries)):
+        for b in range(a + 1, len(entries)):
+            (i, da), (j, db) = entries[a], entries[b]
+            if i == j:
+                continue
+            norm = math.hypot(*da) * math.hypot(*db)
+            turn = (da[0] * db[0] + da[1] * db[1]) / norm if norm else 1.0
+            if best is None or turn < best:
+                best, pair = turn, (a, b)
+    return pair
+
+
+def road_groups(pieces, report=None):
     """The pieces joined into roads (union-find; each union is one of at most 2n end matches): the parts of one
     source feature always, named pieces of one route that touch, and unnamed pieces through a point exactly two
-    piece ends share."""
+    piece ends share. Where three or more ends of one named route meet (it branches, so a name is wrong or a spur
+    shares it: Natural Earth's I-84 was "5"), only the straightest pair joins (owner 2026-10-30)."""
     parent = list(range(len(pieces)))
 
     def find(i):
@@ -1871,15 +1889,28 @@ def road_groups(pieces):
             first_part[piece[0]] = index
     ends = {}
     for index, (_, _, _, q) in enumerate(pieces):
-        for point in (q[0], q[-1]):
-            ends.setdefault((int(point[0]), int(point[1])), []).append(index)
+        for point, toward in ((q[0], q[1]), (q[-1], q[-2])):
+            key = (int(point[0]), int(point[1]))
+            direction = (int(toward[0]) - key[0], int(toward[1]) - key[1])
+            ends.setdefault(key, []).append((index, direction))
+    branches = 0
     for members in ends.values():
-        for a in range(len(members)):
-            for b in range(a + 1, len(members)):
-                i, j = members[a], members[b]
-                name_i, name_j = pieces[i][2], pieces[j][2]
-                if (name_i and name_i == name_j) or (not name_i and not name_j and len(members) == 2):
-                    parent[find(i)] = find(j)
+        if len(members) == 2 and not pieces[members[0][0]][2] and not pieces[members[1][0]][2]:
+            parent[find(members[0][0])] = find(members[1][0])
+        named = {}
+        for entry in members:
+            if pieces[entry[0]][2]:
+                named.setdefault(pieces[entry[0]][2], []).append(entry)
+        for entries in named.values():
+            if len(entries) > 2:
+                branches += 1
+                a, b = straightest_pair(entries)
+                entries = [entries[a], entries[b]]
+            for a in range(len(entries)):
+                for b in range(a + 1, len(entries)):
+                    parent[find(entries[a][0])] = find(entries[b][0])
+    if report is not None:
+        report.counts["named-route branch points (straightest pair joined)"] = branches
     groups = {}
     for index in range(len(pieces)):
         groups.setdefault(find(index), []).append(index)
@@ -1891,7 +1922,7 @@ def build_roads(features, report):
     lines (u16 pointCount · first point i32 lon, i32 lat · zigzag-LEB128 deltas)."""
     pieces = road_pieces(features, report)
     roads = []
-    for members in road_groups(pieces):
+    for members in road_groups(pieces, report):
         uident = min(pieces[i][0] for i in members)
         kind = ROAD_HIGHWAY if any(pieces[i][1] == ROAD_HIGHWAY for i in members) else ROAD_MAIN
         lines = [pieces[i][3] for i in sorted(members, key=lambda i: (pieces[i][0], int(pieces[i][3][0, 0])))]
