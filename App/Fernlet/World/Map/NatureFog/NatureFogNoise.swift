@@ -25,7 +25,7 @@ nonisolated enum NatureFogNoise {
     }
 
     /// The mockup's `noise(col, row, size, salt)`: smooth value noise with lattice points `size` hexes apart,
-    /// so woods, meadows and ponds come in patches.
+    /// so woods and meadows come in patches.
     static func noise(_ col: Int, _ row: Int, size: Double, salt: Int) -> Double {
         guard size > 0 else { return 0 }
         let x = Double(col) / size, y = Double(row) / size
@@ -75,11 +75,11 @@ nonisolated struct NatureRandom {
     }
 }
 
-/// What one fog hex is (spec "What each hex is"): an edge next to the uncovered map, part of a pond, or one of
+/// What one fog hex is (spec "What each hex is"): an edge next to the uncovered map, or one of
 /// the four kinds of ground cover; the terrain sets add theirs (the mockup's `kinds`: sea waves, sand ripples,
 /// mountain scree, tundra lichen, ice cracks and snow drifts, crop rows and roofs).
 nonisolated enum NatureHexKind: Hashable {
-    case edge, pond, short, long, flowers, boulder
+    case edge, short, long, flowers, boulder
     case waves, ripples, scree, lichen, crack, snow, crops, roof
 }
 
@@ -125,11 +125,6 @@ nonisolated enum NatureFogRules {
     /// The woods noise, `noise(col, row, 6, salt 1)`: above 0.58 the woods' mix, above 0.62 the woods green.
     static func woods(_ col: Int, _ row: Int) -> Double {
         NatureFogNoise.noise(col, row, size: 6, salt: 1)
-    }
-
-    /// Whether a hex with all six neighbours wild is a pond: `noise(col, row, 5, salt 2) > 0.86`.
-    static func isPond(_ col: Int, _ row: Int) -> Bool {
-        NatureFogNoise.noise(col, row, size: 5, salt: 2) > 0.86
     }
 
     /// The mockup's `kindAt`: short, long, flowers or boulder by `hash(col+1000, row+1000) % 100`.

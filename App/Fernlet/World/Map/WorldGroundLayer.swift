@@ -23,7 +23,7 @@ struct WorldGround: Equatable {
 }
 
 /// Fernlet's own ground layer over whichever base map is underneath: trails, the nature fog with its
-/// lifted cells (``NatureFogLayer``: ground hexes, grass, flowers, ponds, boulders and trees, approved
+/// lifted cells (``NatureFogLayer``: ground hexes, grass, flowers, boulders and trees, approved
 /// 2026-10-26), and dotted traces.
 ///
 /// Everything is placed from the reported `MapViewport` and the global `MercatorHexGrid`; nothing

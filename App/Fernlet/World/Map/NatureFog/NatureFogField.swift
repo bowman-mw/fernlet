@@ -10,7 +10,7 @@ import WorldMapStore
 nonisolated struct NatureFogScale: Hashable {
     /// Centre to corner, in points.
     let radius: Double
-    /// Reduced detail: no tufts or specks, 3-pixel flowers, no boulders, plain ponds; trees stay.
+    /// Reduced detail: no tufts or specks, 3-pixel flowers, no boulders; trees stay.
     let reduced: Bool
 
     /// Below this radius on screen the fog draws its reduced detail.
@@ -109,8 +109,6 @@ nonisolated struct NatureFogLayout {
     var seas: [(centre: CGPoint, paint: NaturePaint)] = []
     var specks: [NatureFogBlock] = []
     var marks: [NatureFogMark] = []
-    var ponds: [CGPoint] = []
-    var shores: [(from: CGPoint, to: CGPoint)] = []
     /// The sand line along a sea hex's sides that meet land.
     var coasts: [(from: CGPoint, to: CGPoint)] = []
     var waterMarks: [NatureFogBlock] = []

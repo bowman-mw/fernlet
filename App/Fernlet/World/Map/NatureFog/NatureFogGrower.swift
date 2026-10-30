@@ -2,8 +2,8 @@ import CoreGraphics
 import Foundation
 import WorldMapStore
 
-/// Lays out the nature fog over one area, from the mockup's `field()`: which hexes are edges, ponds or ground
-/// cover, which trees stand, and where every piece goes (spec "What each hex is", "Trees and pines",
+/// Lays out the nature fog over one area, from the mockup's `field()`: which hexes are edges or ground
+/// cover (no ponds: water only where the atlas has it, owner 2026-10-30), which trees stand, and where every piece goes (spec "What each hex is", "Trees and pines",
 /// "Pieces on a hex").
 ///
 /// Unlike the mockup's screenful of cells, the fog here is the whole world minus the uncovered cells, so a
@@ -34,8 +34,8 @@ nonisolated final class NatureFogGrower {
         self.terrain = terrain
     }
 
-    /// What `cell` is: clear, an edge (a neighbour is clear), a pond (all neighbours wild and the pond noise),
-    /// or its ground cover.
+    /// What `cell` is: clear, an edge (a neighbour is clear), or its ground cover. The mockup's random
+    /// ponds are gone (owner, 2026-10-30): water is only the atlas's, drawn by the water set.
     func state(_ cell: HexCell) -> NatureCellState {
         if let known = memo[cell] { return known }
         if memo.count >= Self.memoLimit { memo.removeAll(keepingCapacity: true) }
@@ -53,14 +53,13 @@ nonisolated final class NatureFogGrower {
         guard !clearing.isClear(cell) else { return .clear }
         if MercatorHexGrid.neighbours(of: cell).contains(where: clearing.isClear) { return .wild(.edge) }
         let at = NatureFogRules.offset(of: cell), land = self.land(cell)
-        if land.set.hasPonds && NatureFogRules.isPond(at.col, at.row) { return .wild(.pond) }
         return .wild(TerrainRules.ground(land, col: at.col, row: at.row))
     }
 
-    /// Whether `cell` is wild ground a tree may stand over: fog, not an edge, not a pond, not the sea.
+    /// Whether `cell` is wild ground a tree may stand over: fog, not an edge, not the sea.
     private func isDeepWild(_ cell: HexCell) -> Bool {
         guard case .wild(let kind) = state(cell) else { return false }
-        return kind != .edge && kind != .pond && !land(cell).set.isWater
+        return kind != .edge && !land(cell).set.isWater
     }
 
     /// Every cell whose centre lies in `area` (global points), row by row; bounded to 400 rows and columns.
@@ -115,7 +114,7 @@ nonisolated final class NatureFogGrower {
     }
 
     /// The wildness rule: a tree stands only while every hex within canopy radius + 0.7 R of its canopy is
-    /// fog, not an edge, not a pond and not the sea. Clearing any of them lifts the whole tree, and no new tree
+    /// fog, not an edge and not the sea. Clearing any of them lifts the whole tree, and no new tree
     /// appears.
     func stands(_ plan: NatureTreePlan) -> Bool {
         cells(round: plan, within: plan.canopyRadius + 0.7 * scale.radius).allSatisfy(isDeepWild)

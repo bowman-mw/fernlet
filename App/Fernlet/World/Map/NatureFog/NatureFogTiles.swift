@@ -45,8 +45,8 @@ struct NatureFogChange {
 /// **Bounded** (Power of 10): at most ``cacheLimit`` tiles kept (the farthest from the middle of the screen go
 /// first), ``cacheLimit`` wanted, ``painterCount`` drawing.
 ///
-/// A cleared hex can change everything within about 6 R of it: its neighbours become plain edges, a pond's
-/// shore moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
+/// A cleared hex can change everything within about 6 R of it: its neighbours become plain edges, the sea's
+/// sand line moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
 /// tile within 6 R.
 ///
 /// With a ``NatureFogTerrain`` snapshot each grower gets its own ``NatureTerrainMemo``, so a hex's land is read
