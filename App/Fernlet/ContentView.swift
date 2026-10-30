@@ -84,6 +84,8 @@ struct ContentView: View {
     /// The Stamp book asked for by the stamp banner or the stamp widget: Today opens and pushes it at its
     /// stamps (owner, 2026-10-24: no sheet), and the Today panel's HomeView takes and clears this.
     @State private var pendingStampBook = false
+    /// Sprout's passport: opened from anywhere through the environment (`worldPassportBook`).
+    @State private var passportPresenter = WorldPassportPresenter()
     /// Whether the session-end keep-as-friends prompt is up (``KeepFriendsPromptHost``, owner
     /// 2026-10-24: shown wherever the person is, Home included).
     @State private var isKeepFriendsPromptUp = false
@@ -285,6 +287,8 @@ struct ContentView: View {
         launchRoot
             // Round 7 world map: FERNLET_UI_TEST_WORLD_VIEW's DEBUG host; a no-op in Release.
             .worldAtlasMapHook(store: store)
+            // Round 7: Sprout's passport over the root, opened through the environment.
+            .worldPassportBook(passportPresenter, store: store)
             .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
                 sheetContent(for: sheet)
             }
