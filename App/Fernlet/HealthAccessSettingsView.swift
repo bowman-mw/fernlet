@@ -241,6 +241,13 @@ struct HealthAccessSettingsView: View {
 
     private func setMasterEnabled(_ enabled: Bool) async {
         healthError = nil
+        // R8: the App Review demo's sample data never reaches Apple Health (`ReviewDemo`).
+        #if FERNLET_DEMO
+        guard !(enabled && ReviewDemo.blocksCloudAndHealth) else {
+            healthError = ReviewDemo.cloudAndHealthBlockedMessage
+            return
+        }
+        #endif
         FernletAuditLog.log(enabled ? "privacy.healthKit.masterEnabled" : "privacy.healthKit.masterDisabled")
         do {
             let service = makeHealthKitService()

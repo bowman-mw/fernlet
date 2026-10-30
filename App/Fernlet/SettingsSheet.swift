@@ -391,6 +391,10 @@ struct SettingsSheet: View {
 
     private var settingsForm: some View {
         Form {
+            // R8: the App Review demo build's "sample data / Leave demo" section (`ReviewDemo`).
+            #if FERNLET_DEMO
+            ReviewDemoSettingsSection(store: store)
+            #endif
             yourDaySection
             homeMapSection
             friendsSection
