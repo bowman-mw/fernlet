@@ -278,7 +278,8 @@ final class NatureFogMapView: UIView {
             guard radius >= NatureFogScale.minimumRadius,
                   let map = Self.acceptedMapping(scene.viewport, size: size, scale: NatureFogScale(radius: radius, reduced: false)) else { continue }
             let scale = NatureFogScale(radius: radius, reduced: radius < NatureFogScale.detailFloor)
-            let spare = spareBooks.first { $0.scale == scale && $0.palette == scene.palette } ?? fresh(scale, scene: scene)
+            let spare = spareBooks.first { $0.scale == scale && $0.palette == scene.palette && $0.terrain == scene.terrain }
+                ?? fresh(scale, scene: scene)
             _ = spare.change(to: scene.clearing)
             spareBooks = Array(([spare] + spareBooks.filter { $0 !== spare }).prefix(Self.spareBookLimit))
             let low = NatureFogTileBook.key(at: CGPoint(x: map.originX, y: map.originY))
@@ -299,7 +300,7 @@ final class NatureFogMapView: UIView {
             guard let self, let next, self.book === next else { return }
             self.arrived(tile)
         }
-        if let book, book.palette == scene.palette { next.borrowPlaceholder(book.placeholder) }
+        if let book, book.palette == scene.palette { next.borrowPlaceholders(from: book) }
         return next
     }
 
@@ -432,7 +433,7 @@ final class NatureFogMapView: UIView {
 
     /// A waiting tile's look until its picture arrives, never wild fog over the person's own ground (the
     /// owner's zoom on the phone, 2026-10-30): nothing where the outgoing tiles cover all of it; the map where
-    /// its ground is uncovered; wild fog (``NatureFogTileBook/placeholder``, the fog's colour until that's
+    /// its ground is uncovered; wild fog (``NatureFogTileBook/placeholder(for:)``, the fog's colour until that's
     /// drawn) where it's fogged; and a tile with both is cut to its fogged hexes (``fogMask(_:book:)``, built
     /// once), or at very small hexes shows whichever covers most of it.
     private func cover(_ container: CALayer, key: NatureTileKey, at frame: CGRect, book: NatureFogTileBook) {
@@ -455,8 +456,8 @@ final class NatureFogMapView: UIView {
             showsMap.insert(key)
             container.mask = nil
         }
-        container.backgroundColor = fogged ? book.palette.color(.grassB) : nil
-        container.contents = fogged ? book.placeholder : nil
+        container.backgroundColor = fogged ? book.placeholderColour(for: key) : nil
+        container.contents = fogged ? book.placeholder(for: key) : nil
     }
 
     /// The tile at `key`'s fogged hexes as a mask in its own points; nil at hexes under 5 pt (too many to
@@ -819,8 +820,8 @@ extension NatureFogMapView {
     private func blank(_ key: NatureTileKey, book: NatureFogTileBook) {
         guard var layers = shown[key] else { return }
         layers.container.sublayers?.forEach { $0.removeFromSuperlayer() }
-        layers.container.backgroundColor = book.palette.color(.grassB)
-        layers.container.contents = book.placeholder
+        layers.container.backgroundColor = book.placeholderColour(for: key)
+        layers.container.contents = book.placeholder(for: key)
         layers.swaying = []
         layers.trees = []
         shown[key] = layers
