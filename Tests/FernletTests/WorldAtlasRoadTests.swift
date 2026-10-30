@@ -55,7 +55,7 @@ struct WorldAtlasRoadTests {
                 == ["ne:road:4", "ne:road:9"], "through the junction: both, each once")
         #expect(atlas.roadsCrossed(from: GeoPoint(10.1, 100.18), to: GeoPoint(10.1, 100.2)).map(\.token) == ["ne:road:4"],
                 "a fix on the line counts")
-        #expect(atlas.roadsCrossed(from: GeoPoint(10.27, 100.53), to: GeoPoint(10.29, 100.53)).map(\.token) == ["ne:road:9"],
+        #expect(atlas.roadsCrossed(from: GeoPoint(10.26, 100.53), to: GeoPoint(10.28, 100.53)).map(\.token) == ["ne:road:9"],
                 "the road's second line")
         #expect(atlas.roadsCrossed(from: GeoPoint(10.1, 100.15), to: GeoPoint(10.1, 100.25)).isEmpty,
                 "11 km between fixes is a gap, not a crossing")
