@@ -51,8 +51,8 @@ struct WorldRoadCrossingTests {
                 "the Sahara has no major road")
     }
 
-    /// A walk across Portland (the roads screenshot's) crosses I-5 and I-84: each road once. (The pack groups the
-    /// touching pieces of a route, and Portland's I-5 and I-84 are one road there, so both turn amber together.)
+    /// A walk across Portland (the roads screenshot's) crosses I-5 and I-84: each road once, and two roads (the pack
+    /// joins only the straightest pair where a named route branches three ways, so I-84 is no longer part of I-5).
     @Test func aWalkAcrossPortlandCrossesBothInterstates() throws {
         let atlas = try WorldExploreTests.shippedAtlas()
         let crossed = AtlasRoadCrossings(cells: WorldRoadTestScenes.cells, atlas: atlas)
@@ -60,6 +60,7 @@ struct WorldRoadCrossingTests {
         let i84 = try #require(atlas.roadsCrossed(from: GeoPoint(45.52, -122.62), to: GeoPoint(45.56, -122.62)).first)
         let tokens = crossed.tokens(in: atlas)
         #expect(tokens.contains(i5.token) && tokens.contains(i84.token))
+        #expect(i5.token != i84.token, "I-84 is its own road")
         #expect(Set(crossed.roadIndices).count == crossed.roadIndices.count && crossed.roadIndices == crossed.roadIndices.sorted())
     }
 
