@@ -140,7 +140,7 @@ struct WorldLandmarkTests {
         keeper.observe(point: Self.laurelhurst.offset(east: 120, north: 0), at: Self.t2)
         keeper.endDiscoveries()
         var heard: [AtlasDiscovery] = []
-        for await discovery in stream.prefix(32) { heard.append(discovery) }
+        for await event in stream.prefix(32) { if let discovery = event.discovery { heard.append(discovery) } }
         #expect(heard.filter { $0.kind == .landmark }.map(\.token) == ["laurelhurstPark"])
         let park = try #require(list.landmark(token: "laurelhurstPark"))
         #expect(keeper.isFound(park))
