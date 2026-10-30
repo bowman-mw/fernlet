@@ -19,20 +19,27 @@ struct WorldOffMapHome<Companion: View>: View {
     let onOpenPrint: (FriendsRoute?) -> Void
     @ViewBuilder let companion: () -> Companion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Sprout's passport: while it is open only the scene shows behind it, as the map Home shows only the map
+    /// (World-Passport-Spec §2).
+    @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
 
     var body: some View {
         let large = dynamicTypeSize.isAccessibilitySize
+        let plates: Double = passport?.isPresented == true ? 0 : 1
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 18)
+                .opacity(plates)
             WorldPhotoPrints(store: store, arrangement: .row(compact: large), onOpen: onOpenPrint)
                 .padding(.leading, 14)
                 .padding(.top, 8)
+                .opacity(plates)
             scene(large: large)
             WorldStatusPlate(status: status) { onOpen(.today) }
                 .scaleEffect(large ? 1 : 1.22, anchor: .top)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 8)
+                .opacity(plates)
             Spacer(minLength: 0)
         }
         .padding(.top, 8)

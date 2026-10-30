@@ -8,11 +8,20 @@ import Foundation
 /// opens no connection and writes nothing (the keeper decides which fixes reach it). Every query is bounded:
 /// a raster lookup is one index; the coast mask lookup a binary search of at most 64 steps; the reach search
 /// at most `(2 × maxReachSpan + 1)²` cells of 256 sub-cells each; the country search one pass over the decoded
-/// table, whose size the decoder caps; the city search at most 51 one-degree cells of `AtlasCityIndex` and at
+/// table, whose size the decoder caps; the admin-1 search one pass over the country's own entries (or over
+/// the decoded table when the country is unknown); the city search at most 51 one-degree cells of `AtlasCityIndex` and at
 /// most one pass over the urban boundaries (`WorldAtlasCities.swift`); a lookup by token (``city(token:)``,
 /// ``country(code:)``, ``sea(token:)``) one dictionary read, the dictionaries built once at init.
 public nonisolated final class WorldAtlas: Sendable {
     // MARK: The rules' constants (each one decided once, here)
+
+    /// How many countries the passport counts ("N of 194 countries"): the 193 UN members, the Holy See and
+    /// Palestine, without North Korea (owner, 2026-10-29: "Take north korea out of the passport"). The pack's
+    /// `CTRY` flag marks exactly these (``AtlasCountry/countsInPassport``).
+    public static let passportCountryTotal = 194
+    /// Countries the passport leaves out entirely: a reading inside one earns no country and no city entry, though
+    /// its continent, coast and sea still count (their polygons stay in the pack). North Korea, owner 2026-10-29.
+    public static let excludedFromPassport: Set<String> = ["KP"]
 
     /// How near water must be to count its ocean or sea: 2 km (owner, 2026-10-29).
     public static let oceanReachMetres = 2_000.0
@@ -38,6 +47,15 @@ public nonisolated final class WorldAtlas: Sendable {
     public let urbanAreas: [AtlasPolygon]
     /// The cities.
     public let cities: [AtlasCity]
+    /// The states and provinces (`ADM1`), sorted by country then token, for the world view's State and City
+    /// zooms: their lines and the plate's place (`WorldAtlasAdmin1.swift`).
+    public let admin1s: [AtlasAdmin1]
+    /// The plate groups (`ADM1`'s first table): the first-level regions entries are shown as where Natural
+    /// Earth's admin-1 is second-level (England, Île-de-France). An entry not in a group is its own.
+    public let admin1Groups: [AtlasAdmin1Group]
+    /// The major roads (`ROAD`), in number order, for the approved major-road style and the crossing rule
+    /// (`WorldAtlasRoads.swift`).
+    public let roads: [AtlasRoad]
     /// The generator's provenance JSON (`META`), when the pack carries it.
     public let metaJSON: String?
     /// Every cell's state: 0 water, 1 land, 2 coast.
@@ -63,6 +81,14 @@ public nonisolated final class WorldAtlas: Sendable {
     let countryIndex: [String: Int]
     /// Each sea token's index into ``seas`` (the first, should a token repeat).
     let seaIndex: [String: Int]
+    /// Each admin-1 token's index into ``admin1s`` (tokens are unique: the decoder refuses a repeat).
+    let admin1Index: [String: Int]
+    /// Each country code's admin-1 entries, as indices into ``admin1s`` in table order.
+    let admin1sByCountry: [String: [Int]]
+    /// Each road token's index into ``roads`` (numbers are unique: the decoder refuses a repeat).
+    let roadIndex: [String: Int]
+    /// The roads' segments by one-degree cell, for ``roadsCrossed(from:to:)``.
+    let roadGrid: AtlasRoadIndex
 
     /// The atlas in `data` (a whole pack file), or the reason it is refused.
     public convenience init(data: Data) throws {
@@ -89,6 +115,13 @@ public nonisolated final class WorldAtlas: Sendable {
         cityIndex = Self.firstIndices(of: layers.cities.map(\.token))
         countryIndex = Self.firstIndices(of: layers.countries.map(\.code))
         seaIndex = Self.firstIndices(of: layers.seas.map(\.token))
+        admin1s = layers.admin1s
+        admin1Groups = layers.admin1Groups
+        admin1Index = Self.firstIndices(of: layers.admin1s.map(\.token))
+        admin1sByCountry = Self.groupedIndices(of: layers.admin1s.map(\.countryCode))
+        roads = layers.roads
+        roadIndex = Self.firstIndices(of: layers.roads.map(\.token))
+        roadGrid = try AtlasRoadIndex(roads: layers.roads)
     }
 
     // MARK: Lookups by token
@@ -121,6 +154,15 @@ public nonisolated final class WorldAtlas: Sendable {
             index[key] = position
         }
         return index
+    }
+
+    /// Every position of each key in `keys`, in order. Bounded: one pass over a decoder-capped table.
+    private static func groupedIndices(of keys: [String]) -> [String: [Int]] {
+        var groups: [String: [Int]] = [:]
+        for (position, key) in keys.enumerated() {
+            groups[key, default: []].append(position)
+        }
+        return groups
     }
 
     // MARK: What lies under a point
@@ -167,10 +209,13 @@ public nonisolated final class WorldAtlas: Sendable {
     public func visit(at point: GeoPoint) -> AtlasVisit {
         let terrain = AtlasTerrainClassifier(atlas: self).terrain(at: point)
         guard point.isValid else { return AtlasVisit(terrain: terrain) }
-        let country = country(at: point)
+        let found = country(at: point)
+        let excluded = found.map { Self.excludedFromPassport.contains($0.code)
+            || Self.excludedFromPassport.contains($0.sovereignCode) } ?? false
+        let country = excluded ? nil : found
+        let city = excluded ? nil : city(at: point, inCountry: found?.code)
         var visit = AtlasVisit(countryCode: country?.code, sovereignCode: country?.sovereignCode,
-                               continent: continent(at: point), city: city(at: point, inCountry: country?.code),
-                               terrain: terrain)
+                               continent: continent(at: point), city: city, terrain: terrain)
         switch water(near: point) {
         case .ocean(let ocean): visit.ocean = ocean
         case .sea(let sea): visit.sea = sea
@@ -219,4 +264,9 @@ public nonisolated final class WorldAtlas: Sendable {
 }
 
 /// The bundled atlas is what the app's passport keeper reads accepted fixes against.
-extension WorldAtlas: AtlasVisitResolving {}
+extension WorldAtlas: AtlasVisitResolving {
+    /// Water where the land mask has none (cheap: no country, city or reach search).
+    public func isWater(at point: GeoPoint) -> Bool {
+        point.isValid && !isLand(at: point)
+    }
+}

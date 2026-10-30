@@ -76,9 +76,11 @@ nonisolated struct NatureRandom {
 }
 
 /// What one fog hex is (spec "What each hex is"): an edge next to the uncovered map, part of a pond, or one of
-/// the four kinds of ground cover.
-nonisolated enum NatureHexKind: Equatable {
+/// the four kinds of ground cover; the terrain sets add theirs (the mockup's `kinds`: sea waves, sand ripples,
+/// mountain scree, tundra lichen, ice cracks and snow drifts, crop rows and roofs).
+nonisolated enum NatureHexKind: Hashable {
     case edge, pond, short, long, flowers, boulder
+    case waves, ripples, scree, lichen, crack, snow, crops, roof
 }
 
 /// A tree the mockup's `treeAt` stands on a hex: a pine or a round tree, big or small, with its shape variant.

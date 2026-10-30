@@ -378,6 +378,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// prefix of it and it prefixes none (`noPurposeIsAPrefixOfAnother`). Changing it orphans
         /// every cycle record on every device.
         public static let cycleRecordV1 = CryptographicPurpose("fernlet.cycle-record.v1")
+        /// **Registered 2026-10-29 (World bodybuilding, round 7, piece B1).** The `ColumnCrypto`
+        /// purpose of the sealed `BodyTally` entity's one ciphertext column — one blob per day holding
+        /// that day's bathroom-visit count and free-meal tags: the HKDF `info` its column key is
+        /// derived under and, with the install's binding ID, the column's authenticated data. The key
+        /// it derives from is the journal's device fallback key (`BodyTallyRepository` explains why
+        /// the tallies, which show outside the Private tab, are sealed under it), so this purpose is
+        /// also what keeps a tally blob from ever opening as a journal column under that same key.
+        ///
+        /// Its own versioned spelling: no registered spelling is a prefix of it and it prefixes none
+        /// (`noPurposeIsAPrefixOfAnother`). Changing it orphans every body tally on every device.
+        public static let bodyTallyV1 = CryptographicPurpose("fernlet.body-tally.v1")
     }
 
     /// Domains embedded in HMAC messages.

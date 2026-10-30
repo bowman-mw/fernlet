@@ -23,6 +23,7 @@ import os
 import re
 import struct
 import sys
+import unicodedata
 import zipfile
 import zlib
 
@@ -48,14 +49,22 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 2
+GENERATOR_VERSION = 7
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
 DEFAULT_ROWS = 1800
-SIZE_CAP = 6_291_456
+# 7 MiB since the major roads (owner, 2026-10-30: "raise the pack cap to 7 MiB", one file, one pin).
+SIZE_CAP = 7_340_032
 RAW_SECTION_CAP = 64 * 1024 * 1024
 SIMPLIFY_DEGREES = 0.001
+# ADM1's Douglas-Peucker tolerance: about 890 m, under 3 pt at the world view's City zoom (360 pt a degree of
+# latitude) and under a third of its 10-pt hex. 0.003° (1 pt) and 0.005° did not leave the old 6 MiB cap any margin.
+ADMIN1_SIMPLIFY_DEGREES = 0.008
+MAX_ADMIN1 = 8192
+# A code differently named admin-1 features share stays with the largest only when it is this many times the
+# area of all the others together (New South Wales over Lord Howe Island, Cundinamarca over Bogotá).
+ADMIN1_DOMINANCE = 10.0
 SCALE = 100_000
 FILL_RADIUS = 5
 MIN_SEA_CELLS = 3
@@ -72,8 +81,10 @@ SOURCE_LICENCES = {
     "ne_10m_coastline": "public domain (Natural Earth)",
     "ne_10m_geography_marine_polys": "public domain (Natural Earth)",
     "ne_10m_admin_0_countries": "public domain (Natural Earth)",
+    "ne_10m_admin_1_states_provinces": "public domain (Natural Earth)",
     "ne_10m_populated_places": "public domain (Natural Earth)",
     "ne_10m_urban_areas": "public domain (Natural Earth)",
+    "ne_10m_roads": "public domain (Natural Earth)",
     "Beck_KG_V1": "CC BY 4.0 (Beck et al. 2018, Scientific Data 5:180214)",
 }
 BECK_MEMBER = "Beck_KG_V1_present_0p083.tif"
@@ -99,6 +110,21 @@ SEVEN_SEAS_CONTINENT = {"MV": 3, "IO": 3, "MU": 1, "SC": 1, "SH": 1, "TF": 1, "G
 # Features whose ISO_A2_EH is -99, by ADM0_A3, counted as the territory the UN recognises there.
 EH_FALLBACK = {"SOL": "SO", "CYN": "CY", "CNM": "CY", "KAB": "KZ"}
 
+# Land Natural Earth's default admin-0 gives one country that counts as another (Docs/World-Atlas-Pack.md, CTRY).
+# Owner, 2026-10-29: "Crimea counts as Ukraine." Natural Earth draws Crimea, Sevastopol with it, as a separate part
+# of Russia's multipolygon (one 424-point ring whose border with Kherson is 46 vertices Ukraine's ring shares
+# exactly), and files Crimea's two admin-1 rows (ISO 3166-2 UA-43, UA-40) under ADM0_A3 RUS. Every ring of "from"
+# lying wholly inside "box" (west, south, east, north) moves to "to", stitched into the "to" ring it shares a border
+# with (so one ring is simplified, and no sliver along the isthmus belongs to anyone else); the admin-1 rows with
+# those codes count as "to". The run stops unless at least one ring moves and every anchor (lon, lat: Simferopol,
+# Sevastopol, Yalta) then lies in "to" and in no ring of "from". Sevastopol's anchor is 1.9 km south of its centre
+# (44.6166, 33.5254), which the source's 10m coast leaves in the open water of Sevastopol Bay: no country holds
+# that point, before or after. CONT is unchanged: both countries are Europe there.
+TERRITORY_OVERRIDES = (
+    {"name": "Crimea", "from": "RU", "to": "UA", "box": (32.3, 44.2, 36.75, 46.3), "admin1": ("UA-43", "UA-40"),
+     "anchors": ((34.1024, 44.9521), (33.52, 44.60), (34.1663, 44.4952))},
+)
+
 LANDMASS_OVERRIDES = (
     "RU: Asia east of 60°E (and across the antimeridian), else Europe",
     "TR: Europe north of the Dardanelles–Marmara–Bosporus line (Thrace), else Asia (Anatolia)",
@@ -118,8 +144,15 @@ UN_MEMBERS = (
 ).split()
 THE_195 = frozenset(UN_MEMBERS) | {"VA", "PS"}
 assert len(set(UN_MEMBERS)) == 193 and len(THE_195) == 195, "the 195 table is wrong"
+# The passport's countries (owner, 2026-10-29: "Take north korea out of the passport"): the 195 without North
+# Korea, so 194. Its polygon stays (continent, coast and sea rules still work); the CTRY flag says it doesn't count.
+EXCLUDED_FROM_PASSPORT = frozenset({"KP"})
+PASSPORT_COUNTRIES = THE_195 - EXCLUDED_FROM_PASSPORT
+assert len(PASSPORT_COUNTRIES) == 194, "the passport table is wrong"
 
 ALPHA2 = re.compile(r"^[A-Z]{2}$")
+# A real ISO 3166-2 code (Natural Earth marks its own stand-ins with "~", "-99-" or an "X" and digits).
+ISO_3166_2 = re.compile(r"^[A-Z]{2}-(?!X[0-9])[A-Z0-9]{1,3}$")
 WIKIDATA = re.compile(r"^Q[0-9]+$")
 
 
@@ -162,8 +195,8 @@ def read_source_table(script_dir):
             if len(parts) != 6:
                 raise SystemExit("error: bad source table line in fetch-sources.sh: %r" % line)
             rows.append(dict(zip(("subdir", "file", "bytes", "need", "sha", "url"), parts)))
-    if len(rows) != 8:
-        raise SystemExit("error: fetch-sources.sh lists %d sources, not 8" % len(rows))
+    if len(rows) != 10:
+        raise SystemExit("error: fetch-sources.sh lists %d sources, not 10" % len(rows))
     return rows
 
 
@@ -211,7 +244,8 @@ def zip_member(names, suffix):
 
 
 def parse_shp(data):
-    """Geometries in record order: None, ("point", x, y) or ("polygon", [rings as (n, 2) float64])."""
+    """Geometries in record order: None, ("point", x, y), ("polygon", [rings as (n, 2) float64]) or
+    ("line", [parts as (n, 2) float64])."""
     if len(data) < 100 or struct.unpack(">i", data[0:4])[0] != 9994:
         raise SystemExit("error: not a shapefile (.shp header)")
     end = min(len(data), struct.unpack(">i", data[24:28])[0] * 2)
@@ -230,19 +264,22 @@ def parse_shp(data):
 
 
 def parse_shape(body):
-    """One shapefile record's geometry (points and polygons, with or without Z/M)."""
+    """One shapefile record's geometry (points, polylines and polygons, with or without Z/M)."""
     shape_type = struct.unpack("<i", body[:4])[0]
     if shape_type == 0:
         return None
     if shape_type in (1, 11, 21):
         x, y = struct.unpack("<dd", body[4:20])
         return ("point", x, y)
-    if shape_type not in (5, 15, 25):
+    if shape_type not in (3, 13, 23, 5, 15, 25):
         raise SystemExit("error: unsupported shape type %d" % shape_type)
     parts_count, points_count = struct.unpack("<ii", body[36:44])
     parts = np.frombuffer(body, "<i4", parts_count, 44).astype(np.int64)
     points = np.frombuffer(body, "<f8", points_count * 2, 44 + 4 * parts_count).reshape(points_count, 2)
     bounds = list(parts) + [points_count]
+    if shape_type in (3, 13, 23):
+        lines = [np.array(points[bounds[i]:bounds[i + 1]], dtype=np.float64) for i in range(parts_count)]
+        return ("line", [line for line in lines if len(line) >= 2])
     rings = []
     for i in range(parts_count):
         ring = np.array(points[bounds[i]:bounds[i + 1]], dtype=np.float64)
@@ -579,7 +616,22 @@ def simplify_closed_ring(points, epsilon):
     if far in (0, n - 1):
         return points[keep]
     keep[far] = True
-    stack = [(0, far), (far, n - 1)]
+    return douglas_peucker(points, epsilon, keep, [(0, far), (far, n - 1)])
+
+
+def simplify_open_line(points, epsilon):
+    """The open line (a road) thinned by Douglas-Peucker, its two ends kept."""
+    n = len(points)
+    if n <= 2:
+        return points
+    keep = np.zeros(n, dtype=bool)
+    keep[0] = keep[n - 1] = True
+    return douglas_peucker(points, epsilon, keep, [(0, n - 1)])
+
+
+def douglas_peucker(points, epsilon, keep, stack):
+    """Douglas-Peucker over the spans on `stack`, marking `keep` (iterative; at most 2n + 4 pops)."""
+    n = len(points)
     for _ in range(2 * n + 4):
         if not stack:
             break
@@ -612,16 +664,16 @@ def quantize_ring(points):
     return q if len(q) >= 4 else None
 
 
-def encoded_rings(rings, report, label):
+def encoded_rings(rings, report, label, tolerance=SIMPLIFY_DEGREES):
     """The rings simplified and quantised (closed int64 arrays); rings that vanish are counted."""
     out = []
     dropped = 0
     for ring in rings:
         # A ring Douglas-Peucker thins to a line (the Holy See is about 0.008° across) is kept at a tenth of
         # the tolerance, then unsimplified, so no small country loses its only ring.
-        q = quantize_ring(simplify_closed_ring(ring, SIMPLIFY_DEGREES))
+        q = quantize_ring(simplify_closed_ring(ring, tolerance))
         if q is None:
-            q = quantize_ring(simplify_closed_ring(ring, SIMPLIFY_DEGREES / 10))
+            q = quantize_ring(simplify_closed_ring(ring, tolerance / 10))
         if q is None:
             q = quantize_ring(ring)
         if q is None:
@@ -717,7 +769,7 @@ def country_features(features, report):
             continent = SEVEN_SEAS_CONTINENT[code]
         if continent == 0:
             report.unmap("country %s: continent %r unmapped" % (name, continent_name))
-        items.append({"code": code, "own": code is not None and code == raw, "admin": name,
+        items.append({"code": code, "own": code is not None and code == raw, "admin": name, "a3": a3,
                       "sovereignt": text_field(attrs, "SOVEREIGNT"), "continent": continent,
                       "rings": polygon_rings(geom)})
     home = {}
@@ -730,6 +782,74 @@ def country_features(features, report):
             report.unmap("country %s: sovereign %r has no feature of its own; counts as itself"
                          % (item["admin"], item["sovereignt"]))
     return items
+
+
+def ring_in_box(ring, box):
+    """Whether every point of the ring lies inside box (west, south, east, north)."""
+    lo, hi = ring.min(axis=0), ring.max(axis=0)
+    return bool(lo[0] >= box[0] and lo[1] >= box[1] and hi[0] <= box[2] and hi[1] <= box[3])
+
+
+def stitched_ring(target, ring):
+    """`target` and `ring` as one ring when they share one border, else None. The shared border must be one
+    run of at least two vertices of `ring`, met in `target` in the opposite order (two neighbours traverse
+    their common edge oppositely): the result walks `target` the long way from the run's first vertex to its
+    last, then `ring` the long way back, so the border between them disappears before simplification."""
+    t, r = target[:-1], ring[:-1]
+    m, n = len(t), len(r)
+    where = {(float(x), float(y)): j for j, (x, y) in enumerate(t)}
+    at = [where.get((float(x), float(y))) for x, y in r]
+    shared = [j is not None for j in at]
+    starts = [i for i in range(n) if shared[i] and not shared[i - 1]]
+    k = sum(shared)
+    if len(starts) != 1 or k < 2 or k >= n:
+        return None
+    a = starts[0]
+    b = (a + k - 1) % n
+    ja, jb = at[a], at[b]
+    if any(at[(a + s) % n] != (ja - s) % m for s in range(k)):
+        return None
+    points = [t[(ja + s) % m] for s in range((jb - ja) % m + 1)] + [r[(b + 1 + s) % n] for s in range(n - k)]
+    return close_ring(np.array(points, dtype=np.float64))
+
+
+def apply_territory_overrides(items, report):
+    """Moves each TERRITORY_OVERRIDES rule's rings from one country to the other (stitched into the ring
+    they share a border with, else added as rings of their own) and checks its anchors; stops the run when a
+    rule moves nothing or an anchor lands wrong, so a changed source never silently undoes the owner's rule."""
+    for rule in TERRITORY_OVERRIDES:
+        target = next((i for i in items if i["code"] == rule["to"] and i["own"]), None)
+        if target is None:
+            raise SystemExit("error: territory override %s: no %s feature" % (rule["name"], rule["to"]))
+        moved = stitched = 0
+        for item in items:
+            if item["code"] != rule["from"]:
+                continue
+            kept = []
+            for ring in item["rings"]:
+                if not ring_in_box(ring, rule["box"]):
+                    kept.append(ring)
+                    continue
+                moved += 1
+                rings = list(target["rings"])
+                for index, other in enumerate(rings):
+                    joined = stitched_ring(other, ring)
+                    if joined is not None:
+                        rings[index] = joined
+                        stitched += 1
+                        break
+                else:
+                    rings.append(ring)
+                target["rings"] = rings
+            item["rings"] = kept
+        source_edges = EdgeSet([r for i in items if i["code"] == rule["from"] for r in i["rings"]])
+        target_edges = EdgeSet(target["rings"])
+        wrong = [p for p in rule["anchors"] if not target_edges.contains(*p) or source_edges.contains(*p)]
+        if moved == 0 or wrong:
+            raise SystemExit("error: territory override %s moved %d rings; anchors not in %s alone: %s"
+                             % (rule["name"], moved, rule["to"], wrong))
+        report.counts["territory override %s, %s -> %s (rings moved / stitched)" % (
+            rule["name"], rule["from"], rule["to"])] = "%d / %d" % (moved, stitched)
 
 
 def build_ctry(items, report):
@@ -750,18 +870,18 @@ def build_ctry(items, report):
         if not rings:
             report.unmap("country %s: no ring survives simplification" % code)
             continue
-        flags = 1 if code in THE_195 else 0
+        flags = 1 if code in PASSPORT_COUNTRIES else 0
         head = struct.pack("<2s2sBB", code.encode("ascii"), primary["sovereign"].encode("ascii"),
                            primary["continent"], flags)
         blobs.append(head + encode_polygon(rings))
         entries.append((code, primary["sovereign"], EdgeSet(rings)))
         ring_total += len(rings)
     report.counts["countries"] = len(entries)
-    report.counts["of the 195"] = sum(1 for e in entries if e[0] in THE_195)
+    report.counts["of the passport's 194"] = sum(1 for e in entries if e[0] in PASSPORT_COUNTRIES)
     report.counts["country rings"] = ring_total
-    missing = sorted(THE_195 - {e[0] for e in entries})
+    missing = sorted(PASSPORT_COUNTRIES - {e[0] for e in entries})
     if missing:
-        report.unmap("the 195 with no polygon: %s" % " ".join(missing))
+        report.unmap("the passport's 194 with no polygon: %s" % " ".join(missing))
     return struct.pack("<H", len(entries)) + b"".join(blobs), entries
 
 
@@ -1027,6 +1147,471 @@ def names_blob(english, spanish, french, german, report):
 
 
 # ---------------------------------------------------------------------------------------------------------
+# ADM1: states and provinces (the world view's State zoom: its lines and the plate's place)
+
+
+# ---------------------------------------------------------------------------------------------------------
+# ADM1 plate groups: the first-level region where Natural Earth's admin-1 is a second-level unit
+
+
+# EVERYDAY NAMES (owner, 2026-10-29): a region is named the way people say it in everyday English, "Madrid ·
+# Spain", "Bavaria · Germany", never by its official long form ("Community of Madrid", "Free State of Bavaria").
+# A designation ("Community of", "Region of", "Republic of", "Emirate of", "Province", "Prefecture", "Krai", ...)
+# is dropped only where an everyday name exists without it: it stays where the rest would be an adjective
+# ("Silesian Voivodeship", "Western Province", "Nenets Autonomous Okrug"), a common word ("Free State", "Rivers
+# State"), or another place's name ("State of Mexico", "Niger State", "Davao Region", "Vientiane Prefecture"). No
+# name is invented: every short form is the source's own (its NAME, NAME_ALT or NAME_ES field) or a hand-written
+# entry below. Spanish follows the same short everyday style ("Madrid", "Baviera", "Cataluña", "Escocia"). The
+# rule covers every hand-written name in PLATE_GROUPS and, through EVERYDAY_AFFIXES and EVERYDAY_NAMES, Natural
+# Earth's own admin-1 names.
+#
+# Where Natural Earth's admin-1 is a second-level unit, the plate and the state lines use the first-level
+# region instead (coordinator, 2026-10-29). Per country: the field whose value names the region, and that
+# value -> (ISO 3166-2 code or None, English, Spanish; "" = use English), or SELF to keep the entry as its own
+# group. An "iso:<code>" key, read before the field, places a feature by its own code (Ireland's counties have
+# no province field; two of Malawi's districts have no region). A region with no code gets
+# "ne:region:<country>:<slug>". Countries chosen because ISO 3166-2's first level is the region and Natural
+# Earth's admin-1 sits under it: GB, FR, IT, ES, IE (asked for), BE, PH, UG, LK, GN, BF, MW.
+SELF = "self"
+PLATE_GROUPS = {
+    "GB": ("GEONUNIT", {
+        "England": ("GB-ENG", "England", "Inglaterra"), "Scotland": ("GB-SCT", "Scotland", "Escocia"),
+        "Wales": ("GB-WLS", "Wales", "Gales"), "Northern Ireland": ("GB-NIR", "Northern Ireland", "Irlanda del Norte"),
+    }),
+    "BE": ("GEONUNIT", {
+        "Brussels Capital Region": ("BE-BRU", "Brussels", "Bruselas"),
+        "Flemish Region": ("BE-VLG", "Flanders", "Flandes"), "Walloon Region": ("BE-WAL", "Wallonia", "Valonia"),
+    }),
+    "FR": ("REGION_COD", {
+        "FR-ARA": ("FR-ARA", "Auvergne-Rhône-Alpes", "Auvernia-Ródano-Alpes"),
+        "FR-BFC": ("FR-BFC", "Bourgogne-Franche-Comté", "Borgoña-Franco Condado"),
+        "FR-BRE": ("FR-BRE", "Brittany", "Bretaña"), "FR-CVL": ("FR-CVL", "Centre-Val de Loire", "Centro-Valle de Loira"),
+        "FR-COR": ("FR-COR", "Corsica", "Córcega"), "FR-GES": ("FR-GES", "Grand Est", "Gran Este"),
+        "FR-HDF": ("FR-HDF", "Hauts-de-France", "Alta Francia"), "FR-IDF": ("FR-IDF", "Île-de-France", "Isla de Francia"),
+        "FR-NOR": ("FR-NOR", "Normandy", "Normandía"), "FR-NAQ": ("FR-NAQ", "Nouvelle-Aquitaine", "Nueva Aquitania"),
+        "FR-OCC": ("FR-OCC", "Occitania", "Occitania"), "FR-PDL": ("FR-PDL", "Pays de la Loire", "Países del Loira"),
+        "FR-PAC": ("FR-PAC", "Provence-Alpes-Côte d'Azur", "Provenza-Alpes-Costa Azul"),
+        # The overseas regions are one department each: the entry is already the region.
+        "FR-GUA": SELF, "FR-GUF": SELF, "FR-MTQ": SELF, "FR-MAY": SELF, "FR-LRE": SELF,
+        "": SELF,  # Clipperton Island, counted as France, has no region
+    }),
+    "IT": ("REGION_COD", {
+        "IT-21": ("IT-21", "Piedmont", "Piamonte"), "IT-23": ("IT-23", "Aosta Valley", "Valle de Aosta"),
+        "IT-25": ("IT-25", "Lombardy", "Lombardía"), "IT-32": ("IT-32", "Trentino-Alto Adige", "Trentino-Alto Adigio"),
+        "IT-34": ("IT-34", "Veneto", "Véneto"), "IT-36": ("IT-36", "Friuli-Venezia Giulia", "Friuli-Venecia Julia"),
+        "IT-42": ("IT-42", "Liguria", "Liguria"), "IT-45": ("IT-45", "Emilia-Romagna", "Emilia-Romaña"),
+        "IT-52": ("IT-52", "Tuscany", "Toscana"), "IT-55": ("IT-55", "Umbria", "Umbría"),
+        "IT-57": ("IT-57", "Marche", "Marcas"), "IT-62": ("IT-62", "Lazio", "Lacio"),
+        "IT-65": ("IT-65", "Abruzzo", "Abruzos"), "IT-67": ("IT-67", "Molise", "Molise"),
+        "IT-72": ("IT-72", "Campania", "Campania"), "IT-75": ("IT-75", "Apulia", "Apulia"),
+        "IT-77": ("IT-77", "Basilicata", "Basilicata"), "IT-78": ("IT-78", "Calabria", "Calabria"),
+        "IT-82": ("IT-82", "Sicily", "Sicilia"), "IT-88": ("IT-88", "Sardinia", "Cerdeña"),
+    }),
+    "ES": ("REGION", {
+        "Andalucía": ("ES-AN", "Andalusia", "Andalucía"), "Aragón": ("ES-AR", "Aragon", "Aragón"),
+        "Asturias": ("ES-AS", "Asturias", "Asturias"), "Canary Is.": ("ES-CN", "Canary Islands", "Canarias"),
+        "Cantabria": ("ES-CB", "Cantabria", "Cantabria"), "Castilla y León": ("ES-CL", "Castile and León", "Castilla y León"),
+        "Castilla-La Mancha": ("ES-CM", "Castilla-La Mancha", "Castilla-La Mancha"),
+        "Cataluña": ("ES-CT", "Catalonia", "Cataluña"), "Ceuta": ("ES-CE", "Ceuta", "Ceuta"),
+        "Extremadura": ("ES-EX", "Extremadura", "Extremadura"), "Foral de Navarra": ("ES-NC", "Navarre", "Navarra"),
+        "Galicia": ("ES-GA", "Galicia", "Galicia"), "Islas Baleares": ("ES-IB", "Balearic Islands", "Islas Baleares"),
+        "La Rioja": ("ES-RI", "La Rioja", "La Rioja"), "Madrid": ("ES-MD", "Madrid", "Madrid"),
+        "Melilla": ("ES-ML", "Melilla", "Melilla"), "Murcia": ("ES-MC", "Murcia", "Murcia"),
+        "País Vasco": ("ES-PV", "Basque Country", "País Vasco"),
+        "Valenciana": ("ES-VC", "Valencia", "Valencia"),
+    }),
+    "IE": ("", dict(
+        [("iso:IE-" + c, ("IE-L", "Leinster", "Leinster"))
+         for c in ("CW", "D", "KE", "KK", "LS", "LD", "LH", "MH", "OY", "WH", "WX", "WW")] +
+        [("iso:IE-" + c, ("IE-M", "Munster", "Munster")) for c in ("CE", "CO", "KY", "LK", "TA", "WD")] +
+        [("iso:IE-" + c, ("IE-C", "Connacht", "Connacht")) for c in ("G", "LM", "MO", "RN", "SO")] +
+        [("iso:IE-" + c, ("IE-U", "Ulster", "Úlster")) for c in ("CN", "DL", "MN")])),
+    # Codes and members checked against Natural Earth's REGION and REGION_COD: its REGION says "Dinagat Islands
+    # (Region XIII)" for PH-13, whose members (the Agusans, the Surigaos, Dinagat) are Caraga, and "ARMM" for
+    # PH-14, Bangsamoro since 2019. The 2024 Negros Island Region (PH-18) and Sulu's 2024 exit from Bangsamoro
+    # are not in the source.
+    "PH": ("REGION_COD", {
+        "PH-00": ("PH-00", "Metro Manila", "Gran Manila"), "PH-01": ("PH-01", "Ilocos", "Ilocos"),
+        "PH-02": ("PH-02", "Cagayan Valley", "Valle de Cagayán"), "PH-03": ("PH-03", "Central Luzon", "Luzón Central"),
+        "PH-05": ("PH-05", "Bicol", "Bicol"), "PH-06": ("PH-06", "Western Visayas", "Bisayas Occidentales"),
+        "PH-07": ("PH-07", "Central Visayas", "Bisayas Centrales"), "PH-08": ("PH-08", "Eastern Visayas", "Bisayas Orientales"),
+        "PH-09": ("PH-09", "Zamboanga Peninsula", "Península de Zamboanga"),
+        "PH-10": ("PH-10", "Northern Mindanao", "Mindanao del Norte"), "PH-11": ("PH-11", "Davao Region", "Región de Davao"),
+        "PH-12": ("PH-12", "Soccsksargen", ""), "PH-13": ("PH-13", "Caraga", ""), "PH-14": ("PH-14", "Bangsamoro", ""),
+        "PH-15": ("PH-15", "Cordillera", "Cordillera"),
+        "PH-40": ("PH-40", "Calabarzon", ""), "PH-41": ("PH-41", "Mimaropa", ""),
+    }),
+    "UG": ("REGION", {
+        "Central": ("UG-C", "Central Region", "Región Central"), "Eastern": ("UG-E", "Eastern Region", "Región Oriental"),
+        "Northern": ("UG-N", "Northern Region", "Región Norte"), "Western": ("UG-W", "Western Region", "Región Occidental"),
+    }),
+    "LK": ("REGION_COD", {
+        "LK-1": ("LK-1", "Western Province", "Provincia Occidental"), "LK-2": ("LK-2", "Central Province", "Provincia Central"),
+        "LK-3": ("LK-3", "Southern Province", "Provincia del Sur"), "LK-4": ("LK-4", "Northern Province", "Provincia del Norte"),
+        "LK-5": ("LK-5", "Eastern Province", "Provincia Oriental"),
+        "LK-6": ("LK-6", "North Western Province", "Provincia Noroccidental"),
+        "LK-7": ("LK-7", "North Central Province", "Provincia Centro-Norte"),
+        "LK-8": ("LK-8", "Uva", "Uva"), "LK-9": ("LK-9", "Sabaragamuwa", "Sabaragamuwa"),
+    }),
+    "GN": ("REGION_COD", {
+        "GN.B": ("GN-B", "Boké", ""), "GN.C": ("GN-C", "Conakry", ""), "GN.D": ("GN-D", "Kindia", ""),
+        "GN.F": ("GN-F", "Faranah", ""), "GN.K": ("GN-K", "Kankan", ""), "GN.L": ("GN-L", "Labé", ""),
+        "GN.M": ("GN-M", "Mamou", ""), "GN.N": ("GN-N", "Nzérékoré", ""),
+    }),
+    # Natural Earth's REGION_COD is empty here: the names are its REGION values, the codes ISO 3166-2:BF's
+    # (BF-01..BF-13, the 13 regions in French alphabetical order). Burkina Faso's 2025 reorganisation is not in
+    # the source.
+    "BF": ("REGION", {
+        "Boucle du Mouhoun": ("BF-01", "Boucle du Mouhoun", ""), "Cascades": ("BF-02", "Cascades", ""),
+        "Centre": ("BF-03", "Centre", ""), "Centre-Est": ("BF-04", "Centre-Est", ""), "Centre-Nord": ("BF-05", "Centre-Nord", ""),
+        "Centre-Ouest": ("BF-06", "Centre-Ouest", ""), "Centre-Sud": ("BF-07", "Centre-Sud", ""), "Est": ("BF-08", "Est", ""),
+        "Hauts-Bassins": ("BF-09", "Hauts-Bassins", ""), "Nord": ("BF-10", "Nord", ""),
+        "Plateau-Central": ("BF-11", "Plateau-Central", ""), "Sahel": ("BF-12", "Sahel", ""), "Sud-Ouest": ("BF-13", "Sud-Ouest", ""),
+    }),
+    "MW": ("REGION", {
+        "Central": ("MW-C", "Central Region", "Región Central"), "Northern": ("MW-N", "Northern Region", "Región Norte"),
+        "Southern": ("MW-S", "Southern Region", "Región Sur"),
+        "iso:MW-CT": ("MW-N", "Northern Region", "Región Norte"), "iso:MW-MH": ("MW-S", "Southern Region", "Región Sur"),
+    }),
+}
+GROUP_SLUG = re.compile(r"^ne:region:[A-Z]{2}:[a-z0-9-]{1,40}$")
+NO_GROUP = 0xFFFF
+
+# The everyday-names rule (above PLATE_GROUPS) for Natural Earth's own NAME_EN, per country: the designations
+# dropped, and the codes that keep theirs. A leading designation ("Emirate of Dubai") always goes; a trailing
+# one ("Kebbi State") goes only when the rest is the feature's own NAME, a NAME_ALT entry or its NAME_ES (so
+# "Primorsky Krai" and "Zabaykalsky Krai", whose rest is an adjective, keep theirs).
+EVERYDAY_AFFIXES = {
+    "AE": (("Emirate of ",), ()),
+    "CF": ((" Economic Prefecture", " Prefecture"), ()),
+    "FM": ((" State",), ()),
+    "GN": ((" Prefecture",), ("GN-ML",)),  # Mali Prefecture: Mali is a country
+    "JP": ((" Prefecture",), ()),
+    "MM": ((" State",), ()),
+    # Niger is a country; Rivers, Delta and Plateau are words without their "State".
+    "NG": ((" State",), ("NG-NI", "NG-RI", "NG-DE", "NG-PL")),
+    # Natural Earth's own oblasts are bare names ("Rostov"); its krais and republics follow them.
+    "RU": (("Republic of ", " Krai"), ()),
+    "SG": ((" Community Development Council",), ()),
+    "VE": ((" State", " state"), ()),
+}
+
+# The everyday-names rule's hand-written entries, by the feature's ISO 3166-2 code: (English, Spanish), None
+# keeping Natural Earth's (after the affixes and the Spanish rule). Where Natural Earth's English is broken
+# ("Jewish", "of Bougainville", "Altai Republic" for Altai Krai) the entry repairs it from the feature's own
+# fields (its TYPE_EN, NAME, NAME_ALT, NAME_ES and code).
+EVERYDAY_NAMES = {
+    "CO-SAP": ("San Andrés and Providencia", "San Andrés y Providencia"),  # NE: "Archipelago of Saint Andréws"
+    "DE-HB": ("Bremen", None),  # NE: "Free Hanseatic Bremen"
+    "ES-M": ("Madrid", None),  # NE: "Community of Madrid"
+    "GN-ML": (None, "Prefectura de Mali"),  # NE: "Ayuntamiento del Mali" ("town council"); English keeps Prefecture
+    "GR-F": (None, "Islas Jónicas"),  # NE: "Periferia de Islas Jónicas"
+    "GR-J": (None, "Peloponeso"),  # NE: "Periferia de Peloponeso"
+    "PG-NSB": ("Bougainville", None),  # NE: "of Bougainville"
+    "RU-ALT": ("Altai Krai", "Krai de Altái"),  # NE: "Altai Republic" (RU-AL's name); TYPE_EN Territory
+    "RU-CE": ("Chechnya", None),  # NE: "Chechen Republic"; NAME Chechnya
+    "RU-CHU": ("Chukotka", None),  # NE: "Chukotka Autonomous Okrug"; NAME_ES Chukotka
+    "RU-CU": ("Chuvashia", None),  # NE: "Chuvash Republic"; NAME_ALT Chuvashiya, NAME_ES Chuvasia
+    "RU-KC": ("Karachay-Cherkessia", None),  # NE: "Karachay-Cherkess Republic"; NAME_ALT Karachayevo-Cherkessiya
+    "RU-KO": ("Komi", None),  # NE: "Komi Republic"
+    "RU-ME": ("Mari El", None),  # NE: "Mari El Republic"
+    "RU-SA": ("Yakutia", "Yakutia"),  # NE: "Sakha Republic"; NAME "Sakha (Yakutia)"
+    "RU-TY": ("Tuva", None),  # NE: "Tuva Republic"
+    "RU-UD": ("Udmurtia", None),  # NE: "Udmurt Republic"; NAME_ALT Udmurtiya, NAME_ES Udmurtia
+    "RU-YEV": ("Jewish Autonomous Oblast", None),  # NE: "Jewish"; NAME_ES Óblast Autónomo Hebreo
+    "SG-01": (None, "Central"),  # NE: "Consejo Central"
+    "SG-02": (None, "Noreste"),  # NE: "Consejo del Noreste"
+    "SG-04": (None, "Sudeste"),  # NE: "Consejo del Sudeste"
+    "SG-05": (None, "Sudoeste"),  # NE: "Consejo del Sudoeste"
+    "UA-43": ("Crimea", None),  # NE: "Autonomous Republic of Crimea"; NAME Crimea
+    # Kyiv the city and Kyiv the oblast both read "Kyiv" in NE (NAME "Kiev City" / "Kiev"); the owner chose the
+    # American-style pair, the label telling them apart (2026-10-30: "Go with Valencia and Kyiv city").
+    "UA-30": ("Kyiv City", "Ciudad de Kiev"),
+    "UA-32": ("Kyiv Oblast", "Óblast de Kiev"),
+}
+
+# PLAIN SPELLING (owner, 2026-10-30): names are written without transliteration marks, the American everyday way,
+# in every language the pack stores ("Kyoto", "Osaka", "Hokkaido", not "Kyōto"; Spanish "Herat", not "Herāt";
+# "Tarabulus", not "Ṭarābulus"): the macrons, the scholars' under-dots and the ayn and hamza marks go, in the
+# states and provinces and in the cities. A translation that still holds a letter beyond Latin-1 once they are
+# gone (Spanish "Čaġčarān") uses the plain English name instead. Kept where the marks are letters of the
+# place's own language: Latvia ("Jūrmala"), New Zealand's Māori names ("Manawatū-Whanganui", "Taupō") and
+# Hawaiʻi's ("Līhuʻe", the only marked US name).
+TRANSLITERATION_KEPT = {"LV", "NZ", "US"}
+TRANSLITERATION_MARKS = str.maketrans({
+    "Ā": "A", "ā": "a", "Ē": "E", "ē": "e", "Ī": "I", "ī": "i", "Ō": "O", "ō": "o", "Ū": "U", "ū": "u",
+    "Ḍ": "D", "ḍ": "d", "Ḥ": "H", "ḥ": "h", "Ṇ": "N", "ṇ": "n", "Ṣ": "S", "ṣ": "s", "Ṭ": "T", "ṭ": "t",
+    "Ẓ": "Z", "ẓ": "z", "ʿ": "", "ʾ": "",
+})
+
+
+def plain_names(names, country, report):
+    """`names` (English first, then its translations) under the plain-spelling rule; each change is counted."""
+    if country in TRANSLITERATION_KEPT:
+        return tuple(names)
+    english = names[0].translate(TRANSLITERATION_MARKS)
+    out = [english]
+    for other in names[1:]:
+        plain = other.translate(TRANSLITERATION_MARKS)
+        if plain != other and any(ord(letter) > 0xFF for letter in plain):
+            plain = english
+        out.append(plain)
+    if tuple(out) != tuple(names):
+        key = "names written plain (transliteration marks dropped)"
+        report.counts[key] = report.counts.get(key, 0) + 1
+    return tuple(out)
+
+# The Spanish half of the rule: a NAME_ES that is one of these designations and then the English name ("Municipio
+# de Wandsworth", "Krai de Krasnodar", "República autónoma de Crimea") becomes the name alone (and is then stored
+# empty when it equals the English). Never "Ciudad" or "Territorio", which belong to names ("Ciudad Real").
+SPANISH_DESIGNATION = re.compile(
+    r"^(?:Municipalidad|Municipio|Parroquia|Ayuntamiento|Voivodato|Estado|Krai|Zona|Periferia|Prefectura|Provincia|"
+    r"Región|Distrito|Consejo|Condado|Departamento|Cantón|Emirato|República autónoma|República)"
+    r"(?: de la| de los| de las| del| de)? (.+)$")
+
+
+def folded(text):
+    """Lower-case ASCII letters and digits only, for comparing two spellings of one name."""
+    plain = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"[^a-z0-9]", "", plain)
+
+
+def everyday_english(attrs, country, iso, english):
+    """NAME_EN under the everyday-names rule: EVERYDAY_NAMES first, else EVERYDAY_AFFIXES (a trailing
+    designation only when the rest is the feature's own short name)."""
+    fixed = EVERYDAY_NAMES.get(iso or "", (None, None))[0]
+    if fixed is not None:
+        return fixed
+    affixes, keep = EVERYDAY_AFFIXES.get(country, ((), ()))
+    if iso in keep:
+        return english
+    own = {folded(text_field(attrs, "NAME")), folded(text_field(attrs, "NAME_ES"))}
+    own.update(folded(alt) for alt in text_field(attrs, "NAME_ALT").split("|"))
+    for affix in affixes:
+        if affix.endswith(" ") and english.startswith(affix) and len(english) > len(affix):
+            return english[len(affix):]
+        if affix.startswith(" ") and english.endswith(affix) and folded(english[:-len(affix)]) in own:
+            return english[:-len(affix)]
+    return english
+
+
+def everyday_spanish(iso, spanish, english):
+    """NAME_ES under the everyday-names rule: EVERYDAY_NAMES first, else the name without a leading
+    designation when the rest is the English name."""
+    fixed = EVERYDAY_NAMES.get(iso or "", (None, None))[1]
+    if fixed is not None:
+        return fixed
+    match = SPANISH_DESIGNATION.match(spanish)
+    if match and folded(match.group(1)) == folded(english):
+        return match.group(1)
+    return spanish
+
+
+def everyday_names(attrs, country, iso, report):
+    """The feature's English and Spanish names under the everyday-names rule; every change is counted and
+    each English one logged."""
+    english = text_field(attrs, "NAME_EN", "NAME")
+    spanish = text_field(attrs, "NAME_ES")
+    short = everyday_english(attrs, country, iso, english)
+    short_spanish = everyday_spanish(iso, spanish, short)
+    short, short_spanish = plain_names((short, short_spanish), country, report)
+    if short != english:
+        key = "admin-1 English names made everyday"
+        report.counts[key] = report.counts.get(key, 0) + 1
+        report.note("admin-1 everyday name: %r -> %r" % (english, short))
+    if short_spanish != spanish:
+        key = "admin-1 Spanish names made everyday"
+        report.counts[key] = report.counts.get(key, 0) + 1
+    return short, short_spanish
+
+
+def region_token(country, code, english):
+    """A plate group's frozen token: its ISO 3166-2 code, else "ne:region:<country>:<slug of the English name>"."""
+    if code:
+        return code
+    plain = unicodedata.normalize("NFKD", english).encode("ascii", "ignore").decode("ascii").lower()
+    return "ne:region:%s:%s" % (country, re.sub(r"[^a-z0-9]+", "-", plain).strip("-")[:40])
+
+
+def plate_group(attrs, country, iso, name, report):
+    """The feature's plate group as (token, English, Spanish), or None where its entry is its own group (a
+    country PLATE_GROUPS does not list, a value mapped to SELF, or an unlisted region, logged)."""
+    rule = PLATE_GROUPS.get(country)
+    if rule is None:
+        return None
+    field, table = rule
+    value = unicodedata.normalize("NFC", text_field(attrs, field)) if field else ""
+    found = table.get("iso:%s" % iso) if iso else None
+    if found is None:
+        found = table.get(value)
+    if found is None:
+        report.unmap("admin-1 %s (%s): region %r not in PLATE_GROUPS; its own plate group" % (name, country, value))
+        return None
+    if found == SELF:
+        return None
+    code, english, spanish = found
+    return (region_token(country, code, english), english, "" if spanish == english else spanish)
+
+
+def build_groups(entries, report):
+    """The plate group table (sorted by country, then token) and each group token's index. A token one
+    country uses for two names, or two countries share, stops the run."""
+    seen = {}
+    for entry in entries:
+        group = entry.get("group")
+        if group is None:
+            continue
+        key = (entry["country"],) + group
+        if group[0] in seen and seen[group[0]] != key:
+            raise SystemExit("error: plate group %s is %r and %r" % (group[0], seen[group[0]], key))
+        if not (ISO_3166_2.match(group[0]) or GROUP_SLUG.match(group[0])):
+            raise SystemExit("error: plate group token %r has the wrong shape" % group[0])
+        seen[group[0]] = key
+    rows = sorted(seen.values())
+    blob = struct.pack("<H", len(rows)) + b"".join(
+        short_text(token, report) + country.encode("ascii") + short_text(english, report) + short_text(spanish, report)
+        for country, token, english, spanish in rows)
+    report.counts["admin-1 plate groups (entries grouped)"] = "%d (%d)" % (
+        len(rows), sum(1 for e in entries if e.get("group") is not None))
+    return blob, {row[1]: index for index, row in enumerate(rows)}
+
+
+def admin1_country(attrs, a3_codes, ctry_codes, report, name):
+    """The CTRY code an admin-1 feature belongs to: a TERRITORY_OVERRIDES rule's "to" for the codes it lists,
+    else its ADM0_A3 mapped the way CTRY maps admin-0 (so Somaliland is SO and Kosovo XK), else its own ISO_A2
+    when CTRY has it, else None. Mismatches are logged."""
+    a3 = text_field(attrs, "ADM0_A3").upper()
+    iso_a2 = text_field(attrs, "ISO_A2").upper()
+    country = a3_codes.get(a3)
+    iso = text_field(attrs, "ISO_3166_2").upper()
+    moved = next((r for r in TERRITORY_OVERRIDES if iso in r["admin1"] and country == r["from"]), None)
+    if moved is not None:
+        report.note("admin-1 %s (%s): counted as %s (territory override %s)"
+                    % (name, iso, moved["to"], moved["name"]))
+        return moved["to"]
+    if country is not None and ALPHA2.match(iso_a2) and iso_a2 != country:
+        report.note("admin-1 %s: ISO_A2 %s but ADM0_A3 %s is %s in CTRY; counted as %s"
+                    % (name, iso_a2, a3, country, country))
+    if country is None and ALPHA2.match(iso_a2) and iso_a2 in ctry_codes:
+        report.note("admin-1 %s: ADM0_A3 %r not in CTRY; counted by its ISO_A2 %s" % (name, a3, iso_a2))
+        country = iso_a2
+    if country is not None and country not in ctry_codes:
+        country = None
+    return country
+
+
+def admin1_features(features, a3_codes, ctry_codes, report):
+    """One dict per admin-1 feature whose country CTRY has: ISO code (or None), ne_id, country, names,
+    rings. A feature with no country, rings or name (a few unnamed islets) is logged and left out: a fix
+    there names only its country."""
+    items = []
+    for geom, attrs in features:
+        name = text_field(attrs, "NAME_EN", "NAME")
+        ne_id = attrs.get("NE_ID")
+        country = admin1_country(attrs, a3_codes, ctry_codes, report, name)
+        rings = polygon_rings(geom)
+        if country is None or not rings or not isinstance(ne_id, int) or not name:
+            report.unmap("admin-1 %r (ne_id %s): no CTRY country, rings, ne_id or name; left out of ADM1"
+                         % (name, ne_id))
+            continue
+        iso = text_field(attrs, "ISO_3166_2").upper()
+        if not ISO_3166_2.match(iso):
+            iso = None
+        elif iso[:2] != country:
+            report.note("admin-1 %s: code %s in country %s" % (name, iso, country))
+        name, spanish = everyday_names(attrs, country, iso, report)
+        items.append({"iso": iso, "ne_id": ne_id, "country": country, "name": name, "spanish": spanish,
+                      "rings": rings, "group": plate_group(attrs, country, iso, name, report)})
+    return items
+
+
+def rings_area(rings):
+    """The rings' net area in square degrees, a degree of longitude taken at their mean latitude (signed
+    shoelace sums, so a hole subtracts)."""
+    if not rings:
+        return 0.0
+    signed = sum(float(np.dot(r[:-1, 0], r[1:, 1]) - np.dot(r[1:, 0], r[:-1, 1])) / 2 for r in rings)
+    mean_lat = float(np.mean(np.concatenate([r[:, 1] for r in rings])))
+    return abs(signed) * float(np.cos(np.radians(mean_lat)))
+
+
+def admin1_code_holder(names):
+    """Which name keeps a code differently named features share: the largest, when it is ADMIN1_DOMINANCE
+    times the area of all the others together; else None (the code names none of them)."""
+    areas = {name: sum(rings_area(m["rings"]) for m in same) for name, same in names.items()}
+    largest = max(sorted(areas), key=lambda name: areas[name])
+    others = sum(area for name, area in areas.items() if name != largest)
+    return largest if areas[largest] >= ADMIN1_DOMINANCE * others else None
+
+
+def admin1_entries(items, report):
+    """The ADM1 entries before encoding, each with its frozen token. A real ISO 3166-2 code is the token
+    when every feature carrying it has one name (several such features merge into one entry, as Natural Earth
+    splits a few provinces into pieces). A code several differently named features share stays with the
+    largest when it dwarfs the rest (admin1_code_holder) and names none of the others (Bosnia's cantons all
+    say BA-BIH, so none keeps it); each name without the code is its own entry, "ne:<smallest ne_id>"."""
+    groups = {}
+    for item in sorted(items, key=lambda i: i["ne_id"]):
+        key = (item["iso"], item["country"]) if item["iso"] else ("ne:%d" % item["ne_id"], item["country"])
+        groups.setdefault(key, []).append(item)
+    entries = []
+    for (code, country), members in sorted(groups.items()):
+        names = {}
+        for member in members:
+            names.setdefault(member["name"], []).append(member)
+        holder = next(iter(names)) if len(names) == 1 else None
+        if len(names) > 1 and not code.startswith("ne:"):
+            holder = admin1_code_holder(names)
+            report.counts["admin-1 codes shared by differently named features"] = \
+                report.counts.get("admin-1 codes shared by differently named features", 0) + 1
+            report.note("admin-1 code %s shared by %s; kept by %s" % (code, ", ".join(sorted(names)), holder))
+        for name, same in sorted(names.items()):
+            token = code if name == holder else "ne:%d" % same[0]["ne_id"]
+            spanish = next((m["spanish"] for m in same if m["spanish"]), "")
+            groups_here = sorted({m["group"] for m in same if m["group"] is not None})
+            if len(groups_here) > 1:
+                report.unmap("admin-1 %s: pieces in plate groups %s; the first is used" % (name, groups_here))
+            entries.append({"token": token, "country": country, "name": name, "spanish": spanish,
+                            "rings": [r for m in same for r in m["rings"]], "pieces": len(same),
+                            "group": groups_here[0] if groups_here else None})
+    return entries
+
+
+def build_adm1(items, report):
+    """The ADM1 section: the plate groups (u16 count, then token · country · English · Spanish), then u16
+    count and per entry token · country · English · Spanish · u16 group (0xFFFF: its own) · polygon (the CTRY
+    encoding at ADMIN1_SIMPLIFY_DEGREES), entries sorted by country then token."""
+    entries = sorted(admin1_entries(items, report), key=lambda e: (e["country"], e["token"]))
+    group_blob, group_index = build_groups(entries, report)
+    blobs = []
+    used = set()
+    ring_total = point_total = 0
+    for entry in entries:
+        if entry["token"] in used:
+            report.unmap("admin-1 %s: token %s used twice; left out" % (entry["name"], entry["token"]))
+            continue
+        rings = encoded_rings(entry["rings"], report, "admin-1", ADMIN1_SIMPLIFY_DEGREES)
+        if not rings:
+            report.unmap("admin-1 %s: no ring survives simplification" % entry["name"])
+            continue
+        used.add(entry["token"])
+        spanish = "" if entry["spanish"] == entry["name"] else entry["spanish"]
+        group = NO_GROUP if entry["group"] is None else group_index[entry["group"][0]]
+        blobs.append(short_text(entry["token"], report) + entry["country"].encode("ascii") +
+                     short_text(entry["name"], report) + short_text(spanish, report) + struct.pack("<H", group) +
+                     encode_polygon(rings))
+        ring_total += len(rings)
+        point_total += sum(len(q) for q in rings)
+    if len(blobs) > MAX_ADMIN1:
+        raise SystemExit("error: %d admin-1 entries, over the reader's %d" % (len(blobs), MAX_ADMIN1))
+    report.counts["admin-1 entries"] = len(blobs)
+    report.counts["admin-1 entries with an ISO 3166-2 token"] = sum(1 for t in used if not t.startswith("ne:"))
+    report.counts["admin-1 rings / points"] = "%d / %d" % (ring_total, point_total)
+    report.counts["admin-1 countries"] = len({b[1 + b[0]:3 + b[0]] for b in blobs})
+    return group_blob + struct.pack("<H", len(blobs)) + b"".join(blobs)
+
+
+# ---------------------------------------------------------------------------------------------------------
 # URBN and CITY
 
 
@@ -1135,13 +1720,148 @@ def city_record(geom, attrs, used, countries, report):
             report.counts.get("cities placed by ISO_A2 (outside the simplified rings)", 0) + 1
     population = attrs.get("POP_MAX")
     population = max(0, min(int(population), 0xFFFFFFFF)) if isinstance(population, (int, float)) else 0
-    names = (name, text_field(attrs, "NAME_ES"), text_field(attrs, "NAME_FR"), text_field(attrs, "NAME_DE"))
+    names = plain_names((name, text_field(attrs, "NAME_ES"), text_field(attrs, "NAME_FR"),
+                         text_field(attrs, "NAME_DE")), country, report)
     return {"token": token, "country": country, "population": population, "lon": lon, "lat": lat,
             "names": names}
 
 
 # ---------------------------------------------------------------------------------------------------------
 # The pack
+
+
+# ---------------------------------------------------------------------------------------------------------
+# ROAD: the major roads (World-Exploration-Spec §2, ex-roads: "Only motorway, trunk and primary roads")
+#
+# Natural Earth's roads carry no OSM classes. Its own importance stands in for them: a HIGHWAY (motorway and
+# trunk) is a piece Natural Earth types "Major Highway", "Beltway" or "Bypass" or marks as an expressway; a MAIN
+# ROAD (primary) is any other road piece of SCALERANK 5 or less (Natural Earth's ranking, the same the world
+# over: its "Secondary Highway" is North American only and most of Asia's roads are typed "Unknown"). Ferries
+# and tracks are never roads here. Each line is thinned by Douglas-Peucker at ROAD_SIMPLIFY_DEGREES (about 110 m,
+# well inside the source's own 1:10m accuracy; it keeps under a quarter of the points) and kept in the pack's 1e-5°
+# integers.
+#
+# A ROAD is what turns amber "whole" once crossed: the pieces of one named route that touch end to end (Natural
+# Earth's PREFIX + NAME, else its LABEL, at one LEVEL: "Interstate 80", "E3"), or, unnamed, the pieces chained
+# through every point where exactly two meet (a stretch between junctions). Its frozen token is "ne:road:" and the smallest record number
+# among its pieces in the pinned ne_10m_roads (Natural Earth's own UIDENT is 0 for most pieces): the tokens hold
+# while the source's SHA-256 pin does, and a new source version re-mints them.
+ROAD_HIGHWAY = 1
+ROAD_MAIN = 2
+ROAD_HIGHWAY_TYPES = {"Major Highway", "Beltway", "Bypass"}
+ROAD_MAIN_MAX_SCALERANK = 5
+ROAD_SIMPLIFY_DEGREES = 0.001
+MAX_ROADS = 65_536
+MAX_ROAD_LINES = 8_192
+MAX_ROAD_POINTS = 65_535
+
+
+def road_kind(attrs):
+    """ROAD_HIGHWAY, ROAD_MAIN, or None for a piece that is not a major road (a ferry, a track, a minor road)."""
+    if text_field(attrs, "FEATURECLA") != "Road" or text_field(attrs, "TYPE") == "Track":
+        return None
+    if text_field(attrs, "TYPE") in ROAD_HIGHWAY_TYPES or attrs.get("EXPRESSWAY") == 1:
+        return ROAD_HIGHWAY
+    rank = attrs.get("SCALERANK")
+    return ROAD_MAIN if isinstance(rank, int) and rank <= ROAD_MAIN_MAX_SCALERANK else None
+
+
+def road_name_key(attrs):
+    """The named route a piece belongs to, with its level so Interstate 5 and a state's route 5 stay apart
+    ("Interstate|80", else the label "|E3"), or "" when it has none."""
+    name = (text_field(attrs, "PREFIX") + text_field(attrs, "NAME")).strip() or text_field(attrs, "LABEL").strip()
+    return text_field(attrs, "LEVEL").strip() + "|" + name if name else ""
+
+
+def road_pieces(features, report):
+    """Each major-road line as (record number, kind, name key, int64 (n, 2) points at 1e-5°), repeated points
+    dropped."""
+    pieces = []
+    for record, (geom, attrs) in enumerate(features):
+        kind = road_kind(attrs)
+        if kind is None or not geom or geom[0] != "line":
+            continue
+        uident = record
+        for line in geom[1]:
+            q = np.round(simplify_open_line(line, ROAD_SIMPLIFY_DEGREES) * SCALE).astype(np.int64)
+            moved = np.any(np.diff(q, axis=0) != 0, axis=1)
+            q = np.concatenate([q[:1], q[1:][moved]])
+            if len(q) >= 2:
+                pieces.append((uident, kind, road_name_key(attrs), q))
+    report.counts["road pieces (highway / main)"] = "%d / %d" % (
+        sum(1 for p in pieces if p[1] == ROAD_HIGHWAY), sum(1 for p in pieces if p[1] == ROAD_MAIN))
+    return pieces
+
+
+def road_groups(pieces):
+    """The pieces joined into roads (union-find; each union is one of at most 2n end matches): the parts of one
+    source feature always, named pieces of one route that touch, and unnamed pieces through a point exactly two
+    piece ends share."""
+    parent = list(range(len(pieces)))
+
+    def find(i):
+        for _ in range(len(pieces)):
+            if parent[i] == i:
+                return i
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    first_part = {}
+    for index, piece in enumerate(pieces):
+        if piece[0] in first_part:
+            parent[find(index)] = find(first_part[piece[0]])
+        else:
+            first_part[piece[0]] = index
+    ends = {}
+    for index, (_, _, _, q) in enumerate(pieces):
+        for point in (q[0], q[-1]):
+            ends.setdefault((int(point[0]), int(point[1])), []).append(index)
+    for members in ends.values():
+        for a in range(len(members)):
+            for b in range(a + 1, len(members)):
+                i, j = members[a], members[b]
+                name_i, name_j = pieces[i][2], pieces[j][2]
+                if (name_i and name_i == name_j) or (not name_i and not name_j and len(members) == 2):
+                    parent[find(i)] = find(j)
+    groups = {}
+    for index in range(len(pieces)):
+        groups.setdefault(find(index), []).append(index)
+    return list(groups.values())
+
+
+def build_roads(features, report):
+    """The ROAD section: u32 roadCount, then per road (by token) u32 uident · u8 kind · u16 lineCount ·
+    lines (u16 pointCount · first point i32 lon, i32 lat · zigzag-LEB128 deltas)."""
+    pieces = road_pieces(features, report)
+    roads = []
+    for members in road_groups(pieces):
+        uident = min(pieces[i][0] for i in members)
+        kind = ROAD_HIGHWAY if any(pieces[i][1] == ROAD_HIGHWAY for i in members) else ROAD_MAIN
+        lines = [pieces[i][3] for i in sorted(members, key=lambda i: (pieces[i][0], int(pieces[i][3][0, 0])))]
+        roads.append((uident, kind, lines))
+    roads.sort(key=lambda road: road[0])
+    if len({road[0] for road in roads}) != len(roads):
+        raise SystemExit("error: two roads share a number")
+    if len(roads) > MAX_ROADS:
+        raise SystemExit("error: %d roads, over the %d cap" % (len(roads), MAX_ROADS))
+    out = [struct.pack("<I", len(roads))]
+    points = 0
+    for uident, kind, lines in roads:
+        if len(lines) > MAX_ROAD_LINES:
+            raise SystemExit("error: road %d has %d lines, over the %d cap" % (uident, len(lines), MAX_ROAD_LINES))
+        out.append(struct.pack("<IBH", uident, kind, len(lines)))
+        for q in lines:
+            if len(q) > MAX_ROAD_POINTS:
+                raise SystemExit("error: a line of road %d has %d points" % (uident, len(q)))
+            deltas = np.diff(q, axis=0).ravel()
+            zigzag = ((deltas << 1) ^ (deltas >> 63)).astype(np.uint64)
+            out.append(struct.pack("<Hii", len(q), int(q[0, 0]), int(q[0, 1])) + leb128(zigzag))
+            points += len(q)
+    report.counts["roads (highway / main), lines, points"] = "%d (%d / %d), %d, %d" % (
+        len(roads), sum(1 for r in roads if r[1] == ROAD_HIGHWAY), sum(1 for r in roads if r[1] == ROAD_MAIN),
+        sum(len(r[2]) for r in roads), points)
+    return b"".join(out)
 
 
 def deflate(raw):
@@ -1176,7 +1896,8 @@ def meta_json(args, rows, cols, sources):
                        "licence": SOURCE_LICENCES.get(subdir, "unknown")})
     meta = {"generator": "Scripts/world-atlas/build_world_atlas.py", "generatorVersion": GENERATOR_VERSION,
             "date": args.date, "grid": {"cols": cols, "rows": rows, "sub": SUB},
-            "simplifyDegrees": SIMPLIFY_DEGREES, "sources": listed}
+            "simplifyDegrees": SIMPLIFY_DEGREES, "admin1SimplifyDegrees": ADMIN1_SIMPLIFY_DEGREES,
+            "sources": listed}
     return json.dumps(meta, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
@@ -1211,7 +1932,7 @@ def parse_args(argv):
     parser.add_argument("--out", required=True, help="where to write the pack")
     parser.add_argument("--date", default="unset", help="the generation date written into META")
     parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help="grid rows (cols = 2 x rows)")
-    parser.add_argument("--size-cap", type=int, default=SIZE_CAP, help="refuse a bigger pack (≤ 6 MiB)")
+    parser.add_argument("--size-cap", type=int, default=SIZE_CAP, help="refuse a bigger pack (≤ 7 MiB)")
     parser.add_argument("--unverified-sources", action="store_true",
                         help="allow sources that differ from their pins (self-test only)")
     args = parser.parse_args(argv)
@@ -1236,12 +1957,18 @@ def main(argv):
     clim = build_climate(sources["Beck_KG_V1"]["path"], state, rows, cols, report)
     ocea, seas = build_oceans(layer("ne_10m_geography_marine_polys"), state, rows, cols, report)
     items = country_features(layer("ne_10m_admin_0_countries"), report)
+    apply_territory_overrides(items, report)
     cont = build_cont(items, state, rows, cols, report)
     ctry, countries = build_ctry(items, report)
     urbn, city = build_cities(layer("ne_10m_populated_places"), layer("ne_10m_urban_areas"), countries, report)
+    ctry_codes = {code for code, _, _ in countries}
+    a3_codes = {item["a3"]: item["code"] for item in items if item["code"] is not None and item["a3"]}
+    adm1 = build_adm1(admin1_features(layer("ne_10m_admin_1_states_provinces"), a3_codes, ctry_codes, report),
+                      report)
+    road = build_roads(layer("ne_10m_roads"), report)
     sections = [("LAND", land), ("CLIM", clim.tobytes()), ("OCEA", ocea.tobytes()), ("SEAS", seas),
-                ("CONT", cont.tobytes()), ("CTRY", ctry), ("URBN", urbn), ("CITY", city),
-                ("META", meta_json(args, rows, cols, sources))]
+                ("CONT", cont.tobytes()), ("CTRY", ctry), ("URBN", urbn), ("CITY", city), ("ADM1", adm1),
+                ("ROAD", road), ("META", meta_json(args, rows, cols, sources))]
     pack = assemble(sections, report)
     print_summary(report, pack, args.out)
     if len(pack) > args.size_cap:

@@ -60,7 +60,9 @@ struct StudioHeldNote: View {
 }
 
 /// Under the Studio's canvas (`comp-studio-hat`): the companion wearing the drawing up close and on
-/// the map, live. Decorative: the preview beside the chips and the canvas say the same.
+/// the map, live. The pictures are decoration (the preview beside the chips and the canvas say the same), but
+/// their captions are words on screen, so VoiceOver reads them as plain text (hiding them was the editor's
+/// "Potentially inaccessible text" audit finding once the passport's taller page let the previews show).
 struct StudioPreviewsRow: View {
     var store: FernletStore
     /// Everything the previews wear.
@@ -85,7 +87,6 @@ struct StudioPreviewsRow: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityHidden(true)
     }
 
     private func caption(_ words: String) -> some View {

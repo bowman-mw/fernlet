@@ -78,8 +78,9 @@ struct WorldAtlasPackFormatTests {
         #expect(refusal(try world.build()) == nil)
     }
 
-    /// A file over 6 MiB is refused before anything is read.
+    /// A file over 7 MiB (the owner's cap since the major roads, 2026-10-30) is refused before anything is read.
     @Test func anOversizedFileIsRefused() {
+        #expect(WorldAtlasPack.maxPackBytes == 7_340_032)
         #expect(refusal(Data(count: WorldAtlasPack.maxPackBytes + 1)) == .tooLarge)
     }
 
@@ -135,8 +136,8 @@ struct WorldAtlasPackFormatTests {
     @Test func countriesAndCitiesParse() throws {
         let atlas = try WorldAtlas(data: try WorldAtlasTestPackBuilder.standardWorld().build())
         #expect(atlas.countries.map(\.code) == ["AA", "BB", "DD"])
-        #expect(atlas.countries[1].sovereignCode == "CC" && !atlas.countries[1].isOneOf195)
-        #expect(atlas.countries[0].isOneOf195 && atlas.countries[0].continent == .africa)
+        #expect(atlas.countries[1].sovereignCode == "CC" && !atlas.countries[1].countsInPassport)
+        #expect(atlas.countries[0].countsInPassport && atlas.countries[0].continent == .africa)
         let little = try #require(atlas.cities.first { $0.token == "ne:3" })
         #expect(little.size == .town && little.countryCode == "EE" && little.names.english == "Little Town")
         #expect(abs(little.point.latitude - 15) < 1e-9 && abs(little.point.longitude - 120) < 1e-9)
@@ -149,7 +150,7 @@ struct WorldAtlasPackFormatTests {
     }
 }
 
-/// The shipped `WorldAtlas.pack`: inside the 6 MiB cap and the very file `WorldAtlasPack.expectedSHA256` pins.
+/// The shipped `WorldAtlas.pack`: inside the 7 MiB cap and the very file `WorldAtlasPack.expectedSHA256` pins.
 @MainActor
 struct WorldAtlasPackTests {
     /// The bundled pack's size and checksum.
@@ -160,13 +161,27 @@ struct WorldAtlasPackTests {
         _ = try WorldAtlas(data: data)
     }
 
+    /// The shipped pack carries Natural Earth's major roads (owner, 2026-10-30) and the crossing rule finds them:
+    /// a walk across Portland meets I-5 going west to east and I-84 going north, each a highway; the Sahara has none.
+    @Test func theShippedPackKnowsMajorRoads() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        #expect(atlas.roads.count > 8_000 && atlas.roads.filter { $0.kind == .highway }.count > 5_000)
+        #expect(atlas.roads.allSatisfy { AtlasRoad.isValidToken($0.token) })
+        #expect(Set(atlas.roads.map(\.token)).count == atlas.roads.count, "tokens never repeat")
+        let west = atlas.roadsCrossed(from: GeoPoint(45.50, -122.70), to: GeoPoint(45.50, -122.65))
+        #expect(west.count == 1 && west.first?.kind == .highway, "I-5 through Portland")
+        let north = atlas.roadsCrossed(from: GeoPoint(45.52, -122.62), to: GeoPoint(45.56, -122.62))
+        #expect(north.count == 1 && north.first?.kind == .highway, "I-84 through Portland")
+        #expect(atlas.roadsCrossed(from: GeoPoint(23.0, 10.0), to: GeoPoint(23.03, 10.0)).isEmpty, "the Sahara")
+    }
+
     /// The shipped pack answers real places the way the owner's rules say (spot checks, 2026-10-29).
     @Test func theShippedPackKnowsRealPlaces() throws {
         let atlas = try WorldAtlas(data: Self.shippedPack())
         let portland = atlas.visit(at: GeoPoint(45.5205, -122.6255))
         #expect(portland.countryCode == "US" && portland.continent == .northAmerica)
         #expect(portland.city?.names.english == "Portland" && portland.terrain == .temperateForest)
-        // The smallest of the 195 keeps its ring.
+        // The smallest of the passport's countries keeps its ring.
         #expect(atlas.visit(at: GeoPoint(41.9029, 12.4534)).countryCode == "VA")
         // A sea is its own entry, never its ocean.
         let nice = atlas.visit(at: GeoPoint(43.6950, 7.2650))
@@ -199,6 +214,75 @@ struct WorldAtlasPackTests {
         }
         #expect(atlas.city(at: GeoPoint(30.0, -40.0)) == nil, "mid-Atlantic")
         #expect(atlas.city(at: GeoPoint(42.0, -93.5)) == nil, "rural Iowa")
+    }
+
+    /// The Mediterranean's nine seas are nine entries (design session, Exploration v6; owner 2026-10-29): a
+    /// reading in the Adriatic earns the Adriatic, never the Mediterranean, whose own stamp is its open water.
+    @Test func theMediterraneansNineSeasAreTheirOwnEntries() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let seas: [(String, String, GeoPoint)] = [
+            ("Mediterranean Sea", "Q4918", GeoPoint(34.0, 20.0)), ("Alboran Sea", "Q199408", GeoPoint(36.0, -3.5)),
+            ("Balearic Sea", "Q200712", GeoPoint(40.5, 2.0)), ("Ligurian Sea", "Q42820", GeoPoint(43.9, 8.9)),
+            ("Tyrrhenian Sea", "Q38882", GeoPoint(40.0, 12.5)), ("Ionian Sea", "Q37495", GeoPoint(38.0, 18.5)),
+            ("Adriatic Sea", "Q13924", GeoPoint(43.0, 15.5)), ("Aegean Sea", "Q34575", GeoPoint(38.5, 25.0)),
+            ("Sea of Crete", "Q193149", GeoPoint(35.8, 25.0)),
+        ]
+        for (name, token, point) in seas {
+            #expect(atlas.seas.contains { $0.token == token && $0.names.english == name }, "\(name) is in SEAS")
+            let visit = atlas.visit(at: point)
+            #expect(visit.sea?.token == token, "\(name)'s water earns \(name)")
+            #expect(visit.ocean == nil)
+        }
+        // A beach counts its own sea: Split is the Adriatic, Mykonos the Aegean.
+        #expect(atlas.visit(at: GeoPoint(43.5031, 16.4400)).sea?.token == "Q13924")
+        #expect(atlas.visit(at: GeoPoint(37.4467, 25.3289)).sea?.token == "Q34575")
+    }
+
+    /// The passport counts 194 countries, Asia 47 (owner, 2026-10-29: North Korea is out): KP's polygon stays,
+    /// so a reading in Pyongyang counts Asia but no country and no city.
+    @Test func thePassportCounts194AndLeavesNorthKoreaOut() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let counted = atlas.countries.filter(\.countsInPassport)
+        #expect(counted.count == WorldAtlas.passportCountryTotal && WorldAtlas.passportCountryTotal == 194)
+        #expect(counted.filter { $0.continent == .asia }.count == 47)
+        #expect(atlas.country(code: "KP")?.countsInPassport == false, "KP's polygon stays, uncounted")
+        let pyongyang = atlas.visit(at: GeoPoint(39.0392, 125.7625))
+        #expect(pyongyang.countryCode == nil && pyongyang.sovereignCode == nil && pyongyang.city == nil)
+        #expect(pyongyang.continent == .asia, "the continent still counts")
+        #expect(atlas.visit(at: GeoPoint(37.5665, 126.9780)).countryCode == "KR", "South Korea counts")
+    }
+
+    /// Crimea counts as Ukraine (owner, 2026-10-29; the generator's TERRITORY_OVERRIDES): Simferopol, Sevastopol
+    /// and Yalta earn Ukraine and read Crimea's own admin-1 under it, and Russia's admin-1 has no Ukrainian code
+    /// left. Krasnodar stays Russia and Kherson Ukraine; the continent is Europe either way.
+    @Test func crimeaCountsAsUkraine() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let crimea: [(name: String, point: GeoPoint, region: String)] = [
+            ("Simferopol", GeoPoint(44.9521, 34.1024), "UA-43"),
+            ("Sevastopol, south of the bay", GeoPoint(44.60, 33.52), "UA-40"),
+            ("Yalta", GeoPoint(44.4952, 34.1663), "UA-43"),
+        ]
+        for place in crimea {
+            let visit = atlas.visit(at: place.point)
+            #expect(visit.countryCode == "UA" && visit.sovereignCode == "UA", "\(place.name)")
+            #expect(visit.continent == .europe, "\(place.name)")
+            let plate = atlas.placeName(at: place.point)
+            #expect(plate?.regionToken == place.region && plate?.countryCode == "UA", "\(place.name)")
+        }
+        #expect(atlas.admin1(token: "UA-43")?.names.english == "Crimea")
+        #expect(atlas.admin1(token: "UA-43")?.countryCode == "UA" && atlas.admin1(token: "UA-40")?.countryCode == "UA")
+        #expect(!atlas.admin1s(ofCountry: "RU").contains { $0.token.hasPrefix("UA-") })
+        let krasnodar = atlas.visit(at: GeoPoint(45.0355, 38.9753))
+        #expect(krasnodar.countryCode == "RU" && krasnodar.continent == .europe)
+        let kherson = atlas.visit(at: GeoPoint(46.64, 32.60))
+        #expect(kherson.countryCode == "UA" && atlas.placeName(at: GeoPoint(46.64, 32.60))?.regionToken == "UA-65")
+        // Sevastopol's and Kherson's listed centres lie where Natural Earth's 10m land leaves water (Sevastopol
+        // Bay, the Dnieper), in this pack and the one before it: no country, the Black Sea, but still the city.
+        for (name, centre) in [("Sevastopol", GeoPoint(44.6166, 33.5254)), ("Kherson", GeoPoint(46.6354, 32.6169))] {
+            let visit = atlas.visit(at: centre)
+            #expect(visit.countryCode == nil && visit.sea?.names.english == "Black Sea", "\(name)")
+            #expect(visit.city?.names.english == name)
+        }
     }
 
     /// The bundled pack's bytes.

@@ -14,6 +14,22 @@ nonisolated enum NatureSprite: Hashable {
     case tree(radius: Int, variant: Int)
     /// A pine `height` units tall; an odd variant has the wider bottom tier.
     case pine(height: Int, odd: Bool)
+    /// A winter pine: the pine with snow on its tiers.
+    case snowyPine(height: Int, odd: Bool)
+    /// A spring round tree in blossom.
+    case blossom(radius: Int, variant: Int)
+    /// A bare winter tree of crown radius `radius` units.
+    case bare(radius: Int, variant: Int)
+    /// A palm `height` units tall.
+    case palm(height: Int, variant: Int)
+    /// A cactus `height` units tall.
+    case cactus(height: Int, variant: Int)
+    /// A mountain peak `width` × `height` units.
+    case peak(width: Int, height: Int, variant: Int)
+    /// An urban hex's house or tall block (seven variants).
+    case house(variant: Int)
+    /// A cropland hex's rows: wheat, or greens.
+    case crops(wheat: Bool)
 }
 
 /// A sprite drawn at one pixel per unit, with where its top-left unit sits from its anchor.
@@ -43,7 +59,9 @@ nonisolated struct NatureSpriteImage {
 /// Hexes pick their variant by hash. Zoomed out, trees sized from the smaller R are drawn on first use and
 /// kept beside the set.
 ///
-/// One atlas belongs to one map view (or one widget picture); nothing is shared globally.
+/// One atlas belongs to one map view (or one widget picture); nothing is shared globally. The terrain's other
+/// looks (``TerrainLook``) each get an atlas of their own inside this one, made on first use and drawn only as
+/// their pieces are asked for (at most ``lookLimit``).
 nonisolated final class NatureFogAtlas {
     /// How many long-grass, flower and reed variants there are.
     static let grassVariants = 6
@@ -54,14 +72,29 @@ nonisolated final class NatureFogAtlas {
     static let treeRadii = [12, 8]
     static let pineHeights = [19, 14]
 
+    /// The most terrain looks one atlas holds (11 sets × 4 seasons fit).
+    static let lookLimit = 48
+
     /// The palette every sprite is painted in.
     let palette: NatureFogPalette
     private var sprites: [NatureSprite: NatureSpriteImage] = [:]
+    private var looks: [TerrainLook: NatureFogAtlas] = [:]
 
-    /// The full-detail set, painted in `palette`.
-    init(palette: NatureFogPalette) {
+    /// The full-detail set, painted in `palette` (`preparing` false draws nothing until asked).
+    init(palette: NatureFogPalette, preparing: Bool = true) {
         self.palette = palette
+        guard preparing else { return }
         for key in Self.fullDetailSet { prepare(key) }
+    }
+
+    /// The sprite for `key` painted in `look`'s colours: this atlas's own for its look, else the look's atlas.
+    func sprite(_ key: NatureSprite, look: TerrainLook) -> NatureSpriteImage? {
+        guard look != palette.look else { return sprite(key) }
+        if let atlas = looks[look] { return atlas.sprite(key) }
+        guard looks.count < Self.lookLimit else { return nil }
+        let atlas = NatureFogAtlas(palette: palette.with(look), preparing: false)
+        looks[look] = atlas
+        return atlas.sprite(key)
     }
 
     /// The pieces drawn at full detail.
@@ -109,6 +142,23 @@ nonisolated final class NatureFogAtlas {
             return NatureFogTreeArt.round(radius: radius, variant: variant)
         case .pine(let height, let odd):
             return NatureFogTreeArt.pine(height: height, variant: odd ? 1 : 0)
+        default:
+            return terrainArt(key)
+        }
+    }
+
+    /// The pixel art behind the terrain's pieces.
+    private static func terrainArt(_ key: NatureSprite) -> NaturePixelArt {
+        switch key {
+        case .snowyPine(let height, let odd): TerrainArt.snowyPine(height: height, odd: odd)
+        case .blossom(let radius, let variant): TerrainArt.blossom(radius: radius, variant: variant)
+        case .bare(let radius, let variant): TerrainArt.bare(radius: radius, variant: variant)
+        case .palm(let height, let variant): TerrainArt.palm(height: height, variant: variant)
+        case .cactus(let height, let variant): TerrainArt.cactus(height: height, variant: variant)
+        case .peak(let width, let height, let variant): TerrainArt.peak(width: width, height: height, variant: variant)
+        case .house(let variant): TerrainArt.house(variant: variant)
+        case .crops(let wheat): TerrainArt.crops(wheat: wheat)
+        case .grass, .flowers, .reeds, .boulder, .tree, .pine: NaturePixelArt()
         }
     }
 
@@ -119,8 +169,8 @@ nonisolated final class NatureFogAtlas {
               let context = CGContext(data: nil, width: box.width, height: box.height, bitsPerComponent: 8,
                                       bytesPerRow: box.width * 4, space: space,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        for (unit, paint) in art.pixels {
-            context.setFillColor(palette.color(paint))
+        for (unit, ink) in art.pixels {
+            context.setFillColor(palette.color(ink))
             context.fill(CGRect(x: unit.i - box.minI, y: box.height - 1 - (unit.j - box.minJ), width: 1, height: 1))
         }
         guard let image = context.makeImage() else { return nil }

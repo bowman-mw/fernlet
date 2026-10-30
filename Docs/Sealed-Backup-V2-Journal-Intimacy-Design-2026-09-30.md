@@ -644,15 +644,19 @@ no bookkeeping.
 - Record crypto, AAD, salt derivation and chunk size are unchanged. The writer and set tags travel only
   inside the escrow-sealed plaintext, except that the set tag also appears in suffix record names (§5.2).
   Both are random-looking, per-install or per-set values with no content.
-- **The World passport (added 2026-10-29, round 7).** The JOURNAL head may also carry `"passport":"<base64>"`,
-  the passport's own versioned bytes (`PassportBook.encoded()`), a frozen key like the others. It is inside
-  the head's sealed plaintext, so it shares the journal's content-key path, switch
-  (`sealedBackupJournalEnabled`), owner hold, E1/E2, spacing and deletes; there is no payload type of its
-  own. Left off while the passport is empty and on every other chunk and payload. The prepare reads it
-  just before sealing the head and FAILS when it can't be read (never a head without it); the restore
-  merges it by token, earliest date kept, just before the records, and bytes this build can't read are
-  `unreadableRecords` (`needsNewerFernlet`). An earlier build ignores the key, so its journal restore is
-  unchanged, but its next journal export writes a head without the passport.
+- **The World passport (added 2026-10-29, round 7; owner: "Have it's own switch").** A fifth payload,
+  `worldPassport` (frozen rawValue, record names `sealed-backup.worldPassport…`), on this same engine and
+  envelope, behind its own switch `sealedBackupPassportEnabled` (off by default, like the journal's) and
+  its own bookkeeping (`fernlet.worldPassport.restoreResolved`, `fernlet.sealedBackup.passport{Accepted,
+  Observed}Head`, `fernlet.sealedBackup.passportInFlight`; the marker seeds unresolved, there is no legacy
+  latch). `R` is `PassportBackupRecord`, FROZEN keys `id` (minted per snapshot, names the record only in
+  its set), `kind` (the `AtlasDiscoveryKind` rawValue), `token`, `first` (seconds since 1970). The seam is
+  `!duress`; a passport that can't be read right now fails the snapshot (never an empty set); a restore
+  merges by kind and token, the earliest date kept, never removing a local entry, and a kind, token or
+  count this build can't hold is `unreadableRecords` (`needsNewerFernlet`). No row is ever dead; there was
+  never a v1 passport set. An earlier draft of this round carried the passport as an optional `"passport"`
+  key on the JOURNAL head; it never shipped and is gone: a journal head that still has it restores
+  cleanly (the key is ignored) and the journal's envelope is otherwise unchanged.
 
 ### 5.2 Cloud layout: set-scoped suffix chunks (R1-BR-3, R1-BR-8, R2-F6, R2-F15)
 - **Names.** The head keeps its name, `sealed-backup.<payload>`. A v2 suffix chunk is
@@ -857,6 +861,32 @@ The journal backup carries exactly `JournalNarrative` rows. Nothing else is carr
 - Privacy & Data shows no journal held, paused, waiting or catch-up row, and offers no backup action, during
   the session.
 - Silent wipe: delete-all (§4.7). Recovery-lock: no hub key, so nothing runs.
+
+### 7.7 Body tallies on the journal head (added 2026-10-29, World bodybuilding round 7 piece B2)
+The owner's answer for the Bodybuilding bathroom counts and free-meal tags: "Store them encrypted like the
+journal, inside the sealed iCloud backup" — never plain in CloudKit. They are not a payload of their own:
+- **Format.** The JOURNAL head (chunk 0) may also carry `"bodyTally":{"v":1,"days":[…]}`, each day a
+  `BodyDayTally` under its frozen keys `dayKey, bathroomVisits, freeMealIDs, updatedAt`, in day order
+  (`SealedBackupBodyTallies`, `SealedBackupV2BodyTallies.swift`). It is inside the head's sealed plaintext,
+  so it shares the journal's content-key path, switch (`sealedBackupJournalEnabled`), owner hold, E1/E2,
+  spacing and deletes. Left off while there is no tally, and on every other chunk and payload (the
+  adapter defaults answer nil and ignore one). The §5.1 envelope's frozen keys gain `bodyTally`.
+- **Export.** The prepare reads every tally just before sealing the head (`headBodyTallies()`,
+  `BodyTallyStore.tallyBackupExport`) and FAILS when they can't be read — the journal device key unreadable,
+  an undecided row, a decoy — never a head that drops days. Rows that open under no key here are left out.
+- **Restore.** Before the records, a MERGE per day (`BodyDayTally.merged(with:)`): the higher bathroom count
+  (two iPhones counting the same visits never add up), the union of the free-meal tags (local first, capped
+  at 20), the later stamp. One scan, one save (`BodyTallyRepository.mergeRestored`), never a delete,
+  idempotent; a full store (4,000 days) keeps the newest days. The tallies are re-sealed under THIS
+  iPhone's journal device key (they are shown outside the Private tab). A failed merge keeps the restore
+  unresolved; a `v` this build does not read is `unreadableRecords` (`needsNewerFernlet`).
+- **Earlier builds** ignore the key (they decode only the keys they know), so their journal restore is
+  unchanged; their next journal export writes a head without it, and this build's next export puts every
+  tally back.
+- **Dirty.** Every tally write that lands marks the journal's upload owed
+  (`FernletStore.noteBodyTallyWrite` → `markSealedBackupDirty(.journalNarratives)`); the restore's
+  follow-through export marks itself.
+- **Duress.** The journal seam and the funnel's own decoy gate both refuse: nothing is handed out or merged.
 
 ## 8. Intimacy specifics
 

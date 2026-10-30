@@ -90,17 +90,19 @@ struct WorldCompanionTests {
         #expect(WorldCompanionLook(appearance: custom, state: .tired, asleep: true).body == 0x123456)
     }
 
-    /// The map's pet is Home's pet: the governor answers, its cue plays and nothing else does, and the
-    /// first pat begins Pats Given. (Pinned by source: the handler is a private view method.) Since the
-    /// close-up (refinement `ref-comp-react`) the governor and the re-tally sit in the one shared path,
-    /// `WorldCompanionPet`, which both the map and the close-up call.
-    @Test func theMapsPetIsHomesPet() throws {
-        let source = try RepoRoot.source("App/Fernlet/World/Home/WorldMapCompanion.swift")
+    /// The World's pet is Home's pet: the governor answers, its cue plays and nothing else does, and the
+    /// first pat begins Pats Given. (Pinned by source: the handler is a private view method.) Since Sprout's
+    /// passport (World-Passport-Spec §1, round 7) the map's tap opens the book and Sprout is petted on page 1's
+    /// photo, through the one shared path, `WorldCompanionPet`; the map itself no longer pets.
+    @Test func theWorldsPetIsHomesPet() throws {
+        let map = try RepoRoot.source("App/Fernlet/World/Home/WorldMapCompanion.swift")
+        #expect(!map.contains("WorldCompanionPet.register"), "the map pets again: page 1's photo is where Sprout is petted")
+        let source = try RepoRoot.source("App/Fernlet/World/Passport/Sprout/PassportSproutPage.swift")
         let pet = try #require(source.range(of: "private func pet() {")).upperBound
         let body = String(source[pet...].prefix(900))
-        #expect(body.contains("WorldCompanionPet.register(governor: petGovernor, store: store)"))
+        #expect(body.contains("WorldCompanionPet.register(governor: governor, store: store)"))
         #expect(body.contains("if let cue = HomeView.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }"))
-        #expect(body.components(separatedBy: "FernletFeedback").count == 2, "a second cue in the map's pet handler")
+        #expect(body.components(separatedBy: "FernletFeedback").count == 2, "a second cue in page 1's pet handler")
         let shared = try RepoRoot.source("App/Fernlet/World/Companion/WorldCompanionCloseUp.swift")
         let register = try #require(shared.range(of: "static func register(")).upperBound
         let path = String(shared[register...].prefix(500))

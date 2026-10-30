@@ -319,8 +319,14 @@ private final class PlayedLog {
         let lines = food.components(separatedBy: "\n")
         let closes = lines.indices.filter { lines[$0].contains("closeAfterLogging(photoAttached: photoAttached)") }
         #expect(closes.count >= 4, "found only \(closes.count) of the meal sheet's commit paths")
+        // Round 7 (bodybuilding `bb-free`): the sheet reports through `logReporter`, which is its
+        // `onLogged` with the Free meal tag sealed first (`onLogged.first { … }`), or `onLogged` itself.
+        let reporter = try #require(region(food, from: "private var logReporter: MealLogReporter {", to: "\n    }\n"))
+        #expect(reporter.contains("else { return onLogged }") && reporter.contains("return onLogged.first {"),
+                "the meal sheet's logReporter no longer hands every log to onLogged")
         for index in closes where index > 0 {
-            #expect(lines[index - 1].contains("onLogged(") && lines[index - 1].contains("landedWithCaveat: !photoAttached)"),
+            let reported = lines[index - 1].contains("onLogged(") || lines[index - 1].contains("logReporter(")
+            #expect(reported && lines[index - 1].contains("landedWithCaveat: !photoAttached)"),
                     "FoodView.swift:\(index + 1) closes after a log that never told the toast about its photo")
         }
     }
@@ -331,8 +337,9 @@ private final class PlayedLog {
     private static let mealLoggingCall = #/\bstore\.(logRecipe|logSavedRecipe|addMeal|addResolvedMeals?|commitResolution|copyMeal|logNutrientSuggestionFood|logCatalogFoodItem|logWebImportedFoodProduct|logBarcodeScannedFoodItem|logLabelScannedFoodItem|logHandEnteredMacroMeal)\(/#
 
     /// What counts as handing a logged meal to the toast near the call: the reporter, the meal
-    /// sheet's `onLogged`, or a cooking cover's hold.
-    private static let handOffs = ["onMealsLogged(", "onLogged(", "cookedMeal.hold("]
+    /// sheet's `onLogged` (or its `logReporter`, the same reporter with the Free meal tag sealed first;
+    /// pinned in ``theMealSheetLeavesItsCaveatToTheToast()``), or a cooking cover's hold.
+    private static let handOffs = ["onMealsLogged(", "onLogged(", "logReporter(", "cookedMeal.hold("]
 
     /// Logging calls that deliberately raise no meal toast, each with the reason. Adding to this list
     /// is a product decision, not a way to make the census pass.

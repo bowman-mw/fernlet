@@ -269,7 +269,7 @@ struct WorldPassportTests {
         keeper.observe(point: Self.caribbeanPoint.offset(east: 10, north: 0), at: Self.t3)
         keeper.endDiscoveries()
         var heard: [AtlasDiscovery] = []
-        for await discovery in stream.prefix(32) { heard.append(discovery) }
+        for await event in stream.prefix(32) { if let discovery = event.discovery { heard.append(discovery) } }
         #expect(heard.map(\.kind) == [.country, .continent, .city, .terrain, .terrain, .sea])
         #expect(heard.map(\.token) == ["US", "northAmerica", "Q6106", "temperateForest", "water", "Q1247"])
         #expect(!heard.contains { $0.token == "pacific" }, "a decoy's fix announces nothing")
@@ -317,7 +317,7 @@ struct WorldPassportTests {
         #expect(heard == 4, "only the observed fix's four first visits; the restore announces none")
     }
 
-    /// The sealed backup's hook (the store marks the journal's backup owed): it runs when a first visit is
+    /// The sealed backup's hook (the store marks the passport's own backup owed): it runs when a first visit is
     /// saved and when the wipe removes the passport, never for a fix that found nothing new, a decoy's fix or
     /// a restore.
     @Test func thePassportChangedHookRunsForSavedFirstVisitsAndTheWipeOnly() throws {
@@ -342,7 +342,7 @@ struct WorldPassportTests {
         var restored = PassportBook()
         _ = restored.record(Self.antarctica, at: Self.t3)
         try keeper.restore(restored)
-        #expect(changes == 1, "a restore marks the journal owed itself")
+        #expect(changes == 1, "a restore marks the passport's backup owed itself")
         #expect(try keeper.bookForBackup().discoveries(of: .continent) == 2)
         #expect(keeper.clearAll())
         #expect(changes == 2, "the wipe drops the backup's copy at the next export")

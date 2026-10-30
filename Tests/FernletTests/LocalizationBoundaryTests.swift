@@ -722,6 +722,40 @@ struct LocalizationBoundaryTests {
         #expect(SealedBackupV2RowCopy.intimacy.catchUpIdentifier == "privacy.sealedBackup.intimacyDeferred")
     }
 
+    /// Round 7: the World passport backup's frozen tokens — its payload rawValue (a record name and part
+    /// of the AAD), its four defaults keys in their value grammars, its record's coding keys (a renamed
+    /// key would make every earlier set unreadable), its switch's preference key, and its rows'
+    /// accessibility identifiers.
+    @MainActor
+    @Test func frozenPassportBackupV2Tokens() throws {
+        #expect(SealedBackupPayloadType.worldPassport.rawValue == "worldPassport")
+        #expect(SealedBackupBookkeeping.passportRestoreResolvedKey == "fernlet.worldPassport.restoreResolved")
+        #expect(SealedBackupBookkeeping.passportAcceptedHeadKey == "fernlet.sealedBackup.passportAcceptedHead")
+        #expect(SealedBackupBookkeeping.passportObservedHeadKey == "fernlet.sealedBackup.passportObservedHead")
+        #expect(SealedBackupBookkeeping.passportInFlightKey == "fernlet.sealedBackup.passportInFlight")
+        let defaults = try #require(UserDefaults(suiteName: "fernlet.tests.v2PassportGrammar.\(UUID().uuidString)"))
+        let bookkeeping = SealedBackupBookkeeping(defaults: defaults, legacyLatch: { _ in false })
+        #expect(bookkeeping.seedRestoreMarkerIfAbsent(.worldPassport))
+        #expect(defaults.object(forKey: SealedBackupBookkeeping.passportRestoreResolvedKey) as? Bool == false)
+        let stamp = SealedBackupHeadStamp(writer: "w3", generation: 9)
+        bookkeeping.recordAcceptedHead(SealedBackupAcceptedHead(stamp: stamp, saltPrefix: "0c0d"), .worldPassport, installTag: "me")
+        bookkeeping.recordObservedHead(stamp, .worldPassport, installTag: "me")
+        bookkeeping.recordInFlight(9, .worldPassport, installTag: "me")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.passportAcceptedHeadKey) == "me:w3:9:0c0d")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.passportObservedHeadKey) == "me:w3:9")
+        #expect(defaults.string(forKey: SealedBackupBookkeeping.passportInFlightKey) == "me:9")
+        let record = PassportBackupRecord(id: UUID(), kind: "country", token: "US", date: Date(timeIntervalSince1970: 12))
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
+        #expect(Set(object.keys) == ["id", "kind", "token", "first"])
+        #expect(object["first"] as? Double == 12, "seconds since 1970")
+        let prefs = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(StoragePreferences())) as? [String: Any])
+        #expect(prefs["sealedBackupPassportEnabled"] as? Bool == false)
+        #expect(prefs["sealedBackupPassportReuploadDeferred"] as? Bool == false)
+        let copy = SealedBackupV2RowCopy.passport
+        #expect(copy.identifier("heldByAnotherDevice") == "privacy.sealedBackup.passport.heldByAnotherDevice")
+        #expect(copy.catchUpIdentifier == "privacy.sealedBackup.passportDeferred")
+    }
+
     /// Sealed journal + trainer-export tokens.
     ///
     /// `FeelingTag` is persisted on every `JournalEntry`, is the memory category for `MemoryNote`, and
@@ -1768,7 +1802,8 @@ struct LocalizationBoundaryTests {
 
         #expect(
             GoalType.allCases.map(\.rawValue) == [
-                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep"
+                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep",
+                "bodybuilding"
             ],
             """
             GoalType raw values changed. They are the CURRENT persisted tokens (exported to the coach \
@@ -3209,8 +3244,8 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
                      declaration: "let label: LocalizedStringKey",
                      role: "the second destructive outcome's button"),
-        ForkedMember(path: "App/Fernlet/CompanionCustomizationSheet.swift",
-                     declaration: "colorTitle: LocalizedStringKey,",
+        ForkedMember(path: "App/Fernlet/World/Customize/CustomizeSlotPages.swift",
+                     declaration: "var colorTitle: LocalizedStringKey",
                      role: "a slot page's colour caption (the slot rows' captions are `Text(\"Body\")` literals since `b2-customize`)"),
         // Spanish round step 2, Home lane (2026-10-20): the same T2-1 class on Home and the calm
         // tools — `String` members drawn with `Text(x)`, so none of their literals reached a catalog.
@@ -3955,6 +3990,13 @@ struct LocalizationBoundaryTests {
                      source: "Private, Places: a day's stop count on the delete list ('1 stop')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "worldQuickStart.note.ranFromHere",
                      source: "World Home quick-start card at a saved run route ('run this route once')"),
+        // World round 7, Bodybuilding piece C (2026-10-29): the Day calendar's spoken counts, which would
+        // read "1 bathroom visits" and "1 steps". Moved here from the awaiting list by the round 7
+        // second integration's catalog commit, which authored their plural blocks.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "bodybuilding.bathroom.spoken",
+                     source: "Day calendar, spoken: a day's bathroom visits ('1 bathroom visit')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "bodybuilding.steps.spoken",
+                     source: "Day calendar, spoken: a day's steps ('1 step')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

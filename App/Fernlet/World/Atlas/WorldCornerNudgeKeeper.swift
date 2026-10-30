@@ -26,6 +26,11 @@ final class WorldCornerNudgeKeeper {
     private(set) var corner: HexCell?
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
+    /// A corner picked this session and not yet mentioned by Sprout (spec §5: "Sprout mentions it once"): set
+    /// when ``current(home:revealed:now:isWater:)`` picks a new one, taken by Home (``takeUnannounced()``), and
+    /// gone when the corner is walked into, in a decoy and at a wipe. In memory only: a corner loaded from the
+    /// file was picked, and mentioned, before.
+    @ObservationIgnored private(set) var unannounced: HexCell?
     /// The calendar whose time zone a week runs in (Monday to Monday whatever its first weekday).
     @ObservationIgnored var calendar: Calendar
 
@@ -54,7 +59,8 @@ final class WorldCornerNudgeKeeper {
     /// patch within 1 km. `revealed` must be the loaded fog history. A corner kept for a past week, or for a
     /// home since moved more than 1 km away, gives way to a new pick (moving on from last week's when it can).
     @discardableResult
-    func current(home: GeoPoint?, revealed: Set<HexCell>, now: Date = Date()) -> HexCell? {
+    func current(home: GeoPoint?, revealed: Set<HexCell>, now: Date = Date(),
+                 isWater: (HexCell) -> Bool = { _ in false }) -> HexCell? {
         guard !isDecoy, let home, home.isValid, loadState() else {
             corner = nil
             return nil
@@ -70,13 +76,14 @@ final class WorldCornerNudgeKeeper {
         let miss = NoPick(week: week, home: MercatorHexGrid.cell(containing: home))
         guard miss != noPick,
               let cell = FogCornerNudge.pick(home: home, revealed: revealed, weekStart: weekStart,
-                                             avoiding: state?.cell) else {
+                                             avoiding: state?.cell, isWater: isWater) else {
             noPick = miss
             corner = nil
             return nil
         }
         keep(FogCornerState(weekStart: weekStart, cell: cell))
         corner = cell
+        unannounced = cell
         return cell
     }
 
@@ -88,6 +95,14 @@ final class WorldCornerNudgeKeeper {
               cells.contains(kept.cell) else { return }
         markReached()
         if corner == kept.cell { corner = nil }
+        if unannounced == kept.cell { unannounced = nil }
+    }
+
+    /// The corner Sprout hasn't mentioned yet, if it still shows, and forgets it, so Sprout says it once.
+    func takeUnannounced() -> HexCell? {
+        defer { unannounced = nil }
+        guard !isDecoy, let unannounced, unannounced == corner else { return nil }
+        return unannounced
     }
 
     /// Enters or leaves a decoy session. Either way no corner shows until the next
@@ -96,11 +111,13 @@ final class WorldCornerNudgeKeeper {
         guard on != isDecoy else { return }
         isDecoy = on
         corner = nil
+        unannounced = nil
     }
 
     /// The wipe: forgets the corner and removes its file. Whether the file is gone.
     func clearAll() -> Bool {
         corner = nil
+        unannounced = nil
         state = nil
         noPick = nil
         isLoaded = true

@@ -27,6 +27,7 @@ extension FernletShortcut {
         case .breathing: WorldLogIcon(sprite: WorldSprites.breathe)
         case .grounding: WorldLogIcon(sprite: WorldSprites.target)
         case .worryBox: WorldLogIcon(sprite: WorldSprites.box)
+        case .bathroom: WorldLogIcon(sprite: BathroomRollSprite.roll)
         }
     }
 }

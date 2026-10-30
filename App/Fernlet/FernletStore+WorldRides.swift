@@ -1,6 +1,7 @@
 import FernletDomainModel
 import FernletFoundation
 import Foundation
+import WorldMapStore
 
 /// Car and bike detection's side of the store (round 7; `b1-home-car`, `b1-home-bike`): the map's
 /// ``WorldRideKeeper`` (`worldLocation.rides`) wired to the fog, the location source and the workout log.
@@ -14,7 +15,12 @@ import Foundation
 ///   ride is logged once and never one from before the switch was on.
 /// - **Catch-up** (``catchUpWorldBikeRides(now:defaults:)``): the rides the motion history holds from while
 ///   the app was closed, at most ``bikeRideCatchUpLimit`` back.
-/// - **Undo** removes the workout (``undoWorldBikeRide(_:)``).
+/// - **The ride's line and timeline stop** (Refinements group 19, `ref-ride-line`, `ref-ride-timeline`): a
+///   logged ride joins Where you've been's timeline at its start, and its line is kept with its workout when
+///   "Save new routes" is on, exactly as a walk's; a ride the catch-up found has no line. A decoy keeps
+///   neither (it logs nothing).
+/// - **Undo** removes the workout, its line and its timeline stop (``undoWorldBikeRide(_:)``); with Private
+///   locked, a stop it already folded leaves at its next fold.
 /// - **Car rides never log as exercise.**
 extension FernletStore {
     /// How far back a catch-up looks through the motion history (iOS keeps a week).
@@ -47,6 +53,8 @@ extension FernletStore {
         let workout = Self.bikeRideWorkout(ride)
         let dayKey = FernletDate.dayKey(for: ride.ended)
         addWorkout(workout, date: dayKey)
+        worldPlaces.recordOuting(.ride, at: ride.started, metres: ride.metres, workoutID: workout.id)
+        keepWorldRideLine(ride, for: workout.id, defaults: defaults)
         let logged = WorldLoggedRide(id: workout.id, dayKey: dayKey, metres: ride.metres, minutes: ride.minutes, isKept: true)
         worldLocation.rides.loggedRide = logged
         WorldMapPreferences.setBikeRidesCheckedThrough(ride.ended, in: defaults)
@@ -101,11 +109,59 @@ extension FernletStore {
         WorldMapPreferences.setBikeRidesCheckedThrough(max(checked, min(now, open ?? now)), in: defaults)
     }
 
-    /// The bike-ride note's Undo: the ride's workout goes. Whether anything was removed.
+    /// Keeps a logged ride's line with its workout, exactly as a finished walk's
+    /// (`finishWorldWalk(at:defaults:)`): only with "Save new routes" on, no decoy, and at least two points
+    /// (a ride the catch-up found has none). A line that can't be sealed now is simply not kept.
+    private func keepWorldRideLine(_ ride: WorldBikeRide, for workoutID: UUID, defaults: UserDefaults) {
+        guard WorldMapPreferences.saveNewRoutes(in: defaults), !duressSessionActive, ride.points.count >= 2 else { return }
+        do {
+            try worldRoutes.save(ride.points, for: workoutID)
+        } catch {
+            FernletAuditLog.log("worldMap.route.saveFailed")
+        }
+    }
+
+    /// The bike-ride note's Undo: the ride's workout goes, its saved line with it (`removeWorkout(id:date:)`),
+    /// and its stop on Where you've been's timeline: the waiting one, or, with Private open, the one already
+    /// folded in. Whether the workout was removed.
     @discardableResult
     func undoWorldBikeRide(_ ride: WorldLoggedRide) -> Bool {
         guard ride.isKept else { return false }
-        return removeWorkout(id: ride.id, date: ride.dayKey)
+        let removed = removeWorkout(id: ride.id, date: ride.dayKey)
+        worldPlaces.removeOuting(workoutID: ride.id)
+        removeFoldedWorldRide(workoutID: ride.id)
+        return removed
+    }
+
+    /// Takes a ride's stop off the folded timeline when Private is open (its hub key is at hand); while it is
+    /// locked, queues the removal for Private's next fold (owner 2026-10-29). Nothing in a decoy.
+    private func removeFoldedWorldRide(workoutID: UUID) {
+        guard !duressSessionActive else { return }
+        guard let key = hubContentKeyProvider?() else {
+            worldPlaces.queueOutingRemoval(workoutID: workoutID)
+            return
+        }
+        do {
+            let log = try worldPlaces.store.log(hubKey: key)
+            let next = log.deletingOuting(workoutID: workoutID)
+            if next != log { try worldPlaces.store.saveLog(next, hubKey: key) }
+        } catch {
+            worldPlaces.queueOutingRemoval(workoutID: workoutID)
+            FernletAuditLog.log("worldMap.places.undoRideDeferred")
+        }
+    }
+
+    /// How long the bike ride on the timeline (`stop`) lasted, in minutes, from its cycling workout (looked
+    /// up by id on the day it started, then the next, for a ride past midnight); nil when the workout is gone
+    /// or has no duration, or for any other stop.
+    func worldRideMinutes(for stop: PlaceStop) -> Int? {
+        guard stop.kind == .ride, let id = stop.workoutID, !duressSessionActive else { return nil }
+        let days = [stop.at, stop.at.addingTimeInterval(24 * 60 * 60)]
+        for day in days {
+            let workout = loadDay(for: FernletDate.dayKey(for: day)).workouts.first { $0.id == id }
+            if let workout { return workout.duration }
+        }
+        return nil
     }
 
     /// A finished bike ride as Move logs one: a moderate outdoor cycling activity under the activity's frozen

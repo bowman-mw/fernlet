@@ -84,6 +84,8 @@ struct ContentView: View {
     /// The Stamp book asked for by the stamp banner or the stamp widget: Today opens and pushes it at its
     /// stamps (owner, 2026-10-24: no sheet), and the Today panel's HomeView takes and clears this.
     @State private var pendingStampBook = false
+    /// Sprout's passport: opened from anywhere through the environment (`worldPassportBook`).
+    @State private var passportPresenter = WorldPassportPresenter()
     /// Whether the session-end keep-as-friends prompt is up (``KeepFriendsPromptHost``, owner
     /// 2026-10-24: shown wherever the person is, Home included).
     @State private var isKeepFriendsPromptUp = false
@@ -283,6 +285,12 @@ struct ContentView: View {
     /// makes the app's appearance depend on which preference write SwiftUI resolves last.
     private var rootSheetHost: some View {
         launchRoot
+            // Round 7 world map: FERNLET_UI_TEST_WORLD_VIEW's DEBUG host; a no-op in Release.
+            .worldAtlasMapHook(store: store)
+            // Round 7: Sprout's passport over the root, opened through the environment.
+            .worldPassportBook(passportPresenter, store: store)
+            // The world view's city tap shows the city on Home: any panel over Home closes.
+            .onChange(of: passportPresenter.cityRequest) { _, request in if request != nil { closeWorldPanel() } }
             .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
                 sheetContent(for: sheet)
             }
@@ -884,7 +892,12 @@ struct ContentView: View {
             // cookie's log raises at the bottom.
             .overlay { worldOverlayPanel }
             .overlay(alignment: .top) { sillyStampBannerOverlay }
+            // Round 7: a passport stamp earned just now, in the same slot and by the same rules (World-Passport-Spec §6).
+            .overlay(alignment: .top) { passportStampBannerOverlay }
+            // DEBUG screenshots of Sprout's passport, page 1 (round 7); nothing in Release.
+            .overlay { PassportSproutHarnessHost(store: store) }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownStampBanner)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownPassportBanner)
             .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
             .background(sceneBackground.ignoresSafeArea())
@@ -949,7 +962,7 @@ struct ContentView: View {
                          onFriends: openFriends,
                          // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
                          onSheet: { activeSheet = $0 },
-                         stampBannerShowing: shownStampBanner != nil,
+                         stampBannerShowing: shownStampBanner != nil || shownPassportBanner != nil,
                          isCameraOpen: $isWorldCameraOpen,
                          onMealsLogged: mealLogReporter)
                 .tabPage(.home)
@@ -1021,7 +1034,7 @@ struct ContentView: View {
     /// touches and is no element, so the map under it stays reachable.
     @ViewBuilder
     private var worldItemBarOverlay: some View {
-        if selectedTab == .home && worldOverlay == nil {
+        if selectedTab == .home && worldOverlay == nil && !passportPresenter.isPresented {
             ZStack(alignment: .bottom) {
                 Color.clear
                 // The session on Home (b3-home-session): the green session button bottom left, the
@@ -1673,6 +1686,7 @@ struct ContentView: View {
         // map's sealed location history and its keys go (design page answer 16; World build only).
         lockService.installRecoveryLockPurgeHook { [store] in
             if !store.worldFog.clearAll() { FernletAuditLog.log("worldMap.recoveryLockPurge.incomplete") }
+            if !store.deleteAllBodyTalliesForWipe() { FernletAuditLog.log("bodyTally.recoveryLockPurge.incomplete") }
         }
         // The other half of the duress-recovery custody story, and the one that is NOT a duress path
         // at all: "Delete everything" regenerates this device's proximity identity while deliberately
@@ -1781,6 +1795,9 @@ struct ContentView: View {
         case .intimacyLogs:
             guard current.sealedBackupIntimacyReuploadDeferred != deferred else { return }
             preferencesStore.update { $0.sealedBackupIntimacyReuploadDeferred = deferred }
+        case .worldPassport:
+            guard current.sealedBackupPassportReuploadDeferred != deferred else { return }
+            preferencesStore.update { $0.sealedBackupPassportReuploadDeferred = deferred }
         case .sensitiveNotes:
             // The retired payload never seals, so the store never records a deferral for it — this
             // arm is unreachable and deliberately writes nothing.
@@ -1956,6 +1973,28 @@ struct ContentView: View {
     private var shownStampBanner: SillyStatKind? {
         guard launcher.isDone, !rootSheetIsCoveringTabs, !isWorldCameraOpen else { return nil }
         return store.sillyStats.pendingStampBanners.first
+    }
+
+    /// The passport's new-stamp banner on screen (round 7): held back as the silly stamp's is, and behind it (one
+    /// banner at a time), and never while the passport is open or in a decoy.
+    private var shownPassportBanner: PassportStampEntry? {
+        guard shownStampBanner == nil, launcher.isDone, !rootSheetIsCoveringTabs, !isWorldCameraOpen,
+              !passportPresenter.isPresented, !store.duressSessionActive else { return nil }
+        return passportPresenter.bannerStamp
+    }
+
+    /// The passport's new-stamp banner (``PassportNewStampBanner``), in the silly stamp's slot and motion.
+    @ViewBuilder
+    private var passportStampBannerOverlay: some View {
+        if let entry = shownPassportBanner {
+            PassportNewStampBanner(presenter: passportPresenter, store: store, entry: entry)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .frame(maxWidth: 352)
+                .padding(.horizontal, 16)
+                .padding(.top, stampBannerTop)
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .id(entry)
+        }
     }
 
     /// The top banner slot for a stamp earned just now (``SillyStampBanner``). Slides down from the

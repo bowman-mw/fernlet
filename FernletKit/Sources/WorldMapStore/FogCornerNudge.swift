@@ -71,17 +71,26 @@ public nonisolated enum FogCornerNudge {
     /// within ``searchMetres`` is a fogged patch at least ``minimumMetres`` away. `avoiding` (last week's
     /// corner) is passed over when any other candidate exists, so a new week moves on when it can.
     public static func pick(home: GeoPoint, revealed: Set<HexCell>, weekStart: Date,
-                            avoiding: HexCell? = nil) -> HexCell? {
+                            avoiding: HexCell? = nil,
+                            isWater: (HexCell) -> Bool = { _ in false }) -> HexCell? {
         guard home.isValid, weekStart.timeIntervalSince1970.isFinite else { return nil }
         let all = candidates(home: home, revealed: revealed)
         let others = all.filter { $0.cell != avoiding }
         let pool = others.isEmpty ? all : others
-        guard let nearest = pool.map({ band(of: $0.metres) }).min() else { return nil }
         let key = UInt64(bitPattern: weekIndex(of: weekStart))
-        let ranked = pool.filter { band(of: $0.metres) == nearest }
-            .map { (cell: $0.cell, rank: mix(key, UInt64(bitPattern: $0.cell.id))) }
-        return ranked.min { ($0.rank, $0.cell) < ($1.rank, $1.cell) }?.cell
+        // Nearest band first, the week's hash within it; the first that isn't water wins (owner 2026-10-29:
+        // never a corner on a river or a lake). At most `maxWaterChecks` cells are asked.
+        let ranked = pool.map { (cell: $0.cell, band: band(of: $0.metres), rank: mix(key, UInt64(bitPattern: $0.cell.id))) }
+            .sorted { ($0.band, $0.rank, $0.cell) < ($1.band, $1.rank, $1.cell) }
+        for candidate in ranked.prefix(maxWaterChecks) where !isWater(candidate.cell) {
+            return candidate.cell
+        }
+        return nil
     }
+
+    /// The most candidates ``pick(home:revealed:weekStart:avoiding:isWater:)`` asks the water question of, so
+    /// a home on a lake shore costs at most this many atlas reads.
+    public static let maxWaterChecks = 512
 
     /// Whether `cell` is still a corner of `home`: its centre within ``searchMetres`` of it. A corner picked
     /// for a home the person since moved is picked again.

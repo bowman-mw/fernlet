@@ -191,7 +191,7 @@ final class WorldFogKeeper {
     /// from the loaded history; nil in a decoy, before the history is read, or with no home.
     func currentCorner(home: GeoPoint?, now: Date = Date()) -> HexCell? {
         guard !isDecoy, store.isLoaded else { return nil }
-        return cornerNudge.current(home: home, revealed: store.cells, now: now)
+        return cornerNudge.current(home: home, revealed: store.cells, now: now, isWater: atlas.isWater)
     }
 
     /// Deletes the map widget's picture and reloads the widget; whether the picture is gone.

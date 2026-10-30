@@ -258,8 +258,9 @@ public struct SealedColumnFormatCensusResult: Sendable, Equatable {
 ///
 /// The seven sealed columns of the four original entities use `allowsExternalBinaryDataStorage`, so
 /// any value over ~100 KB lives as a loose file in `.FernletPrivate_SUPPORT` and *faults the whole
-/// blob into memory* the moment the attribute is touched (the eighth, `CycleRecord.payloadCiphertext`,
-/// is stored inline and small, which the same page discipline covers anyway). Fetching every row and reading every column would therefore pull the
+/// blob into memory* the moment the attribute is touched (the eighth and ninth,
+/// `CycleRecord.payloadCiphertext` and `BodyTally.payloadCiphertext`, are stored inline and small,
+/// which the same page discipline covers anyway). Fetching every row and reading every column would therefore pull the
 /// entire sealed corpus into RAM to look at one byte per value. Instead the scan: fetches with a
 /// small `fetchBatchSize`, walks one page at a time inside an `autoreleasepool`, reads only
 /// `data.first` via the classifier, and immediately turns each row back into a fault with
@@ -281,11 +282,12 @@ public enum SealedColumnFormatCensus {
     /// The naming convention the drift guard keys off: every sealed binary column ends in this.
     public static let ciphertextAttributeSuffix = "Ciphertext"
 
-    /// The censused surface: the five sealed entities of `PrivatePersistenceController` and their
-    /// eight ciphertext columns — `CycleRecord.payloadCiphertext` joined on 2026-09-30 (period-data
-    /// design §5.2; it is a V3 `ColumnCrypto` blob like the rest). Written by hand and cross-checked
-    /// against the live model by ``verifyTable(matches:)`` — a ninth column or a sixth entity fails
-    /// loudly instead of going silently un-censused.
+    /// The censused surface: the six sealed entities of `PrivatePersistenceController` and their
+    /// nine ciphertext columns — `CycleRecord.payloadCiphertext` joined on 2026-09-30 (period-data
+    /// design §5.2) and `BodyTally.payloadCiphertext` on 2026-10-29 (World bodybuilding, round 7);
+    /// both are V3 `ColumnCrypto` blobs like the rest. Written by hand and cross-checked against the
+    /// live model by ``verifyTable(matches:)`` — a tenth column or a seventh entity fails loudly
+    /// instead of going silently un-censused.
     public static let censusedEntities: [SealedEntityColumns] = [
         SealedEntityColumns(
             entityName: "MenstrualNarrative",
@@ -305,6 +307,10 @@ public enum SealedColumnFormatCensus {
         ),
         SealedEntityColumns(
             entityName: "CycleRecord",
+            ciphertextAttributeNames: ["payloadCiphertext"]
+        ),
+        SealedEntityColumns(
+            entityName: "BodyTally",
             ciphertextAttributeNames: ["payloadCiphertext"]
         )
     ]

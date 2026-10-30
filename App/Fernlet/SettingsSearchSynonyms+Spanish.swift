@@ -22,7 +22,8 @@ extension SettingsSearchSynonyms {
                          "reordenar", "orden"],
         // Goal & nutrition
         "Goal": ["objetivo", "meta", "bajar de peso", "perder peso", "mantener", "ganar músculo", "músculo",
-                 "deportes", "entrenamiento", "plan de nutrición"],
+                 "deportes", "entrenamiento", "plan de nutrición", "culturismo", "fisicoculturismo", "hipertrofia",
+                 "descarga"],
         "Sick mode": ["días de malestar", "enfermo", "enferma", "enfermedad", "malestar", "descanso", "recuperación"],
         "Show calories": ["mostrar calorías", "calorías", "kcal", "caloría", "números"],
         "Body & measurements": ["cuerpo y medidas", "cuerpo", "estatura", "altura", "peso", "edad", "sexo", "perfil",

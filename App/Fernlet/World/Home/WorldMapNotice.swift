@@ -3,8 +3,8 @@ import SwiftUI
 
 /// The plate that names the map's state, under the status plate (the design kit's `.ntc`: paper in a
 /// 3-pt ink frame, a small pixel sprite, a bold line and a line under it): first day, loading, offline,
-/// approximate location and riding along (`b1-home-first`, `b1-home-loading`, `b1-home-offline`,
-/// `b1-home-approx`, `b1-home-car`).
+/// approximate location and riding along, in the car or on the bike (`b1-home-first`, `b1-home-loading`,
+/// `b1-home-offline`, `b1-home-approx`, `b1-home-car`, `ref-ride-home`).
 ///
 /// It is a status: announced once when it appears (loading only after two seconds), then left in the
 /// reading order after the status plate.
@@ -82,7 +82,7 @@ struct WorldMapNotice: View {
 
     private var sprite: WorldSprite {
         switch kind {
-        case .offline, .approximate, .ridingAlong: WorldSprites.pin
+        case .offline, .approximate, .ridingAlong, .ridingAlongBike: WorldSprites.pin
         case .loading: WorldSprites.photo
         case .firstDay: WorldSprites.leaf
         }
@@ -91,6 +91,7 @@ struct WorldMapNotice: View {
     private var title: LocalizedStringResource {
         switch kind {
         case .ridingAlong: WorldNoticeCopy.ridingAlong
+        case .ridingAlongBike: WorldNoticeCopy.ridingAlongBike
         case .offline: WorldNoticeCopy.offline
         case .approximate: WorldNoticeCopy.approximate
         case .loading: WorldNoticeCopy.loading
@@ -100,7 +101,7 @@ struct WorldMapNotice: View {
 
     private var detail: LocalizedStringResource? {
         switch kind {
-        case .ridingAlong: WorldNoticeCopy.ridingAlongDetail
+        case .ridingAlong, .ridingAlongBike: WorldNoticeCopy.ridingAlongDetail
         case .offline: WorldNoticeCopy.offlineDetail
         case .approximate: WorldNoticeCopy.approximateDetail
         case .loading: nil
@@ -112,6 +113,7 @@ struct WorldMapNotice: View {
     static func identifier(_ kind: WorldMapNoticeKind) -> String {
         switch kind {
         case .ridingAlong: "ridingAlong"
+        case .ridingAlongBike: "ridingAlongBike"
         case .offline: "offline"
         case .approximate: "approximate"
         case .loading: "loading"
@@ -119,10 +121,11 @@ struct WorldMapNotice: View {
         }
     }
 
-    /// What VoiceOver hears when the plate appears.
+    /// What VoiceOver hears when the plate appears: its lines, the bike's plate named as the bike's
+    /// ("Riding along on your bike", Refinements group 19) where its title says only "Riding along".
     static func announcement(_ kind: WorldMapNoticeKind) -> String {
         let notice = WorldMapNotice(kind: kind)
-        let title = String(localized: notice.title)
+        let title = String(localized: kind == .ridingAlongBike ? WorldNoticeCopy.ridingAlongBikeSpoken : notice.title)
         guard let detail = notice.detail else { return title }
         return "\(title). \(String(localized: detail))"
     }
@@ -215,6 +218,10 @@ nonisolated enum WorldNoticeCopy {
     static let ridingAlongDetail = LocalizedStringResource("worldNotice.ridingAlong.detail",
                                                            defaultValue: "Quick starts and banners pause until you're on foot.",
                                                            comment: "World Home notice under 'Riding along': the blue button and banners wait until the person is walking again")
+    static let ridingAlongBike = LocalizedStringResource("worldNotice.ridingAlong.bike", defaultValue: "Riding along",
+                                                         comment: "World Home notice while Fernlet sees the person riding a bike (its own key: the Spanish names the bike where the car's names the car)")
+    static let ridingAlongBikeSpoken = LocalizedStringResource("worldNotice.ridingAlong.bike.spoken", defaultValue: "Riding along on your bike",
+                                                               comment: "World Home, VoiceOver: said once as a bike ride starts, before the plate's line 'Quick starts and banners pause until you're on foot.'")
     static let firstDayDetail = LocalizedStringResource("worldNotice.firstDay.detail", defaultValue: "It uncovers as you go, on this iPhone only.",
                                                         comment: "World Home notice under 'Your map starts here'")
 }

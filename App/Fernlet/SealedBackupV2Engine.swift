@@ -150,8 +150,8 @@ final class SealedBackupUIKitBackgroundTasks: SealedBackupBackgroundTaskAssertin
 }
 
 /// The ONE engine every Sealed backup v2 pass runs on (design 2026-09-30, §3, §4.2) — the period,
-/// intimate-log and journal backups' (``CycleRecordBackupAdapter``, ``IntimacyBackupAdapter``,
-/// ``JournalBackupAdapter``).
+/// intimate-log, journal and World passport backups' (``CycleRecordBackupAdapter``,
+/// ``IntimacyBackupAdapter``, ``JournalBackupAdapter``, ``PassportBackupAdapter``).
 ///
 /// **One serial worker.** A single held `Task` drains a FIFO holding at most one pass per payload, so
 /// no two passes ever run at once, for any payload or trigger (R2-F15). A later explicit intent
@@ -571,6 +571,7 @@ extension StoragePreferences {
         case .periodData: return sealedBackupPeriodEnabled
         case .journalNarratives: return sealedBackupJournalEnabled
         case .intimacyLogs: return sealedBackupIntimacyEnabled
+        case .worldPassport: return sealedBackupPassportEnabled
         // Retired: the flag now means "a copy may still be up there", never "back this up".
         case .sensitiveNotes: return false
         }

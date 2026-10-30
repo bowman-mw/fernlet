@@ -49,6 +49,15 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
     case always
 }
 
+/// What the World map's continuous background updates follow, with Always and background mapping on
+/// (round 7): a drive's road (`nf-car`), or a bike ride's line (Refinements group 19, `ref-ride-line`).
+nonisolated enum WorldTrace: Equatable, Sendable {
+    /// A drive car detection found: traced as a thin line of fog.
+    case drive
+    /// A bike ride Motion found: followed closely for its line, lifting the fog like a walk.
+    case ride
+}
+
 /// The World map's location, following the permission the person gave (design page answer 3; World
 /// app plan step 5a). **The only new file in the app that imports CoreLocation**
 /// (`MapAndLocationConfinementBoundaryTests`; the other is `WeatherKitService.swift`).
@@ -65,9 +74,15 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 ///   stop), so the map uncovers the road driven as a thin line (`nf-car`). When the drive ends, or iOS pauses
 ///   the updates, exactly what ran before comes back: the low-power mode stays, a walk or the map in front
 ///   keep their updates, and otherwise the updates stop. This widens the `location` background mode's use
-///   beyond a walk the person started; the approved privacy sentence says so ("…and, while you're driving,
-///   the road you take"). Never without Always and background mapping, and never during a walk
+///   beyond a walk the person started; the approved privacy sentence says so ("…and, while you're driving or
+///   riding, the road you take"). Never without Always and background mapping, and never during a walk
 ///   (``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)``).
+/// - **A bike ride, followed closely (Refinements group 19, `ref-ride-line`, owner-approved 2026-10-29):**
+///   exactly as a drive is traced, under the same conditions
+///   (``followsRide(permission:backgroundMapping:declaresBackground:walking:)``), a ride car and bike
+///   detection finds (``WorldRideKeeper/onCyclingChanged``) gets continuous background updates for the
+///   `fitness` activity, so its line is drawn without cutting corners; the blue pill shows while it runs. It
+///   stops when the ride ends, or at once when background mapping goes off.
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
 ///   permission screens (step 5c: the map intro's Turn on location, and Settings → Home map's background
 ///   mapping after its explainer); nothing here asks on its own.
@@ -106,8 +121,14 @@ final class WorldLocationSource: NSObject {
     /// Whether a walk is recording (updates keep running off the map).
     private(set) var isWalking = false
 
+    /// What continuous background updates follow now, if anything: a drive or a bike ride (round 7).
+    private(set) var trace: WorldTrace?
+
     /// Whether a drive is being traced: continuous updates that keep running in the background (round 7).
-    private(set) var isTracingDrive = false
+    var isTracingDrive: Bool { trace == .drive }
+
+    /// Whether a bike ride is being followed closely, the same way (Refinements group 19, `ref-ride-line`).
+    var isFollowingRide: Bool { trace == .ride }
 
     /// Whether the readings now are the map's own: updates running for the map on screen, not for a walk.
     var isFollowingMap: Bool { isUpdating && !isWalking }
@@ -116,7 +137,7 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var isUpdating = false
     @ObservationIgnored private var isMonitoringAlways = false
     @ObservationIgnored private var walkSession: CLBackgroundActivitySession?
-    /// What the manager was set to before a drive's trace, put back when it ends.
+    /// What the manager was set to before a drive's trace or a ride's follow, put back when it ends.
     @ObservationIgnored private var beforeTrace: (activity: CLActivityType, pauses: Bool)?
 
     /// The Info.plist purpose key the walk's temporary full-accuracy request names (a frozen token).
@@ -129,7 +150,10 @@ final class WorldLocationSource: NSObject {
         manager.distanceFilter = 10
         apply(status: manager.authorizationStatus, accuracy: manager.accuracyAuthorization, observed: false)
         rides.onDrivingChanged = { [weak self] driving in
-            if driving { self?.startDriveTrace() } else { self?.stopDriveTrace() }
+            if driving { self?.startTrace(.drive) } else { self?.stopTrace(.drive) }
+        }
+        rides.onCyclingChanged = { [weak self] cycling in
+            if cycling { self?.startTrace(.ride) } else { self?.stopTrace(.ride) }
         }
     }
 
@@ -161,17 +185,17 @@ final class WorldLocationSource: NSObject {
     func stopForeground() {
         guard isUpdating, !isWalking else { return }
         isUpdating = false
-        // A drive's trace keeps the updates running in the background until the drive ends.
-        if !isTracingDrive { manager.stopUpdatingLocation() }
+        // A drive's trace (or a ride's follow) keeps the updates running in the background until it ends.
+        if trace == nil { manager.stopUpdatingLocation() }
     }
 
     /// Keeps updates running for a walk the person started, asking for precise location for this walk
     /// when only approximate is allowed, and holding a background session while the app declares one.
     func startWalk() {
         guard permission == .whileUsing || permission == .always, !isWalking else { return }
-        // The walk's own mode, untouched by a drive: a trace running ends first (a reading in a car picks it
-        // up again once the walk is over).
-        stopDriveTrace()
+        // The walk's own mode, untouched by a drive or a ride: a trace or follow running ends first (a reading
+        // in a car or on a bike picks it up again once the walk is over).
+        stopTrace()
         isWalking = true
         startForeground()
         if !isPrecise, Self.declares("NSLocationTemporaryUsageDescriptionDictionary") {
@@ -216,7 +240,7 @@ final class WorldLocationSource: NSObject {
         } else {
             manager.stopMonitoringVisits()
             manager.stopMonitoringSignificantLocationChanges()
-            stopDriveTrace()
+            stopTrace()
         }
     }
 
@@ -228,31 +252,56 @@ final class WorldLocationSource: NSObject {
         permission == .always && backgroundMapping && declaresBackground && !walking
     }
 
-    /// Starts tracing a drive when ``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)``
-    /// allows; a no-op when already tracing. `showsBackgroundLocationIndicator` stays at iOS's default.
-    private func startDriveTrace() {
-        guard !isTracingDrive,
+    /// Whether a detected bike ride is followed closely (Refinements group 19, `ref-ride-line`): exactly as a
+    /// drive is traced (``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)``), with
+    /// Always, background mapping on, the `location` background mode declared, and no walk recording.
+    nonisolated static func followsRide(permission: WorldLocationPermission, backgroundMapping: Bool,
+                                        declaresBackground: Bool, walking: Bool) -> Bool {
+        tracesDrive(permission: permission, backgroundMapping: backgroundMapping, declaresBackground: declaresBackground,
+                    walking: walking)
+    }
+
+    /// The activity iOS is told the updates are for: automotive navigation for a drive (paused by iOS at a
+    /// long stop), fitness for a bike ride (Apple's type for walking, running and cycling, so iOS keeps the
+    /// readings close to the path and pauses only once the person stops moving).
+    nonisolated static func activityType(for trace: WorldTrace) -> CLActivityType {
+        switch trace {
+        case .drive: .automotiveNavigation
+        case .ride: .fitness
+        }
+    }
+
+    /// Starts tracing a drive, or following a bike ride, when
+    /// ``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)`` allows; a no-op when it is
+    /// already followed. A drive becoming a ride (or back) hands the updates over. iOS's blue location pill
+    /// shows while either runs (owner 2026-10-29), so the person can see the road or the ride is being noted.
+    private func startTrace(_ kind: WorldTrace) {
+        guard trace != kind,
               Self.tracesDrive(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
                                declaresBackground: Self.declaresBackgroundLocation, walking: isWalking) else { return }
-        isTracingDrive = true
+        if trace != nil { stopTrace() }
+        trace = kind
         beforeTrace = (manager.activityType, manager.pausesLocationUpdatesAutomatically)
         manager.allowsBackgroundLocationUpdates = true
-        manager.activityType = .automotiveNavigation
+        manager.activityType = Self.activityType(for: kind)
         manager.pausesLocationUpdatesAutomatically = true
+        manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
     }
 
-    /// Ends a drive's trace and puts back exactly what ran before: the map in front or a walk keep their
-    /// updates (started again, since iOS's pause stops them too), otherwise the updates stop and background
-    /// updates go back off. The low-power mode is never touched. A no-op when not tracing.
-    private func stopDriveTrace() {
-        guard isTracingDrive else { return }
-        isTracingDrive = false
+    /// Ends a drive's trace or a ride's follow (only that `kind`'s, when given) and puts back exactly what
+    /// ran before: the map in front or a walk keep their updates (started again, since iOS's pause stops
+    /// them too), otherwise the updates stop and background updates go back off. The low-power mode is never
+    /// touched. A no-op when nothing (or another kind) is followed.
+    private func stopTrace(_ kind: WorldTrace? = nil) {
+        guard let trace, kind.map({ $0 == trace }) ?? true else { return }
+        self.trace = nil
         if let beforeTrace {
             manager.activityType = beforeTrace.activity
             manager.pausesLocationUpdatesAutomatically = beforeTrace.pauses
         }
         beforeTrace = nil
+        manager.showsBackgroundLocationIndicator = false
         if isUpdating { manager.startUpdatingLocation() } else { manager.stopUpdatingLocation() }
         if walkSession == nil { manager.allowsBackgroundLocationUpdates = false }
     }
@@ -278,7 +327,7 @@ final class WorldLocationSource: NSObject {
             return
         }
         setLowPowerAlways(false)
-        stopDriveTrace()
+        stopTrace()
         if permission == .denied || permission == .notAsked {
             stopWalk()
             stopForeground()
@@ -291,20 +340,22 @@ final class WorldLocationSource: NSObject {
     func deliver(_ fix: WorldFix) {
         guard fix.point.isValid, fix.accuracy.isFinite, fix.accuracy >= 0 else { return }
         rides.handle(fix)
-        if rides.isDriving { startDriveTrace() }
+        if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
         var stamped = fix
         stamped.inCar = rides.inCarFlag
         latest = stamped
         onFix?(stamped)
     }
 
-    /// iOS paused the updates (the car has stood still a while): the drive's end hint, so the trace stops; a
-    /// later reading in a car (a significant move, or the map in front) traces again while the drive lasts.
-    fileprivate func driveTracePaused() {
-        // A pause is often a parked car: the rides keeper decides first, which may end the drive and the trace.
+    /// iOS paused the updates (the car or the bike has stood still a while): the end hint, so the trace or
+    /// the follow stops; a later reading while the drive or ride lasts (a significant move, or the map in
+    /// front) follows it again.
+    fileprivate func tracePaused() {
+        // A pause is often a parked car or a locked bike: the rides keeper decides first, which may end the
+        // drive or the ride, and the follow with it.
         rides.tickNow()
-        guard isTracingDrive else { return }
-        stopDriveTrace()
+        guard trace != nil else { return }
+        stopTrace()
     }
 
     /// Hands a low-power visit on, as plain values (a visit with no known time is dropped).
@@ -369,7 +420,7 @@ extension WorldLocationSource: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
-        Task { @MainActor in self.driveTracePaused() }
+        Task { @MainActor in self.tracePaused() }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

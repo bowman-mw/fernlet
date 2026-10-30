@@ -1081,10 +1081,11 @@ struct DeleteAllDataTests {
         #expect(!store.sealedBackupIntimacyReuploadDeferred, "the leg-3 delete re-dirtied the intimacy backup")
     }
 
-    /// "Delete everything" KEEPS the intimate-log and journal restore markers and accepted heads (design
-    /// 2026-09-30 §9, R2-F11) — a set that survived a failed cloud delete never merges back, and is this
-    /// install's own to the next export, which overwrites it — and clears the observed foreign heads.
-    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives])
+    /// "Delete everything" KEEPS the intimate-log, journal and World passport restore markers and
+    /// accepted heads (design 2026-09-30 §9, R2-F11) — a set that survived a failed cloud delete never
+    /// merges back, and is this install's own to the next export, which overwrites it — and clears the
+    /// observed foreign heads.
+    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives, .worldPassport])
     func deleteAllKeepsTheRestoreMarkerAndAcceptedHeadAndClearsTheObservation(_ payload: SealedBackupPayloadType) async {
         let store = makeStore("delete-all-\(payload.rawValue)-marker")
         wireSucceedingSealedHooks(store)
@@ -1108,7 +1109,7 @@ struct DeleteAllDataTests {
     /// the marker is REOPENED (written false, so its one-time seed never runs again) and the accepted and
     /// observed heads are forgotten, so nothing exports over the pre-reset set until the owner's restore
     /// merged it.
-    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives])
+    @Test(arguments: [SealedBackupPayloadType.intimacyLogs, .journalNarratives, .worldPassport])
     func theAppLockResetFunnelReopensTheRestoreAndForgetsTheAcceptedSet(_ payload: SealedBackupPayloadType) {
         let store = makeStore("reset-\(payload.rawValue)-bookkeeping")
         let defaults = UserDefaults(suiteName: "fernlet.tests.v2Reset.\(UUID().uuidString)") ?? .standard
@@ -1121,12 +1122,18 @@ struct DeleteAllDataTests {
         store.sealedBackupBookkeeping.recordObservedHead(stamp, payload, installTag: "me")
 
         store.handleAppLockResetCompleted(
-            preferences: StoragePreferences(sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true),
+            preferences: StoragePreferences(
+                sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true, sealedBackupPassportEnabled: true
+            ),
             clearBookkeeping: {}
         )
 
-        let markerKey = payload == .journalNarratives
-            ? SealedBackupBookkeeping.journalRestoreResolvedKey : SealedBackupBookkeeping.intimacyRestoreResolvedKey
+        let markerKey: String
+        switch payload {
+        case .journalNarratives: markerKey = SealedBackupBookkeeping.journalRestoreResolvedKey
+        case .worldPassport: markerKey = SealedBackupBookkeeping.passportRestoreResolvedKey
+        default: markerKey = SealedBackupBookkeeping.intimacyRestoreResolvedKey
+        }
         #expect(defaults.object(forKey: markerKey) as? Bool == false)
         #expect(!store.sealedBackupBookkeeping.hasAcceptedHeadRecord(payload))
         #expect(!store.sealedBackupBookkeeping.hasObservedHeadRecord(payload))
@@ -1150,10 +1157,12 @@ struct DeleteAllDataTests {
         #expect(store.sealedBackupPeriodReuploadDeferred == false)
         #expect(store.sealedBackupJournalReuploadDeferred == false)
         #expect(store.sealedBackupIntimacyReuploadDeferred == false)
+        #expect(!store.isSealedBackupReuploadOwed(.worldPassport), "the passport's owed upload clears with the rest")
         // …and the persisted copies too, or the obligation comes back at the next launch.
         #expect(persisted[.periodData] == false)
         #expect(persisted[.journalNarratives] == false)
         #expect(persisted[.intimacyLogs] == false)
+        #expect(persisted[.worldPassport] == false)
     }
 
     /// Wires every sealed/reset hook to succeed, for tests that need an otherwise-complete wipe.
@@ -1472,7 +1481,7 @@ struct DeleteAllDataTests {
     /// The reversibility trap, asserted end to end: every deletion path must stay reachable while
     /// the app is LOCKED, so nothing in it — row-delete or rebuild — may need the content key.
     ///
-    /// Seals one row in each of the five sealed entities under a real `FernletLockService` content
+    /// Seals one row in each of the six sealed entities under a real `FernletLockService` content
     /// key, engages the lock (scrubbing that key), then drives the real funnel with the real
     /// repositories wired to the hooks. The rows must be gone, the store file rebuilt, and the lock
     /// must still hold no key on the way out — a wipe that had to decrypt to delete would have had
@@ -1512,7 +1521,11 @@ struct DeleteAllDataTests {
         // AND the legacy narrative, through the production helper the ContentView hook calls.
         try CycleRecordRepository(controller: controller)
             .insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .heavy, note: "cycle record")), contentKey: key)
-        #expect(Self.sealedRowCount(in: controller) == 5, "precondition: the five sealed rows were not seeded")
+        // The sealed body tally (World bodybuilding, round 7 piece B1): no row hook of its own — the
+        // funnel's store rebuild takes it (and leg 11 deletes the journal device key it is sealed
+        // under in production; any key stands in for it here).
+        try BodyTallyRepository(controller: controller).save(BodyDayTally(dayKey: "2026-08-10", bathroomVisits: 2), key: key)
+        #expect(Self.sealedRowCount(in: controller) == 6, "precondition: the six sealed rows were not seeded")
 
         lock.lock(reason: .manual)
         #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
@@ -1678,7 +1691,7 @@ struct DeleteAllDataTests {
     private static func sealedRowCount(in controller: PrivatePersistenceController) -> Int {
         let context = controller.container.viewContext
         return context.performAndWait {
-            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord"].reduce(0) { total, entityName in
+            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally"].reduce(0) { total, entityName in
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 return total + ((try? context.fetch(request).count) ?? 0)
             }

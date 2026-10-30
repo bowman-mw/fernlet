@@ -27,9 +27,16 @@ import WorldMapStore
 /// records, the person's pinned workout spaces (``WorldMapMarker``), a friend the presence radio hears
 /// nearby (first name only, never where they are), rain or snow (``WorldWeatherLayer``), and the time of
 /// day's tint (`CompanionDayPhase`; night dims the light map under a navy tint, and only Dark Mode turns it dark).
+/// Round 7 (World-Exploration-Spec §2, ``WorldExploreLayer``): the atlas's landmarks stand big over the fog, grey
+/// and unnamed until the passport finds them; zoomed out a step, the passport's cities get skyline markers; zoomed
+/// in on a found city, the city view's plate. Sprout says a line the first time the person finds a new kind of place
+/// (§4, ``WorldDiscoveryRouter``, the passport's one discovery reader), and once a week a dashed gold hex marks a new
+/// corner near home, which Sprout mentions once (§5, ``WorldCornerLayer``).
 ///
-/// **The companion** (``WorldMapCompanion``) is Home's: tap to pet, hold (or VoiceOver's "Edit your
-/// companion") for the customize sheet. Its line is the map's own when it has one (``WorldMapLine``).
+/// **The companion** (``WorldMapCompanion``) is Home's: a tap or a hold opens Sprout's passport on page 1, the book
+/// rising from where Sprout stands (World-Passport-Spec §1); a new stamp's banner opens it on the stamp's page, and
+/// the world view's city tap brings Home's camera to that city (``WorldHomePassportHook``). Its line is the map's
+/// own when it has one (``WorldMapLine``).
 ///
 /// **The blue button** (``WorldQuickStart``) quick-starts what the person does where they stand; Walk
 /// together puts the walk bar under the status plate, and End logs the walk with a note that has Undo.
@@ -60,8 +67,9 @@ struct WorldMapHome: View {
     var onMealsLogged: MealLogReporter = .none
     @State private var camera = WorldCamera(center: GeoPoint(0, 0), distance: 1_700)
     @State private var hasPlace = false
-    @State private var isCustomizing = false
-    @State private var customizePetCount = 0
+    /// A city the world view sent Home to (``WorldHomePassportHook``): the camera there, held from the ten
+    /// seconds' re-follow until the person moves the map or goes Back to Sprout.
+    @State private var cityVisit: WorldCamera?
     @State private var tiles = WorldTileStatus()
     @State private var loadingLong = false
     @State private var cardContext: WorldQuickStartContext?
@@ -74,6 +82,9 @@ struct WorldMapHome: View {
     @State private var savedLine: WorldSavedLine?
     /// The saved line being walked again, drawn to follow.
     @State private var guideLine: [GeoPoint] = []
+    /// The saved walk, run and ride lines Home draws (``FernletStore/worldHomeSavedLines(now:defaults:)``),
+    /// read at each front edge and when a walk's or ride's note comes or goes.
+    @State private var savedLines: [[GeoPoint]] = []
     /// Whether the map intro is up (`b1-loc-intro`, ``WorldLocationIntroPresenter``).
     @State private var isLocationIntroUp = false
     /// Where the person's shown solo photos were taken (``WorldPhotoPlace``), read when the map comes to
@@ -92,10 +103,22 @@ struct WorldMapHome: View {
     @State private var menuSearch: WorldMenuSearch?
     /// The map's last viewport, read back to tell when Sprout walks off the visible map (`ref-recenter-auto`).
     @State private var geometry = WorldMapGeometry()
+    /// The land under the fog (round 7, World-Exploration-Spec §1), once the bundled atlas is open; nil: nature fog.
+    @State private var terrain: NatureFogTerrain?
+    /// Cities and landmarks (round 7, World-Exploration-Spec §2): the open cards, the viewport's memo, the art.
+    @State private var explore = WorldExploreState()
+    /// Sprout's discovery lines and the new-stamp hook (round 7, World-Exploration-Spec §4): the one discovery reader.
+    @State private var discoveries = WorldDiscoveryRouter()
+    /// Sprout's mention of the week's new corner (§5), said once; nil once Home goes behind a panel.
+    @State private var cornerLine: String?
+    /// DEBUG `FERNLET_UI_TEST_CORNER`: a corner stood in where the person stands (display only).
+    @State private var testCorner: HexCell?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
+    /// Sprout's passport: while it is open only the map shows behind it (World-Passport-Spec §2).
+    @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
 
     var body: some View {
         TimelineView(.everyMinute) { timeline in
@@ -106,11 +129,8 @@ struct WorldMapHome: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .sheet(isPresented: $isCustomizing) {
-            // The sheet applies `fernletSheet()` itself (full height, the wooden grabber); a second one
-            // here would draw a second band.
-            CompanionCustomizationSheet(store: store, petCount: $customizePetCount)
-        }
+        // Round 7: Sprout's passport's new stamps and the world view's city tap (World-Passport-Spec §1, §6).
+        .modifier(WorldHomePassportHook(store: store, passport: passport, router: discoveries, camera: $camera, cityVisit: $cityVisit))
         // The runner is a focused flow (`b3-runner-*`), presented full screen with no grabber as Move
         // presents it; its ✕ ends it.
         .fullScreenCover(item: $guidedSession) { session in
@@ -123,8 +143,14 @@ struct WorldMapHome: View {
         .modifier(WorldPhotoPlacePresenter(store: store, place: $openPhotoPlace))
         // Round 6: Remember this place, and a place to eat's menu search.
         .modifier(WorldPlacesPresenter(store: store, placeSheet: $placeSheet, menuSearch: $menuSearch, onMealsLogged: onMealsLogged))
+        // Round 7: a found landmark's card and a found city's card (World-Exploration-Spec §2).
+        .modifier(WorldExplorePresenter(store: store, explore: explore))
+        // Round 7: Sprout's lines on finding somewhere new (World-Exploration-Spec §4).
+        .modifier(WorldDiscoveryLinesDriver(store: store, router: discoveries, isSaying: isFrontmost && !isBubbleQuiet))
+        .task(id: cornerLine) { await letCornerLineStand() }
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
+        .task { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
         .task(id: tiles.state) { await watchLoading() }
@@ -145,8 +171,10 @@ struct WorldMapHome: View {
         .task(id: camera) { await refollowWhenIdle() }
         .onChange(of: notice) { _, kind in announce(kind) }
         .onChange(of: holdsRootBanners, initial: true) { _, held in isCameraOpen.wrappedValue = held }
-        // Riding along (`b1-home-car`): an open quick-start card goes with the blue button.
-        .onChange(of: isDriving) { _, driving in if driving { cardContext = nil } }
+        // Riding along (`b1-home-car`, `ref-ride-home`): an open quick-start card goes with the blue button.
+        .onChange(of: isRiding) { _, riding in if riding { cardContext = nil } }
+        .onChange(of: loggedWalk?.id) { if isFrontmost { readSavedLines() } }
+        .onChange(of: store.worldLocation.rides.loggedRide?.id) { if isFrontmost { readSavedLines() } }
         // A permission given (or taken back) in iOS's prompt or in Settings: start or stop following.
         .onChange(of: store.worldLocation.permission) { updateLocation() }
     }
@@ -157,11 +185,10 @@ struct WorldMapHome: View {
     private func offHome(date: Date) -> some View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen,
                         onOpenPrint: openPrint) {
-            WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing,
+            WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive,
                               mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
-                              isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint) {
-                isCustomizing = true
-            }
+                              isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint,
+                              onOpenPassport: openPassport)
         }
     }
 
@@ -172,15 +199,15 @@ struct WorldMapHome: View {
         ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
-                          veiled: isOffline, overlay: { viewport, size in
+                          veiled: isOffline, terrain: terrain, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size)
             }, geometry: geometry)
             if let sky, sky == .rain || sky == .snow {
                 WorldWeatherLayer(sky: sky, isActive: isFrontmost).ignoresSafeArea()
             }
-            plates(date: date)
+            plates(date: date).opacity(passport?.isPresented == true ? 0 : 1)
         }
-        .overlay { bottomControls }
+        .overlay { bottomControls.opacity(passport?.isPresented == true ? 0 : 1) }
     }
 
     /// What stands on the map, placed from the viewport: the space markers, the companion and any friend
@@ -189,6 +216,11 @@ struct WorldMapHome: View {
         let point = companionPoint(viewport: viewport, size: size)
         return ZStack(alignment: .topLeading) {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
+            WorldExploreLayer(store: store, explore: explore, viewport: viewport, size: size,
+                              showsCityPlate: !isWalking && loggedWalk == nil, companion: point)
+            if let corner = shownCorner, let home = cornerHome {
+                WorldCornerLayer(cell: corner, home: home, viewport: viewport, size: size) { panToCorner(corner) }
+            }
             ForEach(shownMarkers) { marker in
                 WorldMapMarkerView(marker: marker, resolvedName: store.worldPlaces.eatingNames[marker.id]) { open(marker) }
                     .fixedSize()
@@ -217,11 +249,9 @@ struct WorldMapHome: View {
 
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
-        WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
-                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, isRiding: isDriving,
-                          onHintEnded: endHint) {
-            isCustomizing = true
-        }
+        WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive, mapLine: mapLine,
+                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, ride: rideVehicle,
+                          onHintEnded: endHint, onOpenPassport: openPassport)
         // Measured at the bubble's own wrap width, so a line of two or three rows is measured as it is
         // drawn and the feet stay on `point` (an unbounded measure took one row and pushed the sprite
         // down by the rest, off the house, the z's and the suitcase that stand at `point`).
@@ -270,13 +300,13 @@ struct WorldMapHome: View {
                 }
                 HStack(alignment: .bottom, spacing: 10) {
                     // Round 7 (`ref-tag-home` d2): beside the blue button anywhere the person stays.
-                    if cardContext == nil, !isDriving, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
+                    if cardContext == nil, !isRiding, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
                         // Above the blue button's label, which slides out over it for 30 s (form answer 28).
                         WorldTagPlaceButton(onRemember: { placeSheet = .spot(spot) }, onNotHere: store.dismissWorldRememberSpot)
                             .zIndex(1)
                     }
-                    // Riding along (`b1-home-car`): quick starts pause until the person is on foot.
-                    if !isDriving, let glyph = WorldQuickStart.glyph(for: buttonContext) {
+                    // Riding along (`b1-home-car`, `ref-ride-home`): quick starts pause until the person is on foot.
+                    if !isRiding, let glyph = WorldQuickStart.glyph(for: buttonContext) {
                         WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
                                               action: toggleCard)
                     }
@@ -333,7 +363,7 @@ struct WorldMapHome: View {
         return WorldMapNoticeKind.make(presence: presence, tiles: isOffline ? .failed : tiles.state, loadingLong: loadingLong,
                                        liftedCells: store.worldFog.visibleCells.count,
                                        uncovers: WorldMapPreferences.uncoverAsYouGo(), isDecoy: store.duressSessionActive,
-                                       isWalking: isWalking, isDriving: isDriving)
+                                       isWalking: isWalking, isDriving: isDriving, isCycling: isCycling)
     }
 
     /// The map's own line for the companion, if it has one.
@@ -346,17 +376,37 @@ struct WorldMapHome: View {
         facts.presence = presence
         facts.isOffline = isOffline
         let now = Date()
-        facts.isNight = phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now)
+        // DEBUG `FERNLET_UI_TEST_CORNER` (`ex-nudge`, a day scene) holds the night line back; nil in release builds.
+        facts.isNight = testCorner == nil && (phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now))
         facts.homeGreeting = homeGreeting
+        facts.discovery = store.duressSessionActive ? nil : discoveries.line?.text
+        facts.cornerNudge = store.duressSessionActive ? nil : cornerLine
         // While a bike ride's note shows: "Wheee! That was a ride." (`b1-home-bike`).
         return WorldRideCopy.bubbleLine(noteShowing: store.worldLocation.rides.loggedRide != nil) ?? WorldMapLine.line(facts)
     }
 
-    /// What the ground draws: the lifted fog, and the walk's line while it records.
+    /// What the ground draws: the lifted fog, the saved walk, run and ride lines (`b1-home-bike`), the walk's
+    /// line while it records, and a bike ride's line so far in the walk line's green (``WorldRideLine``; DEBUG
+    /// `cycling` stages one and `keptride` a kept one, their fog drawn clear).
     private var ground: WorldGround {
         let trace = isWalking ? store.worldWalk.points.map(\.point) : []
-        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered,
-                           trails: isWalking && guideLine.count >= 2 ? [guideLine] : [], traces: trace.count >= 2 ? [trace] : [])
+        let ride = WorldRideLine.drawn(isCycling: isCycling, readings: rideReadings, isDecoy: store.duressSessionActive)
+        let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
+        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged),
+                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride]),
+                           traces: trace.count >= 2 ? [trace] : [])
+    }
+
+    /// Reads Home's saved lines again (DEBUG `keptride` stands the finished ride's kept line in).
+    private func readSavedLines() {
+        let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+        savedLines = WorldRideTestScenes.keptRideLines(around: here) ?? store.worldHomeSavedLines()
+    }
+
+    /// The bike ride's readings so far (``WorldRideKeeper/ridePoints``; DEBUG `cycling` stages a short ride).
+    private var rideReadings: [RoutePoint] {
+        let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+        return WorldRideTestScenes.stagedRide(endingAt: here) ?? store.worldLocation.rides.ridePoints
     }
 
     /// Whether a walk is recording.
@@ -365,15 +415,25 @@ struct WorldMapHome: View {
     /// Whether the person is driving (round 7's car detection; DEBUG `car` stages it): riding along.
     private var isDriving: Bool { store.worldLocation.rides.isDriving || WorldRideTestScenes.drives }
 
+    /// Whether the person is on a bike ride (the ride engine's; DEBUG `cycling` stages it): riding along on
+    /// the bike (`ref-ride-home`).
+    private var isCycling: Bool { store.worldLocation.rides.isCycling || WorldRideTestScenes.cycles }
+
+    /// What the companion rides along in, if anything.
+    private var rideVehicle: WorldRideVehicle? { WorldRideVehicle.current(isDriving: isDriving, isCycling: isCycling) }
+
+    /// Whether the person is riding along, in the car or on the bike: the same things wait either way.
+    private var isRiding: Bool { rideVehicle != nil }
+
     /// Whether the root's banners wait: the disposable camera or the map intro is up, or the person is
     /// riding along.
-    private var holdsRootBanners: Bool { cameraMode != nil || isLocationIntroUp || isDriving }
+    private var holdsRootBanners: Bool { cameraMode != nil || isLocationIntroUp || isRiding }
 
     /// Whether the companion's bubble stays down: under the open quick-start card, while riding along (as
-    /// `b1-home-car` draws it), and at accessibility sizes while a notice, the walk bar or a stamp's banner
-    /// fills the top, so the large bubble never runs into them.
+    /// `b1-home-car` and `ref-ride-home` draw it), and at accessibility sizes while a notice, the walk bar or
+    /// a stamp's banner fills the top, so the large bubble never runs into them.
     private var isBubbleQuiet: Bool {
-        cardContext != nil || isDriving
+        cardContext != nil || isRiding
             || (dynamicTypeSize.isAccessibilitySize && (notice != nil || isWalking || stampBannerShowing))
     }
 
@@ -597,6 +657,7 @@ extension WorldMapHome {
             store.worldFog.flush()
             if !isFrontmost { cardContext = nil }
             homeGreeting = nil
+            cornerLine = nil
         }
         guard isLaunched, scenePhase != .background else {
             location.stopForeground()
@@ -607,6 +668,8 @@ extension WorldMapHome {
         if isFrontmost {
             readPlaces()
             readSavedLine()
+            readSavedLines()
+            readCorner()
         }
         location.startForeground()
         follow(location.latest)
@@ -615,7 +678,8 @@ extension WorldMapHome {
     /// The map came to the front (a panel or sheet closed: following again, `ref-recenter-auto`) or went
     /// behind one.
     private func frontmostChanged(_ front: Bool) {
-        if front { refollow(announce: true) }
+        // A city the world view just sent the map to stays (its panel closing with the passport, round 7).
+        if front, cityVisit == nil { refollow(announce: true) }
         updateLocation()
     }
 
@@ -627,6 +691,7 @@ extension WorldMapHome {
             return
         }
         follow(fix)
+        mentionCorner()
     }
 
     /// Following again: Back to Sprout's tap, or by itself (`ref-recenter-auto`: ten seconds without a
@@ -634,6 +699,7 @@ extension WorldMapHome {
     /// the base map's rule). By itself, VoiceOver hears "Following Sprout again" once, politely.
     private func refollow(announce: Bool) {
         guard !camera.follows, hasPlace else { return }
+        cityVisit = nil
         camera.follows = true
         follow(store.worldLocation.latest)
         guard announce, isFrontmost else { return }
@@ -643,7 +709,8 @@ extension WorldMapHome {
     /// Ten seconds after the person last moved the map (each move changes the camera and restarts this),
     /// following comes back while the map is in front.
     private func refollowWhenIdle() async {
-        guard !camera.follows, hasPlace else { return }
+        // A world-view city visit waits for the person: it holds until they move the map or go Back to Sprout.
+        guard !camera.follows, hasPlace, !WorldHomePassportHook.isStillVisiting(cityVisit, camera: camera) else { return }
         do {
             try await Task.sleep(for: Self.idleRefollow)
         } catch {
@@ -750,9 +817,18 @@ extension WorldMapHome {
         return WorldCompanionHint.isDue(alreadyShown: WorldMapPreferences.companionHintShown(),
                                         introAnswered: WorldMapPreferences.locationIntroAnswered() || asked,
                                         permission: store.worldLocation.permission, isAsking: store.worldLocation.isAsking,
-                                        stampBannerShowing: stampBannerShowing || isDriving,
+                                        stampBannerShowing: stampBannerShowing || isRiding,
                                         isFrontmost: isFrontmost && scenePhase == .active && !isLocationIntroUp,
                                         isDecoy: store.duressSessionActive)
+    }
+
+    /// Whether the companion is live: the map in front and Sprout's passport not open over it.
+    private var isCompanionActive: Bool { isFrontmost && passport?.isPresented != true }
+
+    /// A tap or hold on Sprout (World-Passport-Spec §1): the passport on page 1 (or, the first open after a new
+    /// stamp, that stamp's page), the book rising from `anchor`, where Sprout stands.
+    private func openPassport(from anchor: CGPoint?) {
+        passport?.open(page: 1, from: anchor)
     }
 
     /// The hint ended (a tap, or its 12 seconds): it never shows again on this iPhone (a decoy keeps nothing).
@@ -772,9 +848,12 @@ extension WorldMapHome {
     /// DEBUG screenshots: opens customize, marks today unwell, starts a walk or opens the card, as the
     /// scene list asks (nothing in release builds).
     private func applyTestScenes() async {
-        if UITestSupport.shouldOpenCustomize { isCustomizing = true }
+        // Customize is page 1 of Sprout's passport now (World-Passport-Spec §4).
+        if UITestSupport.shouldOpenCustomize { passport?.open(page: 1) }
         // The camera on your own, as the blue button opens it (`FERNLET_UI_TEST_SOLO_CAMERA`).
         if FriendsUITestHooks.opensSoloCamera, !store.meshNetworkManager.isInSession { cameraMode = .solo(placeName: nil) }
+        if let distance = UITestSupport.exploreCameraDistance { camera.distance = distance }
+        if UITestSupport.stagesCorner { Task { await stageTestCorner() } }
         let scenes = testScenes
         guard !scenes.isEmpty else { return }
         if scenes.contains("sick") != store.isSick(on: store.todayKey) { store.setSick(scenes.contains("sick"), on: store.todayKey) }
@@ -839,5 +918,77 @@ extension WorldMapHome {
         let nearby = await store.worldPlaceLookup.nearbyPlaces(around: fix.point)
         testPhotoKept = PlaceClassifier.photoMayKeepPlace(nearby)
         FernletAuditLog.log("worldMap.photoPlace.testScene", context: ["kept": testPhotoKept ? "yes" : "no"])
+    }
+}
+
+extension WorldMapHome {
+    // MARK: The week's new corner (round 7, World-Exploration-Spec §5)
+
+    /// The home the week's corner is picked near: the person's first home, never the hotel (DEBUG: where they stand).
+    private var cornerHome: GeoPoint? {
+        if testCorner != nil { return store.worldLocation.latest?.point }
+        return store.worldHomes.homes.first?.point
+    }
+
+    /// The corner Home draws: this week's, until it is walked into or the week ends; none in a decoy or with no home.
+    private var shownCorner: HexCell? {
+        guard !store.duressSessionActive else { return nil }
+        return testCorner ?? store.worldFog.cornerNudge.corner
+    }
+
+    /// How near the corner the person must stand for Sprout to call it "nearby", in metres.
+    static let cornerNearMetres = 1_500.0
+
+    /// Asks for this week's corner each time the map comes to the front (a new week picks again), then lets Sprout
+    /// mention a new pick. No home, a decoy, or no fogged patch near home: nothing.
+    private func readCorner() {
+        guard !store.duressSessionActive, !UITestSupport.stagesCorner else { return }
+        _ = store.worldFog.currentCorner(home: store.worldHomes.homes.first?.point)
+        mentionCorner()
+    }
+
+    /// Sprout mentions a corner picked this session once: while the map is in front, the person within
+    /// ``cornerNearMetres`` of it, and the map has no other line (so never at night, in rain or snow, or over a
+    /// greeting or a discovery).
+    private func mentionCorner() {
+        let keeper = store.worldFog.cornerNudge
+        guard cornerLine == nil, isFrontmost, !store.duressSessionActive, let cell = keeper.unannounced,
+              let fix = store.worldLocation.latest,
+              fix.point.distance(to: MercatorHexGrid.centreGeo(of: cell)) <= Self.cornerNearMetres,
+              mapLine == nil, keeper.takeUnannounced() != nil else { return }
+        cornerLine = String(localized: WorldCornerCopy.bubble)
+    }
+
+    /// Once said, the corner's mention stands ``WorldDiscoveryLinesDriver/standing`` and goes (Sprout says it once;
+    /// the hex stays). DEBUG staging keeps it up for the screenshot.
+    private func letCornerLineStand() async {
+        guard cornerLine != nil, testCorner == nil else { return }
+        do {
+            try await Task.sleep(for: WorldDiscoveryLinesDriver.standing)
+        } catch {
+            return
+        }
+        cornerLine = nil
+    }
+
+    /// The hex's tap: the map pans to the corner (off following; Back to Sprout, or ten seconds, brings it back).
+    private func panToCorner(_ cell: HexCell) {
+        camera.move(to: MercatorHexGrid.centreGeo(of: cell), follows: false)
+    }
+
+    /// DEBUG `FERNLET_UI_TEST_CORNER`: once a reading arrives (at most 15 s), stands this week's pick round where
+    /// the person stands in, as if it were home, and Sprout mentions it. Display only: nothing is picked or kept.
+    private func stageTestCorner() async {
+        for _ in 0..<15 where store.worldLocation.latest == nil {
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
+        guard !store.duressSessionActive, let fix = store.worldLocation.latest else { return }
+        let week = FogCornerNudge.weekStart(for: Date(), calendar: .current)
+        testCorner = FogCornerNudge.pick(home: fix.point, revealed: store.worldFog.visibleCells, weekStart: week)
+        if testCorner != nil { cornerLine = String(localized: WorldCornerCopy.bubble) }
     }
 }

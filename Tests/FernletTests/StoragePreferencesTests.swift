@@ -26,9 +26,11 @@ struct StoragePreferencesTests {
             sealedBackupPeriodEnabled: true,
             sealedBackupJournalEnabled: true,
             sealedBackupIntimacyEnabled: true,
+            sealedBackupPassportEnabled: true,
             sealedBackupPeriodReuploadDeferred: true,
             sealedBackupJournalReuploadDeferred: true,
             sealedBackupIntimacyReuploadDeferred: true,
+            sealedBackupPassportReuploadDeferred: true,
             backupExclusionChoiceMade: true,
             lastModifiedAt: Date(timeIntervalSince1970: 1_800_000_000)
         )
@@ -67,11 +69,14 @@ struct StoragePreferencesTests {
         // Same again for the two per-payload deferrals added alongside the Phase-3 payloads.
         #expect(decoded.sealedBackupJournalReuploadDeferred == false)
         #expect(decoded.sealedBackupIntimacyReuploadDeferred == false)
+        #expect(decoded.sealedBackupPassportReuploadDeferred == false)
         // …and for the Phase-3 journal/intimacy backup flags. A non-tolerant decode of these would
         // throw on EVERY existing user's blob, resetting their iCloud and backup choices on upgrade —
         // and a reset `sealedBackup*` flag makes "delete everything" skip a backup it should erase.
         #expect(decoded.sealedBackupJournalEnabled == false)
         #expect(decoded.sealedBackupIntimacyEnabled == false)
+        // …and for the World passport's own switch (round 7): absent is off, exactly like the journal's.
+        #expect(decoded.sealedBackupPassportEnabled == false)
         // The user's real, still-enabled backups keep `hasSealedBackup` true, so the delete dialog
         // still promises (and performs) the iCloud removal.
         #expect(decoded.hasSealedBackup)
@@ -136,7 +141,8 @@ struct StoragePreferencesTests {
             ("sensitiveNotes", { $0.sealedBackupSensitiveNotesEnabled = true }),
             ("periodData", { $0.sealedBackupPeriodEnabled = true }),
             ("journalNarratives", { $0.sealedBackupJournalEnabled = true }),
-            ("intimacyLogs", { $0.sealedBackupIntimacyEnabled = true })
+            ("intimacyLogs", { $0.sealedBackupIntimacyEnabled = true }),
+            ("worldPassport", { $0.sealedBackupPassportEnabled = true })
         ]
         for (name, enable) in flags {
             var preferences = StoragePreferences()
@@ -157,6 +163,7 @@ struct StoragePreferencesTests {
         source.sealedBackupPeriodEnabled = true
         source.sealedBackupJournalEnabled = true
         source.sealedBackupIntimacyEnabled = true
+        source.sealedBackupPassportEnabled = true
 
         var reset = StoragePreferences(iCloudSyncEnabled: true)
         reset.copySealedBackupFlags(from: source)
@@ -165,6 +172,7 @@ struct StoragePreferencesTests {
         #expect(reset.sealedBackupPeriodEnabled)
         #expect(reset.sealedBackupJournalEnabled)
         #expect(reset.sealedBackupIntimacyEnabled)
+        #expect(reset.sealedBackupPassportEnabled)
         #expect(reset.hasSealedBackup, "a flag left behind is a backup the wipe can never find again")
         // Only the backup flags travel — the reset's job is to return everything else to first launch.
         #expect(reset.healthKitMasterEnabled == false)
@@ -192,9 +200,11 @@ struct StoragePreferencesTests {
         #expect(preferences.sealedBackupPeriodEnabled == false)
         #expect(preferences.sealedBackupJournalEnabled == false)
         #expect(preferences.sealedBackupIntimacyEnabled == false)
+        #expect(preferences.sealedBackupPassportEnabled == false)
         #expect(preferences.sealedBackupPeriodReuploadDeferred == false)
         #expect(preferences.sealedBackupJournalReuploadDeferred == false)
         #expect(preferences.sealedBackupIntimacyReuploadDeferred == false)
+        #expect(preferences.sealedBackupPassportReuploadDeferred == false)
         #expect(preferences.hasSealedBackup == false)
         #expect(preferences.healthKitCapabilityEnabled.values.allSatisfy { $0 == false })
     }

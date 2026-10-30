@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# fetch-sources.sh — download the World atlas pack's eight sources onto the build machine, once, with the
+# fetch-sources.sh — download the World atlas pack's ten sources onto the build machine, once, with the
 # owner's OK (Docs/World-Atlas-Pack.md). The app never fetches any of this: only
 # Scripts/world-atlas/build_world_atlas.py reads these files, and only the pack it writes ships.
 #
@@ -29,8 +29,10 @@ ne_10m_minor_islands|ne_10m_minor_islands.zip|314932|required|47c0b3ce26df7b4dba
 ne_10m_coastline|ne_10m_coastline.zip|3069451|optional|bfa04cdbcbef07ef90dfca1dabb48062eca29900a113df0f389303e255484017|https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip
 ne_10m_geography_marine_polys|ne_10m_geography_marine_polys.zip|940563|required|a2d3395904c41e718e02c3ec5bc988712164c524c236fad32d95d282ca303b2a|https://naciscdn.org/naturalearth/10m/physical/ne_10m_geography_marine_polys.zip
 ne_10m_admin_0_countries|ne_10m_admin_0_countries.zip|4930492|required|ce1ac7036499a0edd641fbc093cd209a98f96a49d2eca8480aaacad35138a7f6|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_countries.zip
+ne_10m_admin_1_states_provinces|ne_10m_admin_1_states_provinces.zip|14909524|required|efc59726337323058f9446210adc96673179cd344e053666ee3d28cb58ba2b05|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip
 ne_10m_populated_places|ne_10m_populated_places.zip|2811199|required|cd149186f03d2603e0410da399b980a4357d0ac32d3a2305a49ed3dffcc41d7b|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip
 ne_10m_urban_areas|ne_10m_urban_areas.zip|13097698|required|2c593114e954ce1adb297ddee5465f05d9e81fa0a26deb13f8500d58a00d7051|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip
+ne_10m_roads|ne_10m_roads.zip|9075919|required|880b235383a1e1ccf33f4ea6f82b6755a2ffbce07e3974e412b43e88fe954ae9|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_roads.zip
 Beck_KG_V1|Beck_KG_V1.zip|70961149|required|a33f861200e32e80d5615bba1350ceeb8b0f5e6a6ffdc18b2d1715a3293d7b4b|https://ndownloader.figshare.com/files/12407516
 TABLE
 

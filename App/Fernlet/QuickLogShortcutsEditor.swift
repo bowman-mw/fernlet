@@ -48,8 +48,13 @@ struct QuickLogShortcutsEditor: View {
 
     /// The layout being edited: the STORED array, deliberately NOT visibility-filtered (see the
     /// type doc — filtering the saved array destroys the hidden user's layout irreversibly).
+    ///
+    /// The one exception is the Bodybuilding goal's Bathroom tile: while another goal is chosen it
+    /// reads as Care, exactly as Log draws it, so the editor never offers a tile Log does not show.
+    /// Only an edit made here writes that back; switching goals alone changes nothing stored.
     private var items: [FernletShortcut] {
-        FernletShortcut.normalizedQuickLog(store.settings.quickLogItems)
+        let stored = store.settings.quickLogItems
+        return FernletShortcut.normalizedQuickLog(store.isBathroomTileAvailable ? stored : FernletShortcut.hidingBathroom(stored))
     }
 
     /// The World's framed look: the six slots are one framed card of rows (`b2-settings-quicklog`).
@@ -82,6 +87,8 @@ struct QuickLogShortcutsEditor: View {
         .scrollContentBackground(.hidden)
         .fernletPageBackground()
         .fernletPushedPage("Quick-log shortcuts")
+        // The Bathroom tile's one-time seat (`bb-bowel`), so this page agrees with Log on first visit.
+        .onAppear { store.seatBathroomTileIfNeeded() }
     }
 
     /// A note on the page between the list's rows: the page's own background, no separator, never
@@ -165,9 +172,11 @@ struct QuickLogShortcutsEditor: View {
 
     /// The offerable chips in `allCases` order: the visibility gate withholds hidden surfaces
     /// (ABSENT, not disabled), while the slot's current pick stays so the selection can render.
+    /// Bathroom is offered only while the Bodybuilding goal is chosen (`bb-bowel`).
     private func paletteItems(current: FernletShortcut) -> [FernletShortcut] {
-        let visibility = store.sensitiveSurfaceVisibility
-        return FernletShortcut.allCases.filter { $0 == current || visibility.allows($0) }
+        let offered = FernletShortcut.selectableQuickLogItems(visibility: store.sensitiveSurfaceVisibility,
+                                                              bathroomAvailable: store.isBathroomTileAvailable)
+        return FernletShortcut.allCases.filter { $0 == current || offered.contains($0) }
     }
 
     /// Commits one pick to the STORED array. A chip already used by another slot swaps into this

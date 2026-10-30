@@ -89,6 +89,8 @@ struct HomeView: View {
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
     @State private var isCompanionSheetPresented = false
+    /// Sprout's passport (round 7): Customize from Today opens it on page 1 (World-Passport-Spec §4).
+    @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
     /// Arrange Today, open over the Today panel (World build).
     @State private var isArrangingToday = false
     /// World Today panel: Trends (`b2-trends`) and Body signals (`b2-stress`) push under the plate.
@@ -270,7 +272,9 @@ struct HomeView: View {
     /// The Today panel's top: the companion card, then the gold hearts card while one lasts.
     @ViewBuilder
     private var todayHead: some View {
-        TodayCompanionCard(store: store, isActive: isActive) { isCompanionSheetPresented = true }
+        TodayCompanionCard(store: store, isActive: isActive) {
+            if let passport { passport.open(page: 1) } else { isCompanionSheetPresented = true }
+        }
         if store.goldHeartCount() > 0, let until = store.goldHeartsEnd() {
             TodayGoldHeartsCard(status: WorldStatus.current(store: store, date: Date()), until: until)
         }
@@ -1465,10 +1469,13 @@ struct HomeView: View {
     /// The quick-log tiles on their own (the World Log panel draws them without the card).
     private var quickLogGrid: some View {
         EqualColumnGrid(columns: quickLogColumnCount, horizontalSpacing: 12, verticalSpacing: 14) {
-            ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, visibility: store.sensitiveSurfaceVisibility)) { item in
+            ForEach(store.visibleQuickLogItems) { item in
                 quickLogTile(item)
             }
         }
+        // Bodybuilding (`bb-bowel`): the Bathroom tile takes Care's place the first time the goal is
+        // in force; once only, so the person's later choice in Settings wins.
+        .task(id: store.isBathroomTileAvailable) { store.seatBathroomTileIfNeeded() }
     }
 
     private var quickLogCard: some View {
@@ -1483,10 +1490,11 @@ struct HomeView: View {
                 // Not lazy: a lazy grid tore down the tiles that larger text pushed off screen,
                 // and the audit read their vanished labels as fonts that ignore Dynamic Type.
                 EqualColumnGrid(columns: quickLogColumnCount, horizontalSpacing: 8, verticalSpacing: 8) {
-                    ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, visibility: store.sensitiveSurfaceVisibility)) { item in
+                    ForEach(store.visibleQuickLogItems) { item in
                         quickLogTile(item)
                     }
                 }
+                .task(id: store.isBathroomTileAvailable) { store.seatBathroomTileIfNeeded() }
             }
         }
     }
@@ -1515,6 +1523,16 @@ struct HomeView: View {
 
     @ViewBuilder
     private func quickLogTile(_ item: FernletShortcut) -> some View {
+        if item == .bathroom {
+            // One tap adds a visit, a hold fixes the count (`bb-bowel`): its own tile, not a sheet.
+            BathroomQuickLogTile(store: store, shortState: dynamicTypeSize.isAccessibilitySize)
+        } else {
+            standardQuickLogTile(item)
+        }
+    }
+
+    @ViewBuilder
+    private func standardQuickLogTile(_ item: FernletShortcut) -> some View {
         let button = QuickLogButton(
             noun: noun(for: item),
             state: stateText(for: item, short: dynamicTypeSize.isAccessibilitySize),
@@ -1583,6 +1601,7 @@ struct HomeView: View {
         case .sleep: Text("Sleep")
         case .journal: Text("Journal")
         case .care: Text("Care")
+        case .bathroom: Text("Bathroom")
         case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
             Text(verbatim: item.title)
         }
@@ -1600,7 +1619,7 @@ struct HomeView: View {
         case .sleep: Text("Log sleep")
         case .journal: Text("Log journal")
         case .care: Text("Log care")
-        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
+        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox, .bathroom:
             nil
         }
     }
@@ -1617,7 +1636,7 @@ struct HomeView: View {
         case .sleep: sleepState(short: short)
         case .journal: journalState(short: short)
         case .care: careState(short: short)
-        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
+        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox, .bathroom:
             nil
         }
     }
@@ -1691,7 +1710,7 @@ struct HomeView: View {
             store.day.healthContext?.intimate != nil
         case .friends:
             store.memories.contains { $0.category.localizedCaseInsensitiveContains("friend") }
-        case .breathing, .grounding, .worryBox:
+        case .breathing, .grounding, .worryBox, .bathroom:
             false
         }
     }
@@ -1755,6 +1774,9 @@ struct HomeView: View {
             activeSheet = .firstAid(.grounding)
         case .worryBox:
             activeSheet = .firstAid(.worryBox)
+        case .bathroom:
+            // Drawn by `BathroomQuickLogTile`, which adds the visit itself.
+            store.addBathroomVisit(on: store.todayKey)
         }
     }
 

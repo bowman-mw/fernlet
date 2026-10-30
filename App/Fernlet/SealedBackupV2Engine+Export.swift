@@ -333,7 +333,7 @@ extension SealedBackupV2Engine {
         let prefs = preferences()
         let others = adapters.keys.filter { $0 != adapter.payload && prefs.isSealedBackupEnabled(for: $0) }.sorted { $0.rawValue < $1.rawValue }
         var anyHead = false
-        for other in others {  // R2: at most the v2 payloads (three).
+        for other in others {  // R2: at most the v2 payloads (four).
             if try await service.fetchHeadRecord(payloadType: other) != nil { anyHead = true }
         }
         try ensureGate(adapter, epoch: epoch)

@@ -154,7 +154,7 @@ public final class PlaceLogStore {
         let device = try deviceState()
         let next = current.log.folding(device, now: now, calendar: calendar)
         if next != current.log { try saveLog(next, hubKey: hubKey) }
-        if !device.pending.isEmpty || !device.newPlaces.isEmpty { try saveDeviceState(device.folded) }
+        if device.waitsForFold { try saveDeviceState(device.folded) }
         return next
     }
 

@@ -1,0 +1,5086 @@
+{
+  "version": 1,
+  "about": "All 194 country stamps for the World passport (North Korea is out), approved batch by batch on the World Review Country Stamps page (style and plan: ex-pass-country). Each symbol is 14 x 14 rows of 'k' (ink) and '.' (clear).",
+  "style": {
+    "postmark": "56 x 44 pt: outer rounded rect x 2.5, y 2.5, 51 x 39, radius 5, stroke 2; inner frame x 6, y 6, 44 x 25, radius 3, stroke 0.8; both in the stamp's ink, no fill.",
+    "symbol": "14 x 14 pixels centred at x 28, y 18.5, each pixel min(21 / 14, 2.2) = 1.5 pt. About 7 % of ink pixels are left out, chosen by a seeded generator from the country code, so each stamp looks worn in its own way.",
+    "face": "DM Sans Bold, the stamp book's label face (owner approved it over pixel capitals, Country Stamps page st-face, 2026-10-29). Labels use only characters DM Sans Bold has: it has Ə, not Ệ, Ơ or Ư.",
+    "name": "DM Sans Bold capitals in the stamp's ink, centred at x 28, letter-spacing 0.15. Size: the smaller of 5.6 pt (one line) or 4.6 pt (two lines) and 44 / (0.7 x the longest line's letter count). One line: baseline 38.6. Two lines: baselines 35.3 and 39.7.",
+    "ink": "One of four inks, #2F6FA3, #B3343A, #2E8B57, #7B4BA8, picked by (first code letter + second code letter) mod 4. Dark mode lightens it 38 % toward white.",
+    "tilt": "-6 to +6 degrees, from the same seed.",
+    "notEarned": "A dashed rounded rect with a '?' and no name.",
+    "names": "The country's own name in Latin letters (MÉXICO, PANAMÁ, AZƏRBAYCAN); English where its script isn't Latin (JAPAN); VIET NAM because the face has no Ệ."
+  },
+  "inks": [
+    "#2F6FA3",
+    "#B3343A",
+    "#2E8B57",
+    "#7B4BA8"
+  ],
+  "countries": {
+    "us": {
+      "en": "United States",
+      "es": "Estados Unidos",
+      "label": [
+        "UNITED STATES"
+      ],
+      "symbol": "the Statue of Liberty",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...k..........",
+        "..kkk.........",
+        "...k..........",
+        "...k..k.k.k...",
+        "...k...kkk....",
+        "...kk.kkkkk...",
+        "....kkkkkkk...",
+        ".....kkkkk....",
+        ".....kkkkk....",
+        ".....kkkkkk...",
+        ".....kkkkkk...",
+        "....kkkkkkk...",
+        "...kkkkkkkkk..",
+        "..kkkkkkkkkkk."
+      ],
+      "batch": "na"
+    },
+    "ca": {
+      "en": "Canada",
+      "es": "Canadá",
+      "label": [
+        "CANADA"
+      ],
+      "symbol": "a maple leaf",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        "...k.kkkk.k...",
+        "...kkkkkkkk...",
+        "k..kkkkkkkk..k",
+        "kkkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        ".kkk..kk..kkk.",
+        "......kk......",
+        "......kk......",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "mx": {
+      "en": "Mexico",
+      "es": "México",
+      "label": [
+        "MÉXICO"
+      ],
+      "symbol": "a pyramid",
+      "ink": "#B3343A",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....kkkkkk....",
+        "....k.kk.k....",
+        "...kkkkkkkk...",
+        "...k..kk..k...",
+        "..kkkkkkkkkk..",
+        "..k...kk...k..",
+        ".kkkkkkkkkkkk.",
+        ".k....kk....k.",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "gt": {
+      "en": "Guatemala",
+      "es": "Guatemala",
+      "label": [
+        "GUATEMALA"
+      ],
+      "symbol": "quetzal",
+      "ink": "#7B4BA8",
+      "rows": [
+        "...kk.........",
+        "..kkkk........",
+        ".kk.kkk.......",
+        "kkkkkkk.......",
+        "..kkkkk.......",
+        "..kkkkkk......",
+        "..kkkkkkk.....",
+        "...kkkkkkk....",
+        "...kkkkkkkk...",
+        "kkkkkkkkkkkkkk",
+        "......kk.kk...",
+        ".......kk.kk..",
+        "........kk.kk.",
+        ".........k..kk"
+      ],
+      "batch": "na"
+    },
+    "bz": {
+      "en": "Belize",
+      "es": "Belice",
+      "label": [
+        "BELIZE"
+      ],
+      "symbol": "toucan",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kk.kkkkkkk.",
+        "...kkkkk.....k",
+        "...kkkkkkkkkk.",
+        "...kkkkkk.....",
+        "...kkkkk......",
+        "...kkkkk......",
+        "...kkkkkk.....",
+        "....kkkkk.....",
+        "kkkkkkkkkkkkkk",
+        ".....kk.......",
+        ".....kk......."
+      ],
+      "batch": "na"
+    },
+    "hn": {
+      "en": "Honduras",
+      "es": "Honduras",
+      "label": [
+        "HONDURAS"
+      ],
+      "symbol": "a Maya stela at Copán",
+      "ink": "#2E8B57",
+      "rows": [
+        "....kkkkkk....",
+        "...k......k...",
+        "...k.kkkk.k...",
+        "...k......k...",
+        "...k.k..k.k...",
+        "...k......k...",
+        "...k..kk..k...",
+        "...k.kkkk.k...",
+        "...k......k...",
+        "...k.k..k.k...",
+        "...k.kkkk.k...",
+        "...k......k...",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkkk."
+      ],
+      "batch": "na"
+    },
+    "sv": {
+      "en": "El Salvador",
+      "es": "El Salvador",
+      "label": [
+        "EL SALVADOR"
+      ],
+      "symbol": "Izalco, the volcano, smoking",
+      "ink": "#B3343A",
+      "rows": [
+        "........kk....",
+        "......kk..k...",
+        ".......k.kk...",
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....kk..kk....",
+        "....k....k....",
+        "...kk....kk...",
+        "..kk......kk..",
+        ".kk........kk.",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "na"
+    },
+    "ni": {
+      "en": "Nicaragua",
+      "es": "Nicaragua",
+      "label": [
+        "NICARAGUA"
+      ],
+      "symbol": "Ometepe's twin volcanoes in the lake",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "...k..........",
+        "..kkk.........",
+        "..k.k.........",
+        ".kk.kk...k....",
+        ".k...k..kkk...",
+        "kk...kk.k.k...",
+        "k.....kkk.kk..",
+        "k......k...k..",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "cr": {
+      "en": "Costa Rica",
+      "es": "Costa Rica",
+      "label": [
+        "COSTA RICA"
+      ],
+      "symbol": "a sloth hanging from a branch",
+      "ink": "#B3343A",
+      "rows": [
+        "kkkkkkkkkkkkkk",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..kkk....kkk..",
+        "...kkkkkkkk...",
+        "..kk......kk..",
+        "..k.kk..kk.k..",
+        "..k........k..",
+        "..k...kk...k..",
+        "..kk......kk..",
+        "...kk....kk...",
+        "....kkkkkk....",
+        "..............",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "pa": {
+      "en": "Panama",
+      "es": "Panamá",
+      "label": [
+        "PANAMÁ"
+      ],
+      "symbol": "a ship in a canal lock",
+      "ink": "#B3343A",
+      "rows": [
+        "k............k",
+        "k......k.....k",
+        "k.....kkk....k",
+        "k..kkkkkkkk..k",
+        "k..kkkkkkkk..k",
+        "kkkkkkkkkkkkkk",
+        "k.kkkkkkkkkk.k",
+        "k..kkkkkkkk..k",
+        "k............k",
+        "k.kk..kk..kk.k",
+        "kk..kk..kk..kk",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "cu": {
+      "en": "Cuba",
+      "es": "Cuba",
+      "label": [
+        "CUBA"
+      ],
+      "symbol": "a 1950s car",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "..............",
+        "....kkkkkk....",
+        "...k..k...k...",
+        "..k...k....k..",
+        "kkkkkkkkkkkkkk",
+        "k.kk......kk.k",
+        "kkkkkkkkkkkkkk",
+        "..kk......kk..",
+        ".k..k....k..k.",
+        "..kk......kk..",
+        "..............",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "jm": {
+      "en": "Jamaica",
+      "es": "Jamaica",
+      "label": [
+        "JAMAICA"
+      ],
+      "symbol": "the doctor bird, a streamertail hummingbird",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        ".........kk...",
+        "........kkk...",
+        "....kk.kkk....",
+        "kkkkk.kkkk....",
+        "....kkkkkk....",
+        ".....kkkkkk...",
+        "......kkkkk...",
+        ".......kkkk...",
+        "........kk.k..",
+        ".........k..k.",
+        ".........k..k.",
+        "..........k..k",
+        "..........k..k"
+      ],
+      "batch": "na"
+    },
+    "ht": {
+      "en": "Haiti",
+      "es": "Haití",
+      "label": [
+        "HAÏTI"
+      ],
+      "symbol": "the Citadelle Laferrière on its mountain",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        ".....k.k.k.k..",
+        "....kkkkkkkkk.",
+        "...kk.......k.",
+        "..kk..k..k..k.",
+        ".kk.........k.",
+        "kkkkkkkkkkkkkk",
+        "....k.....k...",
+        "...k.......k..",
+        "..k.........k.",
+        ".k...........k",
+        "k.....k.......",
+        ".....k.k......",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "na"
+    },
+    "do": {
+      "en": "Dominican Republic",
+      "es": "República Dominicana",
+      "label": [
+        "REPÚBLICA",
+        "DOMINICANA"
+      ],
+      "symbol": "a palm on the beach",
+      "ink": "#7B4BA8",
+      "rows": [
+        "....kkk.kkk...",
+        "..kk...k...kk.",
+        ".k....kkk....k",
+        ".....k.k.k....",
+        "....k..k..k...",
+        ".......k......",
+        "........k.....",
+        "........k.....",
+        "........k.....",
+        ".......k......",
+        ".......k......",
+        "....kkkkkkk...",
+        "..kk.......kk.",
+        "kk..kk..kk...k"
+      ],
+      "batch": "na"
+    },
+    "bs": {
+      "en": "Bahamas",
+      "es": "Bahamas",
+      "label": [
+        "BAHAMAS"
+      ],
+      "symbol": "a flamingo",
+      "ink": "#B3343A",
+      "rows": [
+        "...kkk........",
+        "..k...k.......",
+        "..k..kk.......",
+        "..k..k........",
+        "...k..........",
+        "....k.........",
+        "....k.........",
+        "...kkkkkk.....",
+        "..kkkkkkkkk...",
+        "...kkkkkkkkkk.",
+        ".....k........",
+        ".....k........",
+        ".....kk.......",
+        ".....k........"
+      ],
+      "batch": "na"
+    },
+    "bb": {
+      "en": "Barbados",
+      "es": "Barbados",
+      "label": [
+        "BARBADOS"
+      ],
+      "symbol": "a flying fish over the waves",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        ".kk...........",
+        "..kkk.........",
+        "...kkkk.......",
+        "....kkkkk.....",
+        "..kkkkkkkkkk..",
+        ".k.kkkkkkkk.kk",
+        "..kkkkkkkkkk..",
+        ".....kkkk.....",
+        "......kkk.....",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "tt": {
+      "en": "Trinidad and Tobago",
+      "es": "Trinidad y Tobago",
+      "label": [
+        "TRINIDAD AND",
+        "TOBAGO"
+      ],
+      "symbol": "a steelpan",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...kkkkkkkk...",
+        ".kk........kk.",
+        "k..kk....kk..k",
+        "k.....kk.....k",
+        ".kk........kk.",
+        "k..kkkkkkkk..k",
+        "k............k",
+        "k............k",
+        "k............k",
+        "k............k",
+        "kk..........kk",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "lc": {
+      "en": "Saint Lucia",
+      "es": "Santa Lucía",
+      "label": [
+        "SAINT LUCIA"
+      ],
+      "symbol": "the Pitons over the sea",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..k...........",
+        "..kk..........",
+        ".kk.k.........",
+        ".k..k......k..",
+        ".k..kk....kk..",
+        "k....k....k.k.",
+        "k....kk..kk.k.",
+        "k.....k..k..k.",
+        "k.....kkkk..kk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "gd": {
+      "en": "Grenada",
+      "es": "Granada",
+      "label": [
+        "GRENADA"
+      ],
+      "symbol": "a nutmeg, split, with its mace",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        "....kkkkkk....",
+        "...k......k...",
+        "..k..kkkk..k..",
+        "..k.k.k..k.k..",
+        ".k..k..k.k..k.",
+        ".k..kk..kk..k.",
+        ".k..k.kk.k..k.",
+        ".k..k....k..k.",
+        "..k.kk..kk.k..",
+        "..k..kkkk..k..",
+        "...k......k...",
+        "....kkkkkk....",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "vc": {
+      "en": "Saint Vincent and the Grenadines",
+      "es": "San Vicente y las Granadinas",
+      "label": [
+        "SAINT VINCENT AND",
+        "THE GRENADINES"
+      ],
+      "symbol": "the St Vincent parrot",
+      "ink": "#B3343A",
+      "rows": [
+        "....kkkk......",
+        "...k....kk....",
+        "..k..k....k...",
+        "..k.......kkk.",
+        ".k........k..k",
+        ".k........kk.k",
+        ".k.........kk.",
+        ".k.......kk...",
+        ".k.....kk.....",
+        "..k..kk.......",
+        "..k...k.......",
+        "...k...k......",
+        "....k...k.....",
+        ".....kkkk....."
+      ],
+      "batch": "na"
+    },
+    "ag": {
+      "en": "Antigua and Barbuda",
+      "es": "Antigua y Barbuda",
+      "label": [
+        "ANTIGUA AND",
+        "BARBUDA"
+      ],
+      "symbol": "a frigatebird with its red pouch",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "...kk.........",
+        "..k.kkkkk.....",
+        "..kkk.........",
+        ".kk.kk........",
+        ".k...k........",
+        ".k...kkkkk....",
+        "..kkk.kkkkkk..",
+        "....kkkkkkkkk.",
+        ".....kk....kk.",
+        ".....k......kk",
+        "....kk........",
+        "kkkkkkkkkkkk..",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "dm": {
+      "en": "Dominica",
+      "es": "Dominica",
+      "label": [
+        "DOMINICA"
+      ],
+      "symbol": "Trafalgar Falls",
+      "ink": "#B3343A",
+      "rows": [
+        "kkkkkkkkkkkkkk",
+        "k..k.k..k.k..k",
+        "k..k.k..k.k..k",
+        "k..k..k.k.k..k",
+        "k..k.k..k.k..k",
+        "k..k..k..kk..k",
+        "k..k.k..k.k..k",
+        "k..k..k.k.k..k",
+        "k..k.k..k.k..k",
+        "k.kk......kk.k",
+        "kk.k.kk.k.k.kk",
+        ".k..k..k..k...",
+        "k.kk..kk..kk.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "na"
+    },
+    "kn": {
+      "en": "Saint Kitts and Nevis",
+      "es": "San Cristóbal y Nieves",
+      "label": [
+        "SAINT KITTS",
+        "AND NEVIS"
+      ],
+      "symbol": "a vervet monkey",
+      "ink": "#B3343A",
+      "rows": [
+        "....kkk.......",
+        "...k...k......",
+        "..k.k.k.k.....",
+        "..k..k..k.....",
+        "...k...k......",
+        "....kkk.......",
+        "...kkkkk......",
+        "..kkkkkkk.....",
+        "..kk.kk.kk....",
+        "..kkkkkkk....k",
+        "...kkkkk....k.",
+        "..kk...kk..k..",
+        ".kkk...kkkk...",
+        ".............."
+      ],
+      "batch": "na"
+    },
+    "gb": {
+      "en": "United Kingdom",
+      "es": "Reino Unido",
+      "label": [
+        "UNITED KINGDOM"
+      ],
+      "symbol": "Big Ben",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "....k...k.....",
+        "....k.k.k.....",
+        "....k...k.....",
+        "....kkkkk.....",
+        "....kk.kk.....",
+        "....kk.kk.....",
+        "....kk.kk.....",
+        "....kk.kk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk..."
+      ],
+      "batch": "eu"
+    },
+    "fr": {
+      "en": "France",
+      "es": "Francia",
+      "label": [
+        "FRANCE"
+      ],
+      "symbol": "the Eiffel Tower",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        "......k.......",
+        ".....kkk......",
+        ".....k.k......",
+        ".....kkk......",
+        "....kk.kk.....",
+        "....k...k.....",
+        "...kkkkkkk....",
+        "...k.....k....",
+        "..kk.....kk...",
+        "..k..kkk..k...",
+        ".kk.k...k.kk..",
+        ".k..k...k..k..",
+        "kk..........kk"
+      ],
+      "batch": "eu"
+    },
+    "ie": {
+      "en": "Ireland",
+      "es": "Irlanda",
+      "label": [
+        "ÉIRE"
+      ],
+      "symbol": "a Celtic harp",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "...kk.........",
+        ".kkk.kk...kkk.",
+        ".k.k.k.kkk.k.k",
+        ".k.k.k.k.kk.k.",
+        ".k.k.k.k.kkk..",
+        ".k.k.k.k.kk...",
+        ".k.k.k.kkk....",
+        ".k.k.k.kk.....",
+        ".k.k.kk.k.....",
+        ".k.k.k.k......",
+        ".k.k.kk.......",
+        ".k.kkk........",
+        ".kkkk........."
+      ],
+      "batch": "eu"
+    },
+    "is": {
+      "en": "Iceland",
+      "es": "Islandia",
+      "label": [
+        "ÍSLAND"
+      ],
+      "symbol": "Strokkur, the geyser",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        "....k.k.k.....",
+        ".....kkk......",
+        "...k.kkk.k....",
+        ".....kkk......",
+        "......k.......",
+        ".....kkk......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kk...kk....",
+        ".kk.......kk..",
+        "k...........k.",
+        "k..kk...kk...k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "no": {
+      "en": "Norway",
+      "es": "Noruega",
+      "label": [
+        "NORGE"
+      ],
+      "symbol": "a Viking ship",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        "...kkkkkkk....",
+        "...k.k.k.k....",
+        "...kkkkkkk....",
+        "...k.k.k.k....",
+        "...kkkkkkk....",
+        "kk....k.....kk",
+        "k.k...k....k.k",
+        ".kkkkkkkkkkkk.",
+        ".kk.k.k.k.k.k.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "se": {
+      "en": "Sweden",
+      "es": "Suecia",
+      "label": [
+        "SVERIGE"
+      ],
+      "symbol": "a Dala horse",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..........k...",
+        ".........kkk..",
+        "........kkkkk.",
+        "........kk.kkk",
+        "........kk....",
+        ".kkkkkkkkk....",
+        "kkkkkkkkkk....",
+        "kk.k.k.kkk....",
+        ".kkkkkkkkk....",
+        ".kk.....kk....",
+        ".kk.....kk....",
+        ".kk.....kk....",
+        "kkkkkkkkkkkk..",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "fi": {
+      "en": "Finland",
+      "es": "Finlandia",
+      "label": [
+        "SUOMI",
+        "FINLAND"
+      ],
+      "symbol": "a reindeer",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k.k.k.k.......",
+        ".kkk.kk.......",
+        "..k.kk........",
+        "..kkk.........",
+        ".kkkk.........",
+        "kk.kkk........",
+        "...kkkkkkkkkk.",
+        "...kkkkkkkkkkk",
+        "...kkkkkkkkkk.",
+        "...kkkkkkkkkk.",
+        "...k.k....k.k.",
+        "...k.k....k.k.",
+        "...k.k....k.k.",
+        "..kk.kk..kk.kk"
+      ],
+      "batch": "eu"
+    },
+    "dk": {
+      "en": "Denmark",
+      "es": "Dinamarca",
+      "label": [
+        "DANMARK"
+      ],
+      "symbol": "Nyhavn's gabled houses and a mast",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k..k...k...k..",
+        "k.kkk.kkk.kkk.",
+        "kk...k...k...k",
+        "kk.k.k.k.k.k.k",
+        "kk...k...k...k",
+        "kk.k.k.k.k.k.k",
+        "kk...k...k...k",
+        "kkkkkkkkkkkkkk",
+        "k.............",
+        "kkkkkk........",
+        ".kkkk.........",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "ee": {
+      "en": "Estonia",
+      "es": "Estonia",
+      "label": [
+        "EESTI"
+      ],
+      "symbol": "a barn swallow",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "k.............",
+        ".kk...........",
+        "..kkk.....kk..",
+        "...kkkk..kkkk.",
+        "....kkkkkkk.kk",
+        ".....kkkkkk...",
+        "....kkkkkk....",
+        "...kk.kk......",
+        "..kk..k.......",
+        ".kk...k.......",
+        "kk....k.......",
+        "..............",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "lv": {
+      "en": "Latvia",
+      "es": "Letonia",
+      "label": [
+        "LATVIJA"
+      ],
+      "symbol": "the Freedom Monument",
+      "ink": "#2E8B57",
+      "rows": [
+        "..k...k...k...",
+        ".kkk.kkk.kkk..",
+        "..k...k...k...",
+        "...k..k..k....",
+        "....k.k.k.....",
+        ".....kkk......",
+        ".....kkk......",
+        ".....kkk......",
+        ".....kkk......",
+        ".....k.k......",
+        ".....k.k......",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk..."
+      ],
+      "batch": "eu"
+    },
+    "lt": {
+      "en": "Lithuania",
+      "es": "Lituania",
+      "label": [
+        "LIETUVA"
+      ],
+      "symbol": "the Hill of Crosses",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".....k........",
+        "....kkk....k..",
+        "..k..k....kkk.",
+        ".kkk.k..k..k..",
+        "..k..k.kkk.k..",
+        "..k.kk..k.kk..",
+        ".kkkkk..kkkk.k",
+        "kkk.kk.kk.kkkk",
+        ".kk.kkkkk.kk.k",
+        ".kk.kk.kk.kk.k",
+        ".kk.kk.kk.kk.k",
+        ".kkkkkkkkkkkk.",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "nl": {
+      "en": "Netherlands",
+      "es": "Países Bajos",
+      "label": [
+        "NEDERLAND"
+      ],
+      "symbol": "a windmill",
+      "ink": "#2E8B57",
+      "rows": [
+        ".kk........kk.",
+        "..kk......kk..",
+        "...kk....kk...",
+        "....kk..kk....",
+        ".....k.kk.....",
+        ".....kk.k.....",
+        "....kkkkkk....",
+        "...kkk..kkk...",
+        "..kkk....kkk..",
+        ".kk.k....k.kk.",
+        "kk..k.kk.k..kk",
+        "....k.kk.k....",
+        "...k..kk..k...",
+        "...kkkkkkkk..."
+      ],
+      "batch": "eu"
+    },
+    "be": {
+      "en": "Belgium",
+      "es": "Bélgica",
+      "label": [
+        "BELGIQUE",
+        "BELGIË"
+      ],
+      "symbol": "the Belfry of Bruges",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        "....kk..kk....",
+        "....k.kk.k....",
+        "....kkkkkk....",
+        "...kk.kk.kk...",
+        "...k..kk..k...",
+        "...kkkkkkkk...",
+        "..kk.k..k.kk..",
+        "..k..k..k..k..",
+        ".kkkkkkkkkkkk.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "lu": {
+      "en": "Luxembourg",
+      "es": "Luxemburgo",
+      "label": [
+        "LUXEMBOURG"
+      ],
+      "symbol": "the old town on its cliff",
+      "ink": "#B3343A",
+      "rows": [
+        "..k.....k.....",
+        ".kkk...kkk..k.",
+        ".k.k.k.k.k.kkk",
+        "kkkkkkkkkkkk.k",
+        "k.k.k.kk.k.kkk",
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        ".k..k......k.k",
+        ".k...k....k..k",
+        "..k........k.k",
+        "..k..k.k..k..k",
+        "...k......k..k",
+        "...k.....k...k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "de": {
+      "en": "Germany",
+      "es": "Alemania",
+      "label": [
+        "DEUTSCHLAND"
+      ],
+      "symbol": "Neuschwanstein Castle",
+      "ink": "#B3343A",
+      "rows": [
+        "...k......k...",
+        "...k.....kkk..",
+        "..kkk....k.k..",
+        "..k.k..k.kkk..",
+        "..kkk.kkkk.k..",
+        "..k.k.k..k.k..",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k.k.k.kk.",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k..k.k.k.",
+        ".kkkkk..kkkkk.",
+        ".kkkkk..kkkkk.",
+        "kkkkkkkkkkkkkk",
+        ".kk.kk..kk.kk."
+      ],
+      "batch": "eu"
+    },
+    "ch": {
+      "en": "Switzerland",
+      "es": "Suiza",
+      "label": [
+        "HELVETIA"
+      ],
+      "symbol": "the Matterhorn",
+      "ink": "#7B4BA8",
+      "rows": [
+        ".......k......",
+        "......kk......",
+        "......k.k.....",
+        ".....kk.k.....",
+        ".....k..kk....",
+        "....kk.k.k....",
+        "....k.k...k...",
+        "...kk.....kk..",
+        "..kk.......k..",
+        "..k..kk....kk.",
+        ".kk.k..k.k..k.",
+        ".k.k....k.k.kk",
+        "k.k........k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "at": {
+      "en": "Austria",
+      "es": "Austria",
+      "label": [
+        "ÖSTERREICH"
+      ],
+      "symbol": "the Riesenrad, Vienna's big wheel",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...k..k...k...",
+        "..k.k.k..k.k..",
+        "..k..kkkk..k..",
+        "..kkkkkkkkkk..",
+        "..k..kkkk..k..",
+        "..k..kkkk..k..",
+        "..k.kkk.kk.k..",
+        "...kk.k..kk...",
+        "....kkkkkk....",
+        "...k......k...",
+        "...k......k...",
+        ".kkkkkkkkkkkk."
+      ],
+      "batch": "eu"
+    },
+    "li": {
+      "en": "Liechtenstein",
+      "es": "Liechtenstein",
+      "label": [
+        "LIECHTENSTEIN"
+      ],
+      "symbol": "Vaduz Castle on its cliff",
+      "ink": "#B3343A",
+      "rows": [
+        "...k.k.k......",
+        "...kkkkk......",
+        "...k...k.k.k.k",
+        "...k.k.k.kkkkk",
+        "...k...kkk...k",
+        "..kkkkkkkk.k.k",
+        "..k........k.k",
+        ".kk.........kk",
+        ".k...........k",
+        "kk..k......k.k",
+        "k....k.....k.k",
+        "k.k.....k....k",
+        "k...k.....k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "mc": {
+      "en": "Monaco",
+      "es": "Mónaco",
+      "label": [
+        "MONACO"
+      ],
+      "symbol": "a Grand Prix car, seen from above",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...kkkkkkkk...",
+        "......kk......",
+        ".kk...kk...kk.",
+        ".kk..kkkk..kk.",
+        ".kkkkkkkkkkkk.",
+        ".kk..kkkk..kk.",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "kk..kkkkkk..kk",
+        "kkkkkkkkkkkkkk",
+        "kk..kkkkkk..kk",
+        "..kkkkkkkkkk.."
+      ],
+      "batch": "eu"
+    },
+    "pt": {
+      "en": "Portugal",
+      "es": "Portugal",
+      "label": [
+        "PORTUGAL"
+      ],
+      "symbol": "the Rooster of Barcelos",
+      "ink": "#2F6FA3",
+      "rows": [
+        "....k.k.......",
+        "....kkkk......",
+        "...kk.kk......",
+        "..kkkkkk...k..",
+        "....kkkk..kkk.",
+        "....kkkkkkk.kk",
+        "....kk.k.kkkk.",
+        "....kkkkkkkk..",
+        ".....kkkkkk...",
+        "......k.k.....",
+        "......k.k.....",
+        ".....kk.kk....",
+        "...kkkkkkkkk..",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "es": {
+      "en": "Spain",
+      "es": "España",
+      "label": [
+        "ESPAÑA"
+      ],
+      "symbol": "a Spanish guitar",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...........kk.",
+        "..........kkk.",
+        ".........kk...",
+        "........kk....",
+        ".......kk.....",
+        "...kkkkk......",
+        "..kkk.kkk.....",
+        ".kk.kkk.kk....",
+        "kk..k.k..k....",
+        "k..kkk...k....",
+        "k........k....",
+        "kk......kk....",
+        ".kk....kk.....",
+        "..kkkkkk......"
+      ],
+      "batch": "eu"
+    },
+    "ad": {
+      "en": "Andorra",
+      "es": "Andorra",
+      "label": [
+        "ANDORRA"
+      ],
+      "symbol": "a cable car over the Pyrenees",
+      "ink": "#B3343A",
+      "rows": [
+        "kk............",
+        "..kk..........",
+        "....kk........",
+        "......kkk.....",
+        ".......k.kk...",
+        ".....kkkkk.kk.",
+        ".....k.k.k...k",
+        ".....kkkkk....",
+        ".....kkkkk....",
+        "..............",
+        "...k..........",
+        "..k.k.....k...",
+        ".k...k...k.k..",
+        "k.....k.k...k."
+      ],
+      "batch": "eu"
+    },
+    "it": {
+      "en": "Italy",
+      "es": "Italia",
+      "label": [
+        "ITALIA"
+      ],
+      "symbol": "a gondola in Venice",
+      "ink": "#B3343A",
+      "rows": [
+        "..........k...",
+        "..........k...",
+        "..........k...",
+        ".........kk...",
+        ".........k....",
+        ".........k....",
+        "k.......k.....",
+        "kk.....k.....k",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "va": {
+      "en": "Vatican City",
+      "es": "Ciudad del Vaticano",
+      "label": [
+        "CITTÀ DEL",
+        "VATICANO"
+      ],
+      "symbol": "the dome of St Peter's",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        "....kkkkkk....",
+        "...kk....kk...",
+        "..kk.k..k.kk..",
+        "..k..k..k..k..",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k..k.k.k.",
+        ".k.k.k..k.k.k.",
+        ".k.k.k..k.k.k.",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "sm": {
+      "en": "San Marino",
+      "es": "San Marino",
+      "label": [
+        "SAN MARINO"
+      ],
+      "symbol": "the Guaita tower on Monte Titano",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..k.k.k.......",
+        "..kkkkk.......",
+        "..k...k.......",
+        "..k.k.k.......",
+        "..k...k.......",
+        ".kkkkkkk......",
+        ".k.....k......",
+        ".k.k.k.kk.....",
+        "kk......kk....",
+        "k.........kk..",
+        "k...........k.",
+        "k.....k.......",
+        "k...k...k....k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "mt": {
+      "en": "Malta",
+      "es": "Malta",
+      "label": [
+        "MALTA"
+      ],
+      "symbol": "a luzzu boat with its eye",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "k............k",
+        "k............k",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk",
+        "k.......kkk..k",
+        "k......k.k.k.k",
+        ".k......kkk.k.",
+        "..k........k..",
+        "...kkkkkkkk...",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "si": {
+      "en": "Slovenia",
+      "es": "Eslovenia",
+      "label": [
+        "SLOVENIJA"
+      ],
+      "symbol": "the church on the island at Bled",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".........k....",
+        ".........k....",
+        "........kkk...",
+        "........k.k...",
+        "........k.k...",
+        "....kkkkk.k...",
+        "...k....k.k...",
+        "..kkkkkkkkkk..",
+        "..k.k..k...k..",
+        ".kkkkkkkkkkkk.",
+        "kk..........kk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "hr": {
+      "en": "Croatia",
+      "es": "Croacia",
+      "label": [
+        "HRVATSKA"
+      ],
+      "symbol": "Dubrovnik's walls and Minčeta tower",
+      "ink": "#2E8B57",
+      "rows": [
+        "..k.k.k.......",
+        "..kkkkk.......",
+        "..k...k.......",
+        "..k.k.k.......",
+        "..k...k..k.k.k",
+        "..k...kkkkkkkk",
+        "k.k.k.kk...k.k",
+        "kkkkkkkk.k...k",
+        "k......kk...kk",
+        "k..k.k.......k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "ba": {
+      "en": "Bosnia and Herzegovina",
+      "es": "Bosnia y Herzegovina",
+      "label": [
+        "BOSNA I",
+        "HERCEGOVINA"
+      ],
+      "symbol": "Stari Most, Mostar's old bridge",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "k.k........k.k",
+        "kkk........kkk",
+        "kkk...kk...kkk",
+        "k.k..kkkk..k.k",
+        "kkkkkk..kkkkkk",
+        "kkkkk....kkkkk",
+        "k.kk......kk.k",
+        "kkkk......kkkk",
+        "kkkk......kkkk",
+        "kkk........kkk",
+        "kkk........kkk",
+        "kkkkk.kk.kkkkk",
+        "..k..k..k..k.."
+      ],
+      "batch": "eu"
+    },
+    "rs": {
+      "en": "Serbia",
+      "es": "Serbia",
+      "label": [
+        "SRBIJA"
+      ],
+      "symbol": "the house on the rock in the Drina",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "....k.k.k.....",
+        "....k...k.....",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk...",
+        ".kkkkkkkkkkk..",
+        "..............",
+        "kk..kk..kk..kk",
+        "..kk..kk..kk..",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "me": {
+      "en": "Montenegro",
+      "es": "Montenegro",
+      "label": [
+        "CRNA GORA"
+      ],
+      "symbol": "Ostrog Monastery in the cliff",
+      "ink": "#2E8B57",
+      "rows": [
+        "..kk..kkk..kk.",
+        ".k..kk...kk..k",
+        "k...........k.",
+        ".k..kkkkkk..k.",
+        "k..k......k..k",
+        ".k.k.k..k.k.k.",
+        "k..kkkkkkkk..k",
+        ".k.k.k..k.k.k.",
+        "k..kkkkkkkk..k",
+        ".k..........k.",
+        "k..k......k..k",
+        ".k...k..k...k.",
+        "k..k......k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "al": {
+      "en": "Albania",
+      "es": "Albania",
+      "label": [
+        "SHQIPËRIA"
+      ],
+      "symbol": "Berat, the town of a thousand windows",
+      "ink": "#B3343A",
+      "rows": [
+        "......kkkkkk..",
+        ".....k......k.",
+        "....kkkkkkkkkk",
+        "....k.k.k.k.kk",
+        ".kkkkkkkkkkkkk",
+        ".k.k.k.k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k..k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "mk": {
+      "en": "North Macedonia",
+      "es": "Macedonia del Norte",
+      "label": [
+        "NORTH MACEDONIA"
+      ],
+      "symbol": "St John at Kaneo above Lake Ohrid",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "....k...k.....",
+        "...kkkkkkk....",
+        "..kk.k.k..k...",
+        "..kkkkkkkkk...",
+        "..k.k...k.k...",
+        ".kkkkkkkkkkkk.",
+        ".k..........kk",
+        "k............k",
+        "k..........kkk",
+        "kkkkkk..kkk...",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "gr": {
+      "en": "Greece",
+      "es": "Grecia",
+      "label": [
+        "GREECE"
+      ],
+      "symbol": "a blue dome in Santorini",
+      "ink": "#B3343A",
+      "rows": [
+        "........k.....",
+        ".......kkk....",
+        "......kkkkk...",
+        ".....kkkkkkk..",
+        ".....kkkkkkk..",
+        "kkk..kkkkkkk..",
+        "k.k..k.....k..",
+        "kkkkkk..k..kkk",
+        "k.k..k.k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k..k..k..k...k",
+        "kkkkkkkkkkkkkk",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "bg": {
+      "en": "Bulgaria",
+      "es": "Bulgaria",
+      "label": [
+        "BULGARIA"
+      ],
+      "symbol": "a Bulgarian rose",
+      "ink": "#B3343A",
+      "rows": [
+        "....kkkkk.....",
+        "...k..k..k....",
+        "..k.kk.kk.k...",
+        "..k.k...k.k...",
+        "..k..kkk..k...",
+        "...k.....k....",
+        "....kkkkk.....",
+        "......k.......",
+        "..kk..k.......",
+        ".k..k.k..kk...",
+        "..kk.kk.k..k..",
+        "......kk.kk...",
+        "......k.......",
+        "......k......."
+      ],
+      "batch": "eu"
+    },
+    "ro": {
+      "en": "Romania",
+      "es": "Rumanía",
+      "label": [
+        "ROMÂNIA"
+      ],
+      "symbol": "the Transfăgărășan road climbing the mountain",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....k.k......",
+        "....k...k.....",
+        "...k.kkk.k....",
+        "..k.....k.k...",
+        ".k..kkkk...k..",
+        "k..k........k.",
+        "...kkkkkkk...k",
+        "..........k...",
+        "....kkkkkkk...",
+        "...k..........",
+        "...kkkkkkkk...",
+        "...........k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "md": {
+      "en": "Moldova",
+      "es": "Moldavia",
+      "label": [
+        "MOLDOVA"
+      ],
+      "symbol": "a bunch of grapes",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....k.kkk....",
+        "....k..kkkk...",
+        "..kk.kk.kk....",
+        ".k..k..k..k...",
+        ".k..k..k..k...",
+        "..kk.kk.kk....",
+        "...k..k..k....",
+        "...k..k..k....",
+        "....kk.kk.....",
+        ".....k..k.....",
+        ".....kkk......",
+        "......k.......",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "hu": {
+      "en": "Hungary",
+      "es": "Hungría",
+      "label": [
+        "MAGYARORSZÁG"
+      ],
+      "symbol": "the Parliament on the Danube",
+      "ink": "#B3343A",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "..k.kkkkkk.k..",
+        ".kkkk.kk.kkkk.",
+        ".k..kkkkkk..k.",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k.kk",
+        "k.k.k.k.k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "sk": {
+      "en": "Slovakia",
+      "es": "Eslovaquia",
+      "label": [
+        "SLOVENSKO"
+      ],
+      "symbol": "Bratislava Castle",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        ".k..........k.",
+        "kkk........kkk",
+        "kkkkkkkkkkkkkk",
+        "kk..........kk",
+        "kk.k.k.k.k.kkk",
+        "kk..........kk",
+        "kk.k.k.k.k.kkk",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk",
+        "..k........k..",
+        ".k..........k.",
+        "k.....k......k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "cz": {
+      "en": "Czechia",
+      "es": "Chequia",
+      "label": [
+        "ČESKO"
+      ],
+      "symbol": "the Prague astronomical clock",
+      "ink": "#B3343A",
+      "rows": [
+        ".....kkkk.....",
+        "...kkk..kkk...",
+        "..kk...k..kk..",
+        ".kk..kkkk..kk.",
+        ".k..k..k.k..k.",
+        "kk.k...k..k.kk",
+        "k..k..kk..k..k",
+        "k..k...kk.k..k",
+        "kk.k.....kk.kk",
+        ".k..k....kk.k.",
+        ".kk..kkkk..kk.",
+        "..kk......kk..",
+        "...kkk..kkk...",
+        ".....kkkk....."
+      ],
+      "batch": "eu"
+    },
+    "pl": {
+      "en": "Poland",
+      "es": "Polonia",
+      "label": [
+        "POLSKA"
+      ],
+      "symbol": "St Mary's Basilica in Kraków",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...k..........",
+        "..kkk.........",
+        "..k.k.....k...",
+        "..kkk....kkk..",
+        ".kk.kk...k.k..",
+        ".k...k...kkk..",
+        ".k.k.k...k.k..",
+        ".k...kkkkk.k..",
+        ".k.k.k...k.k..",
+        ".k...kk.kk.k..",
+        ".k.k.k.k.k.k..",
+        ".k...k.k.k.k..",
+        ".k...k.k.k.k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "ua": {
+      "en": "Ukraine",
+      "es": "Ucrania",
+      "label": [
+        "UKRAINE"
+      ],
+      "symbol": "a sunflower",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "....k.k..k....",
+        "......kk......",
+        "..k.kkkkkk.k..",
+        "....k....k....",
+        "...kk....kk...",
+        "..kkk....kkk..",
+        "....k....k....",
+        "..k.kkkkkk.k..",
+        "......kk......",
+        "...kk.kk.k....",
+        "...kkkkk......",
+        "......kk......",
+        "......kk......"
+      ],
+      "batch": "eu"
+    },
+    "by": {
+      "en": "Belarus",
+      "es": "Bielorrusia",
+      "label": [
+        "BELARUS"
+      ],
+      "symbol": "a European bison",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..............",
+        ".kk.kkkk......",
+        "kkkkkkkkkkk...",
+        "kk.kkkkkkkkk..",
+        "kkkkkkkkkkkkk.",
+        ".kkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkkk.",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "..kk.kk.kk.kk.",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "ru": {
+      "en": "Russia",
+      "es": "Rusia",
+      "label": [
+        "RUSSIA"
+      ],
+      "symbol": "the onion domes of St Basil's",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "..k.kkkkk.k...",
+        ".kkkk.k.kkkk..",
+        "kk.kkkkk.k.kk.",
+        "kkk.kkk.k.kkk.",
+        ".k...k...k.k..",
+        ".kk.kkk.kk.k..",
+        ".kkkkkkkkkkk..",
+        ".k.k.k.k.k.k..",
+        ".k.k.k.k.k.k..",
+        "kkkkkkkkkkkkk.",
+        "kk.k..k..k.kk.",
+        "kkkkkkkkkkkkk."
+      ],
+      "batch": "eu"
+    },
+    "jp": {
+      "en": "Japan",
+      "es": "Japón",
+      "label": [
+        "JAPAN"
+      ],
+      "symbol": "Mount Fuji",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..............",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "...kk.kk.kk...",
+        "...k......k...",
+        "..k........k..",
+        "..k........k..",
+        ".k..........k.",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        ".kk..k..k..kk.",
+        "k..kk.kk.kk..k"
+      ],
+      "batch": "as"
+    },
+    "cn": {
+      "en": "China",
+      "es": "China",
+      "label": [
+        "CHINA"
+      ],
+      "symbol": "a giant panda",
+      "ink": "#B3343A",
+      "rows": [
+        ".kkk......kkk.",
+        "kkkkk....kkkkk",
+        "kkkk.kkkk.kkkk",
+        ".k..........k.",
+        "k..kkk..kkk..k",
+        "k.kkkk..kkkk.k",
+        "k.kk.k..k.kk.k",
+        "k..kk....kk..k",
+        "k.....kk.....k",
+        "k....k..k....k",
+        ".k...kkkk...k.",
+        "..k........k..",
+        "...kkkkkkkk...",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "mn": {
+      "en": "Mongolia",
+      "es": "Mongolia",
+      "label": [
+        "MONGOLIA"
+      ],
+      "symbol": "a ger, the felt tent",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "...kkkkkkkk...",
+        ".kkk......kkk.",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "k.k.kk..kk.k.k",
+        "k.k.k....k.k.k",
+        "k.k.k....k.k.k",
+        "k.k.k....k.k.k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "kr": {
+      "en": "South Korea",
+      "es": "Corea del Sur",
+      "label": [
+        "SOUTH KOREA"
+      ],
+      "symbol": "Gwanghwamun, the palace gate",
+      "ink": "#B3343A",
+      "rows": [
+        "...kkkkkkkk...",
+        "k.kkkkkkkkkk.k",
+        ".k..........k.",
+        "..k.k.kk.k.k..",
+        "k.kkkkkkkkkk.k",
+        ".k..........k.",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkkk.",
+        ".kkk......kkk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "vn": {
+      "en": "Vietnam",
+      "es": "Vietnam",
+      "label": [
+        "VIET NAM"
+      ],
+      "symbol": "a junk under its battened sails",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...kk....kk...",
+        "..kkkk..kkkk..",
+        "..k..k..k..k..",
+        "..kkkk..kkkk..",
+        "..k..k..k..k..",
+        "..kkkk..kkkk..",
+        "..k..k..k..k..",
+        "..kkkk..kkkk..",
+        "....k.....k...",
+        "k...k.....k...",
+        "kkkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "as"
+    },
+    "la": {
+      "en": "Laos",
+      "es": "Laos",
+      "label": [
+        "LAOS"
+      ],
+      "symbol": "an elephant, for the land of a million elephants",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        ".....kkkkkk...",
+        "...kkkkkkkkkk.",
+        "..kk.kkkkkkkkk",
+        ".kkkkk.kkkkkkk",
+        ".kkkkk.kkkkkkk",
+        "kkk.kk.kkkkkkk",
+        "kk..kkkkkkkkkk",
+        "kk..kkkkkkkkk.",
+        "k...kk..kk.kk.",
+        "k...kk..kk.kk.",
+        "kk..kk..kk.kk.",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "kh": {
+      "en": "Cambodia",
+      "es": "Camboya",
+      "label": [
+        "CAMBODIA"
+      ],
+      "symbol": "the towers of Angkor Wat",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".k...kkkk...k.",
+        "kkk..k..k..kkk",
+        "k.k..kkkk..k.k",
+        "kkk.kk..kk.kkk",
+        "k.k.k....k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k..k..kk..k..k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "th": {
+      "en": "Thailand",
+      "es": "Tailandia",
+      "label": [
+        "THAILAND"
+      ],
+      "symbol": "a temple roof with its chofa",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        "k....kkkk....k",
+        ".k..kk..kk..k.",
+        "..kkk....kkk..",
+        "k..k.kkkk.k..k",
+        ".kk.kk..kk.kk.",
+        "..kk......kk..",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..k.k.kk.k.k..",
+        "..k.k....k.k..",
+        ".kkkkkkkkkkkk.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "mm": {
+      "en": "Myanmar",
+      "es": "Myanmar",
+      "label": [
+        "MYANMAR"
+      ],
+      "symbol": "the Shwedagon Pagoda",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....k....k....",
+        "...k......k...",
+        "..k........k..",
+        ".k..........k.",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "my": {
+      "en": "Malaysia",
+      "es": "Malasia",
+      "label": [
+        "MALAYSIA"
+      ],
+      "symbol": "the Petronas Towers",
+      "ink": "#2E8B57",
+      "rows": [
+        "...k......k...",
+        "...k......k...",
+        "..kkk....kkk..",
+        "..k.k....k.k..",
+        ".kkkkk..kkkkk.",
+        ".k.k.k..k.k.k.",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k..k.k.k.",
+        "kkkkkk..kkkkkk",
+        "k.k..k..k..k.k",
+        "k.k..k..k..k.k",
+        "k.k..k..k..k.k",
+        "k.k..k..k..k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "sg": {
+      "en": "Singapore",
+      "es": "Singapur",
+      "label": [
+        "SINGAPORE"
+      ],
+      "symbol": "an orchid, Vanda Miss Joaquim",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....k..k.....",
+        ".kk..k..k..kk.",
+        "k..k.k..k.k..k",
+        "k...kkkkkk...k",
+        ".k..k.kk.k..k.",
+        "..kkk.kk.kkk..",
+        "....k....k....",
+        "...k..kk..k...",
+        "...k.k..k.k...",
+        "....k....k....",
+        ".....kkkk.....",
+        "......k.......",
+        "......k......."
+      ],
+      "batch": "as"
+    },
+    "bn": {
+      "en": "Brunei",
+      "es": "Brunéi",
+      "label": [
+        "BRUNEI"
+      ],
+      "symbol": "the golden-domed mosque on its lagoon",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk....k.",
+        "......kk...kkk",
+        ".....kkkk...k.",
+        "....k....k..k.",
+        "...k......k.k.",
+        "...k......k.k.",
+        "..kkkkkkkkkkkk",
+        "..k.k.kk.k.k.k",
+        "..k.k.kk.k.k.k",
+        ".kkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "id": {
+      "en": "Indonesia",
+      "es": "Indonesia",
+      "label": [
+        "INDONESIA"
+      ],
+      "symbol": "a Komodo dragon",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        "..........kkk.",
+        "......kkkkk.kk",
+        "kk..kkkkkkkkk.",
+        ".kkkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "...k.kk..k.k..",
+        "..kk..k.kk..k.",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "ph": {
+      "en": "Philippines",
+      "es": "Filipinas",
+      "label": [
+        "PILIPINAS"
+      ],
+      "symbol": "a tarsier on a branch",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".k..........k.",
+        "kk..........kk",
+        "k.kkkkkkkkkk.k",
+        ".k..........k.",
+        "k..kk....kk..k",
+        "k.k..k..k..k.k",
+        "k.k.kk..kk.k.k",
+        "k.k..k..k..k.k",
+        "k..kk....kk..k",
+        ".k....kk....k.",
+        "..kkkkkkkkkk..",
+        "...k......k...",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "tl": {
+      "en": "Timor-Leste",
+      "es": "Timor Oriental",
+      "label": [
+        "TIMOR-LESTE"
+      ],
+      "symbol": "a sacred house of Lospalos",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....k....k....",
+        "....k.kk.k....",
+        "...k......k...",
+        "...k.kkkk.k...",
+        "..kkkkkkkkkk..",
+        "...k.kkkk.k...",
+        "...kkkkkkkk...",
+        "...k.k..k.k...",
+        "...k.k..k.k...",
+        "..kk.kk.kk.kk."
+      ],
+      "batch": "as"
+    },
+    "kz": {
+      "en": "Kazakhstan",
+      "es": "Kazajistán",
+      "label": [
+        "KAZAKHSTAN"
+      ],
+      "symbol": "the Baiterek tower holding its golden egg",
+      "ink": "#B3343A",
+      "rows": [
+        "k............k",
+        ".k...kkkk...k.",
+        "..k.kkkkkk.k..",
+        "..k.kkkkkk.k..",
+        "...k.kkkk.k...",
+        "....k....k....",
+        ".....k..k.....",
+        "......kk......",
+        "......kk......",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....k....k....",
+        "...k......k...",
+        "..kkkkkkkkkk.."
+      ],
+      "batch": "as"
+    },
+    "kg": {
+      "en": "Kyrgyzstan",
+      "es": "Kirguistán",
+      "label": [
+        "KYRGYZSTAN"
+      ],
+      "symbol": "a golden eagle, wings open",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "k............k",
+        "kk..........kk",
+        "kkk...kk...kkk",
+        ".kkk.kkkk.kkk.",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "....kkkkkk....",
+        ".....kkkk.....",
+        "....k.kk.k....",
+        "....kk..kk....",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "tj": {
+      "en": "Tajikistan",
+      "es": "Tayikistán",
+      "label": [
+        "TAJIKISTAN"
+      ],
+      "symbol": "the gate of Hisor Fortress",
+      "ink": "#2E8B57",
+      "rows": [
+        "k.k.k....k.k.k",
+        "kkkkk....kkkkk",
+        "k...k....k...k",
+        "k.k.kkkkkk.k.k",
+        "k...k....k...k",
+        "k...k.kk.k...k",
+        "k...kk..kk...k",
+        "k...k....k...k",
+        "k.k.k....k.k.k",
+        "k...k....k...k",
+        "k...k....k...k",
+        "kk..k....k..kk",
+        "kkkkk....kkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "tm": {
+      "en": "Turkmenistan",
+      "es": "Turkmenistán",
+      "label": [
+        "TÜRKMENISTAN"
+      ],
+      "symbol": "the burning Darvaza crater",
+      "ink": "#B3343A",
+      "rows": [
+        "...k.....k....",
+        "..k.k..k.k.k..",
+        "..k..kk.k..k..",
+        ".k.k.k.k.k.k..",
+        ".kk.k.k.k.k.k.",
+        "kk.k.k.k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        ".kk........kk.",
+        "...kkkkkkkk...",
+        "..............",
+        "kk..........kk",
+        "..kk......kk..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "uz": {
+      "en": "Uzbekistan",
+      "es": "Uzbekistán",
+      "label": [
+        "O'ZBEKISTON"
+      ],
+      "symbol": "a portal of the Registan, Samarkand",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k.....kk.....k",
+        "k....kkkk....k",
+        "k...kkkkkk...k",
+        "kkkkkkkkkkkkkk",
+        "kk..........kk",
+        "kk.kkkkkkkk.kk",
+        "kk.k......k.kk",
+        "kk.k.kkkk.k.kk",
+        "kk.k.k..k.k.kk",
+        "kk.k.k..k.k.kk",
+        "kk.k.k..k.k.kk",
+        "kk.k.k..k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "np": {
+      "en": "Nepal",
+      "es": "Nepal",
+      "label": [
+        "NEPAL"
+      ],
+      "symbol": "the Boudhanath stupa and its eyes",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "..kkkkkkkkkk..",
+        "..k.kk..kk.k..",
+        "..k...kk...k..",
+        "..kkkkkkkkkk..",
+        ".kk........kk.",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k"
+      ],
+      "batch": "as"
+    },
+    "bt": {
+      "en": "Bhutan",
+      "es": "Bután",
+      "label": [
+        "BHUTAN"
+      ],
+      "symbol": "Paro Taktsang, the Tiger's Nest",
+      "ink": "#2E8B57",
+      "rows": [
+        ".......kkkkkkk",
+        "...k...k.....k",
+        "..kkk..k.....k",
+        ".kkkkk.k.....k",
+        "..k.k..k.....k",
+        "..kkkkkk.....k",
+        ".kkkkkkk.....k",
+        "kk.k.k.k.....k",
+        ".kkkkkkk.....k",
+        ".......k.....k",
+        "......k......k",
+        ".....k.......k",
+        "....k........k",
+        "...kkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "bd": {
+      "en": "Bangladesh",
+      "es": "Bangladés",
+      "label": [
+        "BANGLADESH"
+      ],
+      "symbol": "a Bengal tiger",
+      "ink": "#2E8B57",
+      "rows": [
+        ".kk........kk.",
+        "k.kkkkkkkkkk.k",
+        ".k....kk....k.",
+        "k..k..kk..k..k",
+        "k.k........k.k",
+        "k...kk..kk...k",
+        "kk..k....k..kk",
+        "k............k",
+        "kk...kkkk...kk",
+        "k.....kk.....k",
+        ".k..k.kk.k..k.",
+        "..k........k..",
+        "...kkkkkkkk...",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "in": {
+      "en": "India",
+      "es": "India",
+      "label": [
+        "INDIA"
+      ],
+      "symbol": "the Taj Mahal",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "....k....k....",
+        "...k......k...",
+        "...k......k...",
+        "....k....k....",
+        "k....kkkk....k",
+        "k.kkkkkkkkkk.k",
+        "k.k........k.k",
+        "k.k.kk..kk.k.k",
+        "k.k.k....k.k.k",
+        "k.k.k....k.k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "pk": {
+      "en": "Pakistan",
+      "es": "Pakistán",
+      "label": [
+        "PAKISTAN"
+      ],
+      "symbol": "the Faisal Mosque and its minarets",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k............k",
+        "k............k",
+        "k.....kk.....k",
+        "k....k..k....k",
+        "k...k....k...k",
+        "k..k......k..k",
+        "k.k...kk...k.k",
+        "kk...k..k...kk",
+        "k...k....k...k",
+        "k..kkkkkkkk..k",
+        "k..k......k..k",
+        "k..k......k..k",
+        "k..kkkkkkkk..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "lk": {
+      "en": "Sri Lanka",
+      "es": "Sri Lanka",
+      "label": [
+        "SRI LANKA"
+      ],
+      "symbol": "Sigiriya, the Lion Rock",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "...kkkkkkkk...",
+        "..k........k..",
+        "..k.k..k.k.k..",
+        "..k.k..k.k.k..",
+        "..k.k..k...k..",
+        "..k.....k..k..",
+        "..k.kk...k.k..",
+        ".k....k.....k.",
+        "kk.kk.kk.kk.kk",
+        "k.k..k..k..k.k",
+        ".kk.kk.kk.kk.k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "mv": {
+      "en": "Maldives",
+      "es": "Maldivas",
+      "label": [
+        "MALDIVES"
+      ],
+      "symbol": "villas over the water",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "...k......k...",
+        "..kkk....kkk..",
+        ".kkkkk..kkkkk.",
+        "..k.k....k.k..",
+        "..kkk....kkk..",
+        "kkkkkkkkkkkkkk",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "af": {
+      "en": "Afghanistan",
+      "es": "Afganistán",
+      "label": [
+        "AFGHANISTAN"
+      ],
+      "symbol": "the Minaret of Jam",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....kkkkkk....",
+        "....k.kk.k....",
+        "....k....k....",
+        "....kkkkkk....",
+        "...k.k..k.k...",
+        "...k......k...",
+        "...kkkkkkkk...",
+        "..k..k..k..k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "ir": {
+      "en": "Iran",
+      "es": "Irán",
+      "label": [
+        "IRAN"
+      ],
+      "symbol": "the Azadi Tower",
+      "ink": "#7B4BA8",
+      "rows": [
+        ".....kkkk.....",
+        "....k....k....",
+        "....k.kk.k....",
+        "...k..kk..k...",
+        "...k.k..k.k...",
+        "..k..k..k..k..",
+        "..k.k....k.k..",
+        ".k..k....k..k.",
+        ".k.k......k.k.",
+        "k..k......k..k",
+        "k.k........k.k",
+        "k.k........k.k",
+        "k.k........k.k",
+        "kkk........kkk"
+      ],
+      "batch": "as"
+    },
+    "iq": {
+      "en": "Iraq",
+      "es": "Irak",
+      "label": [
+        "IRAQ"
+      ],
+      "symbol": "the spiral minaret of Samarra",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kk..k.....",
+        "....k..kkk....",
+        "...kkk...k....",
+        "...k..kkkkk...",
+        "..kkkk....k...",
+        "..k...kkkkkk..",
+        ".kkkkk.....k..",
+        ".k.....kkkkkk.",
+        "kkkkkkk......k",
+        "k......kkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "sy": {
+      "en": "Syria",
+      "es": "Siria",
+      "label": [
+        "SYRIA"
+      ],
+      "symbol": "a noria, the water wheel of Hama",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...kk.k..kk...",
+        "..kk..k...kk..",
+        "..k.k.k..k.k..",
+        ".kk..kkkk..kk.",
+        ".kkkkkkkkkkkk.",
+        ".kk..kkkk..kk.",
+        "..k.k.k..k.k..",
+        "..kk..k...kk..",
+        "...kk.k..kk...",
+        "....kkkkkk....",
+        ".....k..k.....",
+        "kk.kk.kk.kk.kk"
+      ],
+      "batch": "as"
+    },
+    "lb": {
+      "en": "Lebanon",
+      "es": "Líbano",
+      "label": [
+        "LEBANON"
+      ],
+      "symbol": "a cedar of Lebanon",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "....kkkkkk....",
+        "......kk......",
+        "..kkkkkkkkkk..",
+        "....kkkkkk....",
+        "......kk......",
+        ".kkkkkkkkkkkk.",
+        "...kkkkkkkk...",
+        "......kk......",
+        "kkkkkkkkkkkkkk",
+        "..kkkkkkkkkk..",
+        "......kk......",
+        "......kk......",
+        "....kkkkkk...."
+      ],
+      "batch": "as"
+    },
+    "il": {
+      "en": "Israel",
+      "es": "Israel",
+      "label": [
+        "ISRAEL"
+      ],
+      "symbol": "Masada above the Dead Sea",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "...kkkkkkk....",
+        "..k.k.k...k...",
+        "..k.......kk..",
+        ".k.........k..",
+        ".k..k...k...k.",
+        "k...........k.",
+        "k.....k......k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "ps": {
+      "en": "Palestine",
+      "es": "Palestina",
+      "label": [
+        "PALESTINE"
+      ],
+      "symbol": "an olive tree",
+      "ink": "#7B4BA8",
+      "rows": [
+        "....kkkkk.....",
+        "..kk.....kk...",
+        ".k..k.k.k..k..",
+        "k.k...k...k.k.",
+        "k...k...k...k.",
+        ".kk..k.k..kk..",
+        "....kk.kk.....",
+        ".....kkk......",
+        "......kk......",
+        ".....kk.......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "jo": {
+      "en": "Jordan",
+      "es": "Jordania",
+      "label": [
+        "JORDAN"
+      ],
+      "symbol": "the Treasury at Petra",
+      "ink": "#B3343A",
+      "rows": [
+        ".....kkkk.....",
+        ".....k..k.....",
+        "..k..kkkk..k..",
+        ".kkk.k..k.kkk.",
+        ".k.k.kkkk.k.k.",
+        ".kkkkkkkkkkkk.",
+        "......kk......",
+        "....kk..kk....",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..k.k.kk.k.k..",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        ".kkkkkkkkkkkk."
+      ],
+      "batch": "as"
+    },
+    "sa": {
+      "en": "Saudi Arabia",
+      "es": "Arabia Saudí",
+      "label": [
+        "SAUDI ARABIA"
+      ],
+      "symbol": "a camel in the desert",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        ".kk...kk......",
+        "kkk..kkkk.....",
+        "..k.kkkkkk....",
+        "..kkkkkkkkk...",
+        "...kkkkkkkkkk.",
+        "...kkkkkkkkk.k",
+        "....kkkkkkkk..",
+        "....k.k..k.k..",
+        "....k.k..k.k..",
+        "....k.k..k.k..",
+        "...kk.kk.kk.kk",
+        "..............",
+        "kk..kkk..kk..k"
+      ],
+      "batch": "as"
+    },
+    "ye": {
+      "en": "Yemen",
+      "es": "Yemen",
+      "label": [
+        "YEMEN"
+      ],
+      "symbol": "the tower houses of Shibam",
+      "ink": "#2E8B57",
+      "rows": [
+        "...k..........",
+        "..kkk....k....",
+        "..k.k...kkk...",
+        "..kkk.k.k.k...",
+        ".kk.k.kkkkk.k.",
+        ".kkkkkk.k.kkkk",
+        ".k.kk.kkkkkk.k",
+        "kkkkkk.k.kkkkk",
+        "k.k.kkkkkk.k.k",
+        "kkkkkk.k.kkkkk",
+        "k.k.kkkkkk.k.k",
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "om": {
+      "en": "Oman",
+      "es": "Omán",
+      "label": [
+        "OMAN"
+      ],
+      "symbol": "a dhow under sail",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".k............",
+        "..kk..........",
+        "...kkk........",
+        "....kkkk......",
+        "...k.kkkkk....",
+        "...k..kkkkkk..",
+        "...k...kkkkkkk",
+        "...k..........",
+        "kkkkkkkkkkkk..",
+        ".kkkkkkkkkkk..",
+        "..kkkkkkkk....",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "as"
+    },
+    "ae": {
+      "en": "United Arab Emirates",
+      "es": "Emiratos Árabes Unidos",
+      "label": [
+        "UNITED ARAB",
+        "EMIRATES"
+      ],
+      "symbol": "a falcon on its perch",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kk.kkkk....",
+        "..kkk.kkkk....",
+        "...k.kkkkk....",
+        ".....kkkkkk...",
+        ".....kkkkkkk..",
+        ".....kkkkkkk..",
+        "......kkkkkkk.",
+        ".......kkkk.kk",
+        "......k.k....k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "qa": {
+      "en": "Qatar",
+      "es": "Catar",
+      "label": [
+        "QATAR"
+      ],
+      "symbol": "an Arabian oryx",
+      "ink": "#2E8B57",
+      "rows": [
+        "k............k",
+        ".k..........k.",
+        "..k........k..",
+        "...k......k...",
+        "....k....k....",
+        "...kkkkkkkk...",
+        "kk.kkkkkkkk.kk",
+        "...k......k...",
+        "...k.k..k.k...",
+        "....k....k....",
+        "....k....k....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "bh": {
+      "en": "Bahrain",
+      "es": "Baréin",
+      "label": [
+        "BAHRAIN"
+      ],
+      "symbol": "an open pearl oyster",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..kkkkkkkk....",
+        ".k.k.k.k..kk..",
+        "k.k.k.k.k...k.",
+        "kkkkkkkkkkk..k",
+        "............kk",
+        "....kkk.....k.",
+        "...kkkkk...k..",
+        "k...kkk....k..",
+        "kk.........k..",
+        "k.kkkkkkkkk..k",
+        ".k.k.k.k.k.kk.",
+        "..kkkkkkkkk...",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "kw": {
+      "en": "Kuwait",
+      "es": "Kuwait",
+      "label": [
+        "KUWAIT"
+      ],
+      "symbol": "the Kuwait Towers",
+      "ink": "#2E8B57",
+      "rows": [
+        "...k..........",
+        "..kkk.........",
+        "..kkk.........",
+        "...k......k..k",
+        "..kkk.....k..k",
+        ".kkkkk....k..k",
+        "kkkkkkk..kkk.k",
+        "kkkkkkk.kkkkkk",
+        ".kkkkk..kkkkkk",
+        "..kkk....kkk.k",
+        "...k......k..k",
+        "...k......k..k",
+        "...k......k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "tr": {
+      "en": "Türkiye",
+      "es": "Turquía",
+      "label": [
+        "TÜRKİYE"
+      ],
+      "symbol": "balloons over Cappadocia's fairy chimneys",
+      "ink": "#2E8B57",
+      "rows": [
+        "..kkkk........",
+        ".k.kk.k...kk..",
+        "k..kk..k.k..k.",
+        "k..kk..k.k..k.",
+        ".k.kk.k...kk..",
+        "..k..k.....k..",
+        "..kkkk....kk..",
+        "..............",
+        "..k......k....",
+        ".kkk....kkk...",
+        ".k.k...kk.k.k.",
+        ".k.k...k..kkkk",
+        "kk.kk.kk..k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "cy": {
+      "en": "Cyprus",
+      "es": "Chipre",
+      "label": [
+        "CYPRUS"
+      ],
+      "symbol": "Petra tou Romiou, Aphrodite's rock",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..........kk..",
+        ".........k..k.",
+        "....kkk...kk..",
+        "...k...k......",
+        "..k....k......",
+        "..k.....k.....",
+        ".k......k..kk.",
+        ".k.......kk..k",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "as"
+    },
+    "ge": {
+      "en": "Georgia",
+      "es": "Georgia",
+      "label": [
+        "GEORGIA"
+      ],
+      "symbol": "Gergeti Trinity Church below Mount Kazbek",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".......k......",
+        "......k.k.....",
+        ".....k...k....",
+        "....k.....k...",
+        "...k...k...k..",
+        "..k...kkk...k.",
+        ".k....k.k....k",
+        "k....kkkkk...k",
+        ".....k.k.k....",
+        "...kkkkkkkk...",
+        "...k.k.k..k...",
+        "...kkkkkkkk...",
+        "..k........k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "am": {
+      "en": "Armenia",
+      "es": "Armenia",
+      "label": [
+        "ARMENIA"
+      ],
+      "symbol": "a pomegranate",
+      "ink": "#2E8B57",
+      "rows": [
+        ".....k.k......",
+        ".....kkk......",
+        "...kkkkkkk....",
+        "..k.......k...",
+        ".k..k.k....k..",
+        "k..k.k.k....k.",
+        "k...k.k.k...k.",
+        "k..k.k.k....k.",
+        "k...k.k.....k.",
+        ".k.........k..",
+        "..k.......k...",
+        "...kkkkkkk....",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "az": {
+      "en": "Azerbaijan",
+      "es": "Azerbaiyán",
+      "label": [
+        "AZƏRBAYCAN"
+      ],
+      "symbol": "the Flame Towers of Baku",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......k.......",
+        ".....kk.......",
+        ".....kk....k..",
+        ".k..kkk...kk..",
+        ".k..k.k...kk..",
+        "kk..k.k..kkk..",
+        "kk.kk.kk.k.k..",
+        "k.kk..kk.k.kk.",
+        "k.k...k..k..k.",
+        "kkk...k.kk..k.",
+        "k.k..kk.k...k.",
+        "k.k..k..k...k.",
+        "k.k..k..k...k.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "ma": {
+      "en": "Morocco",
+      "es": "Marruecos",
+      "label": [
+        "MOROCCO"
+      ],
+      "symbol": "a tagine",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....k.kk.k....",
+        "....k....k....",
+        "...k.k..k.k...",
+        "..k........k..",
+        ".k..........k.",
+        "kkkkkkkkkkkkkk",
+        ".k..........k.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "dz": {
+      "en": "Algeria",
+      "es": "Argelia",
+      "label": [
+        "ALGERIA"
+      ],
+      "symbol": "the Martyrs' Memorial in Algiers",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....k.kk.k....",
+        "....k.kk.k....",
+        "...k..kk..k...",
+        "...k..kk..k...",
+        "..k...kk...k..",
+        "..k...kk...k..",
+        ".k....kk....k.",
+        ".k....kk....k.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "af"
+    },
+    "tn": {
+      "en": "Tunisia",
+      "es": "Túnez",
+      "label": [
+        "TUNISIA"
+      ],
+      "symbol": "a studded blue door of Sidi Bou Said",
+      "ink": "#2E8B57",
+      "rows": [
+        "....kkkkkk....",
+        "..kk......kk..",
+        ".k...kkkk...k.",
+        ".k..k....k..k.",
+        ".k.k.k..k.k.k.",
+        ".k.k......k.k.",
+        ".k.k.k..k.k.k.",
+        ".k.k......k.k.",
+        ".k.k.k..k.k.k.",
+        ".k.k......k.k.",
+        ".k.k.k..k.k.k.",
+        ".k.k......k.k.",
+        ".k.kkkkkkkk.k.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "af"
+    },
+    "ly": {
+      "en": "Libya",
+      "es": "Libia",
+      "label": [
+        "LIBYA"
+      ],
+      "symbol": "the arch of Septimius Severus at Leptis Magna",
+      "ink": "#B3343A",
+      "rows": [
+        "kkkkkkkkkkkkkk",
+        "k.k.k..k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "kk..........kk",
+        "kk...kkkk...kk",
+        "kk..k....k..kk",
+        "kk.k......k.kk",
+        "kk.k......k.kk",
+        "kk.k......k.kk",
+        "kk.k......k.kk",
+        "kk.k......k.kk",
+        "kk.k......k.kk",
+        "kkkk......kkkk",
+        "kkkk......kkkk"
+      ],
+      "batch": "af"
+    },
+    "eg": {
+      "en": "Egypt",
+      "es": "Egipto",
+      "label": [
+        "EGYPT"
+      ],
+      "symbol": "the pyramids",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "...........k..",
+        "..........kkk.",
+        "....k......k..",
+        "...kk.........",
+        "..k.kk........",
+        "..k.kkk...k...",
+        ".k..kkkk.kk...",
+        ".k..kkkkk.kk..",
+        "k...kkkkkk.kk.",
+        "k...kkkkkk..kk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "sd": {
+      "en": "Sudan",
+      "es": "Sudán",
+      "label": [
+        "SUDAN"
+      ],
+      "symbol": "the steep pyramids of Meroë",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..k...........",
+        "..k........k..",
+        "..k........k..",
+        ".kkk.......k..",
+        ".k.k...k..kkk.",
+        ".k.k...k..k.k.",
+        ".kkk..k.k.k.k.",
+        ".k.k..kkk.kkk.",
+        ".k.k..k.k.k.k.",
+        "kkkkk.k.kk...k",
+        "k...kkkkkkkkkk",
+        "k...kk...k...k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "af"
+    },
+    "mr": {
+      "en": "Mauritania",
+      "es": "Mauritania",
+      "label": [
+        "MAURITANIA"
+      ],
+      "symbol": "the Eye of the Sahara",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        "...kkk..kkk...",
+        "..kk......kk..",
+        ".kk..kkkk..kk.",
+        ".k..k....k..k.",
+        ".k.k..kk..k.k.",
+        "k..k.k..k.k..k",
+        "k..k.k..k.k..k",
+        ".k.k..kk..k.k.",
+        ".k..k....k..k.",
+        ".kk..kkkk..kk.",
+        "..kk......kk..",
+        "...kkk..kkk...",
+        "......kk......"
+      ],
+      "batch": "af"
+    },
+    "sn": {
+      "en": "Senegal",
+      "es": "Senegal",
+      "label": [
+        "SÉNÉGAL"
+      ],
+      "symbol": "a baobab",
+      "ink": "#B3343A",
+      "rows": [
+        ".k..k..k...k..",
+        "..k.k.k...k...",
+        "...kkkk..k....",
+        "....kkkkk.....",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "...kkkkkkkk...",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "gm": {
+      "en": "The Gambia",
+      "es": "Gambia",
+      "label": [
+        "THE GAMBIA"
+      ],
+      "symbol": "a crocodile of Kachikally",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        "....k.k.k.k...",
+        "..kkkkkkkkkk..",
+        "kkkkkkkkkkk.kk",
+        ".kkkkkkkkkkkkk",
+        "...kk...kk....",
+        "..kk...kk.....",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "gw": {
+      "en": "Guinea-Bissau",
+      "es": "Guinea-Bisáu",
+      "label": [
+        "GUINÉ-BISSAU"
+      ],
+      "symbol": "a cashew apple and its nut",
+      "ink": "#2E8B57",
+      "rows": [
+        ".....k........",
+        ".....k........",
+        "...kkkkk......",
+        "..k.....k.....",
+        ".k.......k....",
+        ".k.......k....",
+        ".k.......k....",
+        "..k.....k.....",
+        "...kkkkk......",
+        "....kkkk......",
+        "...k....k.....",
+        "...k..kk......",
+        "....kk........",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "gn": {
+      "en": "Guinea",
+      "es": "Guinea",
+      "label": [
+        "GUINÉE"
+      ],
+      "symbol": "a djembe drum",
+      "ink": "#B3343A",
+      "rows": [
+        "..kkkkkkkkkk..",
+        ".k..........k.",
+        "..kkkkkkkkkk..",
+        "..k.k.k.k.kk..",
+        "...k.k.k.k.k..",
+        "....kk.k.kk...",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....k....k....",
+        "...k......k...",
+        "..k........k..",
+        "..kkkkkkkkkk..",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "sl": {
+      "en": "Sierra Leone",
+      "es": "Sierra Leona",
+      "label": [
+        "SIERRA LEONE"
+      ],
+      "symbol": "the Cotton Tree of Freetown",
+      "ink": "#7B4BA8",
+      "rows": [
+        "...kkkkkkkk...",
+        ".kk........kk.",
+        "k..k.k..k.k..k",
+        "k.k..k.k..k..k",
+        ".kk.kkkk.kk.k.",
+        "...k.kk.k.....",
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "...kk.kk.kk...",
+        "..kk..kk..kk..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "af"
+    },
+    "lr": {
+      "en": "Liberia",
+      "es": "Liberia",
+      "label": [
+        "LIBERIA"
+      ],
+      "symbol": "a pygmy hippo",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..............",
+        "..........k.k.",
+        "....kkkkkkkkk.",
+        "..kkkkkkkkkkkk",
+        ".kkkkkkkkkk.kk",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        ".kkkkkkkkkkk..",
+        ".kk.kk...kk.k.",
+        ".kk.kk...kk.k.",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ci": {
+      "en": "Côte d'Ivoire",
+      "es": "Costa de Marfil",
+      "label": [
+        "CÔTE D'IVOIRE"
+      ],
+      "symbol": "a cocoa pod",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        "......k.......",
+        ".....kkk......",
+        "....k.k.k.....",
+        "...k.k.k.k....",
+        "..k.k.k.k.k...",
+        "..k.k.k.k.k...",
+        "..k.k.k.k.k...",
+        "..k.k.k.k.k...",
+        "...k.k.k.k....",
+        "....k.k.k.....",
+        ".....kkk......",
+        "......k.......",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ml": {
+      "en": "Mali",
+      "es": "Malí",
+      "label": [
+        "MALI"
+      ],
+      "symbol": "the Great Mosque of Djenné",
+      "ink": "#B3343A",
+      "rows": [
+        ".k....kk....k.",
+        ".k....kk....k.",
+        "kkk..kkkk..kkk",
+        "k.kk.k..k.kk.k",
+        "kkk..kkkk..kkk",
+        "k.kkkk..kkkk.k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k....k.k.k",
+        "kkk.k....k.kkk",
+        "kkk.k....k.kkk",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "bf": {
+      "en": "Burkina Faso",
+      "es": "Burkina Faso",
+      "label": [
+        "BURKINA FASO"
+      ],
+      "symbol": "a painted house of Tiébélé",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "kkkkkkkkkkkkkk",
+        "kk.k.k.k.k.k.k",
+        "k.k.k.k.k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "k..k...k...k.k",
+        "k.kkk.kkk.kkkk",
+        "kkkkkkkkkkkkkk",
+        "k....kkk.....k",
+        "k...k...k....k",
+        "k...k...k....k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "gh": {
+      "en": "Ghana",
+      "es": "Ghana",
+      "label": [
+        "GHANA"
+      ],
+      "symbol": "the canopy walkway of Kakum",
+      "ink": "#7B4BA8",
+      "rows": [
+        "kkkk......kkkk",
+        "kkkk......kkkk",
+        ".kk........kk.",
+        ".kk........kk.",
+        "kkkk......kkkk",
+        ".kk.k....k.kk.",
+        ".kk..kkkk..kk.",
+        ".kk.k.kk.k.kk.",
+        ".kk..kkkk..kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        "kkkk......kkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "tg": {
+      "en": "Togo",
+      "es": "Togo",
+      "label": [
+        "TOGO"
+      ],
+      "symbol": "a Tata house of Koutammakou",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..k.......k...",
+        ".kkk.....kkk..",
+        "kkkkk...kkkkk.",
+        ".k.k.....k.k..",
+        ".k.kkkkkkk.k..",
+        ".k.........k..",
+        ".k....kk...k..",
+        ".k...k..k..k..",
+        ".k...k..k..k..",
+        ".kkkkkkkkkkk..",
+        "..............",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "bj": {
+      "en": "Benin",
+      "es": "Benín",
+      "label": [
+        "BÉNIN"
+      ],
+      "symbol": "a royal python of Ouidah",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..........kkk.",
+        ".........kk.kk",
+        ".........kk...",
+        "..kkkkkkkkk...",
+        ".kkkkkkkkk....",
+        ".kk...........",
+        ".kkkkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "..........kk..",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkk...",
+        "k.............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ne": {
+      "en": "Niger",
+      "es": "Níger",
+      "label": [
+        "NIGER"
+      ],
+      "symbol": "the Agadez cross",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....k..k.....",
+        ".....k..k.....",
+        "......kk......",
+        "..kk..kk..kk..",
+        "..kkkkkkkkkk..",
+        "..kk.kkkk.kk..",
+        "....kk..kk....",
+        "...kk....kk...",
+        "...k..kk..k...",
+        "...kk....kk...",
+        "....kk..kk....",
+        ".....kkkk.....",
+        "......kk......"
+      ],
+      "batch": "af"
+    },
+    "ng": {
+      "en": "Nigeria",
+      "es": "Nigeria",
+      "label": [
+        "NIGERIA"
+      ],
+      "symbol": "Zuma Rock",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        ".....kkkk.....",
+        "...kk....kk...",
+        "..k..k.k...k..",
+        ".k..k..k.k..k.",
+        ".k.k..k...k.k.",
+        "k..k..k.k..k.k",
+        "k.k..k...k...k",
+        "k.k..k.k..k..k",
+        "k..k...k..k..k",
+        "k..k.....k...k",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "cv": {
+      "en": "Cabo Verde",
+      "es": "Cabo Verde",
+      "label": [
+        "CABO VERDE"
+      ],
+      "symbol": "Pico do Fogo in its crater",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "......kk......",
+        ".....k..k.....",
+        "....k....k....",
+        "kk.k......k.kk",
+        "k.kk......kk.k",
+        "k.k........k.k",
+        "kk..........kk",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "af"
+    },
+    "cm": {
+      "en": "Cameroon",
+      "es": "Camerún",
+      "label": [
+        "CAMEROUN",
+        "CAMEROON"
+      ],
+      "symbol": "a lion",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...kkkkkkkk...",
+        ".kkkkkkkkkkkk.",
+        "kkkk......kkkk",
+        "kkk........kkk",
+        "kk..k....k..kk",
+        "kk..........kk",
+        "kk...kkkk...kk",
+        "kk....kk....kk",
+        "kkk..k..k..kkk",
+        "kkkk......kkkk",
+        ".kkkk....kkkk.",
+        "..kkkkkkkkkk..",
+        "...kkkkkkkk...",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "td": {
+      "en": "Chad",
+      "es": "Chad",
+      "label": [
+        "TCHAD"
+      ],
+      "symbol": "the Aloba Arch in the Ennedi",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..kkkkkkkk....",
+        ".kkkkkkkkkkk..",
+        "kkk......kkkk.",
+        "kk........kkk.",
+        "kk.........kk.",
+        "kk.........kkk",
+        "kk..........kk",
+        "kk..........kk",
+        "kkk.........kk",
+        "kkk........kkk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "cf": {
+      "en": "Central African Republic",
+      "es": "República Centroafricana",
+      "label": [
+        "RÉPUBLIQUE",
+        "CENTRAFRICAINE"
+      ],
+      "symbol": "a butterfly",
+      "ink": "#B3343A",
+      "rows": [
+        "....k....k....",
+        ".....k..k.....",
+        "kkk...kk...kkk",
+        "k..kk.kk.kk..k",
+        "k.k..kkkk..k.k",
+        "k..k..kk..k..k",
+        ".kkkkkkkkkkkk.",
+        "..k...kk...k..",
+        ".k..k.kk.k..k.",
+        ".k...kkkk...k.",
+        "..kkk.kk.kkk..",
+        "......kk......",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "gq": {
+      "en": "Equatorial Guinea",
+      "es": "Guinea Ecuatorial",
+      "label": [
+        "GUINEA",
+        "ECUATORIAL"
+      ],
+      "symbol": "a sea turtle of Bioko",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "kk..kkkkkk..kk",
+        ".kkk.k..k.kkk.",
+        "..k.k.kk.k.k..",
+        "..k.kkkkkk.k..",
+        "..k.k.kk.k.k..",
+        "..k..k..k..k..",
+        ".kkk.k..k.kkk.",
+        "kk..kkkkkk..kk",
+        ".....kkkk.....",
+        "......kk......",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ga": {
+      "en": "Gabon",
+      "es": "Gabón",
+      "label": [
+        "GABON"
+      ],
+      "symbol": "a Punu mask",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..kkkkkkkkkk..",
+        ".k..........k.",
+        "k............k",
+        "k..kk....kk..k",
+        "k.k..k..k..k.k",
+        "k............k",
+        "k.kkk....kkk.k",
+        "k............k",
+        ".k....kk....k.",
+        ".k..........k.",
+        "..k.kk..kk.k..",
+        "..k........k..",
+        "...k......k...",
+        "....kkkkkk...."
+      ],
+      "batch": "af"
+    },
+    "cg": {
+      "en": "Republic of the Congo",
+      "es": "República del Congo",
+      "label": [
+        "CONGO"
+      ],
+      "symbol": "a western lowland gorilla",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        ".....kkk......",
+        "....kkkkk.....",
+        "....k.kkk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk...",
+        ".kkkkkkkkkkk..",
+        ".kk.kkkkk.kk..",
+        ".kk.kkkkk.kk..",
+        ".kk.kkkkk.kk..",
+        ".kk.kkkkk.kk..",
+        "kkk.kk.kk.kkk.",
+        "kkk.kk.kk.kkk.",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "cd": {
+      "en": "DR Congo",
+      "es": "RD del Congo",
+      "label": [
+        "RD CONGO"
+      ],
+      "symbol": "an okapi",
+      "ink": "#7B4BA8",
+      "rows": [
+        ".kk...........",
+        ".kkk..........",
+        "kkkk..........",
+        "...kk.........",
+        "....kkkkkkkk..",
+        "....kkkkkkkkk.",
+        "....kkkkk.k.kk",
+        "....kkkkk.k.k.",
+        "....k.k...k.k.",
+        "....kkk...kkk.",
+        "....k.k...k.k.",
+        "....kkk...kkk.",
+        "...kk.kk.kk.kk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "st": {
+      "en": "São Tomé and Príncipe",
+      "es": "Santo Tomé y Príncipe",
+      "label": [
+        "SÃO TOMÉ E",
+        "PRÍNCIPE"
+      ],
+      "symbol": "Pico Cão Grande",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        ".....k.k......",
+        ".....k.k......",
+        "....k..k......",
+        "....k...k.....",
+        "....k...k.....",
+        "...k....k.....",
+        "...k.....k....",
+        "..k......k....",
+        "kk.kk.kk.kkk.k",
+        "k.k..k..k...kk",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ao": {
+      "en": "Angola",
+      "es": "Angola",
+      "label": [
+        "ANGOLA"
+      ],
+      "symbol": "a giant sable antelope",
+      "ink": "#2F6FA3",
+      "rows": [
+        "kk............",
+        ".kkk..........",
+        "..k.kk........",
+        "...k..kk......",
+        "....k...kk....",
+        ".....kk..kkk..",
+        ".......kkkkkk.",
+        "........kk.kkk",
+        "........kkkkkk",
+        "........kkkk.k",
+        "........kkk...",
+        "........kk....",
+        ".......kk.....",
+        ".......kk....."
+      ],
+      "batch": "af"
+    },
+    "bi": {
+      "en": "Burundi",
+      "es": "Burundi",
+      "label": [
+        "BURUNDI"
+      ],
+      "symbol": "a royal drum",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..kkkkkkkkkk..",
+        ".k..........k.",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..k........k..",
+        "...k......k...",
+        "...k.k..k.k...",
+        "...k......k...",
+        "...k.k..k.k...",
+        "....k....k....",
+        "....k....k....",
+        "....kkkkkk....",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "rw": {
+      "en": "Rwanda",
+      "es": "Ruanda",
+      "label": [
+        "RWANDA"
+      ],
+      "symbol": "the land of a thousand hills",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "...kkk........",
+        "..k...k...kk..",
+        ".k.....k.k..k.",
+        "k..kkk..k....k",
+        ".kk...kk..kk.k",
+        "k..k.k..kk..kk",
+        ".k...k.k..k..k",
+        "k.k...k.k..k.k",
+        ".k.k...k.k..kk",
+        "k...k...k.k..k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ug": {
+      "en": "Uganda",
+      "es": "Uganda",
+      "label": [
+        "UGANDA"
+      ],
+      "symbol": "a shoebill",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        ".....kkk......",
+        "....kkkkk.....",
+        "....k.kkkkkkk.",
+        "....kkkkkkkkkk",
+        ".....kkkkk.kk.",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "...kkkkkkk....",
+        "....kkkkk.....",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....kk.kk....."
+      ],
+      "batch": "af"
+    },
+    "ke": {
+      "en": "Kenya",
+      "es": "Kenia",
+      "label": [
+        "KENYA"
+      ],
+      "symbol": "a giraffe",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..kk..........",
+        "..kkk.........",
+        ".kkkk.........",
+        "...kk.........",
+        "...kk.........",
+        "...kk.........",
+        "...kkk........",
+        "...kkkkkkkk...",
+        "...kkkkkkkkk..",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "..kk.kk.kk.kk."
+      ],
+      "batch": "af"
+    },
+    "tz": {
+      "en": "Tanzania",
+      "es": "Tanzania",
+      "label": [
+        "TANZANIA"
+      ],
+      "symbol": "Kilimanjaro and an acacia",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..............",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "...k.k..k.k...",
+        "..k........k..",
+        ".k..........k.",
+        "k.kkkkk......k",
+        ".kkkkkkk.....k",
+        "...kk........k",
+        "...kk........k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "et": {
+      "en": "Ethiopia",
+      "es": "Etiopía",
+      "label": [
+        "ETHIOPIA"
+      ],
+      "symbol": "Bete Giyorgis at Lalibela, from above",
+      "ink": "#B3343A",
+      "rows": [
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        "k....kkkk....k",
+        "k....k..k....k",
+        "k..kkk..kkk..k",
+        "k..k......k..k",
+        "k..k......k..k",
+        "k..kkk..kkk..k",
+        "k....k..k....k",
+        "k....k..k....k",
+        "k....k..k....k",
+        "k....kkkk....k",
+        "k............k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "af"
+    },
+    "er": {
+      "en": "Eritrea",
+      "es": "Eritrea",
+      "label": [
+        "ERITREA"
+      ],
+      "symbol": "the steam train from Asmara to Massawa",
+      "ink": "#7B4BA8",
+      "rows": [
+        ".kk...........",
+        "k..k..........",
+        ".kk.k.........",
+        "..k...........",
+        ".kkk......kkkk",
+        ".kkk......k..k",
+        "kkkkkkkkkkk..k",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        "k.kk..kk..kk.k",
+        ".k..k.k..k.kk.",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "dj": {
+      "en": "Djibouti",
+      "es": "Yibuti",
+      "label": [
+        "DJIBOUTI"
+      ],
+      "symbol": "a whale shark",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..............",
+        ".....k.....k..",
+        "....kk....kk..",
+        ".kkkkkkkkkkk..",
+        "kk.k.k.k.kkkk.",
+        "k.k.k.k.kk.kk.",
+        "kkkkkkkkkkk..k",
+        ".kk..kk.......",
+        "..............",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "so": {
+      "en": "Somalia",
+      "es": "Somalia",
+      "label": [
+        "SOOMAALIYA"
+      ],
+      "symbol": "a frankincense tree",
+      "ink": "#2E8B57",
+      "rows": [
+        ".k.k.....k.k..",
+        "..k.k...k.k...",
+        "...kk..kkk....",
+        "....kk.kk.....",
+        ".....kkk......",
+        ".....kk.......",
+        "....kkk.......",
+        "....k.kk......",
+        "....kk.k......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kk...kk....",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ss": {
+      "en": "South Sudan",
+      "es": "Sudán del Sur",
+      "label": [
+        "SOUTH SUDAN"
+      ],
+      "symbol": "a long-horned cow",
+      "ink": "#2E8B57",
+      "rows": [
+        "k............k",
+        "kk..........kk",
+        ".kk........kk.",
+        "..kk......kk..",
+        "...kkkkkkkk...",
+        ".kkk......kkk.",
+        "....k....k....",
+        "....k.kk.k....",
+        "....k....k....",
+        ".....k..k.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "sc": {
+      "en": "Seychelles",
+      "es": "Seychelles",
+      "label": [
+        "SEYCHELLES"
+      ],
+      "symbol": "a coco de mer",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..kkk....kkk..",
+        ".k...k..k...k.",
+        "k.....kk.....k",
+        "k............k",
+        "k............k",
+        "k............k",
+        "k............k",
+        "k............k",
+        ".k..........k.",
+        "..k........k..",
+        "...kk.kk.kk...",
+        ".....k..k.....",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "km": {
+      "en": "Comoros",
+      "es": "Comoras",
+      "label": [
+        "COMORES"
+      ],
+      "symbol": "a coelacanth",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "......kk......",
+        ".....kkkkk....",
+        "..kkkkkkkkkk.k",
+        ".kk.kkkkkkkkkk",
+        "kkkkkkkkkkkkk.",
+        ".kkkkkkkkkkkkk",
+        "..kkkkkkkkkk.k",
+        "...kk...kk....",
+        "...k.....k....",
+        "..............",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "mg": {
+      "en": "Madagascar",
+      "es": "Madagascar",
+      "label": [
+        "MADAGASIKARA"
+      ],
+      "symbol": "a ring-tailed lemur",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".k..k.....kk..",
+        ".kkkk.....k...",
+        "kk.kk.....kk..",
+        ".kkk......k...",
+        "..kk......kk..",
+        ".kkkk.....k...",
+        ".kkkk.....kk..",
+        "kkkkkk....k...",
+        "kkkkkk...kk...",
+        ".kkkk...kk....",
+        ".k..k..kk.....",
+        ".k..kkkk......",
+        "kk.kk.........",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "mu": {
+      "en": "Mauritius",
+      "es": "Mauricio",
+      "label": [
+        "MAURITIUS"
+      ],
+      "symbol": "a dodo",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "....kkk.......",
+        "...kkkkk......",
+        "..kk.kkk......",
+        "kkkkkkk.......",
+        "k.kkkkk.......",
+        "...kkkkkkk....",
+        "..kkkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "..kkkkkkkkkkkk",
+        "...kkkkkkkk.k.",
+        "....kk..kk....",
+        "....k...k.....",
+        "...kk..kk....."
+      ],
+      "batch": "af"
+    },
+    "mz": {
+      "en": "Mozambique",
+      "es": "Mozambique",
+      "label": [
+        "MOÇAMBIQUE"
+      ],
+      "symbol": "a dugong",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        "..kkkkkkk.....",
+        ".kkkkkkkkkk...",
+        "kk.kkkkkkkkk.k",
+        "kkkkkkkkkkkkkk",
+        ".kkkkkkkkkkk.k",
+        "..kk...k......",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "mw": {
+      "en": "Malawi",
+      "es": "Malaui",
+      "label": [
+        "MALAWI"
+      ],
+      "symbol": "a cichlid of Lake Malawi",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "....kkkkk.....",
+        "..kkkkkkkk..k.",
+        ".kk.k.k.k.k.kk",
+        "kkkkk.k.k.kk.k",
+        "kkkkk.k.k.kkkk",
+        ".kkkk.k.k.kk.k",
+        "..kkkkkkkk..k.",
+        "....kk........",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "zm": {
+      "en": "Zambia",
+      "es": "Zambia",
+      "label": [
+        "ZAMBIA"
+      ],
+      "symbol": "Victoria Falls and its rainbow",
+      "ink": "#7B4BA8",
+      "rows": [
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k.k.",
+        "k.k.k.k.k.k.k.",
+        "k.k.k.k.k.k.k.",
+        "k.k.k.k.k.k.k.",
+        "k.k.k.k.k.k.k.",
+        "k.k.k.k.k.k.k.",
+        ".k..k..k..k..k",
+        "......kk......",
+        "....kk..kk....",
+        "...k..kk..k...",
+        "..k.k....k.k..",
+        "..k........k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "af"
+    },
+    "zw": {
+      "en": "Zimbabwe",
+      "es": "Zimbabue",
+      "label": [
+        "ZIMBABWE"
+      ],
+      "symbol": "the conical tower of Great Zimbabwe",
+      "ink": "#B3343A",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "kkkkkkkkkkkkkk",
+        "k..k..k..k..kk",
+        "kk.kk.kk.kk.kk",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "bw": {
+      "en": "Botswana",
+      "es": "Botsuana",
+      "label": [
+        "BOTSWANA"
+      ],
+      "symbol": "a zebra",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "...........kk.",
+        "..........kkk.",
+        ".........kkkkk",
+        "........kk.kk.",
+        ".kkkkkkkk.k...",
+        "kk.kk.kk.kkk..",
+        "k.kk.kk.kk.k..",
+        "kkk.kk.kk.kk..",
+        ".kkkkkkkkkk...",
+        ".k.k....k.k...",
+        ".k.k....k.k...",
+        "kk.kk..kk.kk..",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "na": {
+      "en": "Namibia",
+      "es": "Namibia",
+      "label": [
+        "NAMIBIA"
+      ],
+      "symbol": "a dead camelthorn tree at Deadvlei",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..........kk..",
+        "..k.k....k..k.",
+        "...k.k..k....k",
+        ".k..kk.k......",
+        "..k.kkk.......",
+        "....kk........",
+        ".....k....k...",
+        ".....k...k....",
+        ".....k..k.....",
+        ".....k.k......",
+        "....kkk.......",
+        "...k...k......",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "za": {
+      "en": "South Africa",
+      "es": "Sudáfrica",
+      "label": [
+        "SOUTH AFRICA"
+      ],
+      "symbol": "Table Mountain and its tablecloth",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..kkkkkkkk....",
+        ".k.k.k.k.k.k..",
+        ".kkkkkkkkkkk..",
+        ".k.........k..",
+        "k..........kk.",
+        "k...........kk",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ls": {
+      "en": "Lesotho",
+      "es": "Lesoto",
+      "label": [
+        "LESOTHO"
+      ],
+      "symbol": "a Basotho hat",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        "....k.kk.k....",
+        "....kkkkkk....",
+        "...k.k..k.k...",
+        "...kkkkkkkk...",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        ".k.k.k..k.k.k.",
+        "kkkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "sz": {
+      "en": "Eswatini",
+      "es": "Esuatini",
+      "label": [
+        "ESWATINI"
+      ],
+      "symbol": "a white rhino",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "...........k..",
+        "....kkk...kk..",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkkkk",
+        "kkkkkkkkkkkkk.",
+        "kkkkkkkkkkkk..",
+        ".kkkkkkkkkk...",
+        ".kk.kk..kk.k..",
+        ".kk.kk..kk.k..",
+        ".kk.kk..kk.k..",
+        "..............",
+        ".............."
+      ],
+      "batch": "af"
+    },
+    "ar": {
+      "en": "Argentina",
+      "es": "Argentina",
+      "label": [
+        "ARGENTINA"
+      ],
+      "symbol": "a mate gourd and its bombilla",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..........k...",
+        "..........k...",
+        ".........k....",
+        "...kkkkkkkk...",
+        "..k......k.k..",
+        ".k.k.k.k.k..k.",
+        ".k.........k..",
+        "..k.......k...",
+        ".k.k.k.k.k.k..",
+        "..k.......k...",
+        "...k.....k....",
+        "....kkkkk.....",
+        "....k...k.....",
+        "...kkkkkkk...."
+      ],
+      "batch": "sa"
+    },
+    "bo": {
+      "en": "Bolivia",
+      "es": "Bolivia",
+      "label": [
+        "BOLIVIA"
+      ],
+      "symbol": "a llama",
+      "ink": "#B3343A",
+      "rows": [
+        "..........kk..",
+        "..........kkk.",
+        "..........kkkk",
+        "..........kk..",
+        "..........kk..",
+        "..........kk..",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkk..",
+        "kkkkkkkkkkkk..",
+        ".kkkkkkkkkk...",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        ".kk.kk..kk.kk."
+      ],
+      "batch": "sa"
+    },
+    "br": {
+      "en": "Brazil",
+      "es": "Brasil",
+      "label": [
+        "BRASIL"
+      ],
+      "symbol": "Christ the Redeemer on Corcovado",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "...k......k...",
+        "..k........k..",
+        ".k..........k.",
+        "k............k"
+      ],
+      "batch": "sa"
+    },
+    "cl": {
+      "en": "Chile",
+      "es": "Chile",
+      "label": [
+        "CHILE"
+      ],
+      "symbol": "a moai of Rapa Nui",
+      "ink": "#7B4BA8",
+      "rows": [
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "...kkkkkkkk...",
+        "..kk..kkkkk...",
+        "..kkkkkkkkk...",
+        "...kkkkkkkk...",
+        "..kkkkkkkk....",
+        ".kkkkkkkkk....",
+        "..kkkkkkkk....",
+        "...kkkkkkk....",
+        "...kkkkkkk....",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "co": {
+      "en": "Colombia",
+      "es": "Colombia",
+      "label": [
+        "COLOMBIA"
+      ],
+      "symbol": "the wax palms of the Cocora Valley",
+      "ink": "#2E8B57",
+      "rows": [
+        ".k........k...",
+        "kkk......kkk..",
+        "k.k..k...k.k..",
+        "..k.kkk...k...",
+        "..k.k.k...k...",
+        "..k..k....k...",
+        "..k..k....k...",
+        "..k..k....k...",
+        "..k..k....k...",
+        "..k..k...kk...",
+        "..k..k..k..k..",
+        "kk.k.kk.....kk",
+        "k...k..kk...k.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "ec": {
+      "en": "Ecuador",
+      "es": "Ecuador",
+      "label": [
+        "ECUADOR"
+      ],
+      "symbol": "a Galápagos giant tortoise",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "....kkkkkk....",
+        "...k.k..k.k...",
+        "..k.kk..kk.kkk",
+        ".k..k....k.kkk",
+        ".kkkkkkkkkkk.k",
+        "..kk.....kk...",
+        "..kk.....kk...",
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "gy": {
+      "en": "Guyana",
+      "es": "Guyana",
+      "label": [
+        "GUYANA"
+      ],
+      "symbol": "a giant water lily",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "....kk.kk.....",
+        ".....kkk......",
+        "..kkkkkkkkkk..",
+        ".k..........k.",
+        "k.k.k.k.k.k..k",
+        "k............k",
+        ".kkkkkkkkkkkk.",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "py": {
+      "en": "Paraguay",
+      "es": "Paraguay",
+      "label": [
+        "PARAGUAY"
+      ],
+      "symbol": "ñandutí lace",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "....kkk.kk....",
+        "..kk..k...kk..",
+        "..kk..k...kk..",
+        ".k..kk..kk..k.",
+        ".k..k....k..k.",
+        "...k..kk..kkk.",
+        ".kk...kk......",
+        ".k..k....k..k.",
+        ".k..kk..kk..k.",
+        "..kk..k...kk..",
+        "..kk..k...kk..",
+        "....kkk.kk....",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "pe": {
+      "en": "Peru",
+      "es": "Perú",
+      "label": [
+        "PERÚ"
+      ],
+      "symbol": "Machu Picchu",
+      "ink": "#B3343A",
+      "rows": [
+        "..........k...",
+        ".........kkk..",
+        "........k...k.",
+        ".......k.....k",
+        "......k......k",
+        "..kk.k........",
+        ".k..k.........",
+        "k...kkkkkkkkkk",
+        "kkk.k.k.k.k.k.",
+        "k.kkkkkkkkkkkk",
+        "kk.k.k.k.k.k.k",
+        "k.kkkkkkkkkkkk",
+        "kk............",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "sr": {
+      "en": "Suriname",
+      "es": "Surinam",
+      "label": [
+        "SURINAME"
+      ],
+      "symbol": "a blue poison dart frog",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        ".kk........kk.",
+        "k..k......k..k",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkkk.",
+        "kk.kkkkkkkk.kk",
+        "k..kkkkkkkk..k",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        ".kk.kkkkkk.kk.",
+        "kk..kk..kk..kk",
+        "k............k",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "uy": {
+      "en": "Uruguay",
+      "es": "Uruguay",
+      "label": [
+        "URUGUAY"
+      ],
+      "symbol": "the Palacio Salvo",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....kkkkkk....",
+        "....k.kk.k....",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "ve": {
+      "en": "Venezuela",
+      "es": "Venezuela",
+      "label": [
+        "VENEZUELA"
+      ],
+      "symbol": "Angel Falls from its tepui",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        ".kkkkkkkkkkkk.",
+        "k............k",
+        "k......k.....k",
+        "k......k.....k",
+        "k......k.....k",
+        "k......k.....k",
+        "k.....k.k....k",
+        "k......k.....k",
+        "k.....k.k....k",
+        "k....k...k...k",
+        "kk.kk.kk.kk.kk",
+        "k.k..k..k..k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "au": {
+      "en": "Australia",
+      "es": "Australia",
+      "label": [
+        "AUSTRALIA"
+      ],
+      "symbol": "a kangaroo",
+      "ink": "#2E8B57",
+      "rows": [
+        "..........kk..",
+        ".........kkk..",
+        "........kkkkk.",
+        "........kk....",
+        ".......kkk....",
+        "......kkkk....",
+        ".....kkkkk....",
+        "....kkkkkk....",
+        "....kkkkk.k...",
+        "...kkkkkk.....",
+        "..kk..kkk.....",
+        ".kk....kk.....",
+        "kk....kkkkk...",
+        "k............."
+      ],
+      "batch": "oc"
+    },
+    "nz": {
+      "en": "New Zealand",
+      "es": "Nueva Zelanda",
+      "label": [
+        "NEW ZEALAND"
+      ],
+      "symbol": "a kiwi",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "...kkkkk......",
+        "..kkkkkkkk....",
+        ".kkkkkkkkkk...",
+        ".kkkkkkkkkk.k.",
+        ".kkkkkkkkkkk..",
+        "..kkkkkkkk.k..",
+        "...k...k...k..",
+        "...k...k....k.",
+        "..kk..kk.....k",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "pg": {
+      "en": "Papua New Guinea",
+      "es": "Papúa Nueva Guinea",
+      "label": [
+        "PAPUA NEW",
+        "GUINEA"
+      ],
+      "symbol": "a bird of paradise",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..kk..........",
+        ".kkk..........",
+        "kkkk..........",
+        "..kkk.........",
+        "..kkkk........",
+        "...kkkk.......",
+        "...kk.k.k.....",
+        "...k.k.k.k....",
+        "..k.k.k.k.k...",
+        "..k.k.k.k..k..",
+        ".k.k..k..k..k.",
+        ".k..k..k..k...",
+        "k...k...k...k.",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "fj": {
+      "en": "Fiji",
+      "es": "Fiyi",
+      "label": [
+        "FIJI"
+      ],
+      "symbol": "a bure, the thatched house",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "....kk..kk....",
+        "...kk....kk...",
+        "..kk......kk..",
+        ".kk........kk.",
+        "kkkkkkkkkkkkkk",
+        "..k........k..",
+        "..k..kkkk..k..",
+        "..k..k..k..k..",
+        "..k..k..k..k..",
+        "..k..k..k..k..",
+        ".kkkkkkkkkkkk.",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "sb": {
+      "en": "Solomon Islands",
+      "es": "Islas Salomón",
+      "label": [
+        "SOLOMON",
+        "ISLANDS"
+      ],
+      "symbol": "a war canoe with its high prow",
+      "ink": "#B3343A",
+      "rows": [
+        "k............k",
+        "k............k",
+        ".k..........k.",
+        ".k..........k.",
+        "..k........k..",
+        "..kk......kk..",
+        "...kkkkkkkk...",
+        "....kkkkkk....",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "vu": {
+      "en": "Vanuatu",
+      "es": "Vanuatu",
+      "label": [
+        "VANUATU"
+      ],
+      "symbol": "Mount Yasur throwing lava",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..k...k...k...",
+        "...k..k..k....",
+        ".k...k.k...k..",
+        "......kk......",
+        ".....k..k.....",
+        "....k....k....",
+        "...k......k...",
+        "..k........k..",
+        ".k..........k.",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "oc"
+    },
+    "ws": {
+      "en": "Samoa",
+      "es": "Samoa",
+      "label": [
+        "SAMOA"
+      ],
+      "symbol": "the To Sua ocean trench and its ladder",
+      "ink": "#2E8B57",
+      "rows": [
+        "..kkkkkkkkkk..",
+        ".k....k.k...k.",
+        "k.....kkk....k",
+        "k.....k.k....k",
+        "k.....kkk....k",
+        "k.....k.k....k",
+        "k.....kkk....k",
+        "k.....k.k....k",
+        "k.kk..kk.kk..k",
+        "k...kk...kk..k",
+        ".k..........k.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "to": {
+      "en": "Tonga",
+      "es": "Tonga",
+      "label": [
+        "TONGA"
+      ],
+      "symbol": "the Ha'amonga 'a Maui trilithon",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "ki": {
+      "en": "Kiribati",
+      "es": "Kiribati",
+      "label": [
+        "KIRIBATI"
+      ],
+      "symbol": "an atoll around its lagoon",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "..kk......k...",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        "..kk.......k..",
+        "....kkkkkkk...",
+        "....kkkkkk....",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "mh": {
+      "en": "Marshall Islands",
+      "es": "Islas Marshall",
+      "label": [
+        "MARSHALL",
+        "ISLANDS"
+      ],
+      "symbol": "a stick chart",
+      "ink": "#B3343A",
+      "rows": [
+        "k.....k......k",
+        ".k...k.k....k.",
+        "..k.k...k..k..",
+        "...k.....kk...",
+        "..k.k...k..k..",
+        ".k...k.k....k.",
+        "kkkkkkkkkkkkkk",
+        ".k...k.k....k.",
+        "..k.k...k..k..",
+        "...k.....kk...",
+        "..k.k...k..k..",
+        ".k...k.k....k.",
+        "k.....k......k",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "fm": {
+      "en": "Micronesia",
+      "es": "Micronesia",
+      "label": [
+        "MICRONESIA"
+      ],
+      "symbol": "a rai stone of Yap",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "..kkkkkkkkkk..",
+        ".kkkkk..kkkkk.",
+        ".kkkk....kkkk.",
+        ".kkkkk..kkkkk.",
+        "..kkkkkkkkkk..",
+        "..kkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "....kkkkkk....",
+        "..............",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "oc"
+    },
+    "nr": {
+      "en": "Nauru",
+      "es": "Nauru",
+      "label": [
+        "NAURU"
+      ],
+      "symbol": "the coral pinnacles",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..k.....k.....",
+        "..k....kk...k.",
+        ".kk....kk...k.",
+        ".kk...kkk..kk.",
+        ".kkk..kkk..kk.",
+        "kkkk.kkkkkkkk.",
+        "kkkkkkkkkkkkkk",
+        "k.k.kk.k..kk.k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "pw": {
+      "en": "Palau",
+      "es": "Palaos",
+      "label": [
+        "PALAU"
+      ],
+      "symbol": "the Rock Islands",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..kkkk...kkk..",
+        ".kkkkkk.kkkkk.",
+        ".kkkkkk.kkkkk.",
+        "..kkkk...kkk..",
+        "...kk.....k...",
+        "...kk.....k...",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "tv": {
+      "en": "Tuvalu",
+      "es": "Tuvalu",
+      "label": [
+        "TUVALU"
+      ],
+      "symbol": "a palm on a tiny islet",
+      "ink": "#2E8B57",
+      "rows": [
+        "....kk.kk.....",
+        "..kk..k..kk...",
+        ".k...kkk....k.",
+        "....k.k.k.....",
+        ".......k......",
+        "........k.....",
+        "........k.....",
+        ".......k......",
+        ".....kkkkk....",
+        "...kkkkkkkkk..",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "oc"
+    }
+  },
+  "excluded": {
+    "kp": "North Korea is out of the passport (owner, 2026-10-29): no stamp, not counted; the passport counts 194."
+  }
+}
