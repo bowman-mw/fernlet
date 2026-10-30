@@ -96,6 +96,11 @@ enum WorldExploreCopy {
                comment: "World city card: how many of the city's landmarks have been found, of how many")
     }
 
+    /// The Major roads crossed row's value: the count ("4").
+    static func roadsCrossed(_ count: Int) -> String {
+        max(count, 0).formatted()
+    }
+
     /// The Uncovered row's value: "3% of the city" (under 1% but some: "Under 1% of the city").
     static func uncovered(_ share: Double) -> String {
         guard share.isFinite, share > 0 else { return percent(0) }

@@ -8,7 +8,8 @@ import WorldMapStore
 ///
 /// - **The map** is drawn from the bundled atlas (``WorldViewMapCanvas``), no MapKit and no network: faint
 ///   land and sea under the fog, the hexes the person uncovered in full, country lines from Country and state
-///   lines from State on the hex edges, and no roads (the atlas has none) and no county lines (answer 13).
+///   lines from State on the hex edges, the major roads the person crossed in amber on the uncovered hexes from
+///   Country in (``WorldRoadStyle``), and no county lines (answer 13).
 /// - **Zoom** World → Country → State → City (``AtlasZoomLevel``) with the framed control on the right
 ///   (``WorldAtlasZoomControl``) or a pinch, one level a step. Reduce Motion: no animated zoom.
 /// - **Pan** east and west all the way round; north and south clamped, the poles at the edges at World
@@ -115,7 +116,7 @@ struct WorldAtlasMapView: View {
 
     /// What the map's drawing depends on beyond the camera: the uncovered hexes, the raster, the places.
     private var generation: Int {
-        model.placeGeneration &+ (model.raster == nil ? 0 : 1) &+ (model.found.isEmpty ? 0 : 2)
+        model.placeGeneration &+ (model.raster == nil ? 0 : 1) &+ (model.found.isEmpty ? 0 : 2) &+ (model.roads.roadCount > 0 ? 4 : 0)
     }
 
     /// The zoom level's spoken value.

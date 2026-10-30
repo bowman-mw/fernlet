@@ -59,6 +59,8 @@ Round 7 (ideas 1, 2, 4, 7, A and B; contract in `Docs/World-Atlas-Pack.md`). The
 
 **States and provinces, and the world view's zoom** (World-Exploration-Spec, "The world view", answers 9 and 13). The pack's `ADM1` section holds Natural Earth's admin-1 states and provinces (``AtlasAdmin1``: a frozen token, its ISO 3166-2 code or `ne:<id>`; the country's alpha-2; English and Spanish names; an outline at 0.008°). Where Natural Earth's admin-1 is second-level (Britain's council areas, France's départements, Italy's and Spain's provinces, Ireland's counties, and Belgium, the Philippines, Uganda, Sri Lanka, Guinea, Burkina Faso and Malawi), each entry names its first-level region, its plate group (``AtlasAdmin1Group``: England, Île-de-France); elsewhere an entry is its own group. ``WorldAtlas/admin1(at:)`` tests only the entries of the country under the fix when there is one, ``WorldAtlas/admin1Group(at:)`` gives its group, and ``WorldAtlas/placeName(at:)`` gives the plate's place (``AtlasPlaceName``: the group's names and the country code, the screen naming the country). The screen draws lines on hex edges: ``WorldAtlas/placeName(of:in:)`` names a hex and ``WorldAtlas/border(between:and:)`` says whether an edge carries a country line, a state line (two groups of one country) or none (``AtlasHexBorder``). ``AtlasPolygon/ring(_:)``, ``WorldAtlas/admin1s(overlapping:)`` and ``WorldAtlas/countries(overlapping:)`` hand over the outlines too. No county data, ever. ``AtlasZoomLevel`` is the ladder World → Country → State → City (about 4.97, 20.7, 86.3 and 360 pt a degree of latitude at 45°; the ends from the mockup, a geometric ladder between), with + and − availability, country lines from Country, state lines and the plate's place from State, and VoiceOver naming the country from Country and the group from State. ``WorldViewHexGrid`` lays a level's 10-pt hexes over Web Mercator and ``WorldViewHexGrid/uncovered(by:)`` maps the lifted fog cells to the hexes they uncover, so one fog store drives every level; ``WorldAtlas/zoomDescription(level:centre:)`` gives the zoom control's VoiceOver parts.
 
+**Major roads** (World-Exploration-Spec §2, `ex-roads`). The pack's `ROAD` section holds Natural Earth's motorways, trunk and main roads (``AtlasRoad``, ``AtlasRoadKind``); ``WorldAtlas/roads(overlapping:)`` hands a screen the roads near its view and ``WorldAtlas/roadsCrossed(from:to:)`` tests one route segment. What the screens draw comes from ``AtlasRoadCrossings``: a road is crossed when one of the person's lifted fog cells lies on its line (its centre within a cell radius of a segment). It is derived from the fog history and never stored, so it needs no file, key or backup, follows every wipe, and in a decoy reads only the decoy's own cells; it reads only the one-degree cells of the road index that hold lifted cells, and keeps each one's answer until its cells change.
+
 ``AtlasTerrainClassifier`` maps the Köppen-Geiger code and the latitude to an ``AtlasTerrain``, and picks a few ``AtlasFlora`` (cacti only in the Americas). ``AtlasSeason`` gives meteorological seasons, flipped south of the equator, and none of the four inside the tropics.
 
 Bounded throughout:
@@ -146,6 +148,9 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``AtlasCountry``
 - ``AtlasWater``
 - ``AtlasTerrainClassifier``
+- ``AtlasRoad``
+- ``AtlasRoadKind``
+- ``AtlasRoadCrossings``
 - ``AtlasFlora``
 - ``AtlasSeason``
 - ``AtlasVisit``

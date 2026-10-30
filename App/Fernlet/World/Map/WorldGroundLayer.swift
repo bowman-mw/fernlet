@@ -16,15 +16,22 @@ struct WorldGround: Equatable {
     var trails: [[GeoPoint]] = []
     /// Lines in progress or from this session, drawn as dotted footsteps.
     var traces: [[GeoPoint]] = []
+    /// The major roads the lifted fog has crossed, drawn whole in amber (World-Exploration-Spec §2, `ex-roads`):
+    /// under the fog, so they show only where the map is uncovered, and under the saved lines.
+    var roads: WorldRoadDrawing = .none
+    /// Whether the roads draw over the fog instead (the city view, `ex-city-view`: "crossed roads show on top"),
+    /// with the saved lines drawn again over them so a walk stays readable.
+    var roadsOverFog = false
 
     /// How wide a saved line draws, in points: the mockups' `--m-trail` line, the same for a walk's and a
     /// ride's (owner 2026-10-29, Refinements group 19).
     static let trailWidth: CGFloat = 5
 }
 
-/// Fernlet's own ground layer over whichever base map is underneath: trails, the nature fog with its
-/// lifted cells (``NatureFogLayer``: ground hexes, grass, flowers, boulders and trees, approved
-/// 2026-10-26), and dotted traces.
+/// Fernlet's own ground layer over whichever base map is underneath: the crossed major roads and the trails, the
+/// nature fog with its lifted cells (``NatureFogLayer``: ground hexes, grass, flowers, boulders and trees, approved
+/// 2026-10-26), and dotted traces. The roads draw in this layer's own Canvas, never inside the fog's tiles; in the
+/// city view a sibling Canvas over the fog draws them (and the trails again) on top.
 ///
 /// Everything is placed from the reported `MapViewport` and the global `MercatorHexGrid`; nothing
 /// here knows the base map is Apple's. It never takes touches, so pans and pinches reach the map, and
@@ -44,20 +51,42 @@ struct WorldGroundLayer: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Canvas { context, size in
-                let trailColor = darkStyle ? WorldPalette.nightTrail : WorldPalette.trail
-                for trail in ground.trails {
-                    context.stroke(path(for: trail, size: size), with: .color(trailColor),
-                                   style: StrokeStyle(lineWidth: WorldGround.trailWidth, lineCap: .square, lineJoin: .miter))
-                }
+                if !ground.roadsOverFog { drawRoads(in: &context, size: size) }
+                drawTrails(in: &context, size: size)
             }
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
                                                  clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
                                                  motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera, terrain: terrain))
+            if ground.roadsOverFog, ground.roads.roadCount > 0 {
+                Canvas { context, size in
+                    drawRoads(in: &context, size: size)
+                    drawTrails(in: &context, size: size)
+                }
+            }
             traces
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// The saved lines, solid green.
+    private func drawTrails(in context: inout GraphicsContext, size: CGSize) {
+        let trailColor = darkStyle ? WorldPalette.nightTrail : WorldPalette.trail
+        for trail in ground.trails {
+            context.stroke(path(for: trail, size: size), with: .color(trailColor),
+                           style: StrokeStyle(lineWidth: WorldGround.trailWidth, lineCap: .square, lineJoin: .miter))
+        }
+    }
+
+    /// The crossed roads, 5 pt at Home's zoom and 4 pt zoomed out a step; nothing for a viewport out of
+    /// proportion with the view (the W-20 guard).
+    private func drawRoads(in context: inout GraphicsContext, size: CGSize) {
+        guard ground.roads.roadCount > 0, WorldLayerGuard.accepts(viewport, in: size) else { return }
+        let width = WorldExploreSelection.isZoomedOut(viewport) ? WorldRoadStyle.homeZoomedOutWidth : WorldRoadStyle.homeWidth
+        let projection = WorldRoadPainter.Projection(originX: viewport.minX, originY: viewport.minY,
+                                                     scale: Double(size.width) / viewport.width)
+        WorldRoadPainter.draw(ground.roads, in: &context, size: size, projection: projection) { _ in width }
     }
 
     /// The dotted footsteps of lines in progress, over the fog.
