@@ -35,6 +35,9 @@ here under Apache-2.0. These are commitments rather than launch pricing: they ar
 the app's US export-control position, where being a free, publicly available app is what keeps the
 shipped binary outside the EAR. See [Docs/Export-Compliance-Encryption.md](Docs/Export-Compliance-Encryption.md) §6A.
 
+**The code is open; the name is not.** Fernlet™ is a trademark of Michael Bowman Olay. Forks are
+welcome under Apache-2.0, but they ship under their own name and icon — see [TRADEMARKS.md](TRADEMARKS.md).
+
 **Requires:** iOS 26 or later. iPhone 15 Pro or newer for the full on-device AI features; the 15 cm
 handshake needs a phone with precise ranging (U1/UWB), with an on-screen confirm as the fallback.
 
