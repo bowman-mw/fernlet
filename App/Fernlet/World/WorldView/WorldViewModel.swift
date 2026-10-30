@@ -70,6 +70,11 @@ final class WorldViewModel {
     @ObservationIgnored private var placeTask: Task<Void, Never>?
     @ObservationIgnored private var pendingPlaces: (hexes: [HexCell], level: AtlasZoomLevel)?
 
+    /// A place lookup still running ends with the model (the memory wall's ML1).
+    isolated deinit {
+        placeTask?.cancel()
+    }
+
     /// Takes `content` (once; later calls do nothing).
     func load(_ newContent: WorldViewContent) {
         guard !isLoaded else { return }
