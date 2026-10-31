@@ -35,6 +35,7 @@ import math
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -69,8 +70,16 @@ def fetch(url, path):
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
     request = urllib.request.Request(url, headers={"User-Agent": AGENT})
-    with urllib.request.urlopen(request, timeout=60) as response, open(path + ".partial", "wb") as handle:
-        handle.write(response.read())
+    # Bounded: four tries, backing off 2, 4 and 8 s after a dropped connection.
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response, open(path + ".partial", "wb") as handle:
+                handle.write(response.read())
+            break
+        except (OSError, urllib.error.URLError):
+            if attempt == 3:
+                raise
+            time.sleep(2 ** (attempt + 1))
     os.replace(path + ".partial", path)
     time.sleep(0.05)
     return path
