@@ -16,9 +16,9 @@ extension CalendarFlightReading {
 /// made-up K7QX2M and its link an example.invalid address.
 @MainActor
 struct CalendarFlightParserTests {
-    static let title = "Cedar Air flight 812 to Honolulu (K7QX2M)"
-    static let location = "Portland International Airport (Portland, Oregon, United States)"
-    static let notes = """
+    nonisolated static let title = "Cedar Air flight 812 to Honolulu (K7QX2M)"
+    nonisolated static let location = "Portland International Airport (Portland, Oregon, United States)"
+    nonisolated static let notes = """
         Cedar Air flight 812 (5 hours, 40 minutes)
         Confirmation code: K7QX2M
 
@@ -32,8 +32,8 @@ struct CalendarFlightParserTests {
 
         This event was automatically added to your calendar from email by Outlook.
         """
-    static let salt = SymmetricKey(data: Data(repeating: 7, count: 32))
-    static let pacific = TimeZone(identifier: "America/Los_Angeles") ?? .gmt
+    nonisolated static let salt = SymmetricKey(data: Data(repeating: 7, count: 32))
+    nonisolated static let pacific = TimeZone(identifier: "America/Los_Angeles") ?? .gmt
 
     /// An event; by default the Outlook one, 09:05 PDT to 11:45 HST (14:45 PDT) on 12 March 2026.
     static func event(title: String = title, location: String? = location, notes: String? = notes,
