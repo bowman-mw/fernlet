@@ -560,6 +560,26 @@ each coordinator audit in it, converted into a `TrainerAuditEvent`.
 | --- | --- |
 | `ProximityPairProfile.recipeShare(in:)` | Fernlet's recipe profile under a namespace: its recipe-share radio row (`_fernlet-recipe2._udp` / `fernlet-recipe-v1` under `.fernlet`), the TXT mode `recipe` and the audit area `recipeShare`, read off the host's own namespace. `FernletFeatureGoldenTests` 31f pins it. |
 
+### Tap to connect (World Friends, 2026-10-31)
+
+Meeting someone new by tapping phones on Home. The privacy half is ProximityKit's (`Sources/ProximityKit/TapRendezvous/`):
+`ProximityTapRendezvous` (start / stop / `answer(_:)` / `withdraw()`, rotation <= 900 s, one link at a time on the pair
+radio), `TapRendezvousLink` (the order: ephemeral hello, sealed range, reveal after the local 15 cm dwell, answer, card
+after both yes) and `TapRendezvousWire` (frames, caps, the sealing channel). The mesh half is
+`MeshNetworkManager.admissibleStrangerSigningKeys` (narrowed join doors) and the responder's hello sent only after it
+accepts the dialer (`NetworkMeshSession.openHellos`).
+
+- `ProximityTapRendezvousProfile.tapToConnect(in:)` (`FernletPairProfiles.swift`): pair row, TXT mode `tap`, labels
+  `fernlet.tap.card.v1` / `fernlet.tap.seal.v1`.
+- `TapToConnectController` / `TapToConnectPresentation` (`App/Fernlet/World/Friends/TapToConnect.swift`): the run seams'
+  `apply(_:)`, the mesh door keys (kept friends + tap matches), the hand-off window, Low Power Mode, who was met by tapping.
+- `FernletStore+TapToConnect.swift`: builds the rendezvous on the store, `setHomeFrontmost(_:)`, the hand-off loop that
+  commits the matched slot (`commitManualProximity(slotID:)`).
+- `ProximityRunPolicy`'s `tapRendezvous` row and the Home discovery exception for a pending hand-off; the seams'
+  `.tapRendezvous` action.
+- Home UI: `TapToConnectHome.swift` (gate, ring maths, cue, layer) and `TapToConnectViews.swift` (rings, plate,
+  question sheet).
+
 ### `FernletConnections/ProximityIdentityEnvelope+PayloadType.swift`
 
 Fernlet's typed view of the signed envelope's raw payload token (plan step A0.7.4), a `nonisolated`
