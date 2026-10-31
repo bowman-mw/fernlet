@@ -290,6 +290,7 @@ struct SillyStatsCopyTests {
         tally.brushCount = 60
         tally.showerCount = 25
         tally.pats = 212
+        tally.furthestFromHomeMeters = 8_400_000
         #expect(SillyStatsEngine.revealed(in: tally) == SillyStatKind.allCases)
         for kind in SillyStatKind.allCases {
             let text = SillyStatsCopy.text(for: kind, tally: tally, locale: english)
