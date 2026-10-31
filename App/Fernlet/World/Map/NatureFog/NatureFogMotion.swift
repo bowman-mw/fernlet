@@ -47,11 +47,14 @@ struct NatureFogMotion: Equatable {
         return animation
     }
 
-    /// A tile's crossfade from its old picture to its new one: the cleared grass fades, a lifted tree fades
-    /// whole, and the new edge hexes lighten.
-    static func clearing() -> CATransition {
-        let fade = CATransition()
-        fade.type = .fade
+    /// A tile's old picture fading out over its new one: the cleared grass fades, a lifted tree fades whole,
+    /// and the new edge hexes lighten. Only the old picture fades; the new one sits under it at full strength,
+    /// so mid-fade the tile is never see-through where fog stays (a crossfade let the map show through the
+    /// tile and along its edges: the owner's blinking lines while driving, 2026-10-30).
+    static func clearing() -> CABasicAnimation {
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
         fade.duration = clearDuration
         fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
         return fade

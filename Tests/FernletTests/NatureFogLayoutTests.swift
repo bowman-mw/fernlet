@@ -164,15 +164,17 @@ struct NatureFogLayoutTests {
         #expect(view.shownTileCount > 0 && view.waitingTileCount == 0)
         view.settle(now: CACurrentMediaTime() + 60)
         #expect(view.isSwaying && view.swayingSpriteCount > 0)
-        var fading = 0, swaying = 0
+        var fading = 0, swaying = 0, seeThrough = 0
         view.onTileArrived = { [unowned view] in
             fading = max(fading, view.fadingTileCount)
+            seeThrough = max(seeThrough, view.fadingTileCount - view.fadingOverNewPictureCount)
             swaying = max(swaying, view.swayingSpriteCount)
         }
         view.show(scene(next, reduceMotion: false))
         #expect(view.scatteringCount > 0, "its blades scatter")
         await view.finishDrawing()
         #expect(fading > 0, "the cleared grass fades as its new picture arrives")
+        #expect(seeThrough == 0, "the old picture fades over the new one, so the map never shows through (driving, 2026-10-30)")
         #expect(swaying > 0, "the map didn't move: the grass keeps swaying")
     }
 
@@ -183,11 +185,15 @@ struct NatureFogLayoutTests {
         await view.finishDrawing()
         view.settle(now: CACurrentMediaTime() + 60)
         #expect(!view.isSwaying && view.swayingSpriteCount == 0, "no sway")
-        var fading = 0
-        view.onTileArrived = { [unowned view] in fading = max(fading, view.fadingTileCount) }
+        var fading = 0, seeThrough = 0
+        view.onTileArrived = { [unowned view] in
+            fading = max(fading, view.fadingTileCount)
+            seeThrough = max(seeThrough, view.fadingTileCount - view.fadingOverNewPictureCount)
+        }
         view.show(scene(next, reduceMotion: true))
         await view.finishDrawing()
         #expect(fading > 0, "a clearing hex simply fades out")
+        #expect(seeThrough == 0, "over the new picture, never see-through")
         #expect(view.scatteringCount == 0, "no scatter")
     }
 
