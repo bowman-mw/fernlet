@@ -150,12 +150,13 @@ struct CalendarFlightParserTests {
         #expect(found.flight.departure == nil && found.flight.arrival == nil && !found.flight.timesUnsure)
     }
 
-    /// The event hash is HMAC-SHA256 as 64 lowercase hex: stable for one salt, different for another, and
-    /// absent with no identifier.
+    /// The event hash is HMAC-SHA256 over the purpose label "fernlet.world.calendar-event-hash.v1", a zero
+    /// byte and the identifier, as 64 lowercase hex: stable for one salt, different for another, and absent
+    /// with no identifier. The pinned value was computed independently (Python's hmac).
     @Test func saltedHash() throws {
         let known = CalendarFlightParser.eventHash("The quick brown fox jumps over the lazy dog",
                                                    salt: SymmetricKey(data: Data("key".utf8)))
-        #expect(known == "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8")
+        #expect(known == "82d0bca9f5e0513d48465e6f9f3c99f42a8239cb325e4af863f6b0eaa50b8fb1")
         let first = CalendarFlightParser.eventHash("event-1", salt: Self.salt)
         #expect(first == CalendarFlightParser.eventHash("event-1", salt: Self.salt))
         #expect(first != CalendarFlightParser.eventHash("event-1", salt: SymmetricKey(data: Data(repeating: 8, count: 32))))
