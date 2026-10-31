@@ -98,11 +98,12 @@ extension PassportBookScreen {
         go(to: page + by, in: book)
     }
 
-    /// Turns to page `number`: the pixel curl in four steps (0.3 s) with a light haptic, or a 0.15 s cross-fade
-    /// with Reduce Motion. VoiceOver hears the new page.
+    /// Turns to page `number`: the leaf swings away in one smooth motion (``PassportTurn/duration``) with a light
+    /// haptic, or a 0.15 s cross-fade with Reduce Motion. A turn asked for during another lands that one at once
+    /// and swings on from the page it was uncovering, so a quick run of swipes keeps up. VoiceOver hears the new page.
     func go(to number: Int, in book: PassportBookModel) {
         let target = book.clamped(number)
-        guard target != page, turn == nil else { return }
+        guard target != page else { return }
         detail = nil
         pageOnTop = true
         FernletFeedback.system.play(.tick)
@@ -111,24 +112,15 @@ extension PassportBookScreen {
             announce(book)
             return
         }
-        turn = PassportTurn(from: page, to: target, step: 1)
-        Task { await curl(to: target, in: book) }
+        turn = PassportTurn(from: page, to: target, id: (turn?.id ?? 0) &+ 1)
+        page = target
+        announce(book)
     }
 
-    /// The curl's remaining steps, 75 ms apart.
-    private func curl(to target: Int, in book: PassportBookModel) async {
-        for next in 2 ... 4 {
-            do {
-                try await Task.sleep(for: .milliseconds(75))
-            } catch {
-                break
-            }
-            if next < 4 { turn?.step = next } else { turn = nil }
-            if next == 2 { page = target }
-        }
-        page = target
+    /// Ends the turn `id` once its leaf has swung away (a newer turn that replaced it carries on).
+    func finishTurn(_ id: Int) {
+        guard turn?.id == id else { return }
         turn = nil
-        announce(book)
     }
 
     /// "Page 3 of 6, Stamps, 14 August to 21 September".
