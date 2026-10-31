@@ -29,7 +29,9 @@ struct WorldHomesLayer: View {
 struct WorldCompanionExtras: View {
     var store: FernletStore
     let point: CGPoint
-    let date: Date
+    /// Whether the companion's own bedtime has come (``WorldMapCompanion/isPastBedtime(store:at:)``), read by Home
+    /// once a minute rather than on every map frame that moves these.
+    let isPastBedtime: Bool
 
     var body: some View {
         let book = store.worldHomes
@@ -50,7 +52,7 @@ struct WorldCompanionExtras: View {
     private func isAsleepAtHome(_ book: HomeBook) -> Bool {
         guard let at = book.presence.atID, book.homes.contains(where: { $0.id == at }) else { return false }
         if WorldPlacesTestScenes.scenes.contains("asleep") { return true }
-        return WorldMapCompanion.isPastBedtime(store: store, at: date)
+        return isPastBedtime
     }
 }
 
