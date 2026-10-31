@@ -12,6 +12,10 @@ import WorldMapStore
 /// in a decoy. VoiceOver hears "New stamp, Sea of Japan, 24 October 2026. It's in Sprout's passport." once it
 /// settles; it stays for the notice window (the assistive one with VoiceOver or Switch Control), then goes, and
 /// the next open of the passport still lands the stamp.
+///
+/// An airport's ticket flows through it too (World-Airports-Spec §3): "New stamp: Portland International", and,
+/// for an airport found on the ground (its first trip, no flight landing there), "Ten minutes at the airport found
+/// it. It's in Sprout's passport." A landing's own banner is Home's.
 struct PassportNewStampBanner: View {
     let presenter: WorldPassportPresenter
     let store: FernletStore
@@ -25,7 +29,8 @@ struct PassportNewStampBanner: View {
         self.store = store
         self.entry = entry
         _library = State(initialValue: PassportLibrary(openAtlas: { [store] in store.worldFog.atlas.openedAtlas },
-                                                       seaNeighbours: { [store] in store.worldFog.atlas.seaNeighbours() }))
+                                                       seaNeighbours: { [store] in store.worldFog.atlas.seaNeighbours() },
+                                                       airports: { [store] in store.worldLocation.flights.airportsShelf.pack() }))
     }
 
     var body: some View {
@@ -42,7 +47,7 @@ struct PassportNewStampBanner: View {
                         .font(WorldType.bannerTitle)
                         .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
-                    Text(PassportNewStampCopy.detail(companion: WorldRecenterCopy.companionName(store)))
+                    Text(detail)
                         .font(WorldType.bannerDetail)
                         .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
@@ -82,6 +87,18 @@ struct PassportNewStampBanner: View {
     private var name: String {
         guard let kind = entry.stampKind else { return "" }
         return library.name(of: kind, onPage: true)
+    }
+
+    /// The second line: "It's in Sprout's passport.", or an airport found on the ground's "Ten minutes at the
+    /// airport found it. It's in Sprout's passport."
+    private var detail: LocalizedStringResource {
+        let companion = WorldRecenterCopy.companionName(store)
+        guard entry.kind == .airport,
+              PassportAirportStamp.foundOnTheGround(code: library.airportCode(entry.token), at: entry.date,
+                                                    trip: entry.trip, flights: store.worldFog.atlas.book.flights) else {
+            return PassportNewStampCopy.detail(companion: companion)
+        }
+        return PassportAirportCopy.foundOnTheGround(companion: companion)
     }
 
     /// What VoiceOver hears: "New stamp, Sea of Japan, 24 October 2026. It's in Sprout's passport."
@@ -139,10 +156,10 @@ nonisolated enum PassportNewStampCopy {
                                               comment: "VoiceOver hint on the Home banner for a new passport stamp")
 
     /// Points per postmark point (a special's per pixel) that fit the stamp in the banner's 48-pt square: a country's
-    /// 56 × 44 postmark at 0.8, a round or hexagonal one at 0.9, a special to 44 pt.
+    /// 56 × 44 postmark or an airport's ticket at 0.8, a round or hexagonal one at 0.9, a special to 44 pt.
     static func artScale(for kind: PassportStampKind) -> CGFloat {
         switch kind {
-        case .country: 0.8
+        case .country, .airport: 0.8
         case .continent, .ocean, .sea: 0.9
         case .special(let allOceans): 44 / CGFloat(max(PassportStampArt.special(allOceans: allOceans).count, 1))
         }

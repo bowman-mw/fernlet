@@ -4,8 +4,11 @@ import SwiftUI
 import WorldMapStore
 
 /// What one passport stamp is (World-Exploration-Spec §3): a country by its alpha-2 code, a continent, an ocean, a
-/// sea by its atlas token, or one of the two specials.
+/// sea by its atlas token, one of the two specials, or an airport by its frozen token (World-Airports-Spec §4.1),
+/// whose ticket says TRANSIT for a layover's trip.
 nonisolated enum PassportStampKind: Hashable, Sendable {
+    /// An airport by its frozen `WorldAirport.token`; `transit` when the trip was a layover.
+    case airport(String, transit: Bool)
     case country(String)
     case continent(AtlasContinent)
     case ocean(AtlasOcean)
@@ -16,6 +19,7 @@ nonisolated enum PassportStampKind: Hashable, Sendable {
     /// The postmark's shape (a special has none: it is a full-colour picture).
     var shape: PassportPostmarkShape {
         switch self {
+        case .airport: .ticket
         case .country: .rect
         case .continent: .round
         case .ocean, .sea, .special: .hex
@@ -23,9 +27,11 @@ nonisolated enum PassportStampKind: Hashable, Sendable {
     }
 
     /// The key the stamp's tilt, nudge and wear are seeded from (a frozen token, never shown): a country's
-    /// lower-case code, a continent's mockup key, an ocean's rawValue, a sea's token, a special's mockup key.
+    /// lower-case code, a continent's mockup key, an ocean's rawValue, a sea's token, a special's mockup key, an
+    /// airport's "ap:" key (a layover's with "t", the mockup's `apEntry`).
     var seedKey: String {
         switch self {
+        case .airport(let token, let transit): PassportAirportStamp.seedKey(token, transit: transit)
         case .country(let code): code.lowercased()
         case .continent(let continent): continent.stampKey
         case .ocean(let ocean): ocean.rawValue
@@ -45,6 +51,16 @@ nonisolated enum PassportStampKind: Hashable, Sendable {
         if case .country = self { return true }
         return false
     }
+
+    /// Whether it is an airport's ticket.
+    var isAirport: Bool {
+        if case .airport = self { return true }
+        return false
+    }
+
+    /// Whether the stamp prints its own name (a country's label, an airport's code and city), so a page shows no
+    /// name under it.
+    var carriesOwnName: Bool { isCountry || isAirport }
 }
 
 /// One stamp to show: what it is and when it was earned (a first visit, or a trip's start).
@@ -92,7 +108,7 @@ struct PassportStampView: View {
             if model.isEarned, let drawing = library.drawing(of: model.kind) {
                 PassportPostmark(stamp: drawing, shape: model.kind.shape, scale: scale)
                     .accessibilityElement()
-                    .accessibilityLabel(Text(PassportCopy.stamp(named: library.name(of: model.kind))))
+                    .accessibilityLabel(Text(library.stampLabel(of: model.kind)))
             } else {
                 PassportEmptySpace(kind: model.kind, scale: scale)
             }
@@ -102,7 +118,9 @@ struct PassportStampView: View {
 
 /// A stamp as it lands on a page of Sprout's passport (World-Passport-Spec §6): the art at 1.9×, nudged off the grid
 /// by its seed (−7…+7 pt across, −5…+5 down), the name underneath for a continent, ocean or sea (DM Sans Bold 12; a
-/// country's stamp carries its own), and its date box. One VoiceOver element: "Canada, stamp, 2 September 2026".
+/// country's stamp and an airport's ticket carry their own), and its date box. One VoiceOver element: "Canada,
+/// stamp, 2 September 2026"; an airport's "Heathrow, LHR, stamp, 3 October 2026" or "Helsinki Airport, HEL,
+/// transit stamp, 21 October 2026" (World-Airports-Spec §4.2).
 ///
 /// `still` drops the nudge (the moment a new stamp lands, before it settles). The page around it is another
 /// piece's; this view only places itself.
@@ -120,7 +138,7 @@ struct PassportPlacedStamp: View {
             VStack(spacing: 4) {
                 PassportStampView(model: PassportStampModel(kind: kind, firstVisit: entry.date), library: library,
                                   scale: kind.isSpecial ? scale * 4 / 1.9 : scale)
-                if !kind.isCountry {
+                if !kind.carriesOwnName {
                     Text(verbatim: name)
                         .font(.custom(FernletFontName.dmSansBold, size: 12, relativeTo: .caption))
                         .foregroundStyle(WorldPalette.bark)
@@ -132,7 +150,7 @@ struct PassportPlacedStamp: View {
             }
             .offset(x: CGFloat(nudge.across), y: CGFloat(nudge.down))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(PassportCopy.placed(named: name, on: PassportDates.long(entry.date))))
+            .accessibilityLabel(Text(library.placedLabel(of: kind, on: PassportDates.long(entry.date))))
         }
     }
 }
@@ -217,9 +235,29 @@ enum PassportCopy {
                                 comment: "VoiceOver: a stamp on a passport page: the place's name, then the stamp's date")
     }
 
-    /// "A country not reached yet" (a continent, an ocean, a sea).
+    /// "Heathrow, LHR, stamp" (an airport's ticket, by its name and code).
+    static func airportStamp(named name: String, code: String) -> LocalizedStringResource {
+        LocalizedStringResource("\(name), \(code), stamp",
+                                comment: "VoiceOver: an airport's passport stamp: the airport's name, then its code (Heathrow, LHR, stamp)")
+    }
+
+    /// "Heathrow, LHR, stamp, 3 October 2026" (an airport's ticket on a page).
+    static func placedAirport(named name: String, code: String, on date: String) -> LocalizedStringResource {
+        LocalizedStringResource("\(name), \(code), stamp, \(date)",
+                                comment: "VoiceOver: an airport's stamp on a passport page: its name, its code, then the stamp's date")
+    }
+
+    /// "Helsinki Airport, HEL, transit stamp, 21 October 2026" (a layover's ticket on a page).
+    static func placedTransit(named name: String, code: String, on date: String) -> LocalizedStringResource {
+        LocalizedStringResource("\(name), \(code), transit stamp, \(date)",
+                                comment: "VoiceOver: a layover's airport stamp on a passport page (it says TRANSIT): its name, its code, then the date")
+    }
+
+    /// "A country not reached yet" (a continent, an ocean, a sea; "An airport not found yet").
     static func notReached(_ kind: PassportStampKind) -> LocalizedStringResource {
         switch kind {
+        case .airport: LocalizedStringResource("An airport not found yet",
+                                               comment: "VoiceOver: a dashed airport ticket in the passport, not found yet")
         case .country: LocalizedStringResource("A country not reached yet",
                                                comment: "VoiceOver: an empty passport space for a country")
         case .continent: LocalizedStringResource("A continent not reached yet",

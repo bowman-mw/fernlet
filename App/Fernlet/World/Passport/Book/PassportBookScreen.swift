@@ -36,7 +36,8 @@ struct PassportBookScreen: View {
         self.presenter = presenter
         self.store = store
         _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas },
-                                                       seaNeighbours: { store.worldFog.atlas.seaNeighbours() }))
+                                                       seaNeighbours: { store.worldFog.atlas.seaNeighbours() },
+                                                       airports: { store.worldLocation.flights.airportsShelf.pack() }))
         _importFlow = State(initialValue: FlightyImportFlow(store: store))
     }
 
@@ -223,13 +224,14 @@ struct PassportBookScreen: View {
                                full: isFull(book))
         case .index:
             if let detail {
-                PassportContinentPage(detail: detail, book: book, index: indexModel(book), library: library) {
+                PassportContinentPage(detail: detail, book: book, index: indexModel(book, flights: flights),
+                                      library: library) {
                     turnFromIndex(to: $0, kind: $1, token: $2, in: book)
                 }
             } else {
-                PassportIndexPage(index: indexModel(book), library: library, onTurn: {
+                PassportIndexPage(index: indexModel(book, flights: flights), library: library, onTurn: {
                     turnFromIndex(to: $0, kind: $1, token: $2, in: book)
-                }, onOpen: { stepDetail($0) })
+                }, onOpen: { stepDetail($0) }, onGo: { go(to: $0, in: book) })
             }
         }
     }
@@ -246,8 +248,9 @@ struct PassportBookScreen: View {
         PassportProgress(entries: book.ordered, table: library.countryTable)
     }
 
-    private func indexModel(_ book: PassportBookModel) -> PassportIndexModel {
-        PassportIndexModel(book: book, table: library.countryTable) { library.name(of: $0, onPage: true) }
+    /// The index: places named as the index names them (an airport without "International"), with the Flights row.
+    private func indexModel(_ book: PassportBookModel, flights: PassportFlightsModel?) -> PassportIndexModel {
+        PassportIndexModel(book: book, table: library.countryTable, flights: flights) { library.indexName(of: $0) }
     }
 
     /// Every stamp found: all 194 countries, the seven continents and the five oceans.
