@@ -139,9 +139,15 @@ public nonisolated enum CalendarFlightParser {
         return .skipped(sawRoute ? .noFlightNumber : .noRoute)
     }
 
-    /// HMAC-SHA256 of `identifier` under `salt`, as 64 lowercase hex.
+    /// The purpose label every event hash's message starts with (domain separation: the salt key never MACs
+    /// anything that could be mistaken for another purpose's message).
+    static let eventHashPurpose = Data("fernlet.world.calendar-event-hash.v1".utf8) + Data([0])
+
+    /// HMAC-SHA256 of the purpose label then `identifier` under `salt`, as 64 lowercase hex.
     public static func eventHash(_ identifier: String, salt: SymmetricKey) -> String {
-        let code = HMAC<SHA256>.authenticationCode(for: Data(identifier.utf8), using: salt)
+        // The message starts with the event-hash purpose label, so this MAC is never another purpose's.
+        let message = eventHashPurpose + Data(identifier.utf8)
+        let code = HMAC<SHA256>.authenticationCode(for: message, using: salt)
         let digits = Array("0123456789abcdef")
         var hex = ""
         hex.reserveCapacity(64)
