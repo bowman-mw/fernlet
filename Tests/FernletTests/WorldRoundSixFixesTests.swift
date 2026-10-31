@@ -159,7 +159,7 @@ struct WorldRoundSixFixesTests {
     @Test func aWalkOrRunTogetherAtARunningPaceLogsARun() throws {
         let store = makeTestStore()
         let defaults = try #require(UserDefaults(suiteName: "WorldRoundSixFixesTests.\(UUID().uuidString)"))
-        let start = Date()
+        let start = middayToday()
         store.startWorldWalk(at: start, decidesByPace: true)
         for second in 0...300 {
             store.worldWalk.record(WorldFix(point: GeoPoint(45.5205, -122.6255).offset(east: Double(second) * 2.6, north: 0),

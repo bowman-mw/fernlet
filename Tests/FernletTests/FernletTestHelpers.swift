@@ -192,6 +192,13 @@ func uniqueSharedRecipeImportQueueURL() -> URL {
         .appendingPathComponent("PendingRecipeURLs.json")
 }
 
+/// A moment well inside today (local noon), for tests that start something and finish it minutes later
+/// and then look it up on `store.day`: anchoring at `Date()` straddles midnight when the suite runs
+/// in the last few minutes of the day, and the later event lands on tomorrow's page.
+func middayToday(_ calendar: Calendar = .current) -> Date {
+    calendar.date(bySettingHour: 12, minute: 0, second: 0, of: Date()) ?? Date()
+}
+
 /// Creates a FernletStore backed by an in-memory Core Data stack.
 /// All data is discarded when the store is deallocated.
 ///

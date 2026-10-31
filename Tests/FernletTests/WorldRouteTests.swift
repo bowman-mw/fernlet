@@ -95,7 +95,7 @@ struct WorldRouteTests {
     /// under the workout's id; deleting the workout deletes the line.
     @Test func aFinishedWalkLogsAWorkoutAndKeepsItsLine() throws {
         let (store, defaults) = try Self.store()
-        let start = Date()
+        let start = middayToday()
         store.startWorldWalk(at: start)
         for east in stride(from: 0.0, through: 400, by: 5) {
             store.worldWalk.record(WorldFix(point: GeoPoint(45.5205, -122.6255).offset(east: east, north: 0),
@@ -150,7 +150,7 @@ struct WorldRouteTests {
 
     /// A short walk, recorded and finished.
     private static func walk(_ store: FernletStore, defaults: UserDefaults) throws -> Workout? {
-        let start = Date()
+        let start = middayToday()
         store.startWorldWalk(at: start)
         for east in stride(from: 0.0, through: 100, by: 5) {
             store.worldWalk.record(WorldFix(point: GeoPoint(45.5205, -122.6255).offset(east: east, north: 0),
