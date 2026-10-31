@@ -44,7 +44,7 @@ struct WorldAirportsTests {
         #expect(pdx.name(spanish: true) == "Internacional de Portland")
         #expect(pdx.timeZoneIdentifier == "America/Los_Angeles")
         #expect(airports.timeZone(iata: "pdx")?.identifier == "America/Los_Angeles")
-        #expect(!pdx.grounds.isOurOutline)
+        #expect(pdx.grounds.isOurOutline, "Portland has its own outline since batch 3")
         #expect(pdx.contains(pdx.point))
         #expect(airports.airports(containing: pdx.point).map(\.token) == ["PDX"])
         #expect(airports.airports(containing: pdx.point.offset(east: 0, north: -6_000)).isEmpty,
