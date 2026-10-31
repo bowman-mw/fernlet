@@ -214,7 +214,8 @@ struct PassportBookTests {
         #expect(mapped[0] == PassportStampEntry(kind: .country, token: "US", date: date, trip: 2))
         #expect(mapped[1].kind == .special && mapped[1].token == PassportStampEntry.allContinentsToken)
         #expect(mapped[2].stampKind == .special(allOceans: true))
-        #expect(PassportStampEntry(stamp: PassportStamp(kind: .airport, token: "PDX", date: date)) == nil,
-                "an airport's stamp waits for its own ticket stamp")
+        let airport = PassportStampEntry(stamp: PassportStamp(kind: .airport, token: "PDX", date: date, trip: 2))
+        #expect(airport == PassportStampEntry(kind: .airport, token: "PDX", date: date, trip: 2),
+                "an airport's ticket lands with its trip (World-Airports-Spec §4.2)")
     }
 }
