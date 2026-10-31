@@ -42,7 +42,8 @@ nonisolated enum WorldViewInk {
 
 /// The world view's map: the level's hexes over the whole screen, faint land and sea under the fog and what
 /// the person uncovered in full, then the country lines (from Country) and state lines (from State) on the
-/// hex edges. Only the hexes on screen are drawn, in one path per colour. Decoration to VoiceOver: the markers
+/// hex edges, then the crossed major roads in amber, clipped to the uncovered hexes (from Country in). Only the
+/// hexes on screen are drawn, in one path per colour. Decoration to VoiceOver: the markers
 /// and the zoom control carry the meaning.
 struct WorldViewMapCanvas: View {
     let camera: WorldViewCamera
@@ -59,6 +60,7 @@ struct WorldViewMapCanvas: View {
             let hexes = camera.visibleHexes()
             drawHexes(hexes, in: &context, dark: dark)
             drawLines(hexes, in: &context, dark: dark)
+            drawRoads(hexes, in: &context, size: size)
         }
         .accessibilityHidden(true)
     }
@@ -92,6 +94,32 @@ struct WorldViewMapCanvas: View {
         let style = { (width: Double) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         context.stroke(path(segments.region), with: .color(ink), style: style(WorldViewInk.regionLineWidth))
         context.stroke(path(segments.country), with: .color(ink), style: style(WorldViewInk.countryLineWidth))
+    }
+
+    /// The crossed roads, whole, but only on the uncovered hexes on screen, where the level draws roads.
+    private func drawRoads(_ hexes: [WorldViewVisibleHex], in context: inout GraphicsContext, size: CGSize) {
+        let level = camera.level
+        guard WorldRoadStyle.showsRoads(at: level), model.roads.roadCount > 0 else { return }
+        let corners = cornerOffsets
+        var uncovered = Path()
+        // Bounded: the hexes on screen (WorldViewCamera.maxVisibleHexes).
+        for hex in hexes where model.isFound(hex.cell, at: level) {
+            let centre = camera.screenPoint(x: hex.x, y: hex.y)
+            uncovered.addLines(corners.map { CGPoint(x: centre.x + $0.x, y: centre.y + $0.y) })
+            uncovered.closeSubpath()
+        }
+        guard !uncovered.isEmpty else { return }
+        let view = camera.viewport, centreX = camera.viewport.minX + camera.viewport.width / 2
+        let projection = WorldRoadPainter.Projection(originX: view.minX, originY: view.minY, scale: camera.scale) { piece in
+            WorldViewCamera.wrappedDelta(piece.minX - centreX) - (piece.minX - centreX)
+        }
+        let drawing = model.roads
+        context.drawLayer { layer in
+            layer.clip(to: uncovered)
+            WorldRoadPainter.draw(drawing, in: &layer, size: size, projection: projection) { kind in
+                WorldRoadStyle.worldWidth(at: level, kind: kind)
+            }
+        }
     }
 
     /// A path of the edge segments, on screen.

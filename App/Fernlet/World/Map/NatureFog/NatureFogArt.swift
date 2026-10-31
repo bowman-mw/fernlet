@@ -94,7 +94,7 @@ nonisolated struct NatureHexUnits {
     }
 }
 
-/// The fog's pieces as the mockup draws them (`tuft`, `grass`, `boulder`, `reeds`, `treeArt`, `pineArt`),
+/// The fog's pieces as the mockup draws them (`tuft`, `grass`, `boulder`, `treeArt`, `pineArt`; the mockup's `reeds` went with its ponds),
 /// ported unit for unit. The atlas renders them once; nothing here draws.
 nonisolated enum NatureFogArt {
     /// Long grass, or the shorter, sparser grass under wildflowers with 4–6 flowers on it.
@@ -180,21 +180,6 @@ nonisolated enum NatureFogArt {
         art.rect(xu, root - dark + 1, 1, dark, .bladeDark)
         if mid > 0 { art.rect(xu, tip + light, 1, mid, .bladeMid) }
         art.rect(xu + lean, tip, 1, light, .bladeLight)
-    }
-
-    /// Reeds rising from a pond's lower shore; 35 % carry a brown cattail.
-    static func reeds(random: inout NatureRandom, hex: NatureHexUnits = .full) -> NaturePixelArt {
-        var art = NaturePixelArt()
-        let limit = Int((hex.hwu - 0.3).rounded(.down))
-        guard limit >= 2 else { return art }
-        for xu in (-limit + 1)..<(limit - 1) {
-            if random.next() > 0.55 { continue }
-            let root = Int((-hex.top(Double(xu) + 0.5)).rounded(.down)) - 1
-            let tip = root - 3 - random.below(3)
-            blade(&art, xu: xu, root: root, tip: tip, lean: 0)
-            if random.next() < 0.35 { art.rect(xu, tip - 2, 1, 2, .cattail) }
-        }
-        return art
     }
 
     /// The boulder's 8 × 5 pixels (the mockup's `ROCK`), top-left at (0, 0).

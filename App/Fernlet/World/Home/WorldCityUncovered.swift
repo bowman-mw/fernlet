@@ -39,8 +39,19 @@ nonisolated enum WorldCityUncovered {
 
     /// How many of `lifted` lie in `area` (by bucket).
     static func cellsInside(_ area: Area, lifted: Set<HexCell>) -> Int {
+        insideCells(area, lifted: lifted).count
+    }
+
+    /// The major roads crossed inside the city (the card's "Major roads crossed"): the roads the lifted cells inside
+    /// `area` lie on (``AtlasRoadCrossings``), so a road counts for the city it was crossed in.
+    static func roadsCrossed(in area: Area, lifted: Set<HexCell>, atlas: WorldAtlas) -> Int {
+        AtlasRoadCrossings(cells: insideCells(area, lifted: lifted), atlas: atlas).count
+    }
+
+    /// The cells of `lifted` that lie in `area` (by bucket).
+    static func insideCells(_ area: Area, lifted: Set<HexCell>) -> [HexCell] {
         var buckets: [Int64: Bool] = [:]
-        var inside = 0
+        var inside: [HexCell] = []
         // Bounded: at most maxLifted cells, each one dictionary read or one area test.
         for cell in lifted.prefix(Self.maxLifted) {
             let point = MercatorHexGrid.centreGeo(of: cell)
@@ -48,13 +59,13 @@ nonisolated enum WorldCityUncovered {
             let col = Int64((point.longitude / bucketDegrees).rounded(.down))
             let key = row &* 1_000_000 &+ col
             if let known = buckets[key] {
-                inside += known ? 1 : 0
+                if known { inside.append(cell) }
                 continue
             }
             let probe = GeoPoint((Double(row) + 0.5) * bucketDegrees, (Double(col) + 0.5) * bucketDegrees)
             let holds = contains(area, probe)
             buckets[key] = holds
-            inside += holds ? 1 : 0
+            if holds { inside.append(cell) }
         }
         return inside
     }
@@ -115,14 +126,27 @@ nonisolated enum WorldCityUncovered {
     }
 }
 
-/// Each city's uncovered share, worked out once per city and number of lifted cells, off the main actor, and kept
-/// (at most ``maxCities``) for the session.
+/// Each city's uncovered share and major roads crossed, worked out once per city and number of lifted cells, off the
+/// main actor, and kept (at most ``maxCities`` each) for the session.
 @MainActor
 final class WorldCityUncoveredCache {
     /// The most cities kept.
     static let maxCities = 64
 
     private var shares: [String: (cells: Int, share: Double)] = [:]
+    private var roads: [String: (cells: Int, count: Int)] = [:]
+
+    /// How many major roads were crossed inside `city` with `lifted` (from memory when the count is unchanged).
+    func roadsCrossed(in city: AtlasCity, atlas: WorldAtlas, lifted: Set<HexCell>) async -> Int {
+        if let kept = roads[city.token], kept.cells == lifted.count { return kept.count }
+        let area = WorldCityUncovered.area(of: city, in: atlas)
+        let count = await Task.detached(priority: .utility) {
+            WorldCityUncovered.roadsCrossed(in: area, lifted: lifted, atlas: atlas)
+        }.value
+        if roads.count >= Self.maxCities { roads.removeAll(keepingCapacity: true) }
+        roads[city.token] = (lifted.count, count)
+        return count
+    }
 
     /// `city`'s uncovered share with `lifted` (from memory when the count of lifted cells is unchanged).
     func share(of city: AtlasCity, in atlas: WorldAtlas, lifted: Set<HexCell>) async -> Double {

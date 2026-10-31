@@ -45,8 +45,8 @@ struct NatureFogChange {
 /// **Bounded** (Power of 10): at most ``cacheLimit`` tiles kept (the farthest from the middle of the screen go
 /// first), ``cacheLimit`` wanted, ``painterCount`` drawing.
 ///
-/// A cleared hex can change everything within about 6 R of it: its neighbours become plain edges, a pond's
-/// shore moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
+/// A cleared hex can change everything within about 6 R of it: its neighbours become plain edges, the sea's
+/// sand line moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
 /// tile within 6 R.
 ///
 /// With a ``NatureFogTerrain`` snapshot each grower gets its own ``NatureTerrainMemo``, so a hex's land is read
@@ -95,9 +95,16 @@ final class NatureFogTileBook {
         painters = (0..<Self.painterCount).map { _ in NatureFogTilePainter(palette: palette) }
         let first = painters[0], wild = NatureFogTileOrder(key: NatureTileKey(x: 0, y: 0), scale: scale, palette: palette,
                                                           clearing: NatureFogClearing(), generation: -1, pixelScale: self.pixelScale)
+        let sea = terrain.map { NatureFogTileOrder(key: Self.openSea(at: scale), scale: scale, palette: palette,
+                                                   clearing: NatureFogClearing(), generation: -1,
+                                                   pixelScale: self.pixelScale, terrain: $0) }
+        let second = painters[1]
         placeholderDrawing = Task { [weak self] in
             let tile = await first.paint(wild)
             self?.placeholder = tile.ground
+            guard let sea else { return }
+            let open = await second.paint(sea)
+            self?.seaPlaceholder = open.ground
         }
     }
 
@@ -113,9 +120,55 @@ final class NatureFogTileBook {
     private(set) var placeholder: CGImage?
     private var placeholderDrawing: Task<Void, Never>?
 
-    /// Borrows `image` (the last scale's wild fog, same palette) until this book's own is drawn.
-    func borrowPlaceholder(_ image: CGImage?) {
-        if placeholder == nil { placeholder = image }
+    /// Wild fog over open sea at this scale and palette, drawn once over ``terrain`` from an empty clearing: what a
+    /// waiting tile over the sea shows instead of ``placeholder`` (the meadow), so a zoom over water never flashes
+    /// green. Nil with no terrain, and until it's drawn.
+    private(set) var seaPlaceholder: CGImage?
+    /// Whether each tile asked about lies mostly over the sea (at most ``seaMemoLimit``, then forgotten).
+    private var seaTiles: [NatureTileKey: Bool] = [:]
+    /// The most tiles ``isSea(_:)`` remembers.
+    static let seaMemoLimit = cacheLimit * 4
+
+    /// Borrows `other`'s wild fog (the last scale's, same palette) until this book's own is drawn.
+    func borrowPlaceholders(from other: NatureFogTileBook) {
+        if placeholder == nil { placeholder = other.placeholder }
+        if seaPlaceholder == nil, terrain != nil { seaPlaceholder = other.seaPlaceholder }
+    }
+
+    /// What the tile at `key` shows until its own picture arrives: the sea's wild fog where the tile lies mostly
+    /// over the sea and that's drawn, else the meadow's.
+    func placeholder(for key: NatureTileKey) -> CGImage? {
+        guard let seaPlaceholder, isSea(key) else { return placeholder }
+        return seaPlaceholder
+    }
+
+    /// The flat colour under ``placeholder(for:)`` until it's drawn: the sea's or the meadow's.
+    func placeholderColour(for key: NatureTileKey) -> CGColor {
+        palette.color(terrain != nil && isSea(key) ? .water : .grassB)
+    }
+
+    /// Whether the tile at `key` lies mostly over the sea: three of its five sample points (its centre and the
+    /// middles of its quarters) are water in ``terrain``. False with no terrain. Bounded: five atlas reads a tile,
+    /// remembered.
+    func isSea(_ key: NatureTileKey) -> Bool {
+        guard let terrain else { return false }
+        if let known = seaTiles[key] { return known }
+        let area = Self.area(of: key), units = scale.pointsPerUnit
+        let spots = [(0.5, 0.5), (0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]
+        let wet = spots.filter { spot in
+            let point = WebMercator.geo(x: (area.minX + area.width * spot.0) / units,
+                                        y: (area.minY + area.height * spot.1) / units)
+            return terrain.classifier.terrain(at: point) == .water
+        }.count
+        if seaTiles.count >= Self.seaMemoLimit { seaTiles = [:] }
+        seaTiles[key] = wet >= 3
+        return wet >= 3
+    }
+
+    /// The tile over open sea (the South Pacific at 30°S 130°W) at `scale`, for ``seaPlaceholder``.
+    nonisolated static func openSea(at scale: NatureFogScale) -> NatureTileKey {
+        let unit = WebMercator.unit(GeoPoint(-30, -130))
+        return key(at: CGPoint(x: unit.x * scale.pointsPerUnit, y: unit.y * scale.pointsPerUnit))
     }
 
     /// The tiles held now.

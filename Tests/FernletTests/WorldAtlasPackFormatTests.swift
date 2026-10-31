@@ -172,6 +172,10 @@ struct WorldAtlasPackTests {
         #expect(west.count == 1 && west.first?.kind == .highway, "I-5 through Portland")
         let north = atlas.roadsCrossed(from: GeoPoint(45.52, -122.62), to: GeoPoint(45.56, -122.62))
         #expect(north.count == 1 && north.first?.kind == .highway, "I-84 through Portland")
+        // Natural Earth names the Banfield "5"; the generator's ROAD_NAME_OVERRIDES make it I-84, its own road.
+        #expect(west.first?.token == "ne:road:53" && north.first?.token == "ne:road:1233", "I-5 and I-84 apart")
+        let east = atlas.roadsCrossed(from: GeoPoint(45.52, -122.55), to: GeoPoint(45.56, -122.55))
+        #expect(east.map(\.token) == ["ne:road:1233"], "I-84 east of I-205 is the same road")
         #expect(atlas.roadsCrossed(from: GeoPoint(23.0, 10.0), to: GeoPoint(23.03, 10.0)).isEmpty, "the Sahara")
     }
 

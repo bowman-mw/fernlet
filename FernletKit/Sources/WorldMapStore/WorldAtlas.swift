@@ -186,12 +186,15 @@ public nonisolated final class WorldAtlas: Sendable {
     }
 
     /// The continent `point` counts toward: Antarctica anywhere south of ``antarcticaLatitude``, else the
-    /// `CONT` cell under a land fix, else nil (at sea).
+    /// `CONT` cell under a land fix or a lake (water no ocean or sea names, whose cells keep their continent:
+    /// a fix on Lake Geneva is in Europe, owner 2026-10-30), else nil (at sea, and on the Caspian, whose `CONT`
+    /// is 0).
     public func continent(at point: GeoPoint) -> AtlasContinent? {
         guard point.isValid else { return nil }
         guard point.latitude >= Self.antarcticaLatitude else { return .antarctica }
-        guard isLand(at: point) else { return nil }
-        return AtlasContinent(packCode: continents[grid.index(of: point)])
+        let index = grid.index(of: point)
+        guard isLand(at: point) || oceans[index] == 0 else { return nil }
+        return AtlasContinent(packCode: continents[index])
     }
 
     /// The country whose rings hold `point` (each country's box first, then the even-odd rule), or nil.

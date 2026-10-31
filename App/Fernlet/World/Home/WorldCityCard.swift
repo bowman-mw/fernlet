@@ -5,15 +5,17 @@ import WorldMapStore
 /// A found city's card (`ex-city-card`, World-Exploration-Spec §2): a full-height sheet with Done top right; the
 /// name, its size class and country; its skyline (decoration); when it was discovered; its landmarks found of its
 /// list, found ones as small icons with their names and the rest as question marks, never named; and how much of
-/// the city the person has uncovered. Kept on this iPhone only (the passport and the fog are device-only data).
+/// the major roads crossed inside it (derived from the lifted fog, ``WorldCityUncovered/roadsCrossed(in:lifted:atlas:)``);
+/// how much of the city the person has uncovered. Kept on this iPhone only (the passport and the fog are device-only
+/// data).
 ///
-/// Not drawn: the mockup's "Major roads crossed" (the atlas has no road data, `ex-roads` blocked), and the
-/// discovered row's "On a walk," (the passport keeps the date, not how).
+/// Not drawn: the discovered row's "On a walk," (the passport keeps the date, not how).
 struct WorldCityCard: View {
     let store: FernletStore
     let model: WorldCityCardModel
     let explore: WorldExploreState
     @State private var share: Double?
+    @State private var roadsCrossed: Int?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -37,15 +39,18 @@ struct WorldCityCard: View {
         }
         .fernletSheet()
         .task { await readShare() }
+        .task { await readRoads() }
         .accessibilityIdentifier("world.city.card")
     }
 
-    /// The rows: discovered, landmarks found (when the city has a list), uncovered.
+    /// The rows: discovered, landmarks found (when the city has a list), major roads crossed, uncovered.
     @ViewBuilder private var rows: some View {
         FernletKeyValueRow("Discovered", value: Text(verbatim: WorldExploreCopy.discovered(model.discoveredAt)), showsRule: false)
         if !landmarks.isEmpty {
             FernletKeyValueRow("Landmarks", value: Text(verbatim: WorldExploreCopy.landmarksFound(found.count, of: landmarks.count)), showsRule: false)
         }
+        FernletKeyValueRow("Major roads crossed", value: Text(verbatim: roadsCrossed.map { WorldExploreCopy.roadsCrossed($0) } ?? "…"),
+                           showsRule: false)
         FernletKeyValueRow("Uncovered", value: Text(verbatim: share.map { WorldExploreCopy.uncovered($0) } ?? "…"), showsRule: false)
     }
 
@@ -92,7 +97,16 @@ struct WorldCityCard: View {
             share = 0
             return
         }
-        share = await explore.uncovered.share(of: model.city, in: atlas, lifted: store.worldFog.visibleCells)
+        share = await explore.uncovered.share(of: model.city, in: atlas, lifted: store.worldRoadCells)
+    }
+
+    /// Counts the major roads crossed inside the city (off the main actor, kept per city).
+    private func readRoads() async {
+        guard let atlas = store.worldFog.atlas.openedAtlas else {
+            roadsCrossed = 0
+            return
+        }
+        roadsCrossed = await explore.uncovered.roadsCrossed(in: model.city, atlas: atlas, lifted: store.worldRoadCells)
     }
 }
 

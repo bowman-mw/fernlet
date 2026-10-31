@@ -46,7 +46,9 @@ nonisolated struct WorldViewLandRaster: Sendable {
 ///   each hex's centre, kept per hex;
 /// - the place each land hex is in (its country, or from State in its plate group), looked up off the main
 ///   actor for the hexes on screen and kept per hex, for the lines on hex edges and the state labels;
-/// - each level's city markers (``WorldViewCluster``).
+/// - each level's city markers (``WorldViewCluster``);
+/// - the major roads the lifted fog has crossed (``AtlasRoadCrossings``), worked out once off the main actor and
+///   drawn whole on the uncovered hexes (World-Exploration-Spec §2: "on the world view").
 @MainActor
 @Observable
 final class WorldViewModel {
@@ -63,6 +65,8 @@ final class WorldViewModel {
     private(set) var raster: WorldViewLandRaster?
     /// Moves each time looked-up places arrive, so the map redraws its lines.
     private(set) var placeGeneration = 0
+    /// The crossed roads (none until computed, and always none in a decoy, whose content has no lifted fog).
+    private(set) var roads = WorldRoadDrawing.none
 
     @ObservationIgnored private var landCache: [AtlasZoomLevel: [HexCell: Bool]] = [:]
     @ObservationIgnored private var placeCache: [AtlasZoomLevel: [HexCell: AtlasPlaceName?]] = [:]
@@ -94,6 +98,13 @@ final class WorldViewModel {
         }
         if raster == nil, let atlas = content.atlas {
             raster = await Task.detached(priority: .userInitiated) { WorldViewLandRaster(atlas: atlas) }.value
+        }
+        if roads.generation == 0, let atlas = content.atlas, !content.liftedCells.isEmpty {
+            let cells = content.liftedCells
+            roads = await Task.detached(priority: .userInitiated) {
+                let crossed = AtlasRoadCrossings(cells: cells, atlas: atlas)
+                return WorldRoadDrawing.make(roads: crossed.roads(in: atlas), generation: 1)
+            }.value
         }
     }
 

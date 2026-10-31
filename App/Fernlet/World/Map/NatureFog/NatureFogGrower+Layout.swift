@@ -45,11 +45,6 @@ nonisolated extension NatureFogGrower {
             return
         }
         if ground { layout.hexes.append((centre, groundPaint(kind, land: land, col: at.col, row: at.row, hash: hash), land.look)) }
-        if kind == .pond {
-            if ground { pond(cell, centre: centre, anchor: spot.anchor, random: &random, into: &layout) }
-            if !scale.reduced && !covered.contains(cell) { reeds(spot, into: &layout) }
-            return
-        }
         guard !covered.contains(cell) else { return }
         if scale.reduced {
             guard land.set.isApproved, kind == .flowers, ground else { return }
@@ -119,33 +114,6 @@ nonisolated extension NatureFogGrower {
         guard frame.intersects(spot.area) else { return }
         layout.pieces.append(NaturePiece(sprite: key, frame: frame, sortY: spot.centre.y + lift, sortX: spot.centre.x, swayGroup: sway,
                                          look: spot.look))
-    }
-
-    /// A pond hex: water a little larger than the hex (covering the seams), a shore on every side that faces
-    /// grass, and at full detail 2 ripples and sometimes a lily pad.
-    private func pond(_ cell: HexCell, centre: CGPoint, anchor: CGPoint, random: inout NatureRandom, into layout: inout NatureFogLayout) {
-        layout.ponds.append(centre)
-        for (index, side) in NatureFogRules.sides(of: cell).enumerated() where state(side) != .wild(.pond) {
-            layout.shores.append((Self.corner(centre, scale.radius, index), Self.corner(centre, scale.radius, (index + 1) % 6)))
-        }
-        guard !scale.reduced else { return }
-        let unit = scale.unit
-        for row in 0..<2 {
-            let x = anchor.x + Double(-3 + random.below(4)) * unit, y = anchor.y + Double(-4 + row * 3 + random.below(2)) * unit
-            layout.waterMarks.append(NatureFogBlock(rect: CGRect(x: x, y: y, width: 3 * unit, height: unit), paint: .ripple))
-        }
-        if random.next() < 0.5 {
-            let x = anchor.x + Double(-2 + random.below(3)) * unit
-            layout.waterMarks.append(NatureFogBlock(rect: CGRect(x: x, y: anchor.y + 2 * unit, width: 2 * unit, height: unit), paint: .lily))
-        }
-    }
-
-    /// Reeds on a pond's near (lower) shore: where its south-west or south-east neighbour isn't pond.
-    private func reeds(_ spot: NatureFogSpot, into layout: inout NatureFogLayout) {
-        let sides = NatureFogRules.sides(of: spot.cell)
-        guard sides.count == 6, state(sides[1]) != .wild(.pond) || state(sides[0]) != .wild(.pond) else { return }
-        let variant = Int((spot.hash >> 12) % UInt32(NatureFogAtlas.reedVariants))
-        place(.reeds(variant), anchor: spot.anchor, spot: spot, lift: 0, sway: nil, into: &layout)
     }
 
     /// Corner `index` of a pointy-top hex (the mockup's `vert`: 30° + 60° steps, y down).

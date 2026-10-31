@@ -97,7 +97,7 @@ struct NatureFogLayoutTests {
             if case .pine = piece.sprite { return true }
             return false
         }, "no tufts, flowers or boulders; trees are still drawn")
-        #expect(layout.waterMarks.allSatisfy { NaturePaint.petals.contains($0.paint) && $0.rect.width == far.unit }, "flowers are single pixels; ponds have no ripples")
+        #expect(layout.waterMarks.allSatisfy { NaturePaint.petals.contains($0.paint) && $0.rect.width == far.unit }, "flowers are single pixels")
         let viewport = MapViewport.around(GeoPoint(45.5205, -122.6255), heightMetres: 382 * 1.1, size: CGSize(width: 364, height: 382))
         let picture = NatureFogPicturePainter(viewport: viewport, clearing: NatureFogClearing(), palette: Self.light)
         let pictureScale = picture.scale(in: CGSize(width: 364, height: 382))
@@ -106,7 +106,7 @@ struct NatureFogLayoutTests {
 
     @Test func theAtlasIsUnder40KB() {
         let atlas = NatureFogAtlas(palette: Self.light)
-        #expect(NatureFogAtlas.fullDetailSet.count == 28)
+        #expect(NatureFogAtlas.fullDetailSet.count == 25, "no reeds: the ponds are gone (owner, 2026-10-30)")
         #expect(NatureFogAtlas.fullDetailSet.allSatisfy { atlas.sprite($0) != nil })
         #expect(atlas.fullDetailBytes > 10_000 && atlas.fullDetailBytes < 40_960, "atlas \(atlas.fullDetailBytes) bytes")
     }
