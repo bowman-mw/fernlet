@@ -61,9 +61,10 @@ actor NatureFogTilePainter {
     private var memo: NatureTerrainMemo?
     private var memoFor: NatureFogTerrain?
 
-    /// A painter for the tiles of one book (one scale and palette).
+    /// A painter for the tiles of one book (one scale and palette). Its sprites are drawn on first use, on the
+    /// painter, not here: a book is made on the main actor (perf 2026-10-31).
     init(palette: NatureFogPalette) {
-        atlas = NatureFogAtlas(palette: palette)
+        atlas = NatureFogAtlas(palette: palette, preparing: false)
     }
 
     /// The tile `order` asks for.

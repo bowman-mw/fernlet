@@ -16,7 +16,13 @@ import FernletUI
 /// **Accessibility:** one button named with the companion's real name, its state and feeling as the value, the
 /// line as custom content (the bubble itself is decoration and fades), and the hint "Opens Sprout's passport."
 /// (§1: "Sprout, thriving. Opens Sprout's passport."). Voice Control: the name, or "Passport".
-struct WorldMapCompanion: View {
+///
+/// **Its mood is read every 30 s, never per map frame** (owner, 2026-10-31): Home rebuilds this view on every frame
+/// of a pan only to move it, so it is `Equatable` on everything but its actions and Home marks it `.equatable()`;
+/// SwiftUI then skips the body while only the position changes. The store's own changes still redraw it, through
+/// observation. Off the screen (``isOnScreen``) the 30-s clock and the breath wait, and the mood catches up the
+/// moment Sprout is back in view.
+struct WorldMapCompanion: View, Equatable {
     var store: FernletStore
     /// The opt-in body-signal reading, already gated on the setting (Home's `companionBodySignal`).
     var bodySignal: CompanionBodySignal?
@@ -39,6 +45,9 @@ struct WorldMapCompanion: View {
     /// (``WorldRideCar``, `b1-home-car`, round 7), its red bike on a bike ride (``WorldRideBike``,
     /// `ref-ride-home`, Refinements group 19), named as one image on the bike.
     var ride: WorldRideVehicle? = nil
+    /// Whether Sprout stands on the screen, or near enough to come on with the next move (``WorldMapHome``'s
+    /// measure). Off it, the mood clock and the breath wait.
+    var isOnScreen = true
     /// The hint ended: the first tap, or its 12 seconds on Home.
     var onHintEnded: () -> Void = {}
     /// Opens Sprout's passport, rising from the sprite's centre (global coordinates; nil: the screen's centre).
@@ -48,9 +57,19 @@ struct WorldMapCompanion: View {
     @State private var spriteCentre: CGPoint?
     @Environment(\.fernletTermOfAddress) private var termOfAddress
 
+    /// Alike when every input but the actions matches (the store by identity): the actions only reach Home's own
+    /// state, which a skipped body still reaches through them.
+    static func == (lhs: WorldMapCompanion, rhs: WorldMapCompanion) -> Bool {
+        lhs.store === rhs.store && lhs.bodySignal == rhs.bodySignal && lhs.isActive == rhs.isActive
+            && lhs.mapLine == rhs.mapLine && lhs.pixelScale == rhs.pixelScale && lhs.isQuiet == rhs.isQuiet
+            && lhs.isNight == rhs.isNight && lhs.hint == rhs.hint && lhs.ride == rhs.ride && lhs.isOnScreen == rhs.isOnScreen
+    }
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { context in
-            figure(now: now(at: context.date))
+        // The clock only asks for a fresh look; the look is read for the moment the body runs, so coming back on
+        // screen (a new schedule) or a store change shows the mood now.
+        TimelineView(WorldMoodSchedule(isRunning: isOnScreen)) { _ in
+            figure(now: now(at: Date()))
         }
         .task(id: LineKey(isActive: isActive, line: mapLine)) { await sayAmbientLine() }
         .task(id: HintKey(hint: hint, isActive: isActive)) { await endHintWhenDue() }
@@ -101,7 +120,7 @@ struct WorldMapCompanion: View {
                 .accessibilityHidden(true)
             ZStack {
                 if hint { WorldHintRing() }
-                WorldCompanionSprite(now: now, settled: false, isActive: isActive,
+                WorldCompanionSprite(now: now, settled: false, isActive: isActive && isOnScreen,
                                      pixelScale: ride?.riderScale ?? pixelScale)
                     .modifier(WorldRideCar(isRiding: ride == .car))
                     .modifier(WorldRideBike(isRiding: ride == .bike))
@@ -195,6 +214,32 @@ struct WorldMapCompanion: View {
     /// A notice's time on screen: `standard`, or the longer assistive window.
     private static func noticeWindow(standard: Duration) -> Duration {
         FernletDismissalWindow.system.window(standard: standard, assistive: FernletDismissalWindow.assistiveNoticeWindow)
+    }
+}
+
+/// Sprout's mood clock on the map (owner, 2026-10-31): an entry now and one every ``period`` after while Sprout is on
+/// the screen; off it, only the entry now, so the mood waits. A new schedule (Sprout back in view) starts again
+/// with an entry now.
+struct WorldMoodSchedule: TimelineSchedule {
+    /// Seconds between fresh looks.
+    static let period: TimeInterval = 30
+    /// Whether the clock ticks: Sprout is on the screen.
+    let isRunning: Bool
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> Entries {
+        Entries(upcoming: startDate, step: isRunning ? Self.period : nil)
+    }
+
+    /// `upcoming`, then every `step` after it; with no step, `upcoming` alone.
+    struct Entries: Sequence, IteratorProtocol {
+        var upcoming: Date?
+        let step: TimeInterval?
+
+        mutating func next() -> Date? {
+            guard let at = upcoming else { return nil }
+            upcoming = step.map { at.addingTimeInterval($0) }
+            return at
+        }
     }
 }
 

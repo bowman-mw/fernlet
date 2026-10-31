@@ -22,9 +22,15 @@ nonisolated final class NatureFogGrower {
     /// What land each hex is; nil for today's nature fog everywhere.
     let terrain: NatureTerrainMemo?
     private var memo: [HexCell: NatureCellState] = [:]
+    /// The terrain memo's answers this grower has read, kept here unlocked (perf 2026-10-31: a tree asks for its
+    /// hex and six neighbours, and the shared memo's lock was 40 % of layout on the phone). A copy of answers that
+    /// never change for this memo, so it draws exactly what asking the memo every time draws.
+    private var lands: [HexCell: TerrainHex] = [:]
 
     /// The most cell states kept before the memo starts again.
     static let memoLimit = 60_000
+    /// The most land answers kept before the copy starts again (a reduced-detail tile holds about 6,300 hexes).
+    static let landLimit = 20_000
 
     /// A grower for `clearing` at `scale`, placing `atlas`'s sprites, on `terrain`'s land (none: the nature fog).
     init(scale: NatureFogScale, clearing: NatureFogClearing, atlas: NatureFogAtlas, terrain: NatureTerrainMemo? = nil) {
@@ -46,7 +52,12 @@ nonisolated final class NatureFogGrower {
 
     /// The land `cell` draws as: the terrain's answer, or the approved meadow with no terrain.
     func land(_ cell: HexCell) -> TerrainHex {
-        terrain?.hex(cell) ?? .approved
+        guard let terrain else { return .approved }
+        if let known = lands[cell] { return known }
+        if lands.count >= Self.landLimit { lands.removeAll(keepingCapacity: true) }
+        let found = terrain.hex(cell)
+        lands[cell] = found
+        return found
     }
 
     private func classify(_ cell: HexCell) -> NatureCellState {

@@ -188,6 +188,10 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
     /// The longest gap a pace is measured over; and a reading at an airport while flying with a reading this
     /// recently before it is judged by the pace between them.
     public static let pairTime: TimeInterval = 2 * 60
+    /// The fastest pace between two readings that is believed (1,200 km/h, faster than any airliner's ground speed),
+    /// in m/s: a faster one is a jump (a location glitch, a simulator moved across the world), never a flight, so it
+    /// starts nothing and finds no airport. CoreLocation's own speed and the gap rule (to 1,000 km/h) are unchanged.
+    public static let maxBelievablePace = 1_200.0 / 3.6
     /// The shortest time a pace is measured over (a second's GPS jitter is no speed).
     public static let minPaceTime: TimeInterval = 10
     /// The worst accuracy a reading may have to have a speed, in metres (the car and bike rule's).
@@ -650,7 +654,8 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
 
     // MARK: Pace
 
-    /// A good reading's speed: CoreLocation's own, else the pace from the anchor beyond both readings' accuracy.
+    /// A good reading's speed: CoreLocation's own, else the pace from the anchor beyond both readings' accuracy (none
+    /// past ``maxBelievablePace``).
     private func speed(of fix: FlightFix) -> Double? {
         guard fix.accuracy <= Self.goodAccuracy else { return nil }
         if let speed = fix.speed, speed.isFinite, speed >= 0 { return speed }
@@ -658,7 +663,8 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
         let seconds = fix.at.timeIntervalSince(anchor.at)
         guard seconds >= Self.minPaceTime, seconds <= Self.pairTime else { return nil }
         let beyond = Self.greatCircleMetres(anchor.point, fix.point) - anchor.accuracy - fix.accuracy
-        return max(0, beyond) / seconds
+        let pace = max(0, beyond) / seconds
+        return pace <= Self.maxBelievablePace ? pace : nil
     }
 
     /// The straight line from the last placed reading to `fix`.

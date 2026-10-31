@@ -112,6 +112,9 @@ final class NatureFogMapView: UIView {
     /// Each hex's land for the current terrain, one memo handed to every book at every scale (perf review
     /// 2026-10-31): a zoom finds the hexes it has already read. Replaced when the terrain snapshot changes.
     private var terrainMemo: NatureTerrainMemo?
+    /// The sprites every book in the current palette shows (perf 2026-10-31): drawn once, not again on the main
+    /// actor at each zoom step. Replaced when the palette changes.
+    private var sharedAtlas: NatureFogAtlas?
     /// The last camera request, when it came, whether it's still a glide under way (its end lay more than a
     /// screen away when it came, and the map hasn't since come near it or turned away from it: following the
     /// person moves the camera a little at a time and is no glide, and a pan ends one), and how far off its
@@ -333,7 +336,8 @@ final class NatureFogMapView: UIView {
     private func fresh(_ scale: NatureFogScale, scene: NatureFogScene) -> NatureFogTileBook {
         let next = NatureFogTileBook(scale: scale, palette: scene.palette, clearing: scene.clearing,
                                      pixelScale: min(traitCollection.displayScale, 2), terrain: scene.terrain,
-                                     memo: memo(for: scene.terrain))
+                                     memo: memo(for: scene.terrain), atlas: sharedAtlas)
+        sharedAtlas = next.atlas
         next.onReady = { [weak self, weak next] tile in
             guard let self, let next, self.book === next else { return }
             self.arrived(tile)
