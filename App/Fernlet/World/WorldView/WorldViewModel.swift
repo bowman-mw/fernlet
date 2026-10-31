@@ -53,7 +53,7 @@ nonisolated struct WorldViewLandRaster: Sendable {
 @Observable
 final class WorldViewModel {
     /// The most hexes a level's land or place cache keeps before it starts afresh.
-    static let maxCachedHexes = 120_000
+    nonisolated static let maxCachedHexes = 120_000
 
     /// What the view draws.
     private(set) var content = WorldViewContent.empty
@@ -127,10 +127,23 @@ final class WorldViewModel {
         let point = WebMercator.geo(x: WorldViewCamera.wrap(x), y: y)
         if level <= .country, let raster { return raster.isLand(at: point) }
         if let known = landCache[level]?[hex] { return known }
-        let land = content.atlas?.isLand(at: point) ?? false
+        let land = WorldViewMapFacts.atlasLand(content.atlas, x: x, y: y)
         if landCache[level, default: [:]].count >= Self.maxCachedHexes { landCache[level] = [:] }
         landCache[level, default: [:]][hex] = land
         return land
+    }
+
+    /// What a map drawing of `level` reads, copied so it can be built off the main actor (the copies share
+    /// storage until either side changes).
+    func facts(at level: AtlasZoomLevel) -> WorldViewMapFacts {
+        WorldViewMapFacts(level: level, raster: raster, atlas: content.atlas, found: found[level] ?? [],
+                          places: placeCache[level] ?? [:], roads: roads, lands: landCache[level] ?? [:])
+    }
+
+    /// Keeps the land a map drawing looked up (its copy of the cache, grown), when it still fits the cache.
+    func keepLands(_ lands: [HexCell: Bool], at level: AtlasZoomLevel) {
+        guard lands.count <= Self.maxCachedHexes, lands.count > landCache[level]?.count ?? 0 else { return }
+        landCache[level] = lands
     }
 
     /// The place `hex` of `level` is in: `.some(nil)` when looked up and none (the sea, unclaimed land), nil
