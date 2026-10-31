@@ -9,6 +9,9 @@
 // Sleep: a night of 6 h or less, or 90 min or more below the person's own 14-day median. Two such
 // nights in a row make the flag firmer. The old "under 7 h on average" check is retired.
 // Readiness: a session logged on a light day.
+// Travel (World-Airports-Spec §13.4, owner 2026-10-31: "Missing a workout session because of travel
+// should be forgiven"): a session logged on a travel day. The planner learns only the yes/no, never a
+// flight, an airport, a time or a place; it is forgiven exactly as a light day is (the same trims).
 //
 // Built by the app from the day history (WorkoutLoadContextBuilder); never persisted.
 
@@ -22,21 +25,31 @@ public nonisolated enum SleepFlag: Equatable, Sendable {
     case shortNights
 }
 
-/// Why a logged session is flagged: the night before it, a light readiness day, or both.
+/// Why a logged session is flagged: the night before it, a light readiness day, a travel day, or any
+/// of them together.
+///
+/// Every reason forgives the same way: a flagged miss holds the load (``WorkoutLoadEngine``) and a
+/// flagged session that falls short of the trend never counts toward a stall (``WorkoutTrend``). The
+/// travel reason is only a yes/no the app works out (World-Airports-Spec §13.1 wall): nothing about the
+/// flight itself ever reaches this type.
 public nonisolated struct WorkoutSessionFlag: Equatable, Sendable {
     public var sleep: SleepFlag?
     /// The session was logged on a light day (the readiness suggestion, or the person's pick).
     public var lightDay: Bool
+    /// The session was logged on a travel day: a flight's date, or the day after an overnight flight
+    /// (World-Airports-Spec §13.1, §13.4).
+    public var travelDay: Bool
 
-    public init(sleep: SleepFlag? = nil, lightDay: Bool = false) {
+    public init(sleep: SleepFlag? = nil, lightDay: Bool = false, travelDay: Bool = false) {
         self.sleep = sleep
         self.lightDay = lightDay
+        self.travelDay = travelDay
     }
 
-    /// A flag that says something; nil when neither sleep nor readiness flags the session.
-    public static func make(sleep: SleepFlag?, lightDay: Bool) -> WorkoutSessionFlag? {
-        guard sleep != nil || lightDay else { return nil }
-        return WorkoutSessionFlag(sleep: sleep, lightDay: lightDay)
+    /// A flag that says something; nil when neither sleep, readiness nor travel flags the session.
+    public static func make(sleep: SleepFlag?, lightDay: Bool, travelDay: Bool = false) -> WorkoutSessionFlag? {
+        guard sleep != nil || lightDay || travelDay else { return nil }
+        return WorkoutSessionFlag(sleep: sleep, lightDay: lightDay, travelDay: travelDay)
     }
 
     /// Two short nights in a row.
@@ -45,7 +58,8 @@ public nonisolated struct WorkoutSessionFlag: Equatable, Sendable {
     /// How far under a lift's trend line (log units, about a fraction) a flagged session may land
     /// and still meet the trend. The literature's cost of one short night — about 3 % on lower-body
     /// lifts, 1.5 % on upper-body ones (Craven 2022) — applies in full on the firmer flag; one short
-    /// night or a light day gets half, because one night's reading is the least certain.
+    /// night, a light day or a travel day gets half, because one night's reading is the least certain
+    /// (a travel day takes the light day's trims, World-Airports-Spec §13.4).
     public func trim(lowerBody: Bool) -> Double {
         let full = lowerBody ? WorkoutSessionFlags.lowerBodyTrim : WorkoutSessionFlags.upperBodyTrim
         return isFirm ? full : full / 2

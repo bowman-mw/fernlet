@@ -23,9 +23,11 @@ import Foundation
 public nonisolated enum WorkoutSessionNames {
 
     /// The name to draw for a stored or planned session name: its localized form when it is one the
-    /// planner writes, else `name` unchanged.
+    /// planner writes (the travel-day session's frozen ``WorkoutFallbackName`` included), else `name`
+    /// unchanged.
     public static func drawn(_ name: String) -> String {
-        displayed(name) ?? name
+        displayed(name) ?? (name == WorkoutFallbackName.travelDayReset.rawValue
+            ? WorkoutFallbackName.travelDayReset.displayName : name)
     }
 
     /// The localized form of a session name the planner writes — a session title, or a time label

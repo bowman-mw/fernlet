@@ -215,10 +215,13 @@ public nonisolated struct TrendReading: Equatable, Sendable {
     public var flaggedSessions: Int
     public var shortNightSessions: Int
     public var lightDaySessions: Int
+    /// Sessions logged on a travel day (World-Airports-Spec §13.4).
+    public var travelDaySessions: Int
 
     public init(
         state: TrendState = .tooEarly, slopePerWeek: Double? = nil, expectedPerWeek: Double? = nil,
-        windowSessions: Int = 0, flaggedSessions: Int = 0, shortNightSessions: Int = 0, lightDaySessions: Int = 0
+        windowSessions: Int = 0, flaggedSessions: Int = 0, shortNightSessions: Int = 0, lightDaySessions: Int = 0,
+        travelDaySessions: Int = 0
     ) {
         self.state = state
         self.slopePerWeek = slopePerWeek
@@ -227,6 +230,7 @@ public nonisolated struct TrendReading: Equatable, Sendable {
         self.flaggedSessions = flaggedSessions
         self.shortNightSessions = shortNightSessions
         self.lightDaySessions = lightDaySessions
+        self.travelDaySessions = travelDaySessions
     }
 
     /// Half or more of the window was flagged: there weren't enough typical days to judge.
@@ -325,7 +329,8 @@ public nonisolated enum WorkoutTrend {
             windowSessions: window.count,
             flaggedSessions: window.filter { $0.flag != nil }.count,
             shortNightSessions: window.filter { $0.flag?.sleep != nil }.count,
-            lightDaySessions: window.filter { $0.flag?.lightDay == true }.count
+            lightDaySessions: window.filter { $0.flag?.lightDay == true }.count,
+            travelDaySessions: window.filter { $0.flag?.travelDay == true }.count
         )
     }
 

@@ -992,6 +992,7 @@ struct LocalizationBoundaryTests {
                 "Steady Care Walk", "Balanced Strength Circuit", "Strength Base", "Hard Strength Day",
                 "Low Friction Walk", "Move And Strength", "Mood Reset", "Steady Mind Circuit",
                 "Recovery Flow", "Soft Rebuild", "Try Something Small", "Curious Challenge",
+                "Travel-day reset",
             ],
             """
             WorkoutFallbackName raw values changed. They are the names a taken fallback suggestion is \

@@ -66,7 +66,9 @@ extension WorkoutProgram {
         case .repsFirst: return plan.cap.map { repsFirstLine(name, plan: plan, cap: $0) }
         case .setFirst: return plan.cap.map { setFirstLine(name, plan: plan, cap: $0) }
         case .confirming: return WorkoutPlannerCopy.confirming(name)
-        case .heldAfterFlag: return WorkoutPlannerCopy.heldAfterFlag(name, shortNight: plan.previousFlag?.sleep != nil)
+        case .heldAfterFlag:
+            return WorkoutPlannerCopy.heldAfterFlag(name, shortNight: plan.previousFlag?.sleep != nil,
+                                                    travelDay: plan.previousFlag?.travelDay == true)
         case .heldUnfueled: return WorkoutPlannerCopy.heldUnfueled(name)
         case .same, .blockHold, .firstTime: return nil
         }
@@ -158,13 +160,17 @@ extension WorkoutProgram {
         }
     }
 
-    /// The sleep or light-day line: how many of the trend window's sessions came after a short night
-    /// (or, with none, on a light day). Said as co-occurrence; nil when none were flagged.
+    /// The sleep, travel or light-day line: how many of the trend window's sessions came after a short
+    /// night (or, with none, on a travel day; with neither, on a light day). Said as co-occurrence; nil
+    /// when none were flagged.
     static func flagContextLine(_ reading: TrendReading) -> String? {
         let window = reading.windowSessions
         guard window > 0 else { return nil }
         if reading.shortNightSessions > 0 {
             return WorkoutPlannerCopy.shortNightContext(reading.shortNightSessions, of: window)
+        }
+        if reading.travelDaySessions > 0 {
+            return WorkoutPlannerCopy.travelDayContext(reading.travelDaySessions, of: window)
         }
         guard reading.lightDaySessions > 0 else { return nil }
         return WorkoutPlannerCopy.lightDayContext(reading.lightDaySessions, of: window)
