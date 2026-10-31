@@ -30,7 +30,7 @@ On `main`, enable branch protection with:
    with warnings as errors, through `Scripts/macos-build-selftest.sh`, which first proves the check
    is a native macOS build (an `import UIKit` it plants in FernletFoundation must fail it), so an
    iOS-only API reaching the set cannot merge green either; the two macOS scripts are code-owned like
-   the S3 ones. ProximityKit itself is a pinned dependency since plan step A1.3 (exactly `0.1.1`,
+   the S3 ones. ProximityKit itself is a pinned dependency since plan step A1.3 (exactly `0.1.2`,
    from its own repository), whose CI builds and tests it on macOS and iOS; the strict build here
    compiles the tag with warnings as errors.
    **Every test step runs through `Scripts/run-gated-suites.sh`**,

@@ -79,7 +79,7 @@ at the app and check that the published egress list is the whole list.
 | --- | --- |
 | [`App/Fernlet/`](App/Fernlet) | The app target — composition root, `FernletStore`, and the tab surfaces. |
 | [`FernletKit/`](FernletKit) | Local SPM package: 27 modules (domain, persistence, crypto, the sealed `Private*` stores, the walled `AIProviders` + `CloudKitSync`, Fernlet's connection rules and social features on top of `ProximityKit`, UI kits, services). |
-| [`bowman-mw/proximitykit`](https://github.com/bowman-mw/proximitykit) | `ProximityKit`, the peer-to-peer subsystem (radios, identity, sealing, the mesh engine), in a repository of its own: FernletKit depends on its tag `0.1.1`, exactly, and its own CI builds and tests it. |
+| [`bowman-mw/proximitykit`](https://github.com/bowman-mw/proximitykit) | `ProximityKit`, the peer-to-peer subsystem (radios, identity, sealing, the mesh engine), in a repository of its own: FernletKit depends on its tag `0.1.2`, exactly, and its own CI builds and tests it. |
 | [`App/FernletWidgets/`](App/FernletWidgets), [`App/FernletShareExtension/`](App/FernletShareExtension) | Widget and recipe-share extension targets. |
 | [`Tests/FernletTests/`](Tests/FernletTests), [`Tests/FernletUITests/`](Tests/FernletUITests) | Unit tests (including the grep-walls) and UI tests. |
 | [`Site/`](Site) | The whole public web presence — static files only. See [`Site/README.md`](Site/README.md). |
