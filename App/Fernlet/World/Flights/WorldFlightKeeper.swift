@@ -45,6 +45,8 @@ final class WorldFlightKeeper {
     @ObservationIgnored private var recentFlights: [DateInterval] = []
     @ObservationIgnored private var savedAt: Date?
     @ObservationIgnored private var pending: [FlightEvent] = []
+    /// The bundled airport list, opened once on first use (the import sheet and the Flights page read it too).
+    @ObservationIgnored let airportsShelf: WorldAirportsShelf
 
     /// The sealed file the detector's state is kept in: the device side's purpose and buffer key, bound to its
     /// own context so it never opens as another file (as "Remember this place" does).
@@ -61,9 +63,10 @@ final class WorldFlightKeeper {
     /// A keeper placing readings in `grounds` and naming airports by `iataCode` (a token's IATA code); the
     /// bundled `WorldAirports.pack` by default, opened on first use.
     init(grounds: (() -> any AirportGroundsLookup)? = nil, iataCode: ((String) -> String?)? = nil) {
-        let bundled = BundledAirports()
-        self.grounds = grounds ?? { bundled.lookup() }
-        self.iataCode = iataCode ?? { bundled.iata(of: $0) }
+        let shelf = WorldAirportsShelf()
+        airportsShelf = shelf
+        self.grounds = grounds ?? { shelf.lookup() }
+        self.iataCode = iataCode ?? { shelf.iata(of: $0) }
     }
 
     /// Places readings in `grounds` and names airports by `iataCode` from now on (tests' made-up airports).
@@ -153,40 +156,7 @@ final class WorldFlightKeeper {
     }
 }
 
-/// The bundled `WorldAirports.pack`, opened once on first use; with no pack (or an unreadable one) no reading is
-/// inside any airport's grounds, and a flight is still found by its speed alone.
-@MainActor
-private final class BundledAirports {
-    private var opened: WorldAirports?
-    private var tried = false
-
-    /// The grounds lookup: the pack, or none.
-    func lookup() -> any AirportGroundsLookup {
-        open().map { $0 as any AirportGroundsLookup } ?? NoAirports()
-    }
-
-    /// The IATA code of the airport `token`, when the pack lists one.
-    func iata(of token: String) -> String? {
-        open()?.airport(token: token)?.iata
-    }
-
-    private func open() -> WorldAirports? {
-        guard !tried else { return opened }
-        tried = true
-        guard let url = Bundle.main.url(forResource: "WorldAirports", withExtension: "pack") else {
-            FernletAuditLog.log("worldMap.airports.packMissing")
-            return nil
-        }
-        do {
-            opened = try WorldAirports(data: Data(contentsOf: url, options: .mappedIfSafe))
-        } catch {
-            FernletAuditLog.log("worldMap.airports.packUnreadable")
-        }
-        return opened
-    }
-}
-
 /// No airports: nothing is inside any grounds.
-private nonisolated struct NoAirports: AirportGroundsLookup {
+nonisolated struct NoAirports: AirportGroundsLookup {
     func airports(containing point: GeoPoint) -> [WorldAirport] { [] }
 }
