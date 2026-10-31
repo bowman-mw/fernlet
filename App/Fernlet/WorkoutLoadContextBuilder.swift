@@ -18,7 +18,9 @@ import FernletFoundation
 ///
 /// Every session carries its G10 flag (``WorkoutSessionFlag``): the night before it — the day's own
 /// sleep log, else Health's figure for the night — against 6 h and against the person's median of
-/// the 14 nights before, the night before that for the firmer flag, and a workout logged as light.
+/// the 14 nights before, the night before that for the firmer flag, a workout logged as light, and a
+/// travel day (World-Airports-Spec §13.4: `travelDays` is day keys only, the composition root's per-day
+/// yes/no from `FernletStore+WorldTravelDay`; no flight, airport, time or place ever reaches the planner).
 /// Protein over the last two weeks is context for the trend story when Workout setup's food-logs
 /// switch is on (G11, G13); the newest calibration test dates the next one; the warm-up-sets setting
 /// and the lifter's level say whether heavy lifts get warm-up sets. Pure over its inputs.
@@ -35,9 +37,10 @@ enum WorkoutLoadContextBuilder {
 
     /// The context for today. `body` is the body profile in effect on this device (the typed one with
     /// this device's Health import laid over it, `effectiveUserProfile`); nil reads the synced one.
+    /// `travelDays` are the travel days' day keys: a session on one is flagged, and forgiven (§13.4).
     static func build(
         days: [String: FernletDay], today: FernletDay, todayKey: String, settings: FernletSettings,
-        body: UserNutritionProfile? = nil, locale: Locale = .current
+        body: UserNutritionProfile? = nil, locale: Locale = .current, travelDays: Set<String> = []
     ) -> WorkoutLoadContext {
         let unit = defaultUnit(for: locale)
         let profile = body ?? settings.userProfile
@@ -56,7 +59,7 @@ enum WorkoutLoadContextBuilder {
                 return age >= 0 && age <= lookbackDays
             }
             .sorted { $0.1 < $1.1 }
-        let sessions = exposures(window, nights: sleepByDay(merged))
+        let sessions = exposures(window, nights: sleepByDay(merged), travelDays: travelDays)
         return WorkoutLoadContext(
             exposures: sessions.byLift, today: todayDate, defaultUnit: unit,
             recovery: recovery(window, todayDate: todayDate, bodyKilograms: profile.weightKilograms),
@@ -118,19 +121,20 @@ enum WorkoutLoadContextBuilder {
         locale.measurementSystem == .us ? .lb : .kg
     }
 
-    /// Every lift's sessions in `days` (oldest first), each with its sleep or readiness flag, and the
-    /// date of the newest calibration test. `nights` is ``sleepByDay(_:)`` over the whole history, so
-    /// a session near the window's start still has its 14 nights before it.
+    /// Every lift's sessions in `days` (oldest first), each with its sleep, readiness or travel flag, and
+    /// the date of the newest calibration test. `nights` is ``sleepByDay(_:)`` over the whole history, so
+    /// a session near the window's start still has its 14 nights before it; `travelDays` are day keys.
     static func exposures(
-        _ days: [(FernletDay, Date)], nights: [String: Double] = [:]
+        _ days: [(FernletDay, Date)], nights: [String: Double] = [:], travelDays: Set<String> = []
     ) -> (byLift: [String: [LiftExposure]], lastCalibration: Date?) {
         var byLift: [String: [LiftExposure]] = [:]
         var lastCalibration: Date?
         for (day, date) in days {
             let sleep = sleepFlag(on: date, nights: nights)
+            let travelDay = travelDays.contains(day.date)
             var handLogged: [String: LiftExposure] = [:]
             for workout in day.workouts {
-                let flag = WorkoutSessionFlag.make(sleep: sleep, lightDay: workout.intensity == .light)
+                let flag = WorkoutSessionFlag.make(sleep: sleep, lightDay: workout.intensity == .light, travelDay: travelDay)
                 let results = workout.exerciseResults ?? []
                 // A ramp set is never evidence (the engine, the trend and the weekly count all skip
                 // it), so it never takes one of a lift's capped places either.

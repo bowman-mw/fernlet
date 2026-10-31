@@ -126,6 +126,11 @@ final class WorldFlightKeeper {
         return verdict.mayKeep
     }
 
+    /// When the trip under way began and when the flight under way took off, for the travel-day rule (§13.1,
+    /// `FernletStore+WorldTravelDay`); read when asked, never observed.
+    var tripStartedAt: Date? { detector.tripStartedAt }
+    var flightDeparted: Date? { detector.flightDeparted }
+
     /// How long since the landing, while still inside the grounds (the layover counter, §5); nil when not landed.
     func layoverDuration(at now: Date) -> TimeInterval? {
         layoverStart.map { max(0, now.timeIntervalSince($0)) }

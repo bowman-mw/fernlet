@@ -232,7 +232,7 @@ extension FernletStore {
             return guidedSessionForResume()
         }
         let load = WorkoutLoadContextBuilder.build(days: loadDays(), today: day, todayKey: todayKey, settings: settings,
-                                                   body: effectiveUserProfile)
+                                                   body: effectiveUserProfile, travelDays: workoutTravelDayKeys)
         let steps = PlannedWorkoutRun.steps(for: planned, location: settings.activeWorkoutLocation, load: load)
         guard !steps.isEmpty else { return nil }
         let session = PlannedWorkoutRun.session(

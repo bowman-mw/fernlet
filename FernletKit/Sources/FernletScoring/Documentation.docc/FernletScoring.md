@@ -121,7 +121,11 @@ and the retry banner's "when you are ready" and Balanced Strength Circuit's "fee
 through FernletDomainModel's `AddressedCopy` with a resource built against this module's bundle. The fallback workouts' NAMES are tokens: a taken
 suggestion is saved under its frozen `WorkoutFallbackName` (FernletDomainModel, where the draw-time
 mapping lives), and screens draw it through `Workout.displayedName`. Their exercise lines are plan
-text and stay English. ``MealParser``'s "Meal" default name and "Estimated locally…" note are stored
+text and stay English. **The travel-day session** (World-Airports-Spec §13.2, 2026-10-31):
+`WorkoutPlanner.travelDayPlan(locationName:)` and `suggestion(energy:goal:context:goals:travelDay:)` are
+chosen by one yes/no the app works out; "Travel-day reset" is a frozen `WorkoutFallbackName`, its eight
+moves are bundled catalog names, and its one reason line comes from `WorkoutFallbackCopy`. No flight,
+airport, time or place reaches this module. ``MealParser``'s "Meal" default name and "Estimated locally…" note are stored
 meal text the food log draws verbatim, so they stay English until that draw site maps them. No
 derived-signal or readiness phrasing lives here (that is `LocalPersistence`'s `DerivedSignalFactory`,
 whose values six gates compare). Pinned by `LocalizationBoundaryTests.frozenFallbackWorkoutNames`.

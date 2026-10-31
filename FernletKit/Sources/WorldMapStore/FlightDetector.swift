@@ -333,6 +333,10 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
     /// Whether the trip under way began with the ticket (the blue button's "End trip" row).
     public var isTripByTicket: Bool { trip?.byTicket ?? false }
 
+    /// When the trip under way began (a ticket's tap, or a found flight's take-off); the travel-day rule reads
+    /// whether that was today (World-Airports-Spec §13.1).
+    public var tripStartedAt: Date? { trip?.startedAt }
+
     /// The nearest airport whose grounds held the last placed reading, when not flying.
     public var currentAirport: String? {
         isFlying ? nil : lastPlaced?.airport
