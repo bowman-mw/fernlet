@@ -80,6 +80,14 @@ struct FlightImportPlanTests {
         #expect(PassportFlightsModel(flights: [], point: { _ in nil }).pages == [[]])
     }
 
+    /// A trip's distance is the great circle: Portland to London is about 7,890 km, not a flat projection's.
+    @Test func distancesAreGreatCircles() throws {
+        let leg = try #require(Self.flight("PDX", "LHR", "2026-09-02T20:00:00Z"))
+        let points = ["PDX": GeoPoint(45.5887, -122.5975), "LHR": GeoPoint(51.4700, -0.4543)]
+        let model = PassportFlightsModel(flights: [leg], point: { points[$0] })
+        #expect(abs(model.totalMetres - 7_890_000) < 30_000)
+    }
+
     /// Distances round to 10 km and group by threes, with "." in Spanish.
     @Test func kilometresGroupByLanguage() {
         #expect(PassportFlightsText.kilometres(24_848_000, language: .english) == "24,850 km")

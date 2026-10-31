@@ -7,7 +7,8 @@ import WorldMapStore
 // passport (the mockup's sample traveller, Portland since August), never written anywhere. Scenes: `turn` (page 3
 // with the contents open), `sprout` and `sproutHome` (page 1; the place from `FERNLET_UI_TEST_PASSPORT_PLACE`), `world`, `stamps`, `stamps2`, `new` (the Sea of Japan landing on page 5), `index`,
 // `continent` (North America A to Z), `fresh`, `full` (every stamp found), `decoy`, `flights` (the made-up flights'
-// last Flights page, `UITestSupport+AirportFlights`), `flightsImport` (the import summary over it). Absent in Release.
+// last Flights page, `UITestSupport+AirportFlights`), `flightsImport` (the import summary over it), `flightsWorld` (Your
+// world with their arcs). Absent in Release.
 
 extension UITestSupport {
     #if DEBUG
@@ -61,10 +62,12 @@ enum PassportBookDemoScenes {
             let entries = full(atlas: atlas)
             presenter.demo = PassportBookDemo(entries: entries, world: world)
             presenter.open(page: PassportBookModel(entries: entries).stampPageNumbers.upperBound)
-        case "flights", "flightsImport":
+        case "flights", "flightsImport", "flightsWorld":
             let flights = AirportFlightsDemo.flights
-            presenter.demo = PassportBookDemo(entries: sample, world: world, flights: flights,
-                                              importFound: scene == "flightsImport" ? AirportFlightsDemo.found : nil)
+            presenter.demo = PassportBookDemo(entries: sample, world: AirportFlightsDemo.world(world, atlas: atlas),
+                                              flights: flights,
+                                              importFound: scene == "flightsImport" ? AirportFlightsDemo.found : nil,
+                                              opensWorld: scene == "flightsWorld")
             let pages = PassportFlightsModel(flights: flights, point: { _ in nil }).pages.count
             presenter.open(page: PassportBookModel(entries: sample, flightPageCount: pages).indexPage - 1)
         case "new":

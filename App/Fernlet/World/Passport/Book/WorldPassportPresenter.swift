@@ -127,4 +127,6 @@ struct PassportBookDemo {
     var flights: [PassportFlight]?
     /// A Flighty file's summary to open over the book (the import sheet's screenshot, §9.4).
     var importFound: FlightyImportFound?
+    /// Whether it opens on Your world, full screen (the arcs' screenshot, §8).
+    var opensWorld = false
 }

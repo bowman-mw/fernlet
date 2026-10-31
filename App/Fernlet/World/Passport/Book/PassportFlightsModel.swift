@@ -131,10 +131,11 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
         return gap > 0 && gap <= maxStop ? gap : nil
     }
 
-    /// One flight's great-circle distance, or 0 where either airport isn't placed.
+    /// One flight's great-circle distance on the sphere (``WorldFlightArcs/kilometres(_:_:)``, the arcs' own;
+    /// `GeoPoint.distance(to:)` is a flat local projection), or 0 where either airport isn't placed.
     private static func metres(_ flight: PassportFlight, point: (String) -> GeoPoint?) -> Double {
         guard let from = point(flight.from), let to = point(flight.to) else { return 0 }
-        return from.distance(to: to)
+        return WorldFlightArcs.kilometres(from, to) * 1_000
     }
 
     /// The trips, ``tripsPerPage`` a page, each page and each new year opening with its year's heading.

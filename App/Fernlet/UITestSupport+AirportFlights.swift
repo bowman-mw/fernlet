@@ -29,6 +29,16 @@ enum AirportFlightsDemo {
         }
     }()
 
+    /// `world` with the made-up flights' arcs drawn over it, from the bundled airport list.
+    @MainActor
+    static func world(_ world: WorldViewContent, atlas: WorldAtlas?) -> WorldViewContent {
+        var book = PassportBook()
+        book.addFlights(flights)
+        var content = world
+        content.flights = WorldFlightMap.live(book: book, airports: WorldAirportsShelf().pack())
+        return content
+    }
+
     /// A Flighty file holding the same made-up flights, planned against a passport that already has Fernlet's
     /// own five ("5 flights Fernlet saw, kept once"), with two cancelled rows, four repeated and one unknown code.
     static let found: FlightyImportFound = {
