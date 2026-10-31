@@ -87,6 +87,13 @@ public nonisolated struct WorldAirline: Equatable, Sendable {
     public let iata: String
     /// The names an event or an export may use; the first is the everyday one.
     public let names: [String]
+
+    /// An airline row (public so the flight readers' tests can hand in a made-up table).
+    public init(icao: String, iata: String, names: [String]) {
+        self.icao = icao
+        self.iata = iata
+        self.names = names
+    }
 }
 
 /// The bundled `WorldAirports.pack`, opened (Docs/World-Airports-Pack.md: `FAP1`, version 1, the atlas's
