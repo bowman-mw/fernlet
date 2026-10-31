@@ -47,6 +47,24 @@ public nonisolated struct WorldAirport: Equatable, Identifiable, Sendable {
     public let spanishCity: String?
     public let grounds: WorldAirportGrounds
 
+    /// An airport from its fields: the pack's reader, and the made-up airports of the flight detector's tests.
+    public init(token: String, iata: String?, ident: String, point: GeoPoint, countryCode: String,
+                size: WorldAirportSize, timeZoneIdentifier: String, englishName: String, spanishName: String?,
+                englishCity: String, spanishCity: String?, grounds: WorldAirportGrounds) {
+        self.token = token
+        self.iata = iata
+        self.ident = ident
+        self.point = point
+        self.countryCode = countryCode
+        self.size = size
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.englishName = englishName
+        self.spanishName = spanishName
+        self.englishCity = englishCity
+        self.spanishCity = spanishCity
+        self.grounds = grounds
+    }
+
     public var id: String { token }
     /// The code shown on plates and stubs: IATA, else the ident.
     public var code: String { iata ?? ident }
