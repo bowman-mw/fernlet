@@ -322,7 +322,7 @@ struct WorldPlacesTests {
         let key = SymmetricKey(size: .bits256)
         #expect(store.worldPlaceLog() == nil, "Private closed: nothing read")
         store.hubContentKeyProvider = { key }
-        let start = Date()
+        let start = middayToday()
         store.startWorldWalk(at: start)
         for east in stride(from: 0.0, through: 300, by: 5) {
             store.worldWalk.record(WorldFix(point: Self.park.offset(east: east, north: 0), accuracy: 5, at: start, isPrecise: true))

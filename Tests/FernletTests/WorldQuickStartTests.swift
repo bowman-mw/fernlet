@@ -251,7 +251,7 @@ struct WorldQuickStartTests {
         let store = makeTestStore()
         let defaults = try #require(UserDefaults(suiteName: "WorldQuickStartTests.\(UUID().uuidString)"))
         Self.recordWalk(store)
-        let walk = try #require(store.endWorldWalk(at: Date().addingTimeInterval(6 * 60), defaults: defaults))
+        let walk = try #require(store.endWorldWalk(at: Self.walkStart.addingTimeInterval(6 * 60), defaults: defaults))
         #expect(walk.isKept && walk.minutes == 6 && abs(walk.metres - 200) < 20)
         #expect(store.day.workouts.contains { $0.id == walk.id })
         #expect(store.undoWorldWalk(walk))
@@ -265,7 +265,7 @@ struct WorldQuickStartTests {
         let before = store.day.workouts.count
         store.duressSessionActive = true
         Self.recordWalk(store)
-        let walk = try #require(store.endWorldWalk(at: Date().addingTimeInterval(120), defaults: defaults))
+        let walk = try #require(store.endWorldWalk(at: Self.walkStart.addingTimeInterval(120), defaults: defaults))
         #expect(!walk.isKept && store.day.workouts.count == before)
         #expect(try store.worldRoutes.workoutIDs().isEmpty)
         #expect(!store.undoWorldWalk(walk))
@@ -278,7 +278,7 @@ struct WorldQuickStartTests {
         let store = makeTestStore()
         let defaults = try #require(UserDefaults(suiteName: "WorldQuickStartTests.\(UUID().uuidString)"))
         Self.recordWalk(store)
-        let walk = try #require(store.endWorldWalk(at: Date().addingTimeInterval(5 * 60), defaults: defaults))
+        let walk = try #require(store.endWorldWalk(at: Self.walkStart.addingTimeInterval(5 * 60), defaults: defaults))
         let here = GeoPoint(45.5205, -122.6255)
         let line = try #require(store.worldSavedLine(startingNear: here.offset(east: 30, north: 0)))
         #expect(line.workoutID == walk.id && line.walks == 1 && abs(line.metres - 200) < 20)
@@ -304,8 +304,11 @@ struct WorldQuickStartTests {
     }
 
     /// A 200 m walk east, recorded from good readings.
+    /// Where every walk here starts: midday today, so a walk that ends minutes later is still today's.
+    private static let walkStart = middayToday()
+
     private static func recordWalk(_ store: FernletStore) {
-        let start = Date()
+        let start = walkStart
         store.startWorldWalk(at: start)
         for east in stride(from: 0.0, through: 200, by: 5) {
             store.worldWalk.record(WorldFix(point: GeoPoint(45.5205, -122.6255).offset(east: east, north: 0),
