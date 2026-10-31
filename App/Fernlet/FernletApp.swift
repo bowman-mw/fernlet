@@ -39,6 +39,8 @@ import FernletUI
 /// UI-test harness.
 @main
 struct FernletApp: App {
+    /// The Home Screen quick action "Take a trip" (World-Airports-Spec §7, ``WorldTripShortcut``).
+    @UIApplicationDelegateAdaptor(FernletShortcutAppDelegate.self) private var shortcutDelegate
     @State private var lockService = FernletLockService()
     @State private var storagePreferencesStore = StoragePreferencesStore()
     @State private var healthKitService: HealthKitService
