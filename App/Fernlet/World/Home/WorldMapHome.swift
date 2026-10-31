@@ -293,7 +293,8 @@ struct WorldMapHome: View {
                 WorldMapNotice(kind: notice, onUsePrecise: openSettings)
                     .frame(maxWidth: .infinity)
             }
-            WorldLayoverPlate(store: store, date: date)
+            // The airport banner sits over this column's top: the layover plate waits until it has gone.
+            if airportHome.banner == nil { WorldLayoverPlate(store: store, date: date) }
         }
         .padding(.top, 6)
         .padding(.horizontal, 12)
