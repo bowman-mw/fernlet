@@ -22,12 +22,15 @@ extension FernletStore {
         flights.isHome = { [weak self] point in
             self?.worldHomes.homes.contains { $0.point.distance(to: point) <= HomeBook.atRadius } ?? false
         }
-        flights.onEvents = { [weak self] events in self?.recordWorldFlightEvents(events) }
+        flights.onEvents = { [weak self] events in self?.recordWorldFlightEvents(events) ?? true }
     }
 
-    /// Records what the gate found in the passport (at most ``maxFlightEvents`` from one reading).
-    func recordWorldFlightEvents(_ events: [FlightEvent]) {
+    /// Records what the gate found in the passport (at most ``maxFlightEvents`` at once); false, recording
+    /// nothing, when the passport can't be read now (the phone is locked), so the gate hands them again later.
+    @discardableResult
+    func recordWorldFlightEvents(_ events: [FlightEvent]) -> Bool {
         let atlas = worldFog.atlas
+        guard atlas.opensForFlights() else { return false }
         for event in events.prefix(Self.maxFlightEvents) {
             switch event {
             case .airportFound(let token, let how, let at):
@@ -42,10 +45,11 @@ extension FernletStore {
                 continue
             }
         }
+        return true
     }
 
-    /// The most events one reading's changes are read for (a bound; a reading makes at most a few).
-    static let maxFlightEvents = 16
+    /// The most events read at once (a bound: one reading makes at most a few, after at most the gate's waiting ones).
+    static let maxFlightEvents = WorldFlightKeeper.maxPendingEvents + 16
 
     /// The passport's reading of how the gate found an airport: a take-off from an airport no trip had found is
     /// what a ticket would have done (§7, "a flight found by its speed does everything a ticket does").

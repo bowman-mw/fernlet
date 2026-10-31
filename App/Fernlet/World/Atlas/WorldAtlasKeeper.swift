@@ -195,6 +195,12 @@ final class WorldAtlasKeeper {
 
     // MARK: Airports and flights (the flight gate, World-Airports-Spec §3, §4.2, §6)
 
+    /// Whether the flight gate's finds can be taken now: the passport reads (the phone is unlocked), or a decoy is
+    /// showing (which keeps nothing, so they are dropped).
+    func opensForFlights() -> Bool {
+        isDecoy || loadStore()
+    }
+
     /// Records the person at the airport `token` at `date`, found by `find`, and announces a first visit or a new
     /// trip on ``discoveries()`` once saved. Nothing in a decoy or before the passport can be read.
     func recordAirport(token: String, at date: Date, by find: PassportBook.AirportFind) {

@@ -61,8 +61,12 @@ struct WorldFlightGateTests {
     /// Walks recorded to PDX's gate (five minutes), taxis at 36 km/h for a minute (car detection calls it a drive),
     /// takes off, crosses France and lands at CDG.
     private static func flyPortlandToParis(_ store: FernletStore) {
-        let source = store.worldLocation
         store.worldWalk.start(at: start)
+        flyPortlandToParis(store.worldLocation)
+    }
+
+    /// The same journey through `source` alone.
+    private static func flyPortlandToParis(_ source: WorldLocationSource) {
         for step in 0...30 {
             let second = Double(step) * 10
             source.deliver(reading(pdxPoint.offset(east: -2_000 + second * 1.4, north: 0), second, kmh: 5))
@@ -99,7 +103,7 @@ struct WorldFlightGateTests {
         let walk = store.worldWalk
         source.flights.onEvents = { events in
             if sourceFlights.isFlying { sawFlying = true }
-            store.recordWorldFlightEvents(events)
+            return store.recordWorldFlightEvents(events)
         }
         Self.flyPortlandToParis(store)
 
@@ -139,7 +143,10 @@ struct WorldFlightGateTests {
         let source = WorldLocationSource()
         source.flights.useAirports({ Self.airports }, iataCode: { $0 })
         var events: [FlightEvent] = []
-        source.flights.onEvents = { events += $0 }
+        source.flights.onEvents = { found in
+            events += found
+            return true
+        }
         var kept = 0
         source.onFix = { _ in kept += 1 }
         // In along a road 1.5 km south of the middle, then north just inside the eastern edge: 11.4 km at 90 km/h.
@@ -185,6 +192,27 @@ struct WorldFlightGateTests {
         #expect(Self.leaveCDGByRail(climb: 0, vertical: 80), "altitude too vague: the speed decides")
         #expect(Self.leaveCDGByRail(climb: 0, groundKnown: false), "no ground known: the speed decides")
         #expect(FlightDetector.climbMetres == 300 && FlightDetector.altitudeAccuracy == 50)
+    }
+
+    /// What the passport couldn't take (the phone locked at the landing) is handed again with the next reading's
+    /// changes: the landing reaches it once it opens.
+    @Test func findsThePassportCouldNotTakeAreHandedAgain() {
+        let source = WorldLocationSource()
+        source.flights.useAirports({ Self.airports }, iataCode: { $0 })
+        var opens = false
+        var taken: [FlightEvent] = []
+        source.flights.onEvents = { events in
+            guard opens else { return false }
+            taken += events
+            return true
+        }
+        Self.flyPortlandToParis(source)
+        #expect(taken.isEmpty)
+        opens = true
+        source.deliver(Self.reading(Self.cdgPoint.offset(east: 200, north: 0), 9 * 3_600 + 300, kmh: 5))
+        #expect(taken.contains(.airportFound(token: "CDG", how: .landing, at: Self.start.addingTimeInterval(9 * 3_600 + 60))))
+        #expect(taken.contains { if case .landed(let token, let from, _, _) = $0 { token == "CDG" && from == "PDX" } else { false } })
+        #expect(taken.contains(.airportFound(token: "PDX", how: .takeOff, at: Self.start.addingTimeInterval(370))))
     }
 
     /// A late reading (a visit's arrival, delivered after newer ones) inside a flight is refused; one from before

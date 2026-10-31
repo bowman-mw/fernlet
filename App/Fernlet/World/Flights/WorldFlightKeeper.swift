@@ -14,6 +14,9 @@ import WorldMapStore
 /// - **A late reading** (older than the newest one weighed: a low-power visit's arrival, a batch out of order) is
 ///   never shown to the detector. It is kept unless it falls inside a flight: the one under way, or one of the last
 ///   ``maxRecentFlights`` that ended.
+/// - **The passport opens only while the phone is unlocked:** what ``onEvents`` could not take (it answers false)
+///   waits in memory, at most ``maxPendingEvents``, and is handed again with the next reading's changes (a landing
+///   read with the phone locked still finds the airport once it is unlocked).
 /// - **Kept across relaunches** (a phone switched off for the flight still lands): the detector's state is sealed in
 ///   the map's vault under the buffer key (readings arrive with the phone locked), at most every ``saveInterval``
 ///   or at once when something changed; never in a decoy, and every wipe removes it with the vault's folder.
@@ -26,8 +29,9 @@ final class WorldFlightKeeper {
     /// until they leave (§4.2, the owner's note on 9).
     private(set) var layoverAirport: String?
 
-    /// Called with what each reading changed (airports found, flights started and landed, layovers).
-    @ObservationIgnored var onEvents: (([FlightEvent]) -> Void)?
+    /// Called with what each reading changed (airports found, flights started and landed, layovers), after any
+    /// it could not take before; answers whether it took them.
+    @ObservationIgnored var onEvents: (([FlightEvent]) -> Bool)?
     /// Whether a point is at one of the person's homes (a trip ends on getting home, §7).
     @ObservationIgnored var isHome: (GeoPoint) -> Bool = { _ in false }
     /// Whether the state may be written now (false in a decoy).
@@ -40,6 +44,7 @@ final class WorldFlightKeeper {
     @ObservationIgnored private var lastAt: Date?
     @ObservationIgnored private var recentFlights: [DateInterval] = []
     @ObservationIgnored private var savedAt: Date?
+    @ObservationIgnored private var pending: [FlightEvent] = []
 
     /// The sealed file the detector's state is kept in: the device side's purpose and buffer key, bound to its
     /// own context so it never opens as another file (as "Remember this place" does).
@@ -50,6 +55,8 @@ final class WorldFlightKeeper {
     static let saveInterval: TimeInterval = 60
     /// How many ended flights a late reading is checked against.
     static let maxRecentFlights = 8
+    /// The most changes kept waiting for the passport (the newest kept).
+    static let maxPendingEvents = 32
 
     /// A keeper placing readings in `grounds` and naming airports by `iataCode` (a token's IATA code); the
     /// bundled `WorldAirports.pack` by default, opened on first use.
@@ -90,7 +97,7 @@ final class WorldFlightKeeper {
         rememberFlights(in: verdict.events)
         publish()
         save(at: fix.at, changed: !verdict.events.isEmpty)
-        if !verdict.events.isEmpty { onEvents?(verdict.events) }
+        hand(pending + verdict.events)
         return verdict.mayKeep
     }
 
@@ -105,6 +112,13 @@ final class WorldFlightKeeper {
     func flight(from origin: String?, to token: String, departed: Date, arrived: Date) -> PassportFlight? {
         guard let origin, let from = iataCode(origin), let to = iataCode(token) else { return nil }
         return PassportFlight(from: from, to: to, departure: departed, arrival: arrived, sources: .fernlet)
+    }
+
+    /// Hands `events` to ``onEvents``, keeping them (the newest ``maxPendingEvents``) when it could not take them.
+    private func hand(_ events: [FlightEvent]) {
+        guard !events.isEmpty else { return }
+        let taken = onEvents?(events) ?? true
+        pending = taken ? [] : Array(events.suffix(Self.maxPendingEvents))
     }
 
     /// Notes each flight that ended, for late readings (the newest ``maxRecentFlights``).
