@@ -4,6 +4,17 @@
     "" : {
 
     },
+    " to " : {
+      "comment" : "VoiceOver: between the cities of a flight's route, with spaces",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : " a "
+          }
+        }
+      }
+    },
     "\"%@\"\n\nFernlet forgets it for good. Your journal entry stays." : {
       "localizations" : {
         "es" : {
@@ -1274,6 +1285,47 @@
         }
       }
     },
+    "%lld cancelled" : {
+      "comment" : "Airports: import rows skipped because the flight was cancelled",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cancelled"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cancelled"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld cancelado"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld cancelados"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld cm" : {
       "localizations" : {
         "es" : {
@@ -1471,6 +1523,129 @@
         }
       }
     },
+    "%lld flights Fernlet saw, kept once" : {
+      "comment" : "Airports: import flights the passport already holds because Fernlet saw them",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flight Fernlet saw, kept once"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flights Fernlet saw, kept once"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelo que Fernlet vio, guardado una vez"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelos que Fernlet vio, guardados una vez"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld flights already imported, kept once" : {
+      "comment" : "Airports: import flights the passport already holds from an earlier import",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flight already imported, kept once"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flights already imported, kept once"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelo ya importado, guardado una vez"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelos ya importados, guardados una vez"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld flights · %@" : {
+      "comment" : "Sprout's passport Flights page header: how many flights, then the distance flown",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld flight · %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld flights · %2$@"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%1$lld vuelo · %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%1$lld vuelos · %2$@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld friends connected" : {
       "comment" : "The mesh continuation card's subtitle, e.g. '3 friends connected'. Needs a plural variation per language; English also needs the one-friend form.",
       "localizations" : {
@@ -1574,6 +1749,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Equipo: %1$lld · %2$@"
+          }
+        }
+      }
+    },
+    "%lld layovers · %@. Tap a flight to see its arc on Your world." : {
+      "comment" : "Sprout's passport Flights page: the layovers' count and total length, then the hint",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld layover · %2$@. Tap a flight to see its arc on Your world."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld layovers · %2$@. Tap a flight to see its arc on Your world."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%1$lld escala · %2$@. Toca un vuelo para ver su arco en Tu mundo."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%1$lld escalas · %2$@. Toca un vuelo para ver su arco en Tu mundo."
+                }
+              }
+            }
           }
         }
       }
@@ -2024,6 +2240,47 @@
         }
       }
     },
+    "%lld repeated rows" : {
+      "comment" : "Airports: import rows skipped because the file repeats a flight",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld repeated row"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld repeated rows"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld fila repetida"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld filas repetidas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld reps" : {
       "comment" : "Set editor (Edit workout; Log workout, set by set): a set's rep count beside its − / + stepper, e.g. '8 reps'. Needs a plural variation per language; English also needs the one-rep form.",
       "localizations" : {
@@ -2058,6 +2315,47 @@
                 "stringUnit" : {
                   "state" : "needs_review",
                   "value" : "%lld reps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld rows without a date or airports" : {
+      "comment" : "Airports: import rows skipped because their date or airport codes couldn't be read",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld row without a date or airports"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld rows without a date or airports"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld fila sin fecha o sin aeropuertos"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld filas sin fecha o sin aeropuertos"
                 }
               }
             }
@@ -2304,6 +2602,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld viajes"
+          }
+        }
+      }
+    },
+    "%lld unknown airport code: %@" : {
+      "comment" : "Airports: import rows skipped for airport codes not in the list; the codes named, never guessed",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld unknown airport code: %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld unknown airport codes: %2$@"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%1$lld código de aeropuerto desconocido: %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%1$lld códigos de aeropuerto desconocidos: %2$@"
+                }
+              }
+            }
           }
         }
       }
@@ -3131,6 +3470,17 @@
         }
       }
     },
+    "A straight line from your nearest home to the furthest bit of map you've uncovered, worked out on this iPhone." : {
+      "comment" : "Silly stat: how the furthest distance from home is counted",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una línea recta desde tu casa más cercana hasta el trozo de mapa más lejano que has descubierto, calculada en este iPhone."
+          }
+        }
+      }
+    },
     "A tap when a rest or a hold ends." : {
       "localizations" : {
         "es" : {
@@ -3404,6 +3754,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Agregar %@ a hoy"
+          }
+        }
+      }
+    },
+    "Add %lld flights" : {
+      "comment" : "Airports: the import sheet's confirm button; the number of flights",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Add %lld flight"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Add %lld flights"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Añadir %lld vuelo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Añadir %lld vuelos"
+                }
+              }
+            }
           }
         }
       }
@@ -3731,6 +4122,17 @@
         }
       }
     },
+    "Add past flights" : {
+      "comment" : "Airports: the button and Settings row that import past flights from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añadir vuelos anteriores"
+          }
+        }
+      }
+    },
     "Add personal details" : {
       "localizations" : {
         "es" : {
@@ -3957,6 +4359,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Agrega los tuyos y elige qué sugiere Fernlet."
+          }
+        }
+      }
+    },
+    "Added %lld flights from Flighty" : {
+      "comment" : "Airports: the toast after an import; Undo beside it",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld flight from Flighty"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld flights from Flighty"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se añadió %lld vuelo de Flighty"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se añadieron %lld vuelos de Flighty"
+                }
+              }
+            }
           }
         }
       }
@@ -4307,12 +4750,34 @@
         }
       }
     },
+    "Airline, flight number, aircraft, booking code, seat, seat type, cabin, reason, notes, tail number, terminals and gates." : {
+      "comment" : "Airports: what a Flighty file holds that is never kept",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aerolínea, número de vuelo, avión, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, matrícula, terminales y puertas."
+          }
+        }
+      }
+    },
     "Airports" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Aeropuertos"
+          }
+        }
+      }
+    },
+    "Airports and flights" : {
+      "comment" : "Privacy & data: the airports and flights card's title",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aeropuertos y vuelos"
           }
         }
       }
@@ -4435,6 +4900,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ya lo hice — registrarlo"
+          }
+        }
+      }
+    },
+    "Already in the passport" : {
+      "comment" : "Airports: the import sheet's heading for flights kept once",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya en el pasaporte"
           }
         }
       }
@@ -4889,6 +5365,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Según el plan: %@"
+          }
+        }
+      }
+    },
+    "As the crow flies, %@ of the way to the other side of the world." : {
+      "comment" : "Silly stat: the furthest distance from home as a share of half the Earth's circumference",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En línea recta, el %@ del camino a la otra punta del mundo."
           }
         }
       }
@@ -5975,6 +6462,17 @@
         }
       }
     },
+    "Cancelled, Diverted to" : {
+      "comment" : "Airports: fields read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cancelado, Desviado a"
+          }
+        }
+      }
+    },
     "Capture" : {
       "localizations" : {
         "es" : {
@@ -6790,6 +7288,28 @@
         }
       }
     },
+    "Columns are matched by name, so a Flighty update that adds columns still imports." : {
+      "comment" : "Airports: why a newer Flighty file still imports",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las columnas se buscan por nombre, así que una actualización de Flighty que añada columnas sigue importando."
+          }
+        }
+      }
+    },
+    "Columns by name" : {
+      "comment" : "Airports: the heading of how a Flighty file's columns are found",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Columnas por nombre"
+          }
+        }
+      }
+    },
     "Comfortable — could hold a conversation." : {
       "localizations" : {
         "es" : {
@@ -7500,6 +8020,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet no pudo guardar las fotos"
+          }
+        }
+      }
+    },
+    "Couldn't add flights" : {
+      "comment" : "Airports: the alert's title when a Flighty file isn't imported",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudieron añadir los vuelos"
           }
         }
       }
@@ -8280,6 +8811,7 @@
       }
     },
     "Date" : {
+      "comment" : "Airports: a field read from a Flighty file",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9245,6 +9777,17 @@
         }
       }
     },
+    "Draw their arcs on Your world and join the Flights page, marked Imported. Their airports show as flown through; stamps, countries and fog still need you there." : {
+      "comment" : "Airports: what imported flights do, and don't do",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dibujar sus arcos en Tu mundo y sumarse a la página de Vuelos, marcados como importados. Sus aeropuertos salen como sobrevolados; los sellos, los países y la niebla siguen necesitando que estés allí."
+          }
+        }
+      }
+    },
     "Dream Cinema" : {
       "comment" : "Silly stat title: dream sleep measured in films",
       "localizations" : {
@@ -9262,6 +9805,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Serie descendente"
+          }
+        }
+      }
+    },
+    "Dropped as it's read, never kept" : {
+      "comment" : "Airports: the heading of what a Flighty file holds that is never kept",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se descarta al leer, nunca se guarda"
           }
         }
       }
@@ -10814,6 +11368,17 @@
         }
       }
     },
+    "Far Afield" : {
+      "comment" : "Silly stats stamp name, earned when Furthest from home first appears (the map uncovered 5 km or more from a home)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bien lejos"
+          }
+        }
+      }
+    },
     "Fat" : {
       "localizations" : {
         "es" : {
@@ -11451,6 +12016,17 @@
         }
       }
     },
+    "Fernlet reads only each flight's date, airports and gate times. The file isn't kept, and nothing leaves this iPhone." : {
+      "comment" : "Airports: the import sheet's privacy notice",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet solo lee la fecha, los aeropuertos y las horas de puerta de cada vuelo. El archivo no se guarda y nada sale de este iPhone."
+          }
+        }
+      }
+    },
     "Fernlet recipe" : {
       "localizations" : {
         "es" : {
@@ -11626,6 +12202,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet no volverá a sugerirlo."
+          }
+        }
+      }
+    },
+    "Fernlet's airport list is missing from this copy of the app." : {
+      "comment" : "Airports: the bundled airport list couldn't be opened",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A esta copia de la app le falta la lista de aeropuertos de Fernlet."
           }
         }
       }
@@ -11932,6 +12519,39 @@
         }
       }
     },
+    "Flights" : {
+      "comment" : "Sprout's passport: the Flights page's name and header",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos"
+          }
+        }
+      }
+    },
+    "Flights you take show here with their arcs on Your world. Add past ones from a Flighty file." : {
+      "comment" : "Sprout's passport Flights page before any flight: what shows here",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los vuelos que hagas salen aquí, con sus arcos en Tu mundo. Añade los anteriores desde un archivo de Flighty."
+          }
+        }
+      }
+    },
+    "Flighty's flight ID" : {
+      "comment" : "Airports: a field read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ID de vuelo de Flighty"
+          }
+        }
+      }
+    },
     "Floss Boss" : {
       "comment" : "Silly stats stamp name, earned when Floss Rope first appears",
       "localizations" : {
@@ -12183,6 +12803,40 @@
         }
       }
     },
+    "Found %lld flights, %lld airports, %@ to %@" : {
+      "comment" : "VoiceOver: the import summary's tiles: flights, airports, first and last year",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Found %1$lld flights, %2$lld airports, %3$@ to %4$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se encontraron %1$lld vuelos, %2$lld aeropuertos, de %3$@ a %4$@"
+          }
+        }
+      }
+    },
+    "Found %lld flights, %lld airports, %lld countries, %@ to %@" : {
+      "comment" : "VoiceOver: the import summary's tiles: flights, airports, countries, first and last year",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Found %1$lld flights, %2$lld airports, %3$lld countries, %4$@ to %5$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se encontraron %1$lld vuelos, %2$lld aeropuertos, %3$lld países, de %4$@ a %5$@"
+          }
+        }
+      }
+    },
     "Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account." : {
       "localizations" : {
         "en" : {
@@ -12215,6 +12869,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet encontró en iCloud una copia de seguridad cifrada de fotos. Para restaurar tus fotos en este iPhone, activa la copia de seguridad de fotos de arriba."
+          }
+        }
+      }
+    },
+    "Found no flights" : {
+      "comment" : "VoiceOver: the import summary when the file held no flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se encontraron vuelos"
           }
         }
       }
@@ -12437,6 +13102,17 @@
         }
       }
     },
+    "From %@" : {
+      "comment" : "Airports: the import sheet's subtitle: the file's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De %@"
+          }
+        }
+      }
+    },
     "From %@ to %@, in steps of %@." : {
       "localizations" : {
         "en" : {
@@ -12484,6 +13160,28 @@
         }
       }
     },
+    "From a Flighty export file" : {
+      "comment" : "Privacy & data: the line under Add past flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De un archivo exportado de Flighty"
+          }
+        }
+      }
+    },
+    "From a Flighty export file. Read on this iPhone, never sent." : {
+      "comment" : "Airports: the line under Add past flights on the passport's Flights page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De un archivo exportado de Flighty. Se lee en este iPhone y nunca se envía."
+          }
+        }
+      }
+    },
     "From now on, Fernlet plans %@ instead of %@." : {
       "comment" : "Plan editor: a saved swap, written on Save; the arguments are the new and the original exercise",
       "localizations" : {
@@ -12521,6 +13219,17 @@
         }
       }
     },
+    "From, To" : {
+      "comment" : "Airports: fields read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De, A"
+          }
+        }
+      }
+    },
     "Fur shininess: +%@ (estimate)." : {
       "comment" : "Silly stat: a made-up fur shininess figure",
       "localizations" : {
@@ -12532,6 +13241,17 @@
         }
       }
     },
+    "Furthest from home" : {
+      "comment" : "Silly stat title: the furthest the map has been uncovered from the person's home",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo más lejos de casa"
+          }
+        }
+      }
+    },
     "Gastrotrich Lifetimes" : {
       "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal",
       "localizations" : {
@@ -12539,6 +13259,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Vidas de gastrotrico"
+          }
+        }
+      }
+    },
+    "Gate departure and arrival times" : {
+      "comment" : "Airports: fields read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Horas de salida y llegada en puerta"
           }
         }
       }
@@ -14054,6 +14785,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Importar plan de entrenamiento"
+          }
+        }
+      }
+    },
+    "Imported" : {
+      "comment" : "Sprout's passport Flights page: the tag on a flight added from a file or the calendar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Importado"
           }
         }
       }
@@ -15944,6 +16686,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Más descanso"
+          }
+        }
+      }
+    },
+    "Look how far we came! Home's still where we left it." : {
+      "comment" : "Companion line when the Far Afield stamp is earned (the map uncovered 5 km or more from a home)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Mira hasta dónde llegamos! La casa sigue donde la dejamos."
           }
         }
       }
@@ -17841,6 +18594,28 @@
         }
       }
     },
+    "No flights to add" : {
+      "comment" : "Airports: the import sheet's disabled confirm when the file held no flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay vuelos que añadir"
+          }
+        }
+      }
+    },
+    "No flights yet" : {
+      "comment" : "Sprout's passport Flights page before any flight",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay vuelos"
+          }
+        }
+      }
+    },
     "No friends yet — meet up in person to add one." : {
       "localizations" : {
         "es" : {
@@ -18580,6 +19355,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Con notas"
+          }
+        }
+      }
+    },
+    "Nothing" : {
+      "comment" : "Airports: the import skipped no rows",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nada"
           }
         }
       }
@@ -20050,6 +20836,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Contraseña"
+          }
+        }
+      }
+    },
+    "Past flights" : {
+      "comment" : "Airports: the Flighty import summary sheet's title",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos anteriores"
           }
         }
       }
@@ -21681,6 +22478,17 @@
         }
       }
     },
+    "Read" : {
+      "comment" : "Airports: the heading of the column of what's read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se lee"
+          }
+        }
+      }
+    },
     "Read plan" : {
       "localizations" : {
         "es" : {
@@ -22242,6 +23050,7 @@
       }
     },
     "Remove" : {
+      "comment" : "Privacy & data: confirms removing imported flights",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -22468,6 +23277,28 @@
         }
       }
     },
+    "Remove imported flights" : {
+      "comment" : "Privacy & data: removes every flight added from a file or the calendar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar los vuelos importados"
+          }
+        }
+      }
+    },
+    "Remove imported flights?" : {
+      "comment" : "Privacy & data: the confirmation's title",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Quitar los vuelos importados?"
+          }
+        }
+      }
+    },
     "Remove ingredient" : {
       "localizations" : {
         "es" : {
@@ -22641,6 +23472,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Eliminado"
+          }
+        }
+      }
+    },
+    "Removed %lld imported flights" : {
+      "comment" : "VoiceOver: announced after imported flights were removed; the number of flights",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Removed %lld imported flight"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Removed %lld imported flights"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se quitó %lld vuelo importado"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se quitaron %lld vuelos importados"
+                }
+              }
+            }
           }
         }
       }
@@ -25944,6 +26816,17 @@
         }
       }
     },
+    "Skipped" : {
+      "comment" : "Airports: the import sheet's heading for rows left out",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Omitidos"
+          }
+        }
+      }
+    },
     "Sky" : {
       "comment" : "App colors: a light paper colour",
       "localizations" : {
@@ -27627,6 +28510,17 @@
         }
       }
     },
+    "Tap a flight to see its arc on Your world." : {
+      "comment" : "Sprout's passport Flights page: the hint under the stubs",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca un vuelo para ver su arco en Tu mundo."
+          }
+        }
+      }
+    },
     "Tap a photo to see it full size, with its date and note." : {
       "comment" : "Move panel, under the progress-photo strip: how to open a photo.",
       "localizations" : {
@@ -27806,6 +28700,61 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ese código no coincide"
+          }
+        }
+      }
+    },
+    "That doesn't look like a Flighty export file." : {
+      "comment" : "Airports: a picked file isn't a readable CSV",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eso no parece un archivo exportado de Flighty."
+          }
+        }
+      }
+    },
+    "That file couldn't be opened. Try saving it to Files first." : {
+      "comment" : "Airports: a picked file couldn't be read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo abrir ese archivo. Prueba a guardarlo antes en Archivos."
+          }
+        }
+      }
+    },
+    "That file has more flights than Fernlet can read at once." : {
+      "comment" : "Airports: a picked file is over the row cap",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese archivo tiene más vuelos de los que Fernlet puede leer de una vez."
+          }
+        }
+      }
+    },
+    "That file has no %@ column, so it isn't a Flighty export." : {
+      "comment" : "Airports: a picked file lacks a column every Flighty export has; the column's English name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese archivo no tiene la columna %@, así que no es una exportación de Flighty."
+          }
+        }
+      }
+    },
+    "That file is too big to be a Flighty export." : {
+      "comment" : "Airports: a picked file is over the size cap",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese archivo es demasiado grande para ser una exportación de Flighty."
           }
         }
       }
@@ -28048,6 +28997,17 @@
         }
       }
     },
+    "The airports and the arc" : {
+      "comment" : "Airports: why a Flighty file's From and To are read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los aeropuertos y el arco"
+          }
+        }
+      }
+    },
     "The airports, their codes, positions and runways come from OurAirports, which is in the public domain. Their Spanish names and the cities they serve come from Wikidata, under CC0, and their time zones from the tz database, which is in the public domain. All of it travels inside the app: Fernlet never downloads airport data." : {
       "localizations" : {
         "es" : {
@@ -28181,12 +29141,34 @@
         }
       }
     },
+    "The day it goes on" : {
+      "comment" : "Airports: why a Flighty file's date is read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El día en que va"
+          }
+        }
+      }
+    },
     "The fabric on your knee, a cool table edge, your own two hands." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La tela sobre tu rodilla, el borde fresco de una mesa, tus propias manos."
+          }
+        }
+      }
+    },
+    "The file's times are local to each airport. The airport list carries each airport's time zone, so the phone works out stops offline." : {
+      "comment" : "Airports: how a Flighty file's local times are read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las horas del archivo son locales de cada aeropuerto. La lista de aeropuertos lleva la zona horaria de cada uno, así que el teléfono calcula las escalas sin conexión."
           }
         }
       }
@@ -28369,6 +29351,17 @@
         }
       }
     },
+    "The passport can't be opened right now. Unlock your iPhone and try again." : {
+      "comment" : "Airports: the passport couldn't be read or saved",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no se puede abrir el pasaporte. Desbloquea el iPhone y vuelve a intentarlo."
+          }
+        }
+      }
+    },
     "The plan" : {
       "localizations" : {
         "es" : {
@@ -28517,6 +29510,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Las palabras que escribiste sobre este día están selladas en este dispositivo. Si las eliminas, no se puede deshacer."
+          }
+        }
+      }
+    },
+    "Their arcs and Flights page entries go. Flights Fernlet saw itself stay." : {
+      "comment" : "Privacy & data: what removing imported flights does",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se van sus arcos y sus entradas en la página de Vuelos. Los vuelos que Fernlet vio por sí mismo se quedan."
           }
         }
       }
@@ -29393,6 +30397,17 @@
         }
       }
     },
+    "Times without a time zone" : {
+      "comment" : "Airports: the heading of how a Flighty file's times are read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Horas sin zona horaria"
+          }
+        }
+      }
+    },
     "To Step or Not to Step" : {
       "comment" : "Silly stats stamp name, earned when steps reach one Hamlet; a play on Hamlet's famous line",
       "localizations" : {
@@ -29400,6 +30415,39 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Caminar o no caminar"
+          }
+        }
+      }
+    },
+    "To count a flight once when the file repeats it" : {
+      "comment" : "Airports: why a Flighty file's flight ID is read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para contar un vuelo una vez si el archivo lo repite"
+          }
+        }
+      }
+    },
+    "To put flights in order and time stops" : {
+      "comment" : "Airports: why a Flighty file's gate times are read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para ordenar los vuelos y medir escalas"
+          }
+        }
+      }
+    },
+    "To skip a flight, or use where it really went" : {
+      "comment" : "Airports: why a Flighty file's Cancelled and Diverted to are read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para omitir un vuelo o usar adónde fue de verdad"
           }
         }
       }
@@ -31038,6 +32086,17 @@
         }
       }
     },
+    "We've been %@ from home. I still knew the way back." : {
+      "comment" : "Companion line about the furthest the person has been from home",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hemos estado a %@ de casa. Aun así sabía volver."
+          }
+        }
+      }
+    },
     "We've been friends for ^[%@ gastrotrich lifetime](inflect: true). They're tiny and live about three days." : {
       "comment" : "Companion line about how long the user has had the app",
       "localizations" : {
@@ -31228,6 +32287,28 @@
         }
       }
     },
+    "What Fernlet reads" : {
+      "comment" : "Airports: the title of what is read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Qué lee Fernlet"
+          }
+        }
+      }
+    },
+    "What Fernlet reads from the file" : {
+      "comment" : "Airports: the import sheet's link to what is read from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Qué lee Fernlet del archivo"
+          }
+        }
+      }
+    },
     "What Fernlet shows, reads, and protects." : {
       "localizations" : {
         "es" : {
@@ -31255,6 +32336,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Qué comiste?"
+          }
+        }
+      }
+    },
+    "What for" : {
+      "comment" : "Airports: the heading of the column of why each field is read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para qué"
           }
         }
       }
@@ -31315,6 +32407,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Cómo lo llamamos?"
+          }
+        }
+      }
+    },
+    "What they'll do" : {
+      "comment" : "Airports: the import sheet's heading for its effect",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Qué harán"
           }
         }
       }
@@ -32153,6 +33256,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Puedes tener hasta %lld artículos a la venta a la vez. Retira uno para hacer espacio. Tu artículo está guardado y listo para cuando tú lo estés."
+          }
+        }
+      }
+    },
+    "You can remove them all in Privacy & data." : {
+      "comment" : "Airports: the line under the import sheet's confirm",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puedes quitarlos todos en Privacidad y datos."
           }
         }
       }
@@ -34915,6 +36029,17 @@
         }
       }
     },
+    "airports" : {
+      "comment" : "Airports: the import summary tile under the number of airports",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "aeropuertos"
+          }
+        }
+      }
+    },
     "appColors.accent.clay" : {
       "comment" : "App colors: a red-brown accent for buttons, switches and selected chips",
       "extractionState" : "extracted_with_value",
@@ -37534,6 +38659,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "notas de cocina, sustituciones, consejos"
+          }
+        }
+      }
+    },
+    "countries" : {
+      "comment" : "Airports: the import summary tile under the number of countries",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "países"
           }
         }
       }
@@ -40505,6 +41641,17 @@
         }
       }
     },
+    "flights" : {
+      "comment" : "Airports: the import summary tile under the number of flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "vuelos"
+          }
+        }
+      }
+    },
     "food.ingredientRow.summary" : {
       "comment" : "A collapsed recipe-ingredient row: the amount and its unit, then grams of protein (P), carbs (C) and fat (F).",
       "extractionState" : "extracted_with_value",
@@ -43165,6 +44312,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "iOS terminó la sesión en segundo plano"
+          }
+        }
+      }
+    },
+    "imported" : {
+      "comment" : "VoiceOver: said after an imported flight's stub",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "importado"
           }
         }
       }
@@ -55830,6 +56988,34 @@
         }
       }
     },
+    "via %@" : {
+      "comment" : "Sprout's passport Flights page: a trip's stop, its length unknown",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "con escala en %@"
+          }
+        }
+      }
+    },
+    "via %@ · %@" : {
+      "comment" : "Sprout's passport Flights page: a trip's stop and how long it lasted",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "via %1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "con escala en %1$@ · %2$@"
+          }
+        }
+      }
+    },
     "weekly.aerobic.line" : {
       "comment" : "Weekly totals screen: aerobic minutes logged this week out of the 150-minute guideline, e.g. '95 of 150 minutes'. The first number is what was logged; the second is always 150.",
       "extractionState" : "extracted_with_value",
@@ -59657,6 +60843,42 @@
         }
       }
     },
+    "worldQuickStart.cookSomething" : {
+      "comment" : "World Home quick start at home: opens the recipe book (Spanish: Cocinar algo)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cook something"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cocinar algo"
+          }
+        }
+      }
+    },
+    "worldQuickStart.cookSomething.detail" : {
+      "comment" : "World Home quick start: under 'Cook something' (Spanish: De tu recetario)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From your recipe book"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De tu recetario"
+          }
+        }
+      }
+    },
     "worldQuickStart.findMenu" : {
       "comment" : "World Home quick start at a favourite place to eat: searches the web for its menu by the place's name (Spanish: Buscar el menú de …)",
       "extractionState" : "extracted_with_value",
@@ -60130,6 +61352,60 @@
         }
       }
     },
+    "worldQuickStart.loopFromDoor" : {
+      "comment" : "World Home quick start at home: walk or run the latest loop from the person's door again (Spanish: Otra vuelta a la manzana)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Around the block again"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Otra vuelta a la manzana"
+          }
+        }
+      }
+    },
+    "worldQuickStart.loopFromDoor.detail" : {
+      "comment" : "World Home quick start: under 'Around the block again'; the loop's length, e.g. '2.1 km loop from your door' (Spanish: Circuito de 2,1 km desde tu puerta)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ loop from your door"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Circuito de %@ desde tu puerta"
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.atHome" : {
+      "comment" : "World Home quick-start card at one of the person's homes (`ref-home-blue`; Spanish: Estás en casa. Esto tienes a mano.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're home. Here's what's handy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estás en casa. Esto tienes a mano."
+          }
+        }
+      }
+    },
     "worldQuickStart.note.loggedMealsHere" : {
       "comment" : "World Home quick-start card at a favourite place to eat: how many meals were logged there. Plural on the number",
       "localizations" : {
@@ -60344,6 +61620,78 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "worldQuickStart.roomSpace" : {
+      "comment" : "The workout space the hotel's room workout adds: no equipment (Spanish: Habitación de hotel)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hotel room"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Habitación de hotel"
+          }
+        }
+      }
+    },
+    "worldQuickStart.roomWorkout" : {
+      "comment" : "World Home quick start at a hotel: Move's workout suggestion with no equipment, for the hotel room",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggest a room workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sugerir un entreno en la habitación"
+          }
+        }
+      }
+    },
+    "worldQuickStart.roomWorkout.detail" : {
+      "comment" : "World Home quick start at a hotel: under 'Suggest a room workout'; the workout needs no equipment and no workout space",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No equipment · nothing to set up"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin equipo · nada que preparar"
+          }
+        }
+      }
+    },
+    "worldQuickStart.roomWorkout.gentle" : {
+      "comment" : "World Home quick start at a hotel on a resting day: under 'Suggest a room workout'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No equipment · only if you feel up to it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin equipo · solo si te apetece"
           }
         }
       }
@@ -61528,6 +62876,78 @@
         }
       }
     },
+    "worldView.airport.found.spoken" : {
+      "comment" : "Your world: VoiceOver name of a found airport's marker: its city, then its code",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ airport, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aeropuerto de %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "worldView.airport.ring.spoken" : {
+      "comment" : "Your world: VoiceOver name of a small ring for an airport only flown through, shown when zoomed in or tapped",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, flown through"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, de paso"
+          }
+        }
+      }
+    },
+    "worldView.airports.count.one" : {
+      "comment" : "Your world plate: one airport found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 airport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 aeropuerto"
+          }
+        }
+      }
+    },
+    "worldView.airports.count.other" : {
+      "comment" : "Your world plate: the number of airports found (never one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld airports"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld aeropuertos"
+          }
+        }
+      }
+    },
     "worldView.back" : {
       "comment" : "World view: the back chip's word, top left, which returns to the passport's world page",
       "extractionState" : "extracted_with_value",
@@ -61632,6 +63052,114 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld países"
+          }
+        }
+      }
+    },
+    "worldView.flights.arc.spoken" : {
+      "comment" : "Your world: VoiceOver name of a flight arc, a button that opens its card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flights, %1$@ and %2$@, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos, %1$@ y %2$@, %3$@"
+          }
+        }
+      }
+    },
+    "worldView.flights.arc.spoken.imported" : {
+      "comment" : "Your world: VoiceOver name of a flight arc whose flights were all imported (Flighty or the calendar)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flights, %1$@ and %2$@, %3$@, imported"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos, %1$@ y %2$@, %3$@, importados"
+          }
+        }
+      }
+    },
+    "worldView.flights.card" : {
+      "comment" : "Your world: the card of a tapped flight arc: the two cities, the flights both ways, the distance",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ – %2$@ · %3$@ · %4$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ – %2$@ · %3$@ · %4$@"
+          }
+        }
+      }
+    },
+    "worldView.flights.count.one" : {
+      "comment" : "Your world: one flight (on the plate, an arc's card and its VoiceOver name)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 flight"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 vuelo"
+          }
+        }
+      }
+    },
+    "worldView.flights.count.other" : {
+      "comment" : "Your world: the number of flights (never one), on the plate, an arc's card and its VoiceOver name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld flights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld vuelos"
+          }
+        }
+      }
+    },
+    "worldView.flights.km" : {
+      "comment" : "Your world: a flight route's great-circle distance in kilometres, e.g. 3,620 km",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ km"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ km"
           }
         }
       }
@@ -61794,6 +63322,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$@ y %2$lld ciudades más"
+          }
+        }
+      }
+    },
+    "worldView.plate.flights" : {
+      "comment" : "Your world plate: the airports found, then every flight flown, e.g. 6 airports · 53 flights",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
           }
         }
       }
@@ -62262,6 +63808,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Conservarla"
+          }
+        }
+      }
+    },
+    "years" : {
+      "comment" : "Airports: the import summary tile under the years flown",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "años"
           }
         }
       }
