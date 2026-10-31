@@ -160,7 +160,8 @@ struct ContentView: View {
     }
 
     var body: some View {
-        rootSheetHost
+        // Boxed (``mainTabContent`` says why): unboxed, this chain's 35 steps each copied the whole root.
+        AnyView(rootSheetHost)
             // Every passcode setup sheet, wherever it is presented from, asks the same coordinator
             // before it mints a fresh key over sealed entries (period-data design §4.4 step 2).
             .environment(\.fernletPrivateHubOpener, privateHubOpener)
@@ -847,7 +848,8 @@ struct ContentView: View {
         ZStack {
             sceneBackground.ignoresSafeArea()
             if launcher.isDone {
-                mainInterface
+                // Boxed (``mainTabContent`` says why).
+                AnyView(mainInterface)
                     .transition(.opacity)
             } else {
                 LaunchScreen(
@@ -921,8 +923,15 @@ struct ContentView: View {
     /// with empty @State on every friend-mesh session edge (the "blank then loads" symptom). The
     /// session camera is a full-screen cover of the Friends panel now (b3-friends-session), so nothing
     /// here swaps or takes over the tab at all.
-    private var mainTabContent: some View {
-        tabPages
+    ///
+    /// **Boxed in an `AnyView`, as are ``mainInterface`` (in ``launchRoot``) and ``rootSheetHost`` (in
+    /// `body`)**, to keep the root off the main thread's stack. Unboxed, every modifier step of the root's
+    /// chains held a copy of the whole tab tree inline, and a Debug build keeps all of them live at once:
+    /// on 2026-10-30 the first render after launch reached 1,101 KB (`body` 447 KB, `rootSheetHost` 202 KB)
+    /// against an iPhone's 1 MB main-thread stack and crashed with EXC_BAD_ACCESS code 2 (the simulator's
+    /// 8 MB stack hid it). A box holds the same view type every render, so identity and @State are kept.
+    private var mainTabContent: AnyView {
+        AnyView(tabPages)
     }
 
     /// True while any ROOT-presented sheet is covering the tab pages: the `activeSheet` router
