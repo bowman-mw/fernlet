@@ -165,6 +165,7 @@ struct AcknowledgmentsView: View {
                 fontsSection
                 foodDataSection
                 mapDataSection
+                airportsSection
                 weatherSection
             }
             .padding(.horizontal, 16)
@@ -248,6 +249,33 @@ struct AcknowledgmentsView: View {
                 .textSelection(.enabled)
         }
     }
+
+    /// Where the airports come from (World-Airports-Spec §1.3): OurAirports, Wikidata and the tz database for the
+    /// list, and for the outlines Fernlet draws itself, the public outline sets they start from and the pictures
+    /// they were traced over. CORINE's and EOX's terms ask for their credit as written, so those lines are
+    /// notices, never translated (``airportCredits``). Only sources an approved outline actually used are listed.
+    private var airportsSection: some View {
+        FernletFramedSection(header: Text("Airports")) {
+            paragraph(Text("The airports, their codes, positions and runways come from OurAirports, which is in the public domain. Their Spanish names and the cities they serve come from Wikidata, under CC0, and their time zones from the tz database, which is in the public domain. All of it travels inside the app: Fernlet never downloads airport data."))
+            paragraph(Text("Fernlet draws its own outlines of some airports' grounds. They start from the US Census Bureau's TIGER/Line 2015 airport areas, which are in the public domain, or from CORINE Land Cover 2018, and were traced by eye over the pictures below. Fernlet changed the data: it simplified the outlines and kept only their points; the pictures aren't in the app."))
+            ForEach(Self.airportCredits, id: \.self) { credit in
+                Text(verbatim: credit)
+                    .font(.fernlet(.body))
+                    .italic()
+                    .foregroundStyle(Color.bark)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    /// The airport outlines' credits, as their sources ask (notices, never translated), in a fixed order.
+    static let airportCredits = [
+        "CORINE Land Cover 2018: © European Union, Copernicus Land Monitoring Service 2018, European Environment Agency (EEA)",
+        "US Census Bureau, TIGER/Line Shapefiles 2015 (public domain)",
+        "Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+        "USGS The National Map: Orthoimagery (public domain)",
+    ]
 
     /// Beck et al.'s citation, as the dataset asks to be cited (a notice, never translated).
     static let koppenCitation = "Beck, H. E., Zimmermann, N. E., McVicar, T. R., Vergopolan, N., Berg, A., & Wood, E. F. (2018). Present and future Köppen-Geiger climate classification maps at 1-km resolution. Scientific Data, 5, 180214."

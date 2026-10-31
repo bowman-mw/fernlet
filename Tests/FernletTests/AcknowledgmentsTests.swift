@@ -142,6 +142,25 @@ struct AcknowledgmentsTests {
 
     /// Settings → Privacy & data links the screen right under Privacy Policy, the route builds it, and
     /// search finds it by what people type, in English and in Spanish.
+    /// The airports' sources (World-Airports-Spec §1.3): the list's three sources are named, the outline credits
+    /// CORINE's and EOX's terms ask for are carried as written and in order, and the section sits after the map
+    /// data and before the weather.
+    @Test func theAirportsSectionCreditsEverySourceTheOutlinesUsed() throws {
+        let source = try RepoRoot.source("App/Fernlet/AcknowledgmentsView.swift")
+        for name in ["OurAirports", "Wikidata, under CC0", "tz database", "TIGER/Line 2015", "CORINE Land Cover 2018"] {
+            #expect(source.contains(name), "the Airports section names \(name)")
+        }
+        #expect(AcknowledgmentsView.airportCredits.count == 4)
+        #expect(AcknowledgmentsView.airportCredits.first?.contains("© European Union, Copernicus Land Monitoring Service") == true)
+        #expect(AcknowledgmentsView.airportCredits.contains {
+            $0.contains("EOX IT Services GmbH (CC BY 4.0)") && $0.contains("contains modified Copernicus Sentinel data 2016")
+        })
+        let map = try #require(source.range(of: "                mapDataSection\n"))
+        let airports = try #require(source.range(of: "                airportsSection\n"))
+        let weather = try #require(source.range(of: "                weatherSection\n"))
+        #expect(map.lowerBound < airports.lowerBound && airports.lowerBound < weather.lowerBound)
+    }
+
     @Test func settingsLinksAndFindsTheScreen() throws {
         let sheet = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
         let policy = try #require(sheet.range(of: #"hubLink("Privacy Policy", .privacyPolicy)"#))
