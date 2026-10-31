@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// The atlas's one global raster grid (Docs/World-Atlas-Pack.md, "The grid"): `cols = 2 × rows` square cells
 /// of `180° / rows`, row 0 just south of 90°N, column 0 starting at 180°W. The shipped pack uses 1,800 rows
@@ -76,12 +77,31 @@ public nonisolated struct AtlasGrid: Hashable, Sendable {
     }
 }
 
-/// A polygon from the pack (a country or an urban boundary): its bounding box and rings in 1e-5 degrees,
-/// tested with the even-odd rule, so a hole is just another ring.
+/// A polygon from the pack (a country, a state or province, or an urban boundary): its bounding box and rings
+/// in 1e-5 degrees, tested with the even-odd rule, so a hole is just another ring. The point test walks only
+/// the edges of the point's latitude band (``AtlasEdgeBands``, built the first time the polygon is tested and
+/// kept), not every ring point. Equality and hashing read the box and rings only.
 ///
 /// Decoding is bounded: at most ``maxRings`` rings and ``maxPointsPerRing`` points a ring (and never more
 /// points than the section has bytes left), every point checked onto the globe.
 public nonisolated struct AtlasPolygon: Hashable, Sendable {
+    /// The polygon's edge bands, built on its first point test (most polygons are never tested: the screens
+    /// and the passport read a few countries, states and urban boundaries), then kept. Shared by every copy.
+    final class BandSlot: Sendable {
+        /// The bands once built.
+        private let built = Mutex<AtlasEdgeBands?>(nil)
+
+        /// The bands, built by `make` under the lock the first time (so two tasks never build them twice).
+        func bands(_ make: () -> AtlasEdgeBands) -> AtlasEdgeBands {
+            built.withLock { slot in
+                if let slot { return slot }
+                let made = make()
+                slot = made
+                return made
+            }
+        }
+    }
+
     /// The most rings one feature may have (Canada and Indonesia, the most fragmented, have a few thousand).
     public static let maxRings = 10_000
     /// The most points one ring may have (the longest simplified 1:10m coastline ring has under 100,000); a
@@ -98,6 +118,41 @@ public nonisolated struct AtlasPolygon: Hashable, Sendable {
     let lats: [Int32]
     /// Where each ring ends in ``lons`` and ``lats``.
     let ringEnds: [Int]
+    /// The edges by latitude band, derived from the rings when first needed.
+    private let bandSlot = BandSlot()
+
+    /// The polygon with this box and these rings.
+    init(minLon: Int32, minLat: Int32, maxLon: Int32, maxLat: Int32, lons: [Int32], lats: [Int32], ringEnds: [Int]) {
+        self.minLon = minLon
+        self.minLat = minLat
+        self.maxLon = maxLon
+        self.maxLat = maxLat
+        self.lons = lons
+        self.lats = lats
+        self.ringEnds = ringEnds
+    }
+
+    /// Whether two polygons have the same box and rings.
+    public static func == (lhs: AtlasPolygon, rhs: AtlasPolygon) -> Bool {
+        lhs.minLon == rhs.minLon && lhs.minLat == rhs.minLat && lhs.maxLon == rhs.maxLon && lhs.maxLat == rhs.maxLat
+            && lhs.ringEnds == rhs.ringEnds && lhs.lons == rhs.lons && lhs.lats == rhs.lats
+    }
+
+    /// Hashes the box and rings.
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(minLon)
+        hasher.combine(minLat)
+        hasher.combine(maxLon)
+        hasher.combine(maxLat)
+        hasher.combine(ringEnds)
+        hasher.combine(lons)
+        hasher.combine(lats)
+    }
+
+    /// The edge bands, built from the rings on the first call.
+    var bands: AtlasEdgeBands {
+        bandSlot.bands { AtlasEdgeBands(lats: lats, ringEnds: ringEnds, south: minLat, north: maxLat) }
+    }
 
     /// Whether `point` lies in the box (edges included).
     public func boxContains(_ point: GeoPoint) -> Bool {
@@ -105,25 +160,34 @@ public nonisolated struct AtlasPolygon: Hashable, Sendable {
         return lon >= Double(minLon) && lon <= Double(maxLon) && lat >= Double(minLat) && lat <= Double(maxLat)
     }
 
-    /// Whether `point` lies inside: the box first, then the even-odd rule over every ring.
+    /// Whether `point` lies inside: the box first, then the even-odd rule over the edges of the point's
+    /// latitude band (every other edge lies wholly north or south of it, so cannot toggle).
     public func contains(_ point: GeoPoint) -> Bool {
         guard point.isValid, boxContains(point) else { return false }
         let x = point.longitude * Self.unitsPerDegree, y = point.latitude * Self.unitsPerDegree
+        let bands = bands
         var inside = false
-        var start = 0
-        // Bounded: every ring is walked once; rings and points are capped at decode.
-        for end in ringEnds {
-            guard end - start >= 3 else { start = end; continue }
-            var previous = end - 1
-            for current in start..<end {
-                let xi = Double(lons[current]), yi = Double(lats[current])
-                let xj = Double(lons[previous]), yj = Double(lats[previous])
-                if (yi > y) != (yj > y), x < (xj - xi) * (y - yi) / (yj - yi) + xi { inside.toggle() }
-                previous = current
-            }
-            start = end
+        // Bounded: one band's entries, built at decode (at most maxEntriesPerEdge an edge in all).
+        for slot in bands.slots(of: bands.band(of: y)) {
+            guard let (current, previous) = edge(bands.entries[slot]) else { continue }
+            let xi = Double(lons[current]), yi = Double(lats[current])
+            let xj = Double(lons[previous]), yj = Double(lats[previous])
+            if (yi > y) != (yj > y), x < (xj - xi) * (y - yi) / (yj - yi) + xi { inside.toggle() }
         }
         return inside
+    }
+
+    /// The edge an ``AtlasEdgeBands`` entry names, as its current and previous point indices (a ring's
+    /// closing edge runs from its first point back to its last), or nil for one out of range.
+    private func edge(_ entry: UInt32) -> (current: Int, previous: Int)? {
+        guard entry & AtlasEdgeBands.closingFlag != 0 else {
+            let current = Int(entry)
+            return current >= 1 && current < lons.count && current < lats.count ? (current, current - 1) : nil
+        }
+        let ring = Int(entry & ~AtlasEdgeBands.closingFlag)
+        guard ringEnds.indices.contains(ring) else { return nil }
+        let start = ring == 0 ? 0 : ringEnds[ring - 1], end = ringEnds[ring]
+        return start < end && end <= lons.count && end <= lats.count ? (start, end - 1) : nil
     }
 
     /// How many rings the outline has (holes and islands are rings too).

@@ -1,7 +1,7 @@
 // WidgetStampArt.swift
 // FernletWidgets
 //
-// The nineteen silly-stat stamps for the stamp widget (World Review Batch 4, `b4-new-stamp`): each
+// The twenty silly-stat stamps for the stamp widget (World Review Batch 4, `b4-new-stamp`): each
 // stamp's frozen token, its name and its pixel art. Hand-copied twins of the app's `SillyStatKind`
 // tokens, `SillyStampCopy.name(for:)` and `WorldStampArt` (the extension links nothing of the app's);
 // `WidgetWorldTwinTests` pins the tokens, the names and every row of art against the app's.
@@ -25,6 +25,7 @@ enum WidgetStampKind: String, CaseIterable {
     case moonwalk
     case stairwayToSomewhere
     case grandTours
+    case furthestFromHome
     case shakespeareSteps
     case koalaDays
     case dreamCinema
@@ -48,6 +49,7 @@ enum WidgetStampKind: String, CaseIterable {
         case .moonwalk: String(localized: "Small Step", comment: "Silly stats stamp name, earned when the walk to the Moon first appears")
         case .stairwayToSomewhere: String(localized: "Up and Up", comment: "Silly stats stamp name, earned when Stairway to Somewhere first appears")
         case .grandTours: String(localized: "Wheels and Waves", comment: "Silly stats stamp name, earned when Grand Tours (swims and rides) first appears")
+        case .furthestFromHome: String(localized: "Far Afield", comment: "Silly stats stamp name, earned when Furthest from home first appears (the map uncovered 5 km or more from a home)")
         case .shakespeareSteps: String(localized: "To Step or Not to Step", comment: "Silly stats stamp name, earned when steps reach one Hamlet; a play on Hamlet's famous line")
         case .koalaDays: String(localized: "Eucalyptus Dreams", comment: "Silly stats stamp name, earned when Koala Days (sleep) first appears")
         case .dreamCinema: String(localized: "Opening Night", comment: "Silly stats stamp name, earned when Dream Cinema (dream sleep) first appears")
@@ -73,6 +75,7 @@ enum WidgetStampKind: String, CaseIterable {
         case .moonwalk: WidgetStampArt.moon
         case .stairwayToSomewhere: WidgetStampArt.stairs
         case .grandTours: WidgetStampArt.wheel
+        case .furthestFromHome: WidgetStampArt.signpost
         case .shakespeareSteps: WidgetStampArt.skull
         case .koalaDays: WidgetStampArt.leaf
         case .dreamCinema: WidgetStampArt.film
@@ -120,6 +123,8 @@ enum WidgetStampArt {
                                     palette: ["k": 0x4A2E1C, "w": 0xFFFDF8])
     static let floss = WidgetSprite(rows: ["..kkkkk.", ".kmmmmmk", ".kmwwwmk", ".kmmmmmk", ".kkkkkkk", "...k....", "....k...", ".....k.."],
                                     palette: ["k": 0x4A2E1C, "m": 0x9FC58D, "w": 0xFFFDF8])
+    static let signpost = WidgetSprite(rows: ["...kk...", "kkkkkkk.", "kyyyyyyk", "kkkkkkk.", "...kk...", ".kkkkkkk", "kwwwwwwk", ".kkkkkkk", "...kk...", "...kk..."],
+                                       palette: ["k": 0x4A2E1C, "w": 0xD9A56E, "y": 0xF2C14E])
     /// The World's cookie (`WorldSprites.cookie`), the Crumb Goblin's stamp.
     static let cookie = WidgetSprite(rows: ["..kkkk..", ".kccdck.", "kcccccck", "kcdcccck", "kccccdck", "kcdcccck", ".kcccck.", "..kkkk.."],
                                      palette: ["c": 0xD9A05B, "d": 0x5A3A22, "k": 0x4A2E1C])

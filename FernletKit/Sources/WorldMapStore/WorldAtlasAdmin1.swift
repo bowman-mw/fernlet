@@ -191,9 +191,9 @@ extension WorldAtlasLayers {
     }
 }
 
-/// The admin-1 lookups. Bounded: a fix tests only its country's own entries (the United States has 51) when
-/// the country under it is known, else one pass over the decoded table (at most
-/// `WorldAtlasLayers.maxAdmin1s`); each entry's box is tested before its rings.
+/// The admin-1 lookups. Bounded: a fix tests only the entries whose boxes touch its one-degree cell
+/// (`AtlasBoxIndex`, at most `WorldAtlasLayers.maxAdmin1s`), and of those only its country's own when the
+/// country under it is known; each entry's box is tested before its rings.
 extension WorldAtlas {
     /// The state or province whose frozen token is `token`, or nil. A dictionary lookup.
     public func admin1(token: String) -> AtlasAdmin1? {
@@ -213,12 +213,15 @@ extension WorldAtlas {
         admin1(at: point, inCountry: country(at: point)?.code)
     }
 
-    /// The state or province under `point`, among `countryCode`'s entries when it is given, else among all.
+    /// The state or province under `point`, among `countryCode`'s entries when it is given, else among all:
+    /// the first in table order whose rings hold it. Only the entries whose boxes touch the point's one-degree
+    /// cell are tested (``AtlasBoxIndex`` keeps table order, so the first found is the whole table's first).
     public func admin1(at point: GeoPoint, inCountry countryCode: String?) -> AtlasAdmin1? {
         guard point.isValid else { return nil }
-        guard let countryCode else { return admin1s.first { $0.polygon.contains(point) } }
-        for index in admin1sByCountry[countryCode] ?? [] where admin1s.indices.contains(index) {
-            if admin1s[index].polygon.contains(point) { return admin1s[index] }
+        // Bounded: the cell's entries, each listed once (at most WorldAtlasLayers.maxAdmin1s).
+        for index in admin1Boxes.candidates(at: point) where admin1s.indices.contains(Int(index)) {
+            let entry = admin1s[Int(index)]
+            if countryCode == nil || entry.countryCode == countryCode, entry.polygon.contains(point) { return entry }
         }
         return nil
     }

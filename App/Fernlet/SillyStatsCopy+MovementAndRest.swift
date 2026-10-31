@@ -75,6 +75,20 @@ extension SillyStatsCopy {
             footnote: String(localized: "Swim and ride distances from your logged workouts.", locale: locale, comment: "Silly stat: how swim and ride distance is counted"))
     }
 
+    /// Furthest from home (Refinements group 12): the distance, and how far that is to the other side of
+    /// the world.
+    static func furthestFromHome(_ tally: SillyStatsTally, _ locale: Locale) -> SillyStatText {
+        let distance = length(tally.furthestFromHomeMeters, locale)
+        let share = SillyStatsEngine.antipodeFraction(tally)
+        return SillyStatText(
+            emoji: "🧭",
+            title: String(localized: "Furthest from home", locale: locale, comment: "Silly stat title: the furthest the map has been uncovered from the person's home"),
+            headline: distance,
+            detail: String(localized: "As the crow flies, \(share, format: .percent.precision(.fractionLength(0...1))) of the way to the other side of the world.", locale: locale, comment: "Silly stat: the furthest distance from home as a share of half the Earth's circumference"),
+            companionLine: String(localized: "We've been \(distance) from home. I still knew the way back.", locale: locale, comment: "Companion line about the furthest the person has been from home"),
+            footnote: String(localized: "A straight line from your nearest home to the furthest bit of map you've uncovered, worked out on this iPhone.", locale: locale, comment: "Silly stat: how the furthest distance from home is counted"))
+    }
+
     static func shakespeare(_ tally: SillyStatsTally, _ locale: Locale) -> SillyStatText {
         let measure = phrase(.shakespeareSteps, tally, locale)
         return SillyStatText(

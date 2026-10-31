@@ -42,7 +42,7 @@ struct SillyStampBadge: View {
 }
 
 /// The Stamp book's Silly stamps card (designs `b1-stamp-book`, folded into `b2-milestones` draft 2, and
-/// `b2-stamp-art`): all nineteen stamps, four a row (two at accessibility text sizes), the earned ones on
+/// `b2-stamp-art`): all twenty stamps, four a row (two at accessibility text sizes), the earned ones on
 /// gold with their names and days, the rest as faded silhouettes over “?”, with “3 of 19” beside the title.
 ///
 /// The owner approved showing the silhouettes (`b2-stamp-art`: “Unearned stamps still show as a faded

@@ -29,6 +29,9 @@ enum SillyStatsTallier {
         var pats: Int
         /// The unit for a lifted weight that names none ("@135"): pounds where the locale is US.
         var unitlessLoadIsPounds: Bool
+        /// How far from the nearest home the map has been uncovered, in metres, or nil when unknown (no
+        /// home, the map history not read yet, or a decoy). Undated, like Health's lifetime steps.
+        var furthestFromHomeMeters: Double? = nil
     }
 
     static let poundsToKilograms = 0.45359237
@@ -49,6 +52,7 @@ enum SillyStatsTallier {
         }
         tally.steps = max(inputs.healthSteps ?? 0, residueSteps)
         tally.pats = max(inputs.pats, 0)
+        tally.furthestFromHomeMeters = max(inputs.furthestFromHomeMeters ?? 0, 0)
         tally.signatureDish = signatureDish(in: dishes)
         tally.daysKnown = daysKnown(days: inputs.days, todayKey: inputs.todayKey)
         return tally
