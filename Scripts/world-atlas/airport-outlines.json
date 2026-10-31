@@ -163,6 +163,102 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "AAL",
+   "points": [
+    [
+     57.11215,
+     9.83136
+    ],
+    [
+     57.11075,
+     9.84699
+    ],
+    [
+     57.10921,
+     9.86613
+    ],
+    [
+     57.10595,
+     9.88055
+    ],
+    [
+     57.10152,
+     9.88458
+    ],
+    [
+     57.09686,
+     9.88587
+    ],
+    [
+     57.09126,
+     9.88672
+    ],
+    [
+     57.08753,
+     9.88715
+    ],
+    [
+     57.08427,
+     9.88587
+    ],
+    [
+     57.08427,
+     9.879
+    ],
+    [
+     57.0824,
+     9.87814
+    ],
+    [
+     57.08193,
+     9.86956
+    ],
+    [
+     57.08427,
+     9.86613
+    ],
+    [
+     57.08566,
+     9.86098
+    ],
+    [
+     57.08753,
+     9.84896
+    ],
+    [
+     57.08986,
+     9.84038
+    ],
+    [
+     57.09173,
+     9.82836
+    ],
+    [
+     57.09359,
+     9.82536
+    ],
+    [
+     57.09779,
+     9.8251
+    ],
+    [
+     57.10152,
+     9.82664
+    ],
+    [
+     57.10571,
+     9.82819
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "AAN",
    "points": [
     [
@@ -1042,6 +1138,94 @@
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")",
    "unsure": "south fence not visible in grass"
+  },
+  {
+   "id": "ADE",
+   "points": [
+    [
+     12.82854,
+     45.01298
+    ],
+    [
+     12.83222,
+     45.02834
+    ],
+    [
+     12.83548,
+     45.04345
+    ],
+    [
+     12.82937,
+     45.04491
+    ],
+    [
+     12.82619,
+     45.03684
+    ],
+    [
+     12.82335,
+     45.02431
+    ],
+    [
+     12.82285,
+     45.01427
+    ],
+    [
+     12.82561,
+     45.01324
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "ADJ",
+   "points": [
+    [
+     31.96812,
+     35.97256
+    ],
+    [
+     31.98282,
+     36.00749
+    ],
+    [
+     31.97729,
+     36.01067
+    ],
+    [
+     31.97125,
+     35.99891
+    ],
+    [
+     31.96863,
+     35.99848
+    ],
+    [
+     31.9655,
+     35.99076
+    ],
+    [
+     31.96681,
+     35.9881
+    ],
+    [
+     31.96287,
+     35.97557
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "ADL",
@@ -3004,6 +3188,74 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "APW",
+   "points": [
+    [
+     -13.82895,
+     -172.0232
+    ],
+    [
+     -13.8287,
+     -172.01634
+    ],
+    [
+     -13.82903,
+     -172.00861
+    ],
+    [
+     -13.8292,
+     -172.00003
+    ],
+    [
+     -13.82903,
+     -171.99316
+    ],
+    [
+     -13.82978,
+     -171.99187
+    ],
+    [
+     -13.83145,
+     -171.9923
+    ],
+    [
+     -13.83353,
+     -171.99273
+    ],
+    [
+     -13.83378,
+     -171.99831
+    ],
+    [
+     -13.83353,
+     -172.0026
+    ],
+    [
+     -13.83286,
+     -172.01033
+    ],
+    [
+     -13.83228,
+     -172.01719
+    ],
+    [
+     -13.83145,
+     -172.02277
+    ],
+    [
+     -13.8302,
+     -172.02363
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "AQI",
    "points": [
     [
@@ -3055,6 +3307,78 @@
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")",
    "unsure": "faint desert imagery; edges guessed"
+  },
+  {
+   "id": "AQJ",
+   "points": [
+    [
+     29.62525,
+     35.02089
+    ],
+    [
+     29.626,
+     35.02303
+    ],
+    [
+     29.62525,
+     35.02818
+    ],
+    [
+     29.62264,
+     35.02861
+    ],
+    [
+     29.61854,
+     35.02561
+    ],
+    [
+     29.61182,
+     35.02346
+    ],
+    [
+     29.60884,
+     35.0226
+    ],
+    [
+     29.60436,
+     35.02046
+    ],
+    [
+     29.59839,
+     35.01831
+    ],
+    [
+     29.5954,
+     35.01531
+    ],
+    [
+     29.5954,
+     35.01273
+    ],
+    [
+     29.59727,
+     35.01144
+    ],
+    [
+     29.60436,
+     35.01316
+    ],
+    [
+     29.61182,
+     35.01574
+    ],
+    [
+     29.61928,
+     35.01831
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "AQP",
@@ -3387,6 +3711,50 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "ASK",
+   "points": [
+    [
+     6.88841,
+     -5.37207
+    ],
+    [
+     6.89992,
+     -5.3616
+    ],
+    [
+     6.91142,
+     -5.35113
+    ],
+    [
+     6.91381,
+     -5.35387
+    ],
+    [
+     6.91628,
+     -5.35653
+    ],
+    [
+     6.90477,
+     -5.36701
+    ],
+    [
+     6.89327,
+     -5.37748
+    ],
+    [
+     6.8908,
+     -5.37473
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "ASR",
@@ -4141,6 +4509,155 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "AVV",
+   "points": [
+    [
+     -38.02146,
+     144.46489
+    ],
+    [
+     -38.02078,
+     144.47262
+    ],
+    [
+     -38.01808,
+     144.47863
+    ],
+    [
+     -38.01808,
+     144.48506
+    ],
+    [
+     -38.02822,
+     144.48549
+    ],
+    [
+     -38.03025,
+     144.48034
+    ],
+    [
+     -38.03363,
+     144.47691
+    ],
+    [
+     -38.04174,
+     144.47605
+    ],
+    [
+     -38.05188,
+     144.47476
+    ],
+    [
+     -38.05864,
+     144.47305
+    ],
+    [
+     -38.06134,
+     144.46918
+    ],
+    [
+     -38.06134,
+     144.46404
+    ],
+    [
+     -38.05864,
+     144.46146
+    ],
+    [
+     -38.04918,
+     144.46189
+    ],
+    [
+     -38.03971,
+     144.46318
+    ],
+    [
+     -38.03025,
+     144.46446
+    ],
+    [
+     -38.02416,
+     144.46446
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "cloud shadows hide fence"
+  },
+  {
+   "id": "AWA",
+   "points": [
+    [
+     7.11885,
+     38.3956
+    ],
+    [
+     7.11953,
+     38.39989
+    ],
+    [
+     7.11587,
+     38.40101
+    ],
+    [
+     7.10863,
+     38.40204
+    ],
+    [
+     7.10096,
+     38.40101
+    ],
+    [
+     7.09415,
+     38.39947
+    ],
+    [
+     7.08734,
+     38.39792
+    ],
+    [
+     7.08223,
+     38.39646
+    ],
+    [
+     7.07924,
+     38.39432
+    ],
+    [
+     7.0801,
+     38.39174
+    ],
+    [
+     7.08648,
+     38.39157
+    ],
+    [
+     7.095,
+     38.39243
+    ],
+    [
+     7.10352,
+     38.39303
+    ],
+    [
+     7.11204,
+     38.39432
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "AWZ",
    "points": [
     [
@@ -4252,6 +4769,50 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "AZI",
+   "points": [
+    [
+     24.4415,
+     54.44655
+    ],
+    [
+     24.43189,
+     54.46063
+    ],
+    [
+     24.42157,
+     54.47514
+    ],
+    [
+     24.41508,
+     54.46956
+    ],
+    [
+     24.4229,
+     54.45514
+    ],
+    [
+     24.43001,
+     54.44595
+    ],
+    [
+     24.4347,
+     54.44072
+    ],
+    [
+     24.43837,
+     54.44329
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "BAH",
@@ -5419,6 +5980,86 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "BEN",
+   "points": [
+    [
+     32.11117,
+     20.25635
+    ],
+    [
+     32.11357,
+     20.2621
+    ],
+    [
+     32.10826,
+     20.26966
+    ],
+    [
+     32.1039,
+     20.27395
+    ],
+    [
+     32.10172,
+     20.27996
+    ],
+    [
+     32.09554,
+     20.28099
+    ],
+    [
+     32.09226,
+     20.27927
+    ],
+    [
+     32.0839,
+     20.28296
+    ],
+    [
+     32.08063,
+     20.28253
+    ],
+    [
+     32.07917,
+     20.27867
+    ],
+    [
+     32.07954,
+     20.27524
+    ],
+    [
+     32.08608,
+     20.27009
+    ],
+    [
+     32.09045,
+     20.26537
+    ],
+    [
+     32.09081,
+     20.25953
+    ],
+    [
+     32.09699,
+     20.25833
+    ],
+    [
+     32.09917,
+     20.25953
+    ],
+    [
+     32.10935,
+     20.25592
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "BER",
    "points": [
     [
@@ -5732,6 +6373,110 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "BFN",
+   "points": [
+    [
+     -29.08923,
+     26.28364
+    ],
+    [
+     -29.08803,
+     26.28492
+    ],
+    [
+     -29.08871,
+     26.29265
+    ],
+    [
+     -29.08833,
+     26.29952
+    ],
+    [
+     -29.08158,
+     26.3008
+    ],
+    [
+     -29.07633,
+     26.30123
+    ],
+    [
+     -29.07543,
+     26.30398
+    ],
+    [
+     -29.07708,
+     26.3057
+    ],
+    [
+     -29.08533,
+     26.30595
+    ],
+    [
+     -29.08983,
+     26.30767
+    ],
+    [
+     -29.09396,
+     26.30896
+    ],
+    [
+     -29.09583,
+     26.3117
+    ],
+    [
+     -29.10108,
+     26.31196
+    ],
+    [
+     -29.10633,
+     26.3111
+    ],
+    [
+     -29.10896,
+     26.30896
+    ],
+    [
+     -29.11023,
+     26.30467
+    ],
+    [
+     -29.11053,
+     26.30037
+    ],
+    [
+     -29.11008,
+     26.29608
+    ],
+    [
+     -29.10783,
+     26.29454
+    ],
+    [
+     -29.09883,
+     26.29454
+    ],
+    [
+     -29.09658,
+     26.29179
+    ],
+    [
+     -29.09358,
+     26.2875
+    ],
+    [
+     -29.09118,
+     26.28407
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "BFS",
    "points": [
     [
@@ -5966,6 +6711,98 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "BGO",
+   "points": [
+    [
+     60.31061,
+     5.2134
+    ],
+    [
+     60.31104,
+     5.21684
+    ],
+    [
+     60.30976,
+     5.22027
+    ],
+    [
+     60.30721,
+     5.22199
+    ],
+    [
+     60.30296,
+     5.22242
+    ],
+    [
+     60.29871,
+     5.2237
+    ],
+    [
+     60.29807,
+     5.23143
+    ],
+    [
+     60.2936,
+     5.23229
+    ],
+    [
+     60.29105,
+     5.23572
+    ],
+    [
+     60.2851,
+     5.23572
+    ],
+    [
+     60.28254,
+     5.24001
+    ],
+    [
+     60.27701,
+     5.24087
+    ],
+    [
+     60.2768,
+     5.234
+    ],
+    [
+     60.27914,
+     5.22885
+    ],
+    [
+     60.27956,
+     5.2237
+    ],
+    [
+     60.27956,
+     5.21984
+    ],
+    [
+     60.28254,
+     5.21812
+    ],
+    [
+     60.29275,
+     5.21426
+    ],
+    [
+     60.30296,
+     5.21212
+    ],
+    [
+     60.30891,
+     5.21169
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "BGW",
@@ -6640,6 +7477,70 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "BJL",
+   "points": [
+    [
+     13.34932,
+     -16.66614
+    ],
+    [
+     13.35016,
+     -16.66426
+    ],
+    [
+     13.34807,
+     -16.65567
+    ],
+    [
+     13.3464,
+     -16.64838
+    ],
+    [
+     13.34306,
+     -16.64709
+    ],
+    [
+     13.34072,
+     -16.64838
+    ],
+    [
+     13.33262,
+     -16.64108
+    ],
+    [
+     13.32803,
+     -16.63808
+    ],
+    [
+     13.32569,
+     -16.63868
+    ],
+    [
+     13.32569,
+     -16.64108
+    ],
+    [
+     13.33596,
+     -16.6531
+    ],
+    [
+     13.34264,
+     -16.66082
+    ],
+    [
+     13.3474,
+     -16.6664
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "BJM",
    "points": [
     [
@@ -7054,6 +7955,83 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "BLA",
+   "points": [
+    [
+     10.12192,
+     -64.7019
+    ],
+    [
+     10.12175,
+     -64.69718
+    ],
+    [
+     10.12107,
+     -64.6886
+    ],
+    [
+     10.12065,
+     -64.68517
+    ],
+    [
+     10.11854,
+     -64.68302
+    ],
+    [
+     10.11262,
+     -64.68216
+    ],
+    [
+     10.10756,
+     -64.68216
+    ],
+    [
+     10.1008,
+     -64.68276
+    ],
+    [
+     10.09868,
+     -64.68259
+    ],
+    [
+     10.09657,
+     -64.68603
+    ],
+    [
+     10.09573,
+     -64.69118
+    ],
+    [
+     10.09699,
+     -64.69375
+    ],
+    [
+     10.10418,
+     -64.69547
+    ],
+    [
+     10.11093,
+     -64.69718
+    ],
+    [
+     10.116,
+     -64.69976
+    ],
+    [
+     10.12023,
+     -64.70233
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "west-side buildings unclear"
+  },
+  {
    "id": "BLJ",
    "points": [
     [
@@ -7353,6 +8331,74 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "BLZ",
+   "points": [
+    [
+     -15.6761,
+     34.95649
+    ],
+    [
+     -15.67527,
+     34.96164
+    ],
+    [
+     -15.67156,
+     34.9655
+    ],
+    [
+     -15.67007,
+     34.96636
+    ],
+    [
+     -15.67007,
+     34.96868
+    ],
+    [
+     -15.6742,
+     34.9728
+    ],
+    [
+     -15.67718,
+     34.97709
+    ],
+    [
+     -15.67858,
+     34.98138
+    ],
+    [
+     -15.6804,
+     34.98155
+    ],
+    [
+     -15.68106,
+     34.97623
+    ],
+    [
+     -15.68189,
+     34.97434
+    ],
+    [
+     -15.6823,
+     34.96765
+    ],
+    [
+     -15.68081,
+     34.96593
+    ],
+    [
+     -15.67899,
+     34.95692
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "BME",
@@ -7714,6 +8760,95 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "BOD",
+   "points": [
+    [
+     44.83317,
+     -0.73228
+    ],
+    [
+     44.83621,
+     -0.72627
+    ],
+    [
+     44.84169,
+     -0.72026
+    ],
+    [
+     44.84473,
+     -0.71426
+    ],
+    [
+     44.84717,
+     -0.70653
+    ],
+    [
+     44.84778,
+     -0.69537
+    ],
+    [
+     44.84352,
+     -0.6928
+    ],
+    [
+     44.83743,
+     -0.69108
+    ],
+    [
+     44.83378,
+     -0.68765
+    ],
+    [
+     44.8283,
+     -0.68765
+    ],
+    [
+     44.82526,
+     -0.69108
+    ],
+    [
+     44.82221,
+     -0.69451
+    ],
+    [
+     44.81978,
+     -0.70825
+    ],
+    [
+     44.81978,
+     -0.72026
+    ],
+    [
+     44.8143,
+     -0.72885
+    ],
+    [
+     44.81491,
+     -0.734
+    ],
+    [
+     44.81795,
+     -0.73486
+    ],
+    [
+     44.82282,
+     -0.73056
+    ],
+    [
+     44.82952,
+     -0.73228
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "north hangars and east car parks guessed"
   },
   {
    "id": "BOG",
@@ -8113,6 +9248,111 @@
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")",
    "unsure": "apron and field edges faint"
+  },
+  {
+   "id": "BOO",
+   "points": [
+    [
+     67.26364,
+     14.30843
+    ],
+    [
+     67.26464,
+     14.311
+    ],
+    [
+     67.26663,
+     14.31787
+    ],
+    [
+     67.26829,
+     14.32645
+    ],
+    [
+     67.26994,
+     14.33675
+    ],
+    [
+     67.27094,
+     14.34619
+    ],
+    [
+     67.27326,
+     14.35392
+    ],
+    [
+     67.27392,
+     14.36078
+    ],
+    [
+     67.27406,
+     14.37108
+    ],
+    [
+     67.27426,
+     14.38138
+    ],
+    [
+     67.27372,
+     14.4037
+    ],
+    [
+     67.2726,
+     14.40662
+    ],
+    [
+     67.2716,
+     14.40662
+    ],
+    [
+     67.27028,
+     14.40284
+    ],
+    [
+     67.26895,
+     14.39512
+    ],
+    [
+     67.26696,
+     14.38482
+    ],
+    [
+     67.2653,
+     14.37452
+    ],
+    [
+     67.26331,
+     14.3625
+    ],
+    [
+     67.26232,
+     14.35048
+    ],
+    [
+     67.26165,
+     14.33675
+    ],
+    [
+     67.26165,
+     14.32473
+    ],
+    [
+     67.26198,
+     14.31272
+    ],
+    [
+     67.26265,
+     14.30894
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "military south edge unclear"
   },
   {
    "id": "BOS",
@@ -8682,6 +9922,74 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "BRM",
+   "points": [
+    [
+     10.0424,
+     -69.37406
+    ],
+    [
+     10.04452,
+     -69.3732
+    ],
+    [
+     10.04705,
+     -69.37037
+    ],
+    [
+     10.04874,
+     -69.36591
+    ],
+    [
+     10.04916,
+     -69.35475
+    ],
+    [
+     10.0479,
+     -69.35132
+    ],
+    [
+     10.04578,
+     -69.34531
+    ],
+    [
+     10.04452,
+     -69.34445
+    ],
+    [
+     10.04325,
+     -69.34531
+    ],
+    [
+     10.04156,
+     -69.3496
+    ],
+    [
+     10.03944,
+     -69.35389
+    ],
+    [
+     10.03733,
+     -69.36247
+    ],
+    [
+     10.03691,
+     -69.36934
+    ],
+    [
+     10.03843,
+     -69.3732
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "BRS",
@@ -9527,6 +10835,90 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "BUQ",
+   "points": [
+    [
+     -20.01475,
+     28.60983
+    ],
+    [
+     -20.0129,
+     28.61043
+    ],
+    [
+     -20.01338,
+     28.6173
+    ],
+    [
+     -20.00266,
+     28.61842
+    ],
+    [
+     -20.00185,
+     28.62048
+    ],
+    [
+     -20.00991,
+     28.62116
+    ],
+    [
+     -20.00935,
+     28.62631
+    ],
+    [
+     -20.00991,
+     28.63164
+    ],
+    [
+     -20.01435,
+     28.63232
+    ],
+    [
+     -20.0208,
+     28.63833
+    ],
+    [
+     -20.02338,
+     28.64133
+    ],
+    [
+     -20.02685,
+     28.64193
+    ],
+    [
+     -20.02846,
+     28.64005
+    ],
+    [
+     -20.02709,
+     28.63575
+    ],
+    [
+     -20.02419,
+     28.63232
+    ],
+    [
+     -20.0208,
+     28.62374
+    ],
+    [
+     -20.01798,
+     28.61516
+    ],
+    [
+     -20.01637,
+     28.61086
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "BUR",
@@ -10393,6 +11785,78 @@
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
   },
   {
+   "id": "CAP",
+   "points": [
+    [
+     19.71583,
+     -72.21202
+    ],
+    [
+     19.72036,
+     -72.20756
+    ],
+    [
+     19.72601,
+     -72.20284
+    ],
+    [
+     19.7307,
+     -72.19897
+    ],
+    [
+     19.73369,
+     -72.1964
+    ],
+    [
+     19.73692,
+     -72.19554
+    ],
+    [
+     19.74015,
+     -72.19382
+    ],
+    [
+     19.74039,
+     -72.19125
+    ],
+    [
+     19.73813,
+     -72.19039
+    ],
+    [
+     19.73555,
+     -72.19056
+    ],
+    [
+     19.73086,
+     -72.19468
+    ],
+    [
+     19.7248,
+     -72.19983
+    ],
+    [
+     19.71874,
+     -72.20498
+    ],
+    [
+     19.71406,
+     -72.20927
+    ],
+    [
+     19.71389,
+     -72.21116
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "CAY",
    "points": [
     [
@@ -10952,6 +12416,78 @@
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
   },
   {
+   "id": "CEB",
+   "points": [
+    [
+     10.29709,
+     123.96737
+    ],
+    [
+     10.30216,
+     123.96737
+    ],
+    [
+     10.30807,
+     123.97209
+    ],
+    [
+     10.31314,
+     123.97295
+    ],
+    [
+     10.31652,
+     123.97552
+    ],
+    [
+     10.32074,
+     123.97982
+    ],
+    [
+     10.32327,
+     123.98282
+    ],
+    [
+     10.32496,
+     123.98668
+    ],
+    [
+     10.32369,
+     123.99011
+    ],
+    [
+     10.32074,
+     123.99269
+    ],
+    [
+     10.31736,
+     123.99269
+    ],
+    [
+     10.30976,
+     123.98668
+    ],
+    [
+     10.30132,
+     123.9781
+    ],
+    [
+     10.2954,
+     123.97123
+    ],
+    [
+     10.29498,
+     123.96866
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "CEI",
    "points": [
     [
@@ -11171,6 +12707,91 @@
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")",
    "unsure": "south hangar/industrial block kept from CORINE"
+  },
+  {
+   "id": "CFK",
+   "points": [
+    [
+     36.20869,
+     1.32172
+    ],
+    [
+     36.21353,
+     1.32146
+    ],
+    [
+     36.21824,
+     1.32198
+    ],
+    [
+     36.21907,
+     1.32515
+    ],
+    [
+     36.21852,
+     1.32901
+    ],
+    [
+     36.22032,
+     1.33674
+    ],
+    [
+     36.2215,
+     1.34618
+    ],
+    [
+     36.22184,
+     1.35476
+    ],
+    [
+     36.22101,
+     1.35948
+    ],
+    [
+     36.21977,
+     1.35991
+    ],
+    [
+     36.21804,
+     1.35519
+    ],
+    [
+     36.21755,
+     1.34961
+    ],
+    [
+     36.21561,
+     1.34361
+    ],
+    [
+     36.21436,
+     1.3406
+    ],
+    [
+     36.21229,
+     1.3376
+    ],
+    [
+     36.20952,
+     1.33416
+    ],
+    [
+     36.20882,
+     1.32901
+    ],
+    [
+     36.20813,
+     1.32429
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "field edges unclear"
   },
   {
    "id": "CFU",
@@ -11937,6 +13558,115 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "CHS",
+   "points": [
+    [
+     32.91884,
+     -80.05234
+    ],
+    [
+     32.92006,
+     -80.05019
+    ],
+    [
+     32.91992,
+     -80.0459
+    ],
+    [
+     32.91812,
+     -80.04247
+    ],
+    [
+     32.91451,
+     -80.03989
+    ],
+    [
+     32.91019,
+     -80.03646
+    ],
+    [
+     32.90731,
+     -80.03303
+    ],
+    [
+     32.90515,
+     -80.02959
+    ],
+    [
+     32.9001,
+     -80.02873
+    ],
+    [
+     32.88965,
+     -80.02916
+    ],
+    [
+     32.88569,
+     -80.03217
+    ],
+    [
+     32.8828,
+     -80.03303
+    ],
+    [
+     32.8792,
+     -80.02831
+    ],
+    [
+     32.87415,
+     -80.02788
+    ],
+    [
+     32.87343,
+     -80.03303
+    ],
+    [
+     32.87776,
+     -80.03732
+    ],
+    [
+     32.87812,
+     -80.04247
+    ],
+    [
+     32.88208,
+     -80.0459
+    ],
+    [
+     32.88244,
+     -80.05148
+    ],
+    [
+     32.8828,
+     -80.05663
+    ],
+    [
+     32.88713,
+     -80.0562
+    ],
+    [
+     32.89866,
+     -80.05491
+    ],
+    [
+     32.91091,
+     -80.05448
+    ],
+    [
+     32.91595,
+     -80.05363
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "Boeing plant and AFB west edge"
   },
   {
    "id": "CIA",
@@ -13048,6 +14778,179 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "CMW",
+   "points": [
+    [
+     21.41471,
+     -77.86179
+    ],
+    [
+     21.4167,
+     -77.86153
+    ],
+    [
+     21.4183,
+     -77.85681
+    ],
+    [
+     21.4215,
+     -77.85578
+    ],
+    [
+     21.42749,
+     -77.85578
+    ],
+    [
+     21.42989,
+     -77.85381
+    ],
+    [
+     21.43029,
+     -77.84823
+    ],
+    [
+     21.42749,
+     -77.84668
+    ],
+    [
+     21.42589,
+     -77.84222
+    ],
+    [
+     21.42725,
+     -77.83321
+    ],
+    [
+     21.42565,
+     -77.83192
+    ],
+    [
+     21.4243,
+     -77.83278
+    ],
+    [
+     21.4223,
+     -77.83793
+    ],
+    [
+     21.4199,
+     -77.84394
+    ],
+    [
+     21.4175,
+     -77.84995
+    ],
+    [
+     21.41511,
+     -77.85595
+    ],
+    [
+     21.41367,
+     -77.85982
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "CND",
+   "points": [
+    [
+     44.38855,
+     28.47465
+    ],
+    [
+     44.38855,
+     28.47722
+    ],
+    [
+     44.38211,
+     28.4798
+    ],
+    [
+     44.37352,
+     28.48409
+    ],
+    [
+     44.37904,
+     28.48881
+    ],
+    [
+     44.37904,
+     28.49267
+    ],
+    [
+     44.37352,
+     28.49353
+    ],
+    [
+     44.35941,
+     28.49224
+    ],
+    [
+     44.34591,
+     28.4901
+    ],
+    [
+     44.34468,
+     28.48881
+    ],
+    [
+     44.34499,
+     28.48538
+    ],
+    [
+     44.34713,
+     28.47851
+    ],
+    [
+     44.35143,
+     28.47765
+    ],
+    [
+     44.35327,
+     28.4798
+    ],
+    [
+     44.35573,
+     28.47894
+    ],
+    [
+     44.35941,
+     28.48023
+    ],
+    [
+     44.36432,
+     28.48194
+    ],
+    [
+     44.37045,
+     28.48108
+    ],
+    [
+     44.37659,
+     28.47894
+    ],
+    [
+     44.3864,
+     28.47508
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "NW paved strip included?"
+  },
+  {
    "id": "CNF",
    "points": [
     [
@@ -13845,6 +15748,74 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "CRK",
+   "points": [
+    [
+     15.16829,
+     120.55068
+    ],
+    [
+     15.17119,
+     120.55025
+    ],
+    [
+     15.19977,
+     120.56184
+    ],
+    [
+     15.20184,
+     120.56356
+    ],
+    [
+     15.20432,
+     120.56957
+    ],
+    [
+     15.20266,
+     120.57171
+    ],
+    [
+     15.19273,
+     120.56957
+    ],
+    [
+     15.18279,
+     120.56699
+    ],
+    [
+     15.1803,
+     120.57042
+    ],
+    [
+     15.17864,
+     120.57472
+    ],
+    [
+     15.17119,
+     120.57472
+    ],
+    [
+     15.16995,
+     120.56957
+    ],
+    [
+     15.16953,
+     120.5627
+    ],
+    [
+     15.16787,
+     120.55755
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "CRL",
@@ -14881,6 +16852,66 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "CXI",
+   "points": [
+    [
+     1.98835,
+     -157.36101
+    ],
+    [
+     1.98895,
+     -157.35285
+    ],
+    [
+     1.98878,
+     -157.34684
+    ],
+    [
+     1.98835,
+     -157.33912
+    ],
+    [
+     1.98723,
+     -157.3374
+    ],
+    [
+     1.98492,
+     -157.33757
+    ],
+    [
+     1.98432,
+     -157.34084
+    ],
+    [
+     1.98432,
+     -157.34942
+    ],
+    [
+     1.98346,
+     -157.35199
+    ],
+    [
+     1.98363,
+     -157.355
+    ],
+    [
+     1.98432,
+     -157.358
+    ],
+    [
+     1.98492,
+     -157.36101
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "CXR",
@@ -16196,6 +18227,199 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "DIR",
+   "points": [
+    [
+     9.63628,
+     41.84755
+    ],
+    [
+     9.63713,
+     41.84909
+    ],
+    [
+     9.63628,
+     41.85029
+    ],
+    [
+     9.62824,
+     41.85441
+    ],
+    [
+     9.6202,
+     41.85871
+    ],
+    [
+     9.61555,
+     41.86111
+    ],
+    [
+     9.61343,
+     41.86128
+    ],
+    [
+     9.61216,
+     41.85974
+    ],
+    [
+     9.61199,
+     41.85699
+    ],
+    [
+     9.61402,
+     41.85544
+    ],
+    [
+     9.61995,
+     41.8527
+    ],
+    [
+     9.6213,
+     41.85115
+    ],
+    [
+     9.62359,
+     41.85141
+    ],
+    [
+     9.62782,
+     41.85115
+    ],
+    [
+     9.63162,
+     41.84884
+    ],
+    [
+     9.63459,
+     41.8472
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "DJE",
+   "points": [
+    [
+     33.87675,
+     10.75766
+    ],
+    [
+     33.87747,
+     10.77525
+    ],
+    [
+     33.87782,
+     10.79671
+    ],
+    [
+     33.87462,
+     10.79714
+    ],
+    [
+     33.87369,
+     10.78384
+    ],
+    [
+     33.86998,
+     10.78212
+    ],
+    [
+     33.86984,
+     10.77182
+    ],
+    [
+     33.87319,
+     10.7701
+    ],
+    [
+     33.87283,
+     10.75766
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "DJG",
+   "points": [
+    [
+     24.29629,
+     9.45157
+    ],
+    [
+     24.29629,
+     9.45501
+    ],
+    [
+     24.29355,
+     9.46145
+    ],
+    [
+     24.29121,
+     9.46874
+    ],
+    [
+     24.28769,
+     9.47003
+    ],
+    [
+     24.2783,
+     9.47818
+    ],
+    [
+     24.27556,
+     9.47775
+    ],
+    [
+     24.27556,
+     9.47561
+    ],
+    [
+     24.28143,
+     9.46574
+    ],
+    [
+     24.28456,
+     9.4563
+    ],
+    [
+     24.27282,
+     9.44685
+    ],
+    [
+     24.27321,
+     9.44299
+    ],
+    [
+     24.27556,
+     9.44342
+    ],
+    [
+     24.29395,
+     9.45115
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "no fence visible in desert"
+  },
+  {
    "id": "DJJ",
    "points": [
     [
@@ -17251,6 +19475,192 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "DRW",
+   "points": [
+    [
+     -12.40294,
+     130.85746
+    ],
+    [
+     -12.39539,
+     130.85789
+    ],
+    [
+     -12.39372,
+     130.86562
+    ],
+    [
+     -12.39413,
+     130.8742
+    ],
+    [
+     -12.39707,
+     130.87678
+    ],
+    [
+     -12.40461,
+     130.8845
+    ],
+    [
+     -12.41048,
+     130.89308
+    ],
+    [
+     -12.41383,
+     130.89652
+    ],
+    [
+     -12.4197,
+     130.89738
+    ],
+    [
+     -12.42138,
+     130.89523
+    ],
+    [
+     -12.42305,
+     130.88965
+    ],
+    [
+     -12.42473,
+     130.87678
+    ],
+    [
+     -12.42515,
+     130.86819
+    ],
+    [
+     -12.42305,
+     130.86519
+    ],
+    [
+     -12.41802,
+     130.86347
+    ],
+    [
+     -12.41132,
+     130.85961
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "RAAF north area extent unclear"
+  },
+  {
+   "id": "DSM",
+   "points": [
+    [
+     41.54957,
+     -93.68111
+    ],
+    [
+     41.55008,
+     -93.67724
+    ],
+    [
+     41.54893,
+     -93.67295
+    ],
+    [
+     41.547,
+     -93.66866
+    ],
+    [
+     41.54379,
+     -93.6648
+    ],
+    [
+     41.5425,
+     -93.66265
+    ],
+    [
+     41.5425,
+     -93.65064
+    ],
+    [
+     41.54122,
+     -93.64677
+    ],
+    [
+     41.53929,
+     -93.64488
+    ],
+    [
+     41.5258,
+     -93.6448
+    ],
+    [
+     41.52323,
+     -93.6472
+    ],
+    [
+     41.52162,
+     -93.65064
+    ],
+    [
+     41.5213,
+     -93.65579
+    ],
+    [
+     41.52226,
+     -93.66008
+    ],
+    [
+     41.52483,
+     -93.66437
+    ],
+    [
+     41.52483,
+     -93.66952
+    ],
+    [
+     41.52162,
+     -93.67381
+    ],
+    [
+     41.52002,
+     -93.6781
+    ],
+    [
+     41.52066,
+     -93.68239
+    ],
+    [
+     41.52323,
+     -93.68282
+    ],
+    [
+     41.52708,
+     -93.67853
+    ],
+    [
+     41.53351,
+     -93.67596
+    ],
+    [
+     41.54122,
+     -93.67767
+    ],
+    [
+     41.54507,
+     -93.68025
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "west and south fence unclear"
+  },
+  {
    "id": "DSN",
    "points": [
     [
@@ -17547,6 +19957,111 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "DUB",
+   "points": [
+    [
+     53.43623,
+     -6.29061
+    ],
+    [
+     53.43904,
+     -6.28632
+    ],
+    [
+     53.43894,
+     -6.26529
+    ],
+    [
+     53.43761,
+     -6.24813
+    ],
+    [
+     53.43659,
+     -6.23568
+    ],
+    [
+     53.43367,
+     -6.22881
+    ],
+    [
+     53.42943,
+     -6.23053
+    ],
+    [
+     53.42611,
+     -6.22049
+    ],
+    [
+     53.41874,
+     -6.22452
+    ],
+    [
+     53.41439,
+     -6.22564
+    ],
+    [
+     53.41439,
+     -6.23053
+    ],
+    [
+     53.41654,
+     -6.23954
+    ],
+    [
+     53.41255,
+     -6.24023
+    ],
+    [
+     53.41255,
+     -6.24813
+    ],
+    [
+     53.41731,
+     -6.24813
+    ],
+    [
+     53.4192,
+     -6.25971
+    ],
+    [
+     53.41741,
+     -6.26572
+    ],
+    [
+     53.41818,
+     -6.29061
+    ],
+    [
+     53.42104,
+     -6.29404
+    ],
+    [
+     53.42549,
+     -6.29404
+    ],
+    [
+     53.42713,
+     -6.26486
+    ],
+    [
+     53.43352,
+     -6.26572
+    ],
+    [
+     53.43281,
+     -6.29018
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2025-04-09 (contains modified Copernicus Sentinel data 2025)",
+   "imageryDate": "2025-04-09",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "two car parks south of the main airport (around pixels 700-790 and 905-960, y 585-680) were included as airport car parks, but they may be private"
   },
   {
    "id": "DUS",
@@ -18436,6 +20951,66 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "EDL",
+   "points": [
+    [
+     0.40158,
+     35.21929
+    ],
+    [
+     0.40415,
+     35.22015
+    ],
+    [
+     0.40544,
+     35.22744
+    ],
+    [
+     0.40673,
+     35.23259
+    ],
+    [
+     0.4093,
+     35.24375
+    ],
+    [
+     0.41059,
+     35.25276
+    ],
+    [
+     0.40844,
+     35.25534
+    ],
+    [
+     0.4063,
+     35.25491
+    ],
+    [
+     0.40372,
+     35.24375
+    ],
+    [
+     0.40115,
+     35.23088
+    ],
+    [
+     0.399,
+     35.22186
+    ],
+    [
+     0.39943,
+     35.21929
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "EDO",
    "points": [
     [
@@ -18598,6 +21173,142 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "EIN",
+   "points": [
+    [
+     51.43911,
+     5.35975
+    ],
+    [
+     51.44692,
+     5.36499
+    ],
+    [
+     51.45393,
+     5.371
+    ],
+    [
+     51.45762,
+     5.37495
+    ],
+    [
+     51.46136,
+     5.37761
+    ],
+    [
+     51.46296,
+     5.38284
+    ],
+    [
+     51.46296,
+     5.38816
+    ],
+    [
+     51.46259,
+     5.3934
+    ],
+    [
+     51.4597,
+     5.4007
+    ],
+    [
+     51.45104,
+     5.4013
+    ],
+    [
+     51.44901,
+     5.39477
+    ],
+    [
+     51.44815,
+     5.38679
+    ],
+    [
+     51.44612,
+     5.37692
+    ],
+    [
+     51.44077,
+     5.36834
+    ],
+    [
+     51.43788,
+     5.36302
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "EIS",
+   "points": [
+    [
+     18.44142,
+     -64.54797
+    ],
+    [
+     18.44289,
+     -64.54771
+    ],
+    [
+     18.44598,
+     -64.54256
+    ],
+    [
+     18.44818,
+     -64.5387
+    ],
+    [
+     18.4494,
+     -64.53613
+    ],
+    [
+     18.449,
+     -64.53484
+    ],
+    [
+     18.44761,
+     -64.53484
+    ],
+    [
+     18.44631,
+     -64.53355
+    ],
+    [
+     18.44452,
+     -64.53441
+    ],
+    [
+     18.44354,
+     -64.53613
+    ],
+    [
+     18.44354,
+     -64.53956
+    ],
+    [
+     18.44191,
+     -64.54256
+    ],
+    [
+     18.4411,
+     -64.54514
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "ELP",
@@ -19316,6 +22027,98 @@
    "unsure": "washed-out desert imagery; fence not visible"
   },
   {
+   "id": "EVE",
+   "points": [
+    [
+     68.50536,
+     16.67406
+    ],
+    [
+     68.50586,
+     16.68179
+    ],
+    [
+     68.50379,
+     16.68368
+    ],
+    [
+     68.49706,
+     16.68299
+    ],
+    [
+     68.49643,
+     16.68574
+    ],
+    [
+     68.49454,
+     16.68814
+    ],
+    [
+     68.49341,
+     16.6926
+    ],
+    [
+     68.4912,
+     16.69518
+    ],
+    [
+     68.48711,
+     16.69518
+    ],
+    [
+     68.48648,
+     16.68951
+    ],
+    [
+     68.48617,
+     16.68574
+    ],
+    [
+     68.47893,
+     16.68608
+    ],
+    [
+     68.47735,
+     16.68351
+    ],
+    [
+     68.4759,
+     16.68179
+    ],
+    [
+     68.47578,
+     16.6775
+    ],
+    [
+     68.47704,
+     16.67578
+    ],
+    [
+     68.48208,
+     16.67441
+    ],
+    [
+     68.48837,
+     16.67372
+    ],
+    [
+     68.49907,
+     16.67321
+    ],
+    [
+     68.50284,
+     16.67235
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "EVN",
    "points": [
     [
@@ -19790,6 +22593,50 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "FBM",
+   "points": [
+    [
+     -11.5958,
+     27.51487
+    ],
+    [
+     -11.59016,
+     27.52731
+    ],
+    [
+     -11.58621,
+     27.52645
+    ],
+    [
+     -11.58318,
+     27.53358
+    ],
+    [
+     -11.58646,
+     27.53598
+    ],
+    [
+     -11.58276,
+     27.54516
+    ],
+    [
+     -11.58739,
+     27.54722
+    ],
+    [
+     -11.60042,
+     27.51693
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "FCO",
    "points": [
     [
@@ -20172,6 +23019,54 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "FJR",
+   "points": [
+    [
+     25.1183,
+     56.3121
+    ],
+    [
+     25.11278,
+     56.32677
+    ],
+    [
+     25.11706,
+     56.33012
+    ],
+    [
+     25.11434,
+     56.33725
+    ],
+    [
+     25.11108,
+     56.33699
+    ],
+    [
+     25.10874,
+     56.3454
+    ],
+    [
+     25.10563,
+     56.34411
+    ],
+    [
+     25.10089,
+     56.34179
+    ],
+    [
+     25.11294,
+     56.30961
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "FKB",
    "points": [
     [
@@ -20258,6 +23153,78 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "FKI",
+   "points": [
+    [
+     0.49181,
+     25.32352
+    ],
+    [
+     0.4931,
+     25.32609
+    ],
+    [
+     0.49439,
+     25.32824
+    ],
+    [
+     0.49439,
+     25.33124
+    ],
+    [
+     0.49181,
+     25.33425
+    ],
+    [
+     0.48924,
+     25.33468
+    ],
+    [
+     0.4828,
+     25.34326
+    ],
+    [
+     0.47594,
+     25.35184
+    ],
+    [
+     0.47164,
+     25.35399
+    ],
+    [
+     0.47036,
+     25.35313
+    ],
+    [
+     0.47079,
+     25.35098
+    ],
+    [
+     0.47594,
+     25.34326
+    ],
+    [
+     0.48495,
+     25.33124
+    ],
+    [
+     0.48881,
+     25.32481
+    ],
+    [
+     0.4901,
+     25.32309
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "FLL",
@@ -20609,6 +23576,54 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "FNA",
+   "points": [
+    [
+     8.6232,
+     -13.21039
+    ],
+    [
+     8.61862,
+     -13.19477
+    ],
+    [
+     8.61378,
+     -13.17958
+    ],
+    [
+     8.60971,
+     -13.18087
+    ],
+    [
+     8.61319,
+     -13.19374
+    ],
+    [
+     8.61141,
+     -13.1952
+    ],
+    [
+     8.61497,
+     -13.2067
+    ],
+    [
+     8.61726,
+     -13.20687
+    ],
+    [
+     8.61913,
+     -13.21159
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "FNC",
    "points": [
     [
@@ -20933,6 +23948,74 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "FPO",
+   "points": [
+    [
+     26.55223,
+     -78.71164
+    ],
+    [
+     26.5553,
+     -78.70606
+    ],
+    [
+     26.56106,
+     -78.69404
+    ],
+    [
+     26.5672,
+     -78.68202
+    ],
+    [
+     26.56682,
+     -78.67988
+    ],
+    [
+     26.5649,
+     -78.67945
+    ],
+    [
+     26.56298,
+     -78.68202
+    ],
+    [
+     26.55914,
+     -78.68803
+    ],
+    [
+     26.55607,
+     -78.69404
+    ],
+    [
+     26.5507,
+     -78.6949
+    ],
+    [
+     26.54724,
+     -78.69533
+    ],
+    [
+     26.54686,
+     -78.70262
+    ],
+    [
+     26.54763,
+     -78.71035
+    ],
+    [
+     26.54955,
+     -78.71206
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "FRA",
@@ -21971,6 +25054,70 @@
    "unsure": "IAR/Airbus Helicopters plants and their grass field SE of the fence were left out as separate facilities"
   },
   {
+   "id": "GIB",
+   "points": [
+    [
+     36.15195,
+     -5.36025
+    ],
+    [
+     36.15216,
+     -5.3539
+    ],
+    [
+     36.15313,
+     -5.35132
+    ],
+    [
+     36.15417,
+     -5.34703
+    ],
+    [
+     36.15382,
+     -5.34274
+    ],
+    [
+     36.15299,
+     -5.34059
+    ],
+    [
+     36.15209,
+     -5.33982
+    ],
+    [
+     36.15022,
+     -5.33991
+    ],
+    [
+     36.14939,
+     -5.34085
+    ],
+    [
+     36.14939,
+     -5.34531
+    ],
+    [
+     36.14967,
+     -5.35132
+    ],
+    [
+     36.15001,
+     -5.3539
+    ],
+    [
+     36.15008,
+     -5.36025
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "GIG",
    "points": [
     [
@@ -22280,6 +25427,94 @@
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
   },
   {
+   "id": "GND",
+   "points": [
+    [
+     12.00435,
+     -61.7992
+    ],
+    [
+     12.00536,
+     -61.79817
+    ],
+    [
+     12.00603,
+     -61.79559
+    ],
+    [
+     12.0062,
+     -61.79216
+    ],
+    [
+     12.00704,
+     -61.78787
+    ],
+    [
+     12.00788,
+     -61.78701
+    ],
+    [
+     12.00788,
+     -61.78401
+    ],
+    [
+     12.00662,
+     -61.78358
+    ],
+    [
+     12.0062,
+     -61.77929
+    ],
+    [
+     12.00553,
+     -61.77499
+    ],
+    [
+     12.00494,
+     -61.77285
+    ],
+    [
+     12.00368,
+     -61.77268
+    ],
+    [
+     12.00318,
+     -61.77499
+    ],
+    [
+     12.00301,
+     -61.77929
+    ],
+    [
+     12.00284,
+     -61.78358
+    ],
+    [
+     12.00268,
+     -61.78787
+    ],
+    [
+     12.00284,
+     -61.79302
+    ],
+    [
+     12.00318,
+     -61.79688
+    ],
+    [
+     12.00368,
+     -61.79885
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "GNJ",
    "points": [
     [
@@ -22496,6 +25731,154 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "GOH",
+   "points": [
+    [
+     64.20207,
+     -51.67629
+    ],
+    [
+     64.20147,
+     -51.66985
+    ],
+    [
+     64.19804,
+     -51.67243
+    ],
+    [
+     64.19393,
+     -51.67432
+    ],
+    [
+     64.19075,
+     -51.67243
+    ],
+    [
+     64.18757,
+     -51.67286
+    ],
+    [
+     64.18421,
+     -51.67543
+    ],
+    [
+     64.18159,
+     -51.67758
+    ],
+    [
+     64.17935,
+     -51.68359
+    ],
+    [
+     64.17991,
+     -51.69045
+    ],
+    [
+     64.18421,
+     -51.68916
+    ],
+    [
+     64.18944,
+     -51.68659
+    ],
+    [
+     64.19169,
+     -51.6853
+    ],
+    [
+     64.19542,
+     -51.68444
+    ],
+    [
+     64.19673,
+     -51.68144
+    ],
+    [
+     64.19916,
+     -51.67929
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2025-07-23 (contains modified Copernicus Sentinel data 2025)",
+   "imageryDate": "2025-07-23",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "GOI",
+   "points": [
+    [
+     15.37732,
+     73.81427
+    ],
+    [
+     15.37897,
+     73.8147
+    ],
+    [
+     15.38187,
+     73.81942
+    ],
+    [
+     15.38352,
+     73.82715
+    ],
+    [
+     15.38559,
+     73.83401
+    ],
+    [
+     15.38601,
+     73.84088
+    ],
+    [
+     15.38476,
+     73.84689
+    ],
+    [
+     15.38352,
+     73.84861
+    ],
+    [
+     15.38228,
+     73.84775
+    ],
+    [
+     15.38104,
+     73.84174
+    ],
+    [
+     15.37732,
+     73.83916
+    ],
+    [
+     15.37607,
+     73.83487
+    ],
+    [
+     15.37649,
+     73.82801
+    ],
+    [
+     15.37624,
+     73.82114
+    ],
+    [
+     15.37607,
+     73.81599
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "GOJ",
    "points": [
     [
@@ -22599,6 +25982,74 @@
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")",
    "unsure": "south end under construction"
+  },
+  {
+   "id": "GOM",
+   "points": [
+    [
+     -1.64981,
+     29.23593
+    ],
+    [
+     -1.64938,
+     29.23894
+    ],
+    [
+     -1.6541,
+     29.24108
+    ],
+    [
+     -1.66096,
+     29.24237
+    ],
+    [
+     -1.66611,
+     29.24383
+    ],
+    [
+     -1.67125,
+     29.24409
+    ],
+    [
+     -1.67726,
+     29.2428
+    ],
+    [
+     -1.68155,
+     29.24108
+    ],
+    [
+     -1.68241,
+     29.23894
+    ],
+    [
+     -1.68155,
+     29.23765
+    ],
+    [
+     -1.67554,
+     29.23679
+    ],
+    [
+     -1.66697,
+     29.23636
+    ],
+    [
+     -1.65839,
+     29.23576
+    ],
+    [
+     -1.65238,
+     29.2355
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "GOT",
@@ -22751,6 +26202,90 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "GOX",
+   "points": [
+    [
+     15.74648,
+     73.83984
+    ],
+    [
+     15.74772,
+     73.84285
+    ],
+    [
+     15.74871,
+     73.85057
+    ],
+    [
+     15.74978,
+     73.86001
+    ],
+    [
+     15.75143,
+     73.86173
+    ],
+    [
+     15.75143,
+     73.87375
+    ],
+    [
+     15.74978,
+     73.87804
+    ],
+    [
+     15.7473,
+     73.88061
+    ],
+    [
+     15.74482,
+     73.88302
+    ],
+    [
+     15.74111,
+     73.8825
+    ],
+    [
+     15.73987,
+     73.87933
+    ],
+    [
+     15.73739,
+     73.87632
+    ],
+    [
+     15.73227,
+     73.87589
+    ],
+    [
+     15.73227,
+     73.85916
+    ],
+    [
+     15.73821,
+     73.8583
+    ],
+    [
+     15.73987,
+     73.85486
+    ],
+    [
+     15.74053,
+     73.84542
+    ],
+    [
+     15.74358,
+     73.83984
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2023-03-05 (contains modified Copernicus Sentinel data 2023)",
+   "imageryDate": "2023-03-05",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "GRJ",
@@ -23778,6 +27313,51 @@
    "unsure": "built after the 2016 picture and no clean recent Sentinel-2 scene covers it: traced around the runway line"
   },
   {
+   "id": "GXF",
+   "points": [
+    [
+     15.95813,
+     48.77461
+    ],
+    [
+     15.96366,
+     48.78938
+    ],
+    [
+     15.96918,
+     48.80414
+    ],
+    [
+     15.97166,
+     48.80311
+    ],
+    [
+     15.97414,
+     48.80216
+    ],
+    [
+     15.96861,
+     48.7874
+    ],
+    [
+     15.96308,
+     48.77264
+    ],
+    [
+     15.9606,
+     48.77367
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "apron/terminal not visible"
+  },
+  {
    "id": "GYD",
    "points": [
     [
@@ -24383,6 +27963,71 @@
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
   },
   {
+   "id": "HAQ",
+   "points": [
+    [
+     6.75642,
+     73.17057
+    ],
+    [
+     6.75625,
+     73.17529
+    ],
+    [
+     6.75344,
+     73.17589
+    ],
+    [
+     6.7496,
+     73.174
+    ],
+    [
+     6.74534,
+     73.1716
+    ],
+    [
+     6.74091,
+     73.16885
+    ],
+    [
+     6.73665,
+     73.16585
+    ],
+    [
+     6.73324,
+     73.16284
+    ],
+    [
+     6.73358,
+     73.1607
+    ],
+    [
+     6.73682,
+     73.16156
+    ],
+    [
+     6.74151,
+     73.16413
+    ],
+    [
+     6.74619,
+     73.1667
+    ],
+    [
+     6.75088,
+     73.16885
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2025-02-19 (contains modified Copernicus Sentinel data 2025)",
+   "imageryDate": "2025-02-19",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "narrow island: no clear fence, apron or terminal visible at 10 m; west edge set at the runway strip (reclaimed lagoon sand left out), north end stopped at the village edge"
+  },
+  {
    "id": "HAS",
    "points": [
     [
@@ -24734,6 +28379,79 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "HEA",
+   "points": [
+    [
+     34.22435,
+     62.22293
+    ],
+    [
+     34.22648,
+     62.22679
+    ],
+    [
+     34.22648,
+     62.23194
+    ],
+    [
+     34.22435,
+     62.23451
+    ],
+    [
+     34.21867,
+     62.23434
+    ],
+    [
+     34.20874,
+     62.23383
+    ],
+    [
+     34.20022,
+     62.23323
+    ],
+    [
+     34.19312,
+     62.2328
+    ],
+    [
+     34.18886,
+     62.23194
+    ],
+    [
+     34.18815,
+     62.22851
+    ],
+    [
+     34.1885,
+     62.22507
+    ],
+    [
+     34.1917,
+     62.22336
+    ],
+    [
+     34.20022,
+     62.22267
+    ],
+    [
+     34.20874,
+     62.2225
+    ],
+    [
+     34.21725,
+     62.22267
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "Camp Arena east left out"
   },
   {
    "id": "HEL",
@@ -25391,6 +29109,66 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "HIR",
+   "points": [
+    [
+     -9.4318,
+     160.04148
+    ],
+    [
+     -9.42968,
+     160.04405
+    ],
+    [
+     -9.42629,
+     160.04491
+    ],
+    [
+     -9.42545,
+     160.0492
+    ],
+    [
+     -9.42545,
+     160.05349
+    ],
+    [
+     -9.42163,
+     160.06465
+    ],
+    [
+     -9.42231,
+     160.0668
+    ],
+    [
+     -9.42502,
+     160.06723
+    ],
+    [
+     -9.42629,
+     160.06465
+    ],
+    [
+     -9.43053,
+     160.05435
+    ],
+    [
+     -9.43391,
+     160.04577
+    ],
+    [
+     -9.43434,
+     160.04148
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "HKD",
@@ -26126,6 +29904,50 @@
    "unsure": "faint 2016 desert, apron/terminal hard to see"
   },
   {
+   "id": "HOG",
+   "points": [
+    [
+     20.77625,
+     -76.33021
+    ],
+    [
+     20.78917,
+     -76.31665
+    ],
+    [
+     20.79141,
+     -76.31836
+    ],
+    [
+     20.79591,
+     -76.31347
+    ],
+    [
+     20.79414,
+     -76.31107
+    ],
+    [
+     20.7992,
+     -76.30429
+    ],
+    [
+     20.79542,
+     -76.30043
+    ],
+    [
+     20.77223,
+     -76.326
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "HOU",
    "points": [
     [
@@ -26479,6 +30301,66 @@
    "unsure": "desert, fence barely visible"
   },
   {
+   "id": "HSA",
+   "points": [
+    [
+     43.30377,
+     68.52968
+    ],
+    [
+     43.30833,
+     68.53869
+    ],
+    [
+     43.31239,
+     68.53826
+    ],
+    [
+     43.31664,
+     68.53955
+    ],
+    [
+     43.31832,
+     68.54513
+    ],
+    [
+     43.31789,
+     68.55028
+    ],
+    [
+     43.31439,
+     68.55131
+    ],
+    [
+     43.32219,
+     68.56719
+    ],
+    [
+     43.32188,
+     68.56916
+    ],
+    [
+     43.31864,
+     68.57062
+    ],
+    [
+     43.30015,
+     68.53337
+    ],
+    [
+     43.30096,
+     68.53123
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2025-08-13 (contains modified Copernicus Sentinel data 2025)",
+   "imageryDate": "2025-08-13",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "HSG",
    "points": [
     [
@@ -26553,6 +30435,71 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "HSR",
+   "points": [
+    [
+     22.37038,
+     71.02363
+    ],
+    [
+     22.37577,
+     71.02517
+    ],
+    [
+     22.37855,
+     71.02946
+    ],
+    [
+     22.38292,
+     71.03075
+    ],
+    [
+     22.38728,
+     71.03333
+    ],
+    [
+     22.38728,
+     71.03891
+    ],
+    [
+     22.38411,
+     71.04019
+    ],
+    [
+     22.39736,
+     71.04989
+    ],
+    [
+     22.39601,
+     71.05676
+    ],
+    [
+     22.38831,
+     71.05719
+    ],
+    [
+     22.38768,
+     71.05539
+    ],
+    [
+     22.36546,
+     71.02861
+    ],
+    [
+     22.36704,
+     71.02474
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2024-01-05 (contains modified Copernicus Sentinel data 2024)",
+   "imageryDate": "2024-01-05",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "no south-east fence visible; that edge was set about 40 px off the runway centreline to keep Hirasar village out"
   },
   {
    "id": "HSS",
@@ -26888,6 +30835,55 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "HWR",
+   "points": [
+    [
+     30.76159,
+     75.6171
+    ],
+    [
+     30.75466,
+     75.62825
+    ],
+    [
+     30.75296,
+     75.63572
+    ],
+    [
+     30.74654,
+     75.64285
+    ],
+    [
+     30.73924,
+     75.64679
+    ],
+    [
+     30.73533,
+     75.64285
+    ],
+    [
+     30.74153,
+     75.63203
+    ],
+    [
+     30.75126,
+     75.61907
+    ],
+    [
+     30.75798,
+     75.61341
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "air base fence extent guessed"
   },
   {
    "id": "HYD",
@@ -29554,6 +33550,78 @@
    "unsure": "old 15/33 strip faint, included"
   },
   {
+   "id": "JAV",
+   "points": [
+    [
+     69.23936,
+     -51.06526
+    ],
+    [
+     69.23906,
+     -51.06269
+    ],
+    [
+     69.24733,
+     -51.04681
+    ],
+    [
+     69.24788,
+     -51.04294
+    ],
+    [
+     69.24879,
+     -51.03608
+    ],
+    [
+     69.25016,
+     -51.03093
+    ],
+    [
+     69.25259,
+     -51.0275
+    ],
+    [
+     69.25427,
+     -51.02707
+    ],
+    [
+     69.25715,
+     -51.02964
+    ],
+    [
+     69.25715,
+     -51.04337
+    ],
+    [
+     69.25533,
+     -51.04724
+    ],
+    [
+     69.25107,
+     -51.05196
+    ],
+    [
+     69.24834,
+     -51.05453
+    ],
+    [
+     69.24666,
+     -51.05882
+    ],
+    [
+     69.24028,
+     -51.06569
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2024-08-03 (contains modified Copernicus Sentinel data 2024)",
+   "imageryDate": "2024-08-03",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "JAX",
    "points": [
     [
@@ -29649,6 +33717,106 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T02:25:31Z",
    "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "JCL",
+   "points": [
+    [
+     48.94779,
+     14.40389
+    ],
+    [
+     48.94903,
+     14.405
+    ],
+    [
+     48.94942,
+     14.40972
+    ],
+    [
+     48.94987,
+     14.41831
+    ],
+    [
+     48.95015,
+     14.42517
+    ],
+    [
+     48.95156,
+     14.42586
+    ],
+    [
+     48.95184,
+     14.42775
+    ],
+    [
+     48.95241,
+     14.4329
+    ],
+    [
+     48.95184,
+     14.43805
+    ],
+    [
+     48.95213,
+     14.44148
+    ],
+    [
+     48.95399,
+     14.44534
+    ],
+    [
+     48.95421,
+     14.44852
+    ],
+    [
+     48.95184,
+     14.4492
+    ],
+    [
+     48.94903,
+     14.44989
+    ],
+    [
+     48.94508,
+     14.45049
+    ],
+    [
+     48.94497,
+     14.44706
+    ],
+    [
+     48.94339,
+     14.4468
+    ],
+    [
+     48.94339,
+     14.44114
+    ],
+    [
+     48.9444,
+     14.44062
+    ],
+    [
+     48.94429,
+     14.42431
+    ],
+    [
+     48.94429,
+     14.40715
+    ],
+    [
+     48.94553,
+     14.40371
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "JED",
@@ -30168,6 +34336,74 @@
    "unsure": "east hangar cluster in or out"
   },
   {
+   "id": "JRO",
+   "points": [
+    [
+     -3.43014,
+     37.05626
+    ],
+    [
+     -3.42714,
+     37.05712
+    ],
+    [
+     -3.42329,
+     37.05927
+    ],
+    [
+     -3.42286,
+     37.06528
+    ],
+    [
+     -3.42372,
+     37.06957
+    ],
+    [
+     -3.42329,
+     37.08072
+    ],
+    [
+     -3.42286,
+     37.09145
+    ],
+    [
+     -3.42629,
+     37.0936
+    ],
+    [
+     -3.42928,
+     37.0936
+    ],
+    [
+     -3.43143,
+     37.09188
+    ],
+    [
+     -3.43228,
+     37.08072
+    ],
+    [
+     -3.43297,
+     37.06785
+    ],
+    [
+     -3.43314,
+     37.05798
+    ],
+    [
+     -3.43185,
+     37.05626
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "JTR",
    "points": [
     [
@@ -30226,6 +34462,59 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "JUB",
+   "points": [
+    [
+     4.88408,
+     31.5874
+    ],
+    [
+     4.88365,
+     31.59127
+    ],
+    [
+     4.87347,
+     31.60277
+    ],
+    [
+     4.86552,
+     31.61204
+    ],
+    [
+     4.86167,
+     31.60869
+    ],
+    [
+     4.8621,
+     31.60551
+    ],
+    [
+     4.87048,
+     31.59573
+    ],
+    [
+     4.87484,
+     31.59384
+    ],
+    [
+     4.87852,
+     31.58955
+    ],
+    [
+     4.88151,
+     31.58654
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "NW end vs UN compound unclear"
   },
   {
    "id": "JUJ",
@@ -30450,6 +34739,82 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "KBL",
+   "points": [
+    [
+     34.57088,
+     69.19054
+    ],
+    [
+     34.57512,
+     69.19183
+    ],
+    [
+     34.57618,
+     69.19869
+    ],
+    [
+     34.57547,
+     69.20899
+    ],
+    [
+     34.57335,
+     69.21758
+    ],
+    [
+     34.57088,
+     69.22616
+    ],
+    [
+     34.56734,
+     69.23045
+    ],
+    [
+     34.56239,
+     69.23388
+    ],
+    [
+     34.55957,
+     69.23517
+    ],
+    [
+     34.55745,
+     69.23303
+    ],
+    [
+     34.55674,
+     69.22788
+    ],
+    [
+     34.55886,
+     69.21758
+    ],
+    [
+     34.56063,
+     69.20899
+    ],
+    [
+     34.56239,
+     69.20041
+    ],
+    [
+     34.56522,
+     69.19183
+    ],
+    [
+     34.56805,
+     69.19011
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "KBP",
@@ -30711,6 +35076,51 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "KDH",
+   "points": [
+    [
+     31.49937,
+     65.82815
+    ],
+    [
+     31.50822,
+     65.84077
+    ],
+    [
+     31.51759,
+     65.85201
+    ],
+    [
+     31.5211,
+     65.86008
+    ],
+    [
+     31.5121,
+     65.86746
+    ],
+    [
+     31.50559,
+     65.86703
+    ],
+    [
+     31.49242,
+     65.84643
+    ],
+    [
+     31.49161,
+     65.8345
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "air base fence extent guessed"
   },
   {
    "id": "KDU",
@@ -31699,6 +36109,79 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "KIK",
+   "points": [
+    [
+     35.47816,
+     44.32718
+    ],
+    [
+     35.48389,
+     44.33225
+    ],
+    [
+     35.48613,
+     44.33928
+    ],
+    [
+     35.48613,
+     44.34555
+    ],
+    [
+     35.482,
+     44.35259
+    ],
+    [
+     35.47243,
+     44.3604
+    ],
+    [
+     35.46418,
+     44.36658
+    ],
+    [
+     35.45908,
+     44.36855
+    ],
+    [
+     35.45404,
+     44.36658
+    ],
+    [
+     35.45174,
+     44.3604
+    ],
+    [
+     35.45174,
+     44.35104
+    ],
+    [
+     35.45209,
+     44.33928
+    ],
+    [
+     35.45243,
+     44.32993
+    ],
+    [
+     35.46229,
+     44.32838
+    ],
+    [
+     35.47054,
+     44.32761
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "SW dark area inside fence?"
+  },
+  {
    "id": "KIM",
    "points": [
     [
@@ -31841,6 +36324,66 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "KIS",
+   "points": [
+    [
+     -0.09442,
+     34.70767
+    ],
+    [
+     -0.08412,
+     34.72596
+    ],
+    [
+     -0.08137,
+     34.72647
+    ],
+    [
+     -0.0794,
+     34.73025
+    ],
+    [
+     -0.08043,
+     34.73274
+    ],
+    [
+     -0.07837,
+     34.73754
+    ],
+    [
+     -0.08292,
+     34.73995
+    ],
+    [
+     -0.0885,
+     34.73514
+    ],
+    [
+     -0.09116,
+     34.73368
+    ],
+    [
+     -0.09442,
+     34.72759
+    ],
+    [
+     -0.09305,
+     34.7239
+    ],
+    [
+     -0.09897,
+     34.71008
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "KIX",
@@ -33209,6 +37752,74 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "KSA",
+   "points": [
+    [
+     5.3526,
+     162.95104
+    ],
+    [
+     5.35149,
+     162.95164
+    ],
+    [
+     5.35175,
+     162.95335
+    ],
+    [
+     5.35063,
+     162.95447
+    ],
+    [
+     5.35004,
+     162.95636
+    ],
+    [
+     5.35106,
+     162.9579
+    ],
+    [
+     5.35277,
+     162.95764
+    ],
+    [
+     5.35602,
+     162.96151
+    ],
+    [
+     5.35961,
+     162.96597
+    ],
+    [
+     5.36149,
+     162.96623
+    ],
+    [
+     5.36217,
+     162.96537
+    ],
+    [
+     5.36174,
+     162.96408
+    ],
+    [
+     5.35704,
+     162.95722
+    ],
+    [
+     5.35345,
+     162.95121
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "KSF",
@@ -34596,6 +39207,70 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "LAE",
+   "points": [
+    [
+     -6.56719,
+     146.71331
+    ],
+    [
+     -6.56677,
+     146.72018
+    ],
+    [
+     -6.56634,
+     146.72533
+    ],
+    [
+     -6.56421,
+     146.72618
+    ],
+    [
+     -6.56361,
+     146.73005
+    ],
+    [
+     -6.56591,
+     146.73133
+    ],
+    [
+     -6.56762,
+     146.7382
+    ],
+    [
+     -6.56975,
+     146.73992
+    ],
+    [
+     -6.57163,
+     146.73906
+    ],
+    [
+     -6.57163,
+     146.73305
+    ],
+    [
+     -6.57103,
+     146.72447
+    ],
+    [
+     -6.57018,
+     146.71588
+    ],
+    [
+     -6.56932,
+     146.71331
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "LAO",
    "points": [
     [
@@ -34654,6 +39329,98 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "LAQ",
+   "points": [
+    [
+     32.79545,
+     21.92903
+    ],
+    [
+     32.79617,
+     21.93031
+    ],
+    [
+     32.79581,
+     21.93632
+    ],
+    [
+     32.79509,
+     21.94491
+    ],
+    [
+     32.79653,
+     21.95349
+    ],
+    [
+     32.79617,
+     21.96293
+    ],
+    [
+     32.79653,
+     21.96636
+    ],
+    [
+     32.79581,
+     21.96937
+    ],
+    [
+     32.79184,
+     21.96808
+    ],
+    [
+     32.78751,
+     21.97495
+    ],
+    [
+     32.78571,
+     21.97452
+    ],
+    [
+     32.78643,
+     21.96636
+    ],
+    [
+     32.78391,
+     21.96379
+    ],
+    [
+     32.77958,
+     21.95993
+    ],
+    [
+     32.77958,
+     21.95821
+    ],
+    [
+     32.78319,
+     21.95778
+    ],
+    [
+     32.78463,
+     21.9492
+    ],
+    [
+     32.78679,
+     21.94061
+    ],
+    [
+     32.7886,
+     21.93203
+    ],
+    [
+     32.79184,
+     21.92903
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "LAS",
@@ -34896,6 +39663,50 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "LBD",
+   "points": [
+    [
+     40.21499,
+     69.67468
+    ],
+    [
+     40.21657,
+     69.69039
+    ],
+    [
+     40.22063,
+     69.69099
+    ],
+    [
+     40.22161,
+     69.70077
+    ],
+    [
+     40.2182,
+     69.70309
+    ],
+    [
+     40.21906,
+     69.71425
+    ],
+    [
+     40.21578,
+     69.71476
+    ],
+    [
+     40.21172,
+     69.6752
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "LBG",
@@ -36791,6 +41602,78 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "LLW",
+   "points": [
+    [
+     -13.77877,
+     33.7672
+    ],
+    [
+     -13.77752,
+     33.76892
+    ],
+    [
+     -13.77835,
+     33.77063
+    ],
+    [
+     -13.7796,
+     33.77664
+    ],
+    [
+     -13.77877,
+     33.78007
+    ],
+    [
+     -13.78293,
+     33.78437
+    ],
+    [
+     -13.78794,
+     33.78608
+    ],
+    [
+     -13.79544,
+     33.79209
+    ],
+    [
+     -13.79961,
+     33.79467
+    ],
+    [
+     -13.80086,
+     33.79381
+    ],
+    [
+     -13.80044,
+     33.79209
+    ],
+    [
+     -13.79377,
+     33.78437
+    ],
+    [
+     -13.78794,
+     33.7775
+    ],
+    [
+     -13.78293,
+     33.77063
+    ],
+    [
+     -13.78043,
+     33.7672
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "LNZ",
    "points": [
     [
@@ -37369,6 +42252,83 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "LPQ",
+   "points": [
+    [
+     19.89598,
+     102.15583
+    ],
+    [
+     19.89727,
+     102.15635
+    ],
+    [
+     19.90429,
+     102.16485
+    ],
+    [
+     19.91123,
+     102.17343
+    ],
+    [
+     19.91495,
+     102.17781
+    ],
+    [
+     19.91454,
+     102.17927
+    ],
+    [
+     19.91317,
+     102.17961
+    ],
+    [
+     19.90865,
+     102.17429
+    ],
+    [
+     19.90566,
+     102.17086
+    ],
+    [
+     19.90203,
+     102.17
+    ],
+    [
+     19.90026,
+     102.16914
+    ],
+    [
+     19.90002,
+     102.16656
+    ],
+    [
+     19.8988,
+     102.16313
+    ],
+    [
+     19.89784,
+     102.16056
+    ],
+    [
+     19.8955,
+     102.15807
+    ],
+    [
+     19.89493,
+     102.15669
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "runway data offset from visible strip"
+  },
+  {
    "id": "LPX",
    "points": [
     [
@@ -37431,6 +42391,71 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "LRL",
+   "points": [
+    [
+     9.75594,
+     1.08519
+    ],
+    [
+     9.75459,
+     1.08622
+    ],
+    [
+     9.75492,
+     1.08759
+    ],
+    [
+     9.76567,
+     1.09205
+    ],
+    [
+     9.77666,
+     1.09677
+    ],
+    [
+     9.77878,
+     1.0972
+    ],
+    [
+     9.78022,
+     1.09591
+    ],
+    [
+     9.78115,
+     1.09248
+    ],
+    [
+     9.78089,
+     1.09016
+    ],
+    [
+     9.77836,
+     1.09016
+    ],
+    [
+     9.77666,
+     1.0936
+    ],
+    [
+     9.76736,
+     1.08991
+    ],
+    [
+     9.75746,
+     1.08562
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "terminal unclear"
   },
   {
    "id": "LRM",
@@ -37902,6 +42927,91 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "LVI",
+   "points": [
+    [
+     -17.8184,
+     25.79743
+    ],
+    [
+     -17.81864,
+     25.80473
+    ],
+    [
+     -17.81105,
+     25.8116
+    ],
+    [
+     -17.80982,
+     25.81374
+    ],
+    [
+     -17.81227,
+     25.81761
+    ],
+    [
+     -17.81023,
+     25.82104
+    ],
+    [
+     -17.81268,
+     25.82619
+    ],
+    [
+     -17.81636,
+     25.82576
+    ],
+    [
+     -17.82003,
+     25.82318
+    ],
+    [
+     -17.82085,
+     25.8352
+    ],
+    [
+     -17.82412,
+     25.83563
+    ],
+    [
+     -17.82412,
+     25.82619
+    ],
+    [
+     -17.82494,
+     25.82233
+    ],
+    [
+     -17.82861,
+     25.82233
+    ],
+    [
+     -17.82902,
+     25.81503
+    ],
+    [
+     -17.82453,
+     25.81417
+    ],
+    [
+     -17.82371,
+     25.80559
+    ],
+    [
+     -17.82249,
+     25.79743
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "west runway extension unclear"
+  },
+  {
    "id": "LWN",
    "points": [
     [
@@ -38165,6 +43275,51 @@
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")",
    "unsure": "faint 2016 picture; second runway and terminal hard to see"
+  },
+  {
+   "id": "LYP",
+   "points": [
+    [
+     31.35266,
+     72.98763
+    ],
+    [
+     31.36424,
+     72.99768
+    ],
+    [
+     31.37575,
+     73.00763
+    ],
+    [
+     31.37729,
+     73.00523
+    ],
+    [
+     31.37883,
+     73.00283
+    ],
+    [
+     31.36725,
+     72.99278
+    ],
+    [
+     31.35574,
+     72.98283
+    ],
+    [
+     31.3542,
+     72.98523
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "terminal not visible"
   },
   {
    "id": "LYS",
@@ -38480,6 +43635,70 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "MAJ",
+   "points": [
+    [
+     7.06122,
+     171.26016
+    ],
+    [
+     7.06224,
+     171.26059
+    ],
+    [
+     7.06462,
+     171.26874
+    ],
+    [
+     7.06582,
+     171.26917
+    ],
+    [
+     7.06607,
+     171.27089
+    ],
+    [
+     7.06522,
+     171.27132
+    ],
+    [
+     7.06718,
+     171.27904
+    ],
+    [
+     7.0682,
+     171.28376
+    ],
+    [
+     7.06735,
+     171.28436
+    ],
+    [
+     7.06667,
+     171.28376
+    ],
+    [
+     7.06462,
+     171.27475
+    ],
+    [
+     7.06241,
+     171.26617
+    ],
+    [
+     7.06071,
+     171.26102
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "MAN",
    "points": [
     [
@@ -38631,6 +43850,70 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "MAR",
+   "points": [
+    [
+     10.57231,
+     -71.72291
+    ],
+    [
+     10.5713,
+     -71.72162
+    ],
+    [
+     10.56649,
+     -71.71785
+    ],
+    [
+     10.56286,
+     -71.71836
+    ],
+    [
+     10.56125,
+     -71.71913
+    ],
+    [
+     10.55442,
+     -71.72051
+    ],
+    [
+     10.55071,
+     -71.72428
+    ],
+    [
+     10.54489,
+     -71.72909
+    ],
+    [
+     10.54438,
+     -71.73501
+    ],
+    [
+     10.54699,
+     -71.73553
+    ],
+    [
+     10.55594,
+     -71.73149
+    ],
+    [
+     10.56809,
+     -71.72617
+    ],
+    [
+     10.5718,
+     -71.72454
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "MBA",
@@ -39869,6 +45152,70 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "MFU",
+   "points": [
+    [
+     -13.26048,
+     31.92517
+    ],
+    [
+     -13.25855,
+     31.9262
+    ],
+    [
+     -13.25647,
+     31.93049
+    ],
+    [
+     -13.25379,
+     31.93135
+    ],
+    [
+     -13.25379,
+     31.93435
+    ],
+    [
+     -13.25563,
+     31.93478
+    ],
+    [
+     -13.25605,
+     31.93907
+    ],
+    [
+     -13.2563,
+     31.9468
+    ],
+    [
+     -13.25772,
+     31.94766
+    ],
+    [
+     -13.25897,
+     31.9468
+    ],
+    [
+     -13.26022,
+     31.93907
+    ],
+    [
+     -13.26081,
+     31.93135
+    ],
+    [
+     -13.26131,
+     31.9262
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "MGA",
    "points": [
     [
@@ -39943,6 +45290,50 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "MGQ",
+   "points": [
+    [
+     2.00623,
+     45.29065
+    ],
+    [
+     2.01695,
+     45.30292
+    ],
+    [
+     2.02742,
+     45.31477
+    ],
+    [
+     2.02373,
+     45.31777
+    ],
+    [
+     2.01429,
+     45.30739
+    ],
+    [
+     2.00323,
+     45.29314
+    ],
+    [
+     2.00391,
+     45.29194
+    ],
+    [
+     2.00512,
+     45.29134
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "MHD",
@@ -40211,6 +45602,87 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "MJI",
+   "points": [
+    [
+     32.89585,
+     13.2687
+    ],
+    [
+     32.90017,
+     13.27084
+    ],
+    [
+     32.90234,
+     13.27599
+    ],
+    [
+     32.90666,
+     13.28071
+    ],
+    [
+     32.90666,
+     13.28372
+    ],
+    [
+     32.9045,
+     13.28543
+    ],
+    [
+     32.90342,
+     13.29402
+    ],
+    [
+     32.89873,
+     13.29573
+    ],
+    [
+     32.89621,
+     13.3026
+    ],
+    [
+     32.89297,
+     13.30775
+    ],
+    [
+     32.88864,
+     13.31033
+    ],
+    [
+     32.88468,
+     13.30861
+    ],
+    [
+     32.88396,
+     13.3026
+    ],
+    [
+     32.88684,
+     13.28973
+    ],
+    [
+     32.88864,
+     13.28114
+    ],
+    [
+     32.89023,
+     13.27342
+    ],
+    [
+     32.89261,
+     13.26956
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "base extent unclear"
+  },
+  {
    "id": "MJN",
    "points": [
     [
@@ -40421,6 +45893,74 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "MLE",
+   "points": [
+    [
+     4.21325,
+     73.53025
+    ],
+    [
+     4.21565,
+     73.53102
+    ],
+    [
+     4.21393,
+     73.53222
+    ],
+    [
+     4.19938,
+     73.53291
+    ],
+    [
+     4.19425,
+     73.53497
+    ],
+    [
+     4.19082,
+     73.53754
+    ],
+    [
+     4.18226,
+     73.53754
+    ],
+    [
+     4.17884,
+     73.5354
+    ],
+    [
+     4.17627,
+     73.53196
+    ],
+    [
+     4.17584,
+     73.52767
+    ],
+    [
+     4.17798,
+     73.52553
+    ],
+    [
+     4.19938,
+     73.52493
+    ],
+    [
+     4.20965,
+     73.52767
+    ],
+    [
+     4.21154,
+     73.52965
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2025-11-01 (contains modified Copernicus Sentinel data 2025)",
+   "imageryDate": "2025-11-01",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "MLM",
@@ -40922,6 +46462,50 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "MQP",
+   "points": [
+    [
+     -25.39555,
+     31.09371
+    ],
+    [
+     -25.38842,
+     31.09895
+    ],
+    [
+     -25.3864,
+     31.09637
+    ],
+    [
+     -25.38284,
+     31.09903
+    ],
+    [
+     -25.38392,
+     31.10238
+    ],
+    [
+     -25.36981,
+     31.11285
+    ],
+    [
+     -25.37198,
+     31.11646
+    ],
+    [
+     -25.39773,
+     31.09732
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "MRS",
@@ -41440,6 +47024,62 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "MSU",
+   "points": [
+    [
+     -29.43375,
+     27.55207
+    ],
+    [
+     -29.43375,
+     27.56108
+    ],
+    [
+     -29.44421,
+     27.56151
+    ],
+    [
+     -29.45692,
+     27.55979
+    ],
+    [
+     -29.46738,
+     27.55764
+    ],
+    [
+     -29.4771,
+     27.55378
+    ],
+    [
+     -29.4771,
+     27.54563
+    ],
+    [
+     -29.47037,
+     27.5452
+    ],
+    [
+     -29.46439,
+     27.54434
+    ],
+    [
+     -29.45692,
+     27.54563
+    ],
+    [
+     -29.44421,
+     27.54949
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "MSY",
@@ -42387,6 +48027,67 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "MZR",
+   "points": [
+    [
+     36.70126,
+     67.19199
+    ],
+    [
+     36.70436,
+     67.19457
+    ],
+    [
+     36.71055,
+     67.20916
+    ],
+    [
+     36.71675,
+     67.2289
+    ],
+    [
+     36.71709,
+     67.23405
+    ],
+    [
+     36.71399,
+     67.23663
+    ],
+    [
+     36.70918,
+     67.23577
+    ],
+    [
+     36.70574,
+     67.2289
+    ],
+    [
+     36.70092,
+     67.21688
+    ],
+    [
+     36.69541,
+     67.20315
+    ],
+    [
+     36.69473,
+     67.198
+    ],
+    [
+     36.69679,
+     67.19285
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "air base extent guessed"
+  },
+  {
    "id": "MZT",
    "points": [
     [
@@ -42598,6 +48299,78 @@
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")",
    "note": "a small bump added so the outline holds the airport's reference point (ideas-data, 2026-10-31)"
+  },
+  {
+   "id": "NAN",
+   "points": [
+    [
+     -17.77535,
+     177.4269
+    ],
+    [
+     -17.7729,
+     177.42604
+    ],
+    [
+     -17.76145,
+     177.43419
+    ],
+    [
+     -17.75491,
+     177.43677
+    ],
+    [
+     -17.75287,
+     177.43548
+    ],
+    [
+     -17.74919,
+     177.44535
+    ],
+    [
+     -17.74878,
+     177.44792
+    ],
+    [
+     -17.74919,
+     177.45136
+    ],
+    [
+     -17.75205,
+     177.45565
+    ],
+    [
+     -17.75859,
+     177.45608
+    ],
+    [
+     -17.759,
+     177.45136
+    ],
+    [
+     -17.75737,
+     177.44535
+    ],
+    [
+     -17.759,
+     177.44192
+    ],
+    [
+     -17.76717,
+     177.43677
+    ],
+    [
+     -17.77535,
+     177.43033
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "NAP",
@@ -43234,6 +49007,71 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "NDB",
+   "points": [
+    [
+     20.922,
+     -17.03337
+    ],
+    [
+     20.92144,
+     -17.03165
+    ],
+    [
+     20.92184,
+     -17.02951
+    ],
+    [
+     20.9232,
+     -17.02762
+    ],
+    [
+     20.92761,
+     -17.02736
+    ],
+    [
+     20.92921,
+     -17.02848
+    ],
+    [
+     20.93723,
+     -17.0265
+    ],
+    [
+     20.94364,
+     -17.02522
+    ],
+    [
+     20.94541,
+     -17.0259
+    ],
+    [
+     20.94525,
+     -17.02762
+    ],
+    [
+     20.93883,
+     -17.02908
+    ],
+    [
+     20.93082,
+     -17.03123
+    ],
+    [
+     20.9236,
+     -17.03337
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "desert picture washed out; terminal side guessed"
+  },
+  {
    "id": "NDG",
    "points": [
     [
@@ -43432,6 +49270,50 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "NG-0005",
+   "points": [
+    [
+     12.47314,
+     4.35359
+    ],
+    [
+     12.4816,
+     4.36843
+    ],
+    [
+     12.48453,
+     4.36766
+    ],
+    [
+     12.48789,
+     4.37358
+    ],
+    [
+     12.48604,
+     4.37616
+    ],
+    [
+     12.48956,
+     4.38251
+    ],
+    [
+     12.48529,
+     4.38509
+    ],
+    [
+     12.46878,
+     4.35616
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "NGB",
    "points": [
     [
@@ -43622,6 +49504,62 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "NIM",
+   "points": [
+    [
+     13.48519,
+     2.1678
+    ],
+    [
+     13.48978,
+     2.16995
+    ],
+    [
+     13.48978,
+     2.17853
+    ],
+    [
+     13.48686,
+     2.18025
+    ],
+    [
+     13.48745,
+     2.20085
+    ],
+    [
+     13.48436,
+     2.206
+    ],
+    [
+     13.48185,
+     2.206
+    ],
+    [
+     13.47994,
+     2.18883
+    ],
+    [
+     13.47726,
+     2.18111
+    ],
+    [
+     13.47726,
+     2.16995
+    ],
+    [
+     13.48019,
+     2.1678
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "NJC",
@@ -43896,6 +49834,54 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "NLA",
+   "points": [
+    [
+     -12.95896,
+     28.49404
+    ],
+    [
+     -12.95896,
+     28.53679
+    ],
+    [
+     -12.96456,
+     28.53696
+    ],
+    [
+     -12.96456,
+     28.52134
+    ],
+    [
+     -12.96958,
+     28.52117
+    ],
+    [
+     -12.96983,
+     28.51361
+    ],
+    [
+     -12.96791,
+     28.51001
+    ],
+    [
+     -12.96356,
+     28.50975
+    ],
+    [
+     -12.96356,
+     28.49404
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2025-07-24 (contains modified Copernicus Sentinel data 2025)",
+   "imageryDate": "2025-07-24",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "NLU",
@@ -44294,6 +50280,54 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "NOU",
+   "points": [
+    [
+     -22.00412,
+     166.19881
+    ],
+    [
+     -22.01192,
+     166.2128
+    ],
+    [
+     -22.01032,
+     166.21581
+    ],
+    [
+     -22.01526,
+     166.2237
+    ],
+    [
+     -22.02123,
+     166.2286
+    ],
+    [
+     -22.02465,
+     166.22636
+    ],
+    [
+     -22.0225,
+     166.21847
+    ],
+    [
+     -22.02202,
+     166.21117
+    ],
+    [
+     -22.00818,
+     166.19615
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "NQN",
@@ -45636,6 +51670,103 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "OKA",
+   "points": [
+    [
+     26.21675,
+     127.64465
+    ],
+    [
+     26.21698,
+     127.64706
+    ],
+    [
+     26.21467,
+     127.65092
+    ],
+    [
+     26.21159,
+     127.65306
+    ],
+    [
+     26.18232,
+     127.65418
+    ],
+    [
+     26.17847,
+     127.65306
+    ],
+    [
+     26.17616,
+     127.65006
+    ],
+    [
+     26.17639,
+     127.64294
+    ],
+    [
+     26.19118,
+     127.64259
+    ],
+    [
+     26.19195,
+     127.64019
+    ],
+    [
+     26.19503,
+     127.63744
+    ],
+    [
+     26.20119,
+     127.63719
+    ],
+    [
+     26.20212,
+     127.63521
+    ],
+    [
+     26.17655,
+     127.63521
+    ],
+    [
+     26.17593,
+     127.63461
+    ],
+    [
+     26.17716,
+     127.63118
+    ],
+    [
+     26.18001,
+     127.63006
+    ],
+    [
+     26.2052,
+     127.63006
+    ],
+    [
+     26.20566,
+     127.63144
+    ],
+    [
+     26.20427,
+     127.64491
+    ],
+    [
+     26.21351,
+     127.64491
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2023-02-23 (contains modified Copernicus Sentinel data 2023)",
+   "imageryDate": "2023-02-23",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "lagoon between runways included"
+  },
+  {
    "id": "OKC",
    "points": [
     [
@@ -46708,6 +52839,91 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "ORU",
+   "points": [
+    [
+     -17.93655,
+     -67.07741
+    ],
+    [
+     -17.93655,
+     -67.07423
+    ],
+    [
+     -17.93859,
+     -67.07389
+    ],
+    [
+     -17.94023,
+     -67.07054
+    ],
+    [
+     -17.94594,
+     -67.07011
+    ],
+    [
+     -17.94692,
+     -67.07337
+    ],
+    [
+     -17.96227,
+     -67.07354
+    ],
+    [
+     -17.96268,
+     -67.0641
+    ],
+    [
+     -17.96456,
+     -67.06393
+    ],
+    [
+     -17.96472,
+     -67.07354
+    ],
+    [
+     -17.97452,
+     -67.0744
+    ],
+    [
+     -17.97452,
+     -67.07715
+    ],
+    [
+     -17.96513,
+     -67.07741
+    ],
+    [
+     -17.96391,
+     -67.08256
+    ],
+    [
+     -17.96211,
+     -67.08256
+    ],
+    [
+     -17.96105,
+     -67.07955
+    ],
+    [
+     -17.95982,
+     -67.07938
+    ],
+    [
+     -17.95982,
+     -67.07766
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "paved runway runs ~1.5 km north of the data end; traced to the visible end, white apron there taken as terminal"
+  },
+  {
    "id": "ORY",
    "points": [
     [
@@ -46880,6 +53096,83 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T02:25:35Z",
    "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "OSM",
+   "points": [
+    [
+     36.31855,
+     43.14019
+    ],
+    [
+     36.31945,
+     43.14276
+    ],
+    [
+     36.31889,
+     43.14662
+    ],
+    [
+     36.31474,
+     43.14748
+    ],
+    [
+     36.30852,
+     43.15006
+    ],
+    [
+     36.30229,
+     43.15306
+    ],
+    [
+     36.29607,
+     43.15564
+    ],
+    [
+     36.2933,
+     43.15538
+    ],
+    [
+     36.29206,
+     43.15366
+    ],
+    [
+     36.29226,
+     43.15006
+    ],
+    [
+     36.29316,
+     43.14662
+    ],
+    [
+     36.29399,
+     43.14362
+    ],
+    [
+     36.29953,
+     43.14276
+    ],
+    [
+     36.30506,
+     43.14276
+    ],
+    [
+     36.31059,
+     43.14104
+    ],
+    [
+     36.31544,
+     43.13933
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "fence faint"
   },
   {
    "id": "OSR",
@@ -47920,6 +54213,74 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "PBH",
+   "points": [
+    [
+     27.41285,
+     89.41802
+    ],
+    [
+     27.413,
+     89.42016
+    ],
+    [
+     27.40789,
+     89.42334
+    ],
+    [
+     27.40294,
+     89.4266
+    ],
+    [
+     27.3957,
+     89.43089
+    ],
+    [
+     27.3938,
+     89.43141
+    ],
+    [
+     27.39341,
+     89.42986
+    ],
+    [
+     27.3957,
+     89.42789
+    ],
+    [
+     27.39761,
+     89.42445
+    ],
+    [
+     27.39776,
+     89.42188
+    ],
+    [
+     27.39989,
+     89.42102
+    ],
+    [
+     27.4018,
+     89.42145
+    ],
+    [
+     27.40599,
+     89.41931
+    ],
+    [
+     27.41094,
+     89.41759
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "PBM",
    "points": [
     [
@@ -48891,6 +55252,87 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "PEW",
+   "points": [
+    [
+     34.00841,
+     71.51219
+    ],
+    [
+     34.00926,
+     71.51459
+    ],
+    [
+     34.00826,
+     71.51648
+    ],
+    [
+     34.00343,
+     71.51803
+    ],
+    [
+     33.99773,
+     71.51932
+    ],
+    [
+     33.99631,
+     71.52077
+    ],
+    [
+     33.99346,
+     71.5206
+    ],
+    [
+     33.99204,
+     71.51889
+    ],
+    [
+     33.98635,
+     71.51803
+    ],
+    [
+     33.98136,
+     71.51734
+    ],
+    [
+     33.97937,
+     71.51648
+    ],
+    [
+     33.97923,
+     71.51477
+    ],
+    [
+     33.98208,
+     71.51391
+    ],
+    [
+     33.98848,
+     71.51305
+    ],
+    [
+     33.99489,
+     71.51202
+    ],
+    [
+     34.00129,
+     71.51142
+    ],
+    [
+     34.00627,
+     71.5115
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "blurry, fence unclear"
+  },
+  {
    "id": "PFO",
    "points": [
     [
@@ -49800,6 +56242,66 @@
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
   },
   {
+   "id": "PKZ",
+   "points": [
+    [
+     15.13921,
+     105.7757
+    ],
+    [
+     15.14012,
+     105.77742
+    ],
+    [
+     15.13822,
+     105.77897
+    ],
+    [
+     15.1378,
+     105.78085
+    ],
+    [
+     15.13515,
+     105.78326
+    ],
+    [
+     15.13267,
+     105.7836
+    ],
+    [
+     15.13159,
+     105.78343
+    ],
+    [
+     15.12596,
+     105.78755
+    ],
+    [
+     15.12455,
+     105.78703
+    ],
+    [
+     15.12438,
+     105.78566
+    ],
+    [
+     15.13101,
+     105.78085
+    ],
+    [
+     15.13797,
+     105.77553
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "PLQ",
    "points": [
     [
@@ -49870,6 +56372,102 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PLS",
+   "points": [
+    [
+     21.77505,
+     -72.2906
+    ],
+    [
+     21.77641,
+     -72.28974
+    ],
+    [
+     21.7772,
+     -72.28674
+    ],
+    [
+     21.77744,
+     -72.28159
+    ],
+    [
+     21.7772,
+     -72.27644
+    ],
+    [
+     21.77688,
+     -72.27129
+    ],
+    [
+     21.77625,
+     -72.26528
+    ],
+    [
+     21.77585,
+     -72.25841
+    ],
+    [
+     21.77529,
+     -72.25326
+    ],
+    [
+     21.77465,
+     -72.25112
+    ],
+    [
+     21.7729,
+     -72.25086
+    ],
+    [
+     21.77186,
+     -72.25284
+    ],
+    [
+     21.77146,
+     -72.25841
+    ],
+    [
+     21.77067,
+     -72.26528
+    ],
+    [
+     21.77027,
+     -72.27
+    ],
+    [
+     21.76907,
+     -72.27129
+    ],
+    [
+     21.76907,
+     -72.27472
+    ],
+    [
+     21.77067,
+     -72.27515
+    ],
+    [
+     21.77107,
+     -72.28073
+    ],
+    [
+     21.77162,
+     -72.28674
+    ],
+    [
+     21.77242,
+     -72.28974
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "PLX",
@@ -49950,6 +56548,114 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PLZ",
+   "points": [
+    [
+     -33.9958,
+     25.59583
+    ],
+    [
+     -33.99366,
+     25.59583
+    ],
+    [
+     -33.99117,
+     25.59926
+    ],
+    [
+     -33.99025,
+     25.59737
+    ],
+    [
+     -33.98761,
+     25.59737
+    ],
+    [
+     -33.98548,
+     25.59969
+    ],
+    [
+     -33.9837,
+     25.59926
+    ],
+    [
+     -33.98263,
+     25.60184
+    ],
+    [
+     -33.98192,
+     25.60784
+    ],
+    [
+     -33.98156,
+     25.61299
+    ],
+    [
+     -33.98156,
+     25.61814
+    ],
+    [
+     -33.98192,
+     25.62072
+    ],
+    [
+     -33.98334,
+     25.62115
+    ],
+    [
+     -33.98441,
+     25.62329
+    ],
+    [
+     -33.98868,
+     25.62501
+    ],
+    [
+     -33.99508,
+     25.62844
+    ],
+    [
+     -33.99793,
+     25.62887
+    ],
+    [
+     -33.99864,
+     25.62673
+    ],
+    [
+     -33.99722,
+     25.62458
+    ],
+    [
+     -33.99473,
+     25.619
+    ],
+    [
+     -33.9958,
+     25.61471
+    ],
+    [
+     -33.99473,
+     25.61042
+    ],
+    [
+     -33.99544,
+     25.60355
+    ],
+    [
+     -33.99722,
+     25.5984
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "PMC",
@@ -50179,6 +56885,66 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PMV",
+   "points": [
+    [
+     10.91083,
+     -63.98319
+    ],
+    [
+     10.91235,
+     -63.98259
+    ],
+    [
+     10.91445,
+     -63.97358
+    ],
+    [
+     10.91825,
+     -63.97272
+    ],
+    [
+     10.91976,
+     -63.96499
+    ],
+    [
+     10.91614,
+     -63.96328
+    ],
+    [
+     10.91808,
+     -63.95555
+    ],
+    [
+     10.91656,
+     -63.95126
+    ],
+    [
+     10.91445,
+     -63.95083
+    ],
+    [
+     10.91336,
+     -63.95169
+    ],
+    [
+     10.90771,
+     -63.9813
+    ],
+    [
+     10.90855,
+     -63.98302
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "PNH",
@@ -50676,6 +57442,79 @@
    "unsure": "blurry imagery; runway and fence hard to see"
   },
   {
+   "id": "POM",
+   "points": [
+    [
+     -9.43036,
+     147.21188
+    ],
+    [
+     -9.42867,
+     147.2142
+    ],
+    [
+     -9.42977,
+     147.21763
+    ],
+    [
+     -9.43586,
+     147.22235
+    ],
+    [
+     -9.44264,
+     147.22664
+    ],
+    [
+     -9.44958,
+     147.23025
+    ],
+    [
+     -9.45297,
+     147.22965
+    ],
+    [
+     -9.45432,
+     147.22664
+    ],
+    [
+     -9.45322,
+     147.22235
+    ],
+    [
+     -9.45322,
+     147.21806
+    ],
+    [
+     -9.45111,
+     147.2142
+    ],
+    [
+     -9.44603,
+     147.21334
+    ],
+    [
+     -9.44095,
+     147.21205
+    ],
+    [
+     -9.43586,
+     147.21102
+    ],
+    [
+     -9.43205,
+     147.21119
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "hazy picture, edges guessed"
+  },
+  {
    "id": "POS",
    "points": [
     [
@@ -50962,6 +57801,214 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PPS",
+   "points": [
+    [
+     9.74358,
+     118.74647
+    ],
+    [
+     9.74696,
+     118.74733
+    ],
+    [
+     9.74738,
+     118.75377
+    ],
+    [
+     9.74485,
+     118.75463
+    ],
+    [
+     9.74442,
+     118.75978
+    ],
+    [
+     9.744,
+     118.76664
+    ],
+    [
+     9.74358,
+     118.77308
+    ],
+    [
+     9.74231,
+     118.77394
+    ],
+    [
+     9.74062,
+     118.77351
+    ],
+    [
+     9.7385,
+     118.77265
+    ],
+    [
+     9.73808,
+     118.76879
+    ],
+    [
+     9.73977,
+     118.76493
+    ],
+    [
+     9.73977,
+     118.75892
+    ],
+    [
+     9.73977,
+     118.75549
+    ],
+    [
+     9.74062,
+     118.75205
+    ],
+    [
+     9.74087,
+     118.74733
+    ],
+    [
+     9.74188,
+     118.74604
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PPT",
+   "points": [
+    [
+     -17.5628,
+     -149.62107
+    ],
+    [
+     -17.56157,
+     -149.61979
+    ],
+    [
+     -17.55543,
+     -149.6112
+    ],
+    [
+     -17.55011,
+     -149.60262
+    ],
+    [
+     -17.54414,
+     -149.59404
+    ],
+    [
+     -17.54439,
+     -149.59275
+    ],
+    [
+     -17.54561,
+     -149.59275
+    ],
+    [
+     -17.54889,
+     -149.59661
+    ],
+    [
+     -17.55339,
+     -149.60262
+    ],
+    [
+     -17.55543,
+     -149.60691
+    ],
+    [
+     -17.55789,
+     -149.6112
+    ],
+    [
+     -17.56116,
+     -149.61635
+    ],
+    [
+     -17.56362,
+     -149.61936
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PQC",
+   "points": [
+    [
+     10.17328,
+     103.97458
+    ],
+    [
+     10.17497,
+     103.97544
+    ],
+    [
+     10.17523,
+     103.98402
+    ],
+    [
+     10.17413,
+     103.9969
+    ],
+    [
+     10.17244,
+     104.01063
+    ],
+    [
+     10.17117,
+     104.0132
+    ],
+    [
+     10.16906,
+     104.01235
+    ],
+    [
+     10.16822,
+     104.00548
+    ],
+    [
+     10.16484,
+     104.0029
+    ],
+    [
+     10.16441,
+     103.99518
+    ],
+    [
+     10.16695,
+     103.99089
+    ],
+    [
+     10.16906,
+     103.97973
+    ],
+    [
+     10.17033,
+     103.97544
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "PRG",
@@ -51404,6 +58451,102 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "PTG",
+   "points": [
+    [
+     -23.85944,
+     29.44636
+    ],
+    [
+     -23.85332,
+     29.45193
+    ],
+    [
+     -23.849,
+     29.4558
+    ],
+    [
+     -23.84468,
+     29.45708
+    ],
+    [
+     -23.83526,
+     29.45691
+    ],
+    [
+     -23.83353,
+     29.45751
+    ],
+    [
+     -23.83353,
+     29.45923
+    ],
+    [
+     -23.83683,
+     29.45983
+    ],
+    [
+     -23.83777,
+     29.46378
+    ],
+    [
+     -23.83463,
+     29.46695
+    ],
+    [
+     -23.83542,
+     29.46867
+    ],
+    [
+     -23.83761,
+     29.46824
+    ],
+    [
+     -23.84217,
+     29.46395
+    ],
+    [
+     -23.84586,
+     29.46069
+    ],
+    [
+     -23.85253,
+     29.46017
+    ],
+    [
+     -23.86274,
+     29.46009
+    ],
+    [
+     -23.86493,
+     29.45932
+    ],
+    [
+     -23.86493,
+     29.45777
+    ],
+    [
+     -23.86313,
+     29.45691
+    ],
+    [
+     -23.86274,
+     29.45193
+    ],
+    [
+     -23.86156,
+     29.44807
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "PTP",
    "points": [
     [
@@ -51667,6 +58810,62 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "PUS",
+   "points": [
+    [
+     35.19605,
+     128.93196
+    ],
+    [
+     35.19605,
+     128.94097
+    ],
+    [
+     35.19184,
+     128.94483
+    ],
+    [
+     35.17851,
+     128.94526
+    ],
+    [
+     35.16869,
+     128.94483
+    ],
+    [
+     35.16342,
+     128.94183
+    ],
+    [
+     35.16307,
+     128.93711
+    ],
+    [
+     35.16518,
+     128.93281
+    ],
+    [
+     35.17851,
+     128.92938
+    ],
+    [
+     35.18903,
+     128.92895
+    ],
+    [
+     35.19394,
+     128.92981
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "PUY",
@@ -52222,6 +59421,140 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "PZO",
+   "points": [
+    [
+     8.2858,
+     -62.77088
+    ],
+    [
+     8.29064,
+     -62.76101
+    ],
+    [
+     8.29506,
+     -62.75182
+    ],
+    [
+     8.29132,
+     -62.74993
+    ],
+    [
+     8.28835,
+     -62.75586
+    ],
+    [
+     8.28623,
+     -62.75671
+    ],
+    [
+     8.28436,
+     -62.76143
+    ],
+    [
+     8.28478,
+     -62.76289
+    ],
+    [
+     8.28206,
+     -62.76899
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "runway and apron barely visible in dark 2016 picture"
+  },
+  {
+   "id": "PZU",
+   "points": [
+    [
+     19.4454,
+     37.23023
+    ],
+    [
+     19.44985,
+     37.23367
+    ],
+    [
+     19.45066,
+     37.23684
+    ],
+    [
+     19.44782,
+     37.2377
+    ],
+    [
+     19.4458,
+     37.23513
+    ],
+    [
+     19.44337,
+     37.23427
+    ],
+    [
+     19.43649,
+     37.23581
+    ],
+    [
+     19.43552,
+     37.23796
+    ],
+    [
+     19.43447,
+     37.24268
+    ],
+    [
+     19.43164,
+     37.24311
+    ],
+    [
+     19.43123,
+     37.23856
+    ],
+    [
+     19.42597,
+     37.2377
+    ],
+    [
+     19.42095,
+     37.23822
+    ],
+    [
+     19.42014,
+     37.2365
+    ],
+    [
+     19.42111,
+     37.23538
+    ],
+    [
+     19.42597,
+     37.23427
+    ],
+    [
+     19.43406,
+     37.23255
+    ],
+    [
+     19.44281,
+     37.23049
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "low contrast desert"
+  },
+  {
    "id": "QRO",
    "points": [
     [
@@ -52435,6 +59768,59 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "RAR",
+   "points": [
+    [
+     -21.20157,
+     -159.81804
+    ],
+    [
+     -21.20133,
+     -159.8086
+    ],
+    [
+     -21.20141,
+     -159.79315
+    ],
+    [
+     -21.20373,
+     -159.7928
+    ],
+    [
+     -21.20413,
+     -159.79658
+    ],
+    [
+     -21.20589,
+     -159.79675
+    ],
+    [
+     -21.20589,
+     -159.80173
+    ],
+    [
+     -21.20429,
+     -159.80216
+    ],
+    [
+     -21.20413,
+     -159.8086
+    ],
+    [
+     -21.20397,
+     -159.81804
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "2016 picture blank (white) over the island; traced from runway data only"
+  },
+  {
    "id": "RBA",
    "points": [
     [
@@ -52533,6 +59919,74 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "RBR",
+   "points": [
+    [
+     -9.8748,
+     -67.90702
+    ],
+    [
+     -9.87167,
+     -67.90101
+    ],
+    [
+     -9.86786,
+     -67.90076
+    ],
+    [
+     -9.86363,
+     -67.90015
+    ],
+    [
+     -9.86279,
+     -67.89586
+    ],
+    [
+     -9.86448,
+     -67.89415
+    ],
+    [
+     -9.86719,
+     -67.89372
+    ],
+    [
+     -9.86279,
+     -67.88599
+    ],
+    [
+     -9.86042,
+     -67.88084
+    ],
+    [
+     -9.86237,
+     -67.87998
+    ],
+    [
+     -9.86533,
+     -67.88428
+    ],
+    [
+     -9.87057,
+     -67.89286
+    ],
+    [
+     -9.87547,
+     -67.90144
+    ],
+    [
+     -9.87716,
+     -67.90616
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "RDU",
@@ -52839,6 +60293,83 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "RGN",
+   "points": [
+    [
+     16.89828,
+     96.12416
+    ],
+    [
+     16.90321,
+     96.12502
+    ],
+    [
+     16.90732,
+     96.12888
+    ],
+    [
+     16.91224,
+     96.13232
+    ],
+    [
+     16.91881,
+     96.13575
+    ],
+    [
+     16.92374,
+     96.13833
+    ],
+    [
+     16.92538,
+     96.14047
+    ],
+    [
+     16.92415,
+     96.14305
+    ],
+    [
+     16.91964,
+     96.14305
+    ],
+    [
+     16.91471,
+     96.14047
+    ],
+    [
+     16.90978,
+     96.13833
+    ],
+    [
+     16.90485,
+     96.13747
+    ],
+    [
+     16.89993,
+     96.13618
+    ],
+    [
+     16.89664,
+     96.13232
+    ],
+    [
+     16.89623,
+     96.12888
+    ],
+    [
+     16.89623,
+     96.12545
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "terminal side unclear"
+  },
+  {
    "id": "RHO",
    "points": [
     [
@@ -53073,6 +60604,50 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "RIY",
+   "points": [
+    [
+     14.65337,
+     49.36212
+    ],
+    [
+     14.66035,
+     49.37594
+    ],
+    [
+     14.6674,
+     49.38984
+    ],
+    [
+     14.67031,
+     49.3883
+    ],
+    [
+     14.6733,
+     49.38667
+    ],
+    [
+     14.66624,
+     49.37276
+    ],
+    [
+     14.65927,
+     49.35894
+    ],
+    [
+     14.65628,
+     49.36049
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "RJK",
@@ -53363,6 +60938,54 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "RML",
+   "points": [
+    [
+     6.81527,
+     79.87992
+    ],
+    [
+     6.82311,
+     79.88515
+    ],
+    [
+     6.83044,
+     79.88996
+    ],
+    [
+     6.82873,
+     79.89262
+    ],
+    [
+     6.82464,
+     79.8903
+    ],
+    [
+     6.82294,
+     79.89159
+    ],
+    [
+     6.81953,
+     79.89116
+    ],
+    [
+     6.81825,
+     79.8873
+    ],
+    [
+     6.81356,
+     79.88258
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "RMO",
    "points": [
     [
@@ -53645,6 +61268,78 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "ROB",
+   "points": [
+    [
+     6.22069,
+     -10.37135
+    ],
+    [
+     6.22325,
+     -10.37049
+    ],
+    [
+     6.22965,
+     -10.36663
+    ],
+    [
+     6.23818,
+     -10.36148
+    ],
+    [
+     6.24501,
+     -10.35718
+    ],
+    [
+     6.24799,
+     -10.35504
+    ],
+    [
+     6.24842,
+     -10.35332
+    ],
+    [
+     6.24671,
+     -10.35246
+    ],
+    [
+     6.2433,
+     -10.35332
+    ],
+    [
+     6.23989,
+     -10.3559
+    ],
+    [
+     6.23391,
+     -10.3559
+    ],
+    [
+     6.23221,
+     -10.3589
+    ],
+    [
+     6.22538,
+     -10.36405
+    ],
+    [
+     6.21984,
+     -10.36791
+    ],
+    [
+     6.21898,
+     -10.37006
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "ROC",
@@ -54603,6 +62298,50 @@
    "unsure": "terminal location faint"
   },
   {
+   "id": "SAH",
+   "points": [
+    [
+     15.49394,
+     44.21226
+    ],
+    [
+     15.49394,
+     44.22599
+    ],
+    [
+     15.47988,
+     44.22642
+    ],
+    [
+     15.45754,
+     44.22599
+    ],
+    [
+     15.45548,
+     44.2217
+    ],
+    [
+     15.45506,
+     44.21226
+    ],
+    [
+     15.46085,
+     44.2114
+    ],
+    [
+     15.4865,
+     44.2114
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "SAL",
    "points": [
     [
@@ -54906,6 +62645,114 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "SAV",
+   "points": [
+    [
+     32.13119,
+     -81.22477
+    ],
+    [
+     32.13148,
+     -81.21618
+    ],
+    [
+     32.13758,
+     -81.21584
+    ],
+    [
+     32.14013,
+     -81.21155
+    ],
+    [
+     32.14376,
+     -81.21086
+    ],
+    [
+     32.14434,
+     -81.20365
+    ],
+    [
+     32.14318,
+     -81.19902
+    ],
+    [
+     32.14151,
+     -81.19567
+    ],
+    [
+     32.14042,
+     -81.18975
+    ],
+    [
+     32.1354,
+     -81.18915
+    ],
+    [
+     32.13424,
+     -81.18451
+    ],
+    [
+     32.12864,
+     -81.18314
+    ],
+    [
+     32.12588,
+     -81.18451
+    ],
+    [
+     32.12472,
+     -81.18915
+    ],
+    [
+     32.11912,
+     -81.18975
+    ],
+    [
+     32.11411,
+     -81.19112
+    ],
+    [
+     32.11243,
+     -81.19567
+    ],
+    [
+     32.10967,
+     -81.19773
+    ],
+    [
+     32.10967,
+     -81.20168
+    ],
+    [
+     32.11411,
+     -81.20365
+    ],
+    [
+     32.11745,
+     -81.20494
+    ],
+    [
+     32.11912,
+     -81.21086
+    ],
+    [
+     32.12639,
+     -81.21155
+    ],
+    [
+     32.12639,
+     -81.22477
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "SAW",
@@ -55249,6 +63096,66 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "SCQ",
+   "points": [
+    [
+     42.91412,
+     -8.42156
+    ],
+    [
+     42.91412,
+     -8.41787
+    ],
+    [
+     42.90281,
+     -8.4153
+    ],
+    [
+     42.89652,
+     -8.41186
+    ],
+    [
+     42.883,
+     -8.40929
+    ],
+    [
+     42.88269,
+     -8.41229
+    ],
+    [
+     42.88803,
+     -8.41658
+    ],
+    [
+     42.88835,
+     -8.42216
+    ],
+    [
+     42.89463,
+     -8.42517
+    ],
+    [
+     42.90218,
+     -8.42517
+    ],
+    [
+     42.90406,
+     -8.42259
+    ],
+    [
+     42.91161,
+     -8.42302
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "SCR",
@@ -56036,6 +63943,106 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "SFS",
+   "points": [
+    [
+     14.78898,
+     120.2577
+    ],
+    [
+     14.79089,
+     120.25916
+    ],
+    [
+     14.79363,
+     120.26388
+    ],
+    [
+     14.79629,
+     120.26474
+    ],
+    [
+     14.79919,
+     120.26602
+    ],
+    [
+     14.79878,
+     120.26903
+    ],
+    [
+     14.79919,
+     120.2716
+    ],
+    [
+     14.80019,
+     120.27761
+    ],
+    [
+     14.80085,
+     120.28276
+    ],
+    [
+     14.80027,
+     120.28465
+    ],
+    [
+     14.79878,
+     120.28619
+    ],
+    [
+     14.79546,
+     120.28705
+    ],
+    [
+     14.79313,
+     120.28662
+    ],
+    [
+     14.79363,
+     120.28362
+    ],
+    [
+     14.79463,
+     120.27933
+    ],
+    [
+     14.79313,
+     120.27418
+    ],
+    [
+     14.79048,
+     120.27117
+    ],
+    [
+     14.78716,
+     120.27092
+    ],
+    [
+     14.78616,
+     120.26731
+    ],
+    [
+     14.7865,
+     120.26302
+    ],
+    [
+     14.78757,
+     120.26002
+    ],
+    [
+     14.78815,
+     120.25804
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "SGC",
@@ -57021,6 +65028,78 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "SKB",
+   "points": [
+    [
+     17.30562,
+     -62.72929
+    ],
+    [
+     17.30726,
+     -62.728
+    ],
+    [
+     17.313,
+     -62.71899
+    ],
+    [
+     17.31849,
+     -62.70998
+    ],
+    [
+     17.31791,
+     -62.70826
+    ],
+    [
+     17.31628,
+     -62.70783
+    ],
+    [
+     17.31423,
+     -62.70998
+    ],
+    [
+     17.31259,
+     -62.71298
+    ],
+    [
+     17.30849,
+     -62.71427
+    ],
+    [
+     17.30603,
+     -62.71341
+    ],
+    [
+     17.3048,
+     -62.71556
+    ],
+    [
+     17.30685,
+     -62.71813
+    ],
+    [
+     17.30726,
+     -62.72071
+    ],
+    [
+     17.30357,
+     -62.72714
+    ],
+    [
+     17.30398,
+     -62.72886
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "SKD",
    "points": [
     [
@@ -57951,6 +66030,78 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "SNU",
+   "points": [
+    [
+     22.49066,
+     -79.95985
+    ],
+    [
+     22.49264,
+     -79.95213
+    ],
+    [
+     22.49423,
+     -79.9444
+    ],
+    [
+     22.49819,
+     -79.93496
+    ],
+    [
+     22.49899,
+     -79.93239
+    ],
+    [
+     22.49819,
+     -79.92852
+    ],
+    [
+     22.49621,
+     -79.92681
+    ],
+    [
+     22.49423,
+     -79.92552
+    ],
+    [
+     22.49225,
+     -79.92724
+    ],
+    [
+     22.49225,
+     -79.9341
+    ],
+    [
+     22.49066,
+     -79.93925
+    ],
+    [
+     22.48749,
+     -79.94698
+    ],
+    [
+     22.48669,
+     -79.9547
+    ],
+    [
+     22.48709,
+     -79.95942
+    ],
+    [
+     22.48868,
+     -79.96071
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "SOC",
    "points": [
     [
@@ -57998,6 +66149,110 @@
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")",
    "unsure": "fence not visible; strip width guessed"
+  },
+  {
+   "id": "SOF",
+   "points": [
+    [
+     42.69756,
+     23.38895
+    ],
+    [
+     42.69946,
+     23.39153
+    ],
+    [
+     42.69977,
+     23.40011
+    ],
+    [
+     42.69946,
+     23.4147
+    ],
+    [
+     42.6982,
+     23.42758
+    ],
+    [
+     42.69693,
+     23.44045
+    ],
+    [
+     42.6963,
+     23.44474
+    ],
+    [
+     42.6941,
+     23.44517
+    ],
+    [
+     42.69346,
+     23.44045
+    ],
+    [
+     42.69315,
+     23.42758
+    ],
+    [
+     42.69252,
+     23.42329
+    ],
+    [
+     42.69126,
+     23.41728
+    ],
+    [
+     42.6881,
+     23.41685
+    ],
+    [
+     42.68747,
+     23.41213
+    ],
+    [
+     42.68369,
+     23.40955
+    ],
+    [
+     42.68716,
+     23.40612
+    ],
+    [
+     42.68873,
+     23.40011
+    ],
+    [
+     42.68684,
+     23.39754
+    ],
+    [
+     42.68747,
+     23.39453
+    ],
+    [
+     42.68905,
+     23.39024
+    ],
+    [
+     42.69094,
+     23.38724
+    ],
+    [
+     42.69315,
+     23.38852
+    ],
+    [
+     42.69517,
+     23.3881
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "SPU",
@@ -58285,6 +66540,79 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "SRX",
+   "points": [
+    [
+     31.0751,
+     16.58208
+    ],
+    [
+     31.08539,
+     16.58594
+    ],
+    [
+     31.08833,
+     16.59238
+    ],
+    [
+     31.08686,
+     16.60354
+    ],
+    [
+     31.08392,
+     16.61384
+    ],
+    [
+     31.08025,
+     16.62586
+    ],
+    [
+     31.07143,
+     16.63101
+    ],
+    [
+     31.05305,
+     16.63101
+    ],
+    [
+     31.04128,
+     16.63015
+    ],
+    [
+     31.03613,
+     16.62242
+    ],
+    [
+     31.0354,
+     16.60955
+    ],
+    [
+     31.03393,
+     16.59667
+    ],
+    [
+     31.03687,
+     16.58809
+    ],
+    [
+     31.04569,
+     16.58466
+    ],
+    [
+     31.0604,
+     16.5838
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "airbase fence extent unclear"
+  },
+  {
    "id": "SSG",
    "points": [
     [
@@ -58400,6 +66728,78 @@
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")",
    "unsure": "desert: fence line faint"
+  },
+  {
+   "id": "STI",
+   "points": [
+    [
+     19.4087,
+     -70.61877
+    ],
+    [
+     19.40999,
+     -70.61808
+    ],
+    [
+     19.40983,
+     -70.61516
+    ],
+    [
+     19.40829,
+     -70.60829
+    ],
+    [
+     19.40635,
+     -70.59971
+    ],
+    [
+     19.40473,
+     -70.59285
+    ],
+    [
+     19.40384,
+     -70.59096
+    ],
+    [
+     19.40206,
+     -70.59147
+    ],
+    [
+     19.40165,
+     -70.59542
+    ],
+    [
+     19.40084,
+     -70.59971
+    ],
+    [
+     19.4006,
+     -70.60486
+    ],
+    [
+     19.40165,
+     -70.60915
+    ],
+    [
+     19.40368,
+     -70.61087
+    ],
+    [
+     19.40546,
+     -70.6143
+    ],
+    [
+     19.40675,
+     -70.61774
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "STL",
@@ -58961,6 +67361,158 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "SUV",
+   "points": [
+    [
+     -18.039,
+     178.55161
+    ],
+    [
+     -18.04251,
+     178.56243
+    ],
+    [
+     -18.04602,
+     178.57264
+    ],
+    [
+     -18.04912,
+     178.57144
+    ],
+    [
+     -18.047,
+     178.565
+    ],
+    [
+     -18.04904,
+     178.56457
+    ],
+    [
+     -18.04904,
+     178.55942
+    ],
+    [
+     -18.04521,
+     178.55857
+    ],
+    [
+     -18.04211,
+     178.55041
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "SVG",
+   "points": [
+    [
+     58.89595,
+     5.63835
+    ],
+    [
+     58.894,
+     5.63072
+    ],
+    [
+     58.88926,
+     5.62934
+    ],
+    [
+     58.88846,
+     5.62428
+    ],
+    [
+     58.88567,
+     5.62187
+    ],
+    [
+     58.88558,
+     5.61853
+    ],
+    [
+     58.88194,
+     5.6163
+    ],
+    [
+     58.88323,
+     5.60505
+    ],
+    [
+     58.8803,
+     5.60471
+    ],
+    [
+     58.87914,
+     5.61303
+    ],
+    [
+     58.87759,
+     5.61363
+    ],
+    [
+     58.87506,
+     5.61939
+    ],
+    [
+     58.87129,
+     5.62205
+    ],
+    [
+     58.87134,
+     5.62471
+    ],
+    [
+     58.86725,
+     5.63072
+    ],
+    [
+     58.86814,
+     5.63844
+    ],
+    [
+     58.87391,
+     5.64745
+    ],
+    [
+     58.87875,
+     5.64934
+    ],
+    [
+     58.88154,
+     5.64453
+    ],
+    [
+     58.88425,
+     5.64513
+    ],
+    [
+     58.88646,
+     5.64256
+    ],
+    [
+     58.89183,
+     5.6417
+    ],
+    [
+     58.89347,
+     5.64453
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "SVO",
    "points": [
     [
@@ -59233,6 +67785,50 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "SWA",
+   "points": [
+    [
+     23.54165,
+     116.49178
+    ],
+    [
+     23.5647,
+     116.51195
+    ],
+    [
+     23.56203,
+     116.51564
+    ],
+    [
+     23.55526,
+     116.51032
+    ],
+    [
+     23.55117,
+     116.51384
+    ],
+    [
+     23.54472,
+     116.50817
+    ],
+    [
+     23.54731,
+     116.50328
+    ],
+    [
+     23.53897,
+     116.49547
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "SXB",
@@ -60512,6 +69108,86 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "TBU",
+   "points": [
+    [
+     -21.23383,
+     -175.16221
+    ],
+    [
+     -21.23287,
+     -175.16075
+    ],
+    [
+     -21.23487,
+     -175.15603
+    ],
+    [
+     -21.23783,
+     -175.15002
+    ],
+    [
+     -21.23903,
+     -175.14359
+    ],
+    [
+     -21.23687,
+     -175.14015
+    ],
+    [
+     -21.23687,
+     -175.13732
+    ],
+    [
+     -21.23823,
+     -175.135
+    ],
+    [
+     -21.24439,
+     -175.135
+    ],
+    [
+     -21.24519,
+     -175.13715
+    ],
+    [
+     -21.25239,
+     -175.13732
+    ],
+    [
+     -21.25263,
+     -175.14015
+    ],
+    [
+     -21.24943,
+     -175.14041
+    ],
+    [
+     -21.24679,
+     -175.14402
+    ],
+    [
+     -21.24263,
+     -175.15002
+    ],
+    [
+     -21.23927,
+     -175.15603
+    ],
+    [
+     -21.23607,
+     -175.16118
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "TBZ",
    "points": [
     [
@@ -61407,6 +70083,119 @@
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "TJU",
+   "points": [
+    [
+     38.00444,
+     69.81079
+    ],
+    [
+     38.00376,
+     69.81363
+    ],
+    [
+     37.99733,
+     69.81277
+    ],
+    [
+     37.98989,
+     69.81277
+    ],
+    [
+     37.98381,
+     69.81139
+    ],
+    [
+     37.97907,
+     69.80736
+    ],
+    [
+     37.97433,
+     69.80479
+    ],
+    [
+     37.97264,
+     69.80109
+    ],
+    [
+     37.97366,
+     69.79878
+    ],
+    [
+     37.97975,
+     69.79964
+    ],
+    [
+     37.98719,
+     69.80221
+    ],
+    [
+     37.99531,
+     69.80521
+    ],
+    [
+     38.00207,
+     69.80822
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "TKK",
+   "points": [
+    [
+     7.45667,
+     151.83529
+    ],
+    [
+     7.46296,
+     151.84199
+    ],
+    [
+     7.46935,
+     151.8486
+    ],
+    [
+     7.46713,
+     151.85074
+    ],
+    [
+     7.46211,
+     151.84559
+    ],
+    [
+     7.46041,
+     151.84688
+    ],
+    [
+     7.45871,
+     151.84516
+    ],
+    [
+     7.45913,
+     151.84319
+    ],
+    [
+     7.45445,
+     151.83744
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "2016 picture blank (no imagery); traced from runway data only"
+  },
+  {
    "id": "TKS",
    "points": [
     [
@@ -61701,6 +70490,82 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "TLM",
+   "points": [
+    [
+     35.00907,
+     -1.47419
+    ],
+    [
+     35.01048,
+     -1.47273
+    ],
+    [
+     35.01294,
+     -1.46458
+    ],
+    [
+     35.0154,
+     -1.456
+    ],
+    [
+     35.018,
+     -1.44741
+    ],
+    [
+     35.01906,
+     -1.44329
+    ],
+    [
+     35.01821,
+     -1.4414
+    ],
+    [
+     35.01505,
+     -1.44055
+    ],
+    [
+     35.01153,
+     -1.44037
+    ],
+    [
+     35.00872,
+     -1.44158
+    ],
+    [
+     35.00696,
+     -1.44355
+    ],
+    [
+     35.00675,
+     -1.44913
+    ],
+    [
+     35.00732,
+     -1.456
+    ],
+    [
+     35.00717,
+     -1.46286
+    ],
+    [
+     35.00717,
+     -1.46887
+    ],
+    [
+     35.00767,
+     -1.47273
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "TLS",
@@ -62091,6 +70956,174 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "TMR",
+   "points": [
+    [
+     22.80668,
+     5.42153
+    ],
+    [
+     22.81103,
+     5.41724
+    ],
+    [
+     22.81301,
+     5.4181
+    ],
+    [
+     22.81301,
+     5.42239
+    ],
+    [
+     22.81419,
+     5.42668
+    ],
+    [
+     22.81894,
+     5.43097
+    ],
+    [
+     22.81894,
+     5.43956
+    ],
+    [
+     22.81578,
+     5.44557
+    ],
+    [
+     22.81736,
+     5.44986
+    ],
+    [
+     22.82527,
+     5.45501
+    ],
+    [
+     22.82685,
+     5.45844
+    ],
+    [
+     22.82527,
+     5.45887
+    ],
+    [
+     22.81103,
+     5.45329
+    ],
+    [
+     22.80154,
+     5.44814
+    ],
+    [
+     22.796,
+     5.44557
+    ],
+    [
+     22.796,
+     5.44342
+    ],
+    [
+     22.80074,
+     5.44385
+    ],
+    [
+     22.80628,
+     5.44642
+    ],
+    [
+     22.80786,
+     5.43956
+    ],
+    [
+     22.80786,
+     5.43097
+    ],
+    [
+     22.80589,
+     5.42325
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "TMS",
+   "points": [
+    [
+     0.381,
+     6.7017
+    ],
+    [
+     0.38169,
+     6.70341
+    ],
+    [
+     0.38272,
+     6.70856
+    ],
+    [
+     0.38289,
+     6.71457
+    ],
+    [
+     0.38186,
+     6.71672
+    ],
+    [
+     0.381,
+     6.71929
+    ],
+    [
+     0.37929,
+     6.72058
+    ],
+    [
+     0.37628,
+     6.7223
+    ],
+    [
+     0.375,
+     6.72144
+    ],
+    [
+     0.37585,
+     6.71886
+    ],
+    [
+     0.37457,
+     6.71457
+    ],
+    [
+     0.37431,
+     6.71114
+    ],
+    [
+     0.37585,
+     6.70856
+    ],
+    [
+     0.378,
+     6.70599
+    ],
+    [
+     0.37929,
+     6.70213
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "TNA",
    "points": [
     [
@@ -62403,6 +71436,55 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "TOM",
+   "points": [
+    [
+     16.72765,
+     -3.01818
+    ],
+    [
+     16.7316,
+     -3.00788
+    ],
+    [
+     16.73546,
+     -2.99801
+    ],
+    [
+     16.73324,
+     -2.99698
+    ],
+    [
+     16.73036,
+     -3.00445
+    ],
+    [
+     16.72782,
+     -3.00488
+    ],
+    [
+     16.72716,
+     -3.0096
+    ],
+    [
+     16.72847,
+     -3.01003
+    ],
+    [
+     16.72543,
+     -3.01715
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "faint desert picture; apron placement guessed"
+  },
+  {
    "id": "TOS",
    "points": [
     [
@@ -62599,6 +71681,114 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "TRD",
+   "points": [
+    [
+     63.45786,
+     10.88387
+    ],
+    [
+     63.4587,
+     10.88602
+    ],
+    [
+     63.45897,
+     10.8946
+    ],
+    [
+     63.45901,
+     10.90748
+    ],
+    [
+     63.45928,
+     10.91434
+    ],
+    [
+     63.46062,
+     10.91778
+    ],
+    [
+     63.46407,
+     10.91881
+    ],
+    [
+     63.46637,
+     10.91992
+    ],
+    [
+     63.46618,
+     10.93237
+    ],
+    [
+     63.46292,
+     10.9358
+    ],
+    [
+     63.46196,
+     10.94181
+    ],
+    [
+     63.45947,
+     10.94567
+    ],
+    [
+     63.45801,
+     10.94936
+    ],
+    [
+     63.45709,
+     10.9491
+    ],
+    [
+     63.45602,
+     10.94352
+    ],
+    [
+     63.4541,
+     10.93494
+    ],
+    [
+     63.45257,
+     10.92636
+    ],
+    [
+     63.44988,
+     10.91778
+    ],
+    [
+     63.44758,
+     10.91434
+    ],
+    [
+     63.44758,
+     10.90833
+    ],
+    [
+     63.45218,
+     10.90748
+    ],
+    [
+     63.45583,
+     10.90662
+    ],
+    [
+     63.45571,
+     10.89546
+    ],
+    [
+     63.4564,
+     10.88688
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "TRF",
@@ -63009,6 +72199,59 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "TRW",
+   "points": [
+    [
+     1.38445,
+     173.13727
+    ],
+    [
+     1.38325,
+     173.14714
+    ],
+    [
+     1.38196,
+     173.15701
+    ],
+    [
+     1.37887,
+     173.15667
+    ],
+    [
+     1.37922,
+     173.15358
+    ],
+    [
+     1.37767,
+     173.15341
+    ],
+    [
+     1.37802,
+     173.15015
+    ],
+    [
+     1.37973,
+     173.15015
+    ],
+    [
+     1.38008,
+     173.14714
+    ],
+    [
+     1.38136,
+     173.13693
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "2016 picture blank (no imagery); traced from runway data, apron side guessed"
+  },
+  {
    "id": "TRZ",
    "points": [
     [
@@ -63307,6 +72550,82 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "TSR",
+   "points": [
+    [
+     45.81594,
+     21.3153
+    ],
+    [
+     45.81624,
+     21.31658
+    ],
+    [
+     45.81115,
+     21.33589
+    ],
+    [
+     45.80667,
+     21.35306
+    ],
+    [
+     45.80487,
+     21.35907
+    ],
+    [
+     45.80368,
+     21.35907
+    ],
+    [
+     45.80338,
+     21.35478
+    ],
+    [
+     45.80457,
+     21.34448
+    ],
+    [
+     45.80577,
+     21.33589
+    ],
+    [
+     45.80457,
+     21.3316
+    ],
+    [
+     45.80457,
+     21.32731
+    ],
+    [
+     45.80607,
+     21.32474
+    ],
+    [
+     45.80876,
+     21.32302
+    ],
+    [
+     45.80996,
+     21.31873
+    ],
+    [
+     45.81086,
+     21.31444
+    ],
+    [
+     45.81295,
+     21.31401
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "TTU",
    "points": [
     [
@@ -63430,6 +72749,79 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "TUK",
+   "points": [
+    [
+     25.98213,
+     63.01368
+    ],
+    [
+     25.98336,
+     63.01419
+    ],
+    [
+     25.98429,
+     63.02037
+    ],
+    [
+     25.98537,
+     63.02981
+    ],
+    [
+     25.98776,
+     63.0305
+    ],
+    [
+     25.98953,
+     63.03282
+    ],
+    [
+     25.9893,
+     63.03926
+    ],
+    [
+     25.98722,
+     63.04097
+    ],
+    [
+     25.98676,
+     63.04423
+    ],
+    [
+     25.98583,
+     63.04526
+    ],
+    [
+     25.98475,
+     63.04423
+    ],
+    [
+     25.98413,
+     63.03926
+    ],
+    [
+     25.9829,
+     63.02896
+    ],
+    [
+     25.98197,
+     63.02037
+    ],
+    [
+     25.98135,
+     63.01522
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "apron/terminal unclear"
   },
   {
    "id": "TUL",
@@ -63856,6 +73248,306 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "TYS",
+   "points": [
+    [
+     35.82472,
+     -83.98163
+    ],
+    [
+     35.82333,
+     -83.98056
+    ],
+    [
+     35.8195,
+     -83.98163
+    ],
+    [
+     35.81707,
+     -83.98206
+    ],
+    [
+     35.81359,
+     -83.98378
+    ],
+    [
+     35.81185,
+     -83.98506
+    ],
+    [
+     35.80871,
+     -83.98592
+    ],
+    [
+     35.80663,
+     -83.98721
+    ],
+    [
+     35.80384,
+     -83.98807
+    ],
+    [
+     35.80106,
+     -83.99107
+    ],
+    [
+     35.79949,
+     -83.9915
+    ],
+    [
+     35.79827,
+     -83.99493
+    ],
+    [
+     35.79897,
+     -84.00094
+    ],
+    [
+     35.79949,
+     -84.00481
+    ],
+    [
+     35.8021,
+     -84.00824
+    ],
+    [
+     35.80558,
+     -84.01253
+    ],
+    [
+     35.80871,
+     -84.01253
+    ],
+    [
+     35.81011,
+     -84.00781
+    ],
+    [
+     35.81185,
+     -84.00609
+    ],
+    [
+     35.81498,
+     -84.00266
+    ],
+    [
+     35.81846,
+     -83.99751
+    ],
+    [
+     35.82194,
+     -83.99493
+    ],
+    [
+     35.82437,
+     -83.98978
+    ],
+    [
+     35.82542,
+     -83.98506
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "TIGER K2451, corrected by eye",
+   "seedCredit": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "TZL",
+   "points": [
+    [
+     44.45645,
+     18.70345
+    ],
+    [
+     44.46165,
+     18.70388
+    ],
+    [
+     44.46257,
+     18.70645
+    ],
+    [
+     44.4641,
+     18.70817
+    ],
+    [
+     44.46502,
+     18.70903
+    ],
+    [
+     44.46533,
+     18.71246
+    ],
+    [
+     44.46594,
+     18.71675
+    ],
+    [
+     44.46563,
+     18.72104
+    ],
+    [
+     44.46594,
+     18.72534
+    ],
+    [
+     44.46563,
+     18.72963
+    ],
+    [
+     44.46533,
+     18.73392
+    ],
+    [
+     44.46484,
+     18.73907
+    ],
+    [
+     44.4641,
+     18.7425
+    ],
+    [
+     44.46165,
+     18.74379
+    ],
+    [
+     44.45859,
+     18.74379
+    ],
+    [
+     44.45645,
+     18.74293
+    ],
+    [
+     44.45626,
+     18.73907
+    ],
+    [
+     44.45663,
+     18.72963
+    ],
+    [
+     44.45687,
+     18.72104
+    ],
+    [
+     44.45706,
+     18.71332
+    ],
+    [
+     44.45675,
+     18.71075
+    ],
+    [
+     44.45491,
+     18.71032
+    ],
+    [
+     44.45479,
+     18.70817
+    ],
+    [
+     44.45583,
+     18.70388
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "UBN",
+   "points": [
+    [
+     47.65247,
+     106.79016
+    ],
+    [
+     47.65449,
+     106.79145
+    ],
+    [
+     47.65478,
+     106.79875
+    ],
+    [
+     47.65565,
+     106.80733
+    ],
+    [
+     47.65536,
+     106.81591
+    ],
+    [
+     47.65421,
+     106.82449
+    ],
+    [
+     47.65305,
+     106.83308
+    ],
+    [
+     47.65074,
+     106.84166
+    ],
+    [
+     47.64842,
+     106.84595
+    ],
+    [
+     47.64438,
+     106.8481
+    ],
+    [
+     47.64033,
+     106.84724
+    ],
+    [
+     47.64004,
+     106.84166
+    ],
+    [
+     47.64177,
+     106.83308
+    ],
+    [
+     47.64351,
+     106.82449
+    ],
+    [
+     47.64524,
+     106.81591
+    ],
+    [
+     47.6468,
+     106.80733
+    ],
+    [
+     47.64831,
+     106.79875
+    ],
+    [
+     47.64929,
+     106.79188
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "UET",
@@ -65165,6 +74857,58 @@
    "review": "batch5, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "VAV",
+   "points": [
+    [
+     -18.58367,
+     -173.97118
+    ],
+    [
+     -18.58432,
+     -173.96302
+    ],
+    [
+     -18.58529,
+     -173.95376
+    ],
+    [
+     -18.58668,
+     -173.95358
+    ],
+    [
+     -18.58627,
+     -173.96131
+    ],
+    [
+     -18.58586,
+     -173.96629
+    ],
+    [
+     -18.58676,
+     -173.96663
+    ],
+    [
+     -18.58684,
+     -173.96946
+    ],
+    [
+     -18.58546,
+     -173.97006
+    ],
+    [
+     -18.58513,
+     -173.97126
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "VBY",
    "points": [
     [
@@ -66005,6 +75749,154 @@
    "review": "batch3, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "VLI",
+   "points": [
+    [
+     -17.69272,
+     168.30565
+    ],
+    [
+     -17.69149,
+     168.30677
+    ],
+    [
+     -17.69166,
+     168.30848
+    ],
+    [
+     -17.6937,
+     168.3132
+    ],
+    [
+     -17.69615,
+     168.31835
+    ],
+    [
+     -17.69877,
+     168.32522
+    ],
+    [
+     -17.70065,
+     168.32908
+    ],
+    [
+     -17.70351,
+     168.33123
+    ],
+    [
+     -17.70637,
+     168.32994
+    ],
+    [
+     -17.70662,
+     168.3278
+    ],
+    [
+     -17.70474,
+     168.32436
+    ],
+    [
+     -17.70286,
+     168.32007
+    ],
+    [
+     -17.70106,
+     168.31578
+    ],
+    [
+     -17.69926,
+     168.31235
+    ],
+    [
+     -17.69656,
+     168.30848
+    ],
+    [
+     -17.69411,
+     168.306
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "VLN",
+   "points": [
+    [
+     10.15221,
+     -67.94298
+    ],
+    [
+     10.15306,
+     -67.94126
+    ],
+    [
+     10.15322,
+     -67.93268
+    ],
+    [
+     10.15348,
+     -67.92495
+    ],
+    [
+     10.15576,
+     -67.92324
+    ],
+    [
+     10.15576,
+     -67.91809
+    ],
+    [
+     10.1539,
+     -67.91723
+    ],
+    [
+     10.15306,
+     -67.91379
+    ],
+    [
+     10.15052,
+     -67.91294
+    ],
+    [
+     10.14841,
+     -67.91379
+    ],
+    [
+     10.14756,
+     -67.91809
+    ],
+    [
+     10.14841,
+     -67.92238
+    ],
+    [
+     10.14858,
+     -67.93268
+    ],
+    [
+     10.14883,
+     -67.94126
+    ],
+    [
+     10.14968,
+     -67.9428
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "VNO",
    "points": [
     [
@@ -66251,6 +76143,86 @@
    "unsure": "closed runways' inclusion unclear"
   },
   {
+   "id": "VRA",
+   "points": [
+    [
+     23.02522,
+     -81.45109
+    ],
+    [
+     23.02719,
+     -81.45023
+    ],
+    [
+     23.03114,
+     -81.44466
+    ],
+    [
+     23.0343,
+     -81.44122
+    ],
+    [
+     23.03825,
+     -81.44208
+    ],
+    [
+     23.04141,
+     -81.43865
+    ],
+    [
+     23.0422,
+     -81.4335
+    ],
+    [
+     23.04457,
+     -81.42835
+    ],
+    [
+     23.04891,
+     -81.41891
+    ],
+    [
+     23.04891,
+     -81.41633
+    ],
+    [
+     23.04694,
+     -81.4159
+    ],
+    [
+     23.04457,
+     -81.41891
+    ],
+    [
+     23.03825,
+     -81.42835
+    ],
+    [
+     23.03272,
+     -81.43693
+    ],
+    [
+     23.0264,
+     -81.44551
+    ],
+    [
+     23.02403,
+     -81.44895
+    ],
+    [
+     23.02403,
+     -81.45066
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "VRN",
    "points": [
     [
@@ -66487,6 +76459,78 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "VTE",
+   "points": [
+    [
+     17.99862,
+     102.55132
+    ],
+    [
+     18.00026,
+     102.55389
+    ],
+    [
+     17.99454,
+     102.56119
+    ],
+    [
+     17.98883,
+     102.56805
+    ],
+    [
+     17.98393,
+     102.57406
+    ],
+    [
+     17.98026,
+     102.57664
+    ],
+    [
+     17.97577,
+     102.57595
+    ],
+    [
+     17.97209,
+     102.57509
+    ],
+    [
+     17.97209,
+     102.56977
+    ],
+    [
+     17.97536,
+     102.56822
+    ],
+    [
+     17.97675,
+     102.56376
+    ],
+    [
+     17.98026,
+     102.56247
+    ],
+    [
+     17.98679,
+     102.55775
+    ],
+    [
+     17.9925,
+     102.5526
+    ],
+    [
+     17.99618,
+     102.55071
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
    "id": "VTZ",
    "points": [
     [
@@ -66550,6 +76594,78 @@
    "approved": "blanket 2026-10-31",
    "review": "batch7, no review page (owner: \"I don't need to review it\")",
    "unsure": "2023 scene shows only early earthworks, no runway yet: traced the planned runway corridor plus the graded terminal block"
+  },
+  {
+   "id": "VVI",
+   "points": [
+    [
+     -17.63087,
+     -63.14496
+    ],
+    [
+     -17.63005,
+     -63.14367
+    ],
+    [
+     -17.63332,
+     -63.13981
+    ],
+    [
+     -17.63987,
+     -63.13294
+    ],
+    [
+     -17.64723,
+     -63.12693
+    ],
+    [
+     -17.65459,
+     -63.12436
+    ],
+    [
+     -17.65868,
+     -63.12522
+    ],
+    [
+     -17.65909,
+     -63.12736
+    ],
+    [
+     -17.65459,
+     -63.13208
+    ],
+    [
+     -17.65214,
+     -63.13552
+    ],
+    [
+     -17.64886,
+     -63.14067
+    ],
+    [
+     -17.64477,
+     -63.14281
+    ],
+    [
+     -17.6415,
+     -63.14067
+    ],
+    [
+     -17.6366,
+     -63.14238
+    ],
+    [
+     -17.63291,
+     -63.14539
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "VVO",
@@ -67430,6 +77546,99 @@
    "review": "batch7, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "XBJ",
+   "points": [
+    [
+     32.8949,
+     59.25387
+    ],
+    [
+     32.90066,
+     59.2549
+    ],
+    [
+     32.90174,
+     59.25644
+    ],
+    [
+     32.9021,
+     59.26073
+    ],
+    [
+     32.89958,
+     59.26417
+    ],
+    [
+     32.89814,
+     59.27017
+    ],
+    [
+     32.89706,
+     59.28047
+    ],
+    [
+     32.8949,
+     59.29163
+    ],
+    [
+     32.89309,
+     59.30279
+    ],
+    [
+     32.89216,
+     59.30923
+    ],
+    [
+     32.89057,
+     59.30966
+    ],
+    [
+     32.89,
+     59.30279
+    ],
+    [
+     32.89021,
+     59.29592
+    ],
+    [
+     32.88697,
+     59.29249
+    ],
+    [
+     32.88639,
+     59.28562
+    ],
+    [
+     32.88769,
+     59.27618
+    ],
+    [
+     32.88783,
+     59.27017
+    ],
+    [
+     32.88805,
+     59.26159
+    ],
+    [
+     32.88841,
+     59.25773
+    ],
+    [
+     32.89129,
+     59.25515
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "east runway extension faint"
+  },
+  {
    "id": "XIY",
    "points": [
     [
@@ -67648,6 +77857,115 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "XPL",
+   "points": [
+    [
+     14.39694,
+     -87.62659
+    ],
+    [
+     14.39752,
+     -87.6223
+    ],
+    [
+     14.39819,
+     -87.61767
+    ],
+    [
+     14.39386,
+     -87.61544
+    ],
+    [
+     14.38846,
+     -87.61389
+    ],
+    [
+     14.38197,
+     -87.61114
+    ],
+    [
+     14.37449,
+     -87.60986
+    ],
+    [
+     14.37033,
+     -87.61114
+    ],
+    [
+     14.36867,
+     -87.61415
+    ],
+    [
+     14.36784,
+     -87.62144
+    ],
+    [
+     14.37283,
+     -87.62359
+    ],
+    [
+     14.37948,
+     -87.62488
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2023-01-21 (contains modified Copernicus Sentinel data 2023)",
+   "imageryDate": "2023-01-21",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "YAP",
+   "points": [
+    [
+     9.49771,
+     138.07362
+    ],
+    [
+     9.5005,
+     138.08195
+    ],
+    [
+     9.50338,
+     138.09027
+    ],
+    [
+     9.50016,
+     138.09139
+    ],
+    [
+     9.49779,
+     138.08435
+    ],
+    [
+     9.4961,
+     138.08392
+    ],
+    [
+     9.4955,
+     138.08049
+    ],
+    [
+     9.49652,
+     138.08006
+    ],
+    [
+     9.49449,
+     138.07474
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "2016 picture blank (no imagery); traced from runway data, apron side guessed"
   },
   {
    "id": "YCU",
@@ -67920,6 +78238,82 @@
    "reviewer": "owner",
    "approved": "blanket 2026-10-31",
    "review": "batch4, no review page (owner: \"I don't need to review it\")"
+  },
+  {
+   "id": "YIA",
+   "points": [
+    [
+     -7.89304,
+     110.03544
+    ],
+    [
+     -7.89499,
+     110.04188
+    ],
+    [
+     -7.89627,
+     110.04875
+    ],
+    [
+     -7.89542,
+     110.05347
+    ],
+    [
+     -7.89244,
+     110.05733
+    ],
+    [
+     -7.89202,
+     110.06463
+    ],
+    [
+     -7.89797,
+     110.06505
+    ],
+    [
+     -7.90052,
+     110.06763
+    ],
+    [
+     -7.90392,
+     110.0745
+    ],
+    [
+     -7.9063,
+     110.08179
+    ],
+    [
+     -7.91412,
+     110.08179
+    ],
+    [
+     -7.9137,
+     110.07965
+    ],
+    [
+     -7.9114,
+     110.0702
+    ],
+    [
+     -7.90749,
+     110.05733
+    ],
+    [
+     -7.90358,
+     110.04446
+    ],
+    [
+     -7.90069,
+     110.03544
+    ]
+   ],
+   "imagery": "Imagery: Copernicus Sentinel-2 L2A 10 m, 2024-07-21 (contains modified Copernicus Sentinel data 2024)",
+   "imageryDate": "2024-07-21",
+   "seed": "OurAirports runways, retraced by eye on a recent Sentinel-2 scene",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "YIW",
@@ -68667,6 +79061,114 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "YWG",
+   "points": [
+    [
+     49.9147,
+     -97.25671
+    ],
+    [
+     49.91912,
+     -97.25499
+    ],
+    [
+     49.92354,
+     -97.24899
+    ],
+    [
+     49.92907,
+     -97.24469
+    ],
+    [
+     49.93183,
+     -97.24126
+    ],
+    [
+     49.93238,
+     -97.23439
+    ],
+    [
+     49.93183,
+     -97.22924
+    ],
+    [
+     49.92962,
+     -97.22581
+    ],
+    [
+     49.92575,
+     -97.22409
+    ],
+    [
+     49.92078,
+     -97.22238
+    ],
+    [
+     49.9147,
+     -97.22066
+    ],
+    [
+     49.91249,
+     -97.21551
+    ],
+    [
+     49.91028,
+     -97.21594
+    ],
+    [
+     49.90807,
+     -97.21894
+    ],
+    [
+     49.90144,
+     -97.22066
+    ],
+    [
+     49.89425,
+     -97.22238
+    ],
+    [
+     49.89231,
+     -97.22924
+    ],
+    [
+     49.89231,
+     -97.23869
+    ],
+    [
+     49.89397,
+     -97.24469
+    ],
+    [
+     49.89535,
+     -97.24899
+    ],
+    [
+     49.89812,
+     -97.25328
+    ],
+    [
+     49.90254,
+     -97.25843
+    ],
+    [
+     49.90586,
+     -97.25971
+    ],
+    [
+     49.91028,
+     -97.25671
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "YXE",
@@ -69530,6 +80032,75 @@
    "review": "batch6, no review page (owner: \"I don't need to review it\")"
   },
   {
+   "id": "ZNZ",
+   "points": [
+    [
+     -6.20018,
+     39.22041
+    ],
+    [
+     -6.19932,
+     39.22727
+    ],
+    [
+     -6.2053,
+     39.22856
+    ],
+    [
+     -6.21383,
+     39.22856
+    ],
+    [
+     -6.22407,
+     39.22899
+    ],
+    [
+     -6.23089,
+     39.23028
+    ],
+    [
+     -6.23857,
+     39.23071
+    ],
+    [
+     -6.24113,
+     39.22813
+    ],
+    [
+     -6.24113,
+     39.22298
+    ],
+    [
+     -6.23943,
+     39.22041
+    ],
+    [
+     -6.23089,
+     39.21955
+    ],
+    [
+     -6.22407,
+     39.21869
+    ],
+    [
+     -6.21639,
+     39.21912
+    ],
+    [
+     -6.207,
+     39.21955
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")",
+   "unsure": "east fence among houses unclear"
+  },
+  {
    "id": "ZQN",
    "points": [
     [
@@ -69681,6 +80252,66 @@
    "approved": "2026-10-31",
    "approvedAt": "2026-10-31T03:18:57Z/2026-10-31T03:25:50Z",
    "review": "batch 2, https://claude.ai/artifact/Dw72oJA6moS5tBmhw6EbX5"
+  },
+  {
+   "id": "ZSA",
+   "points": [
+    [
+     24.06511,
+     -74.53816
+    ],
+    [
+     24.06496,
+     -74.53129
+    ],
+    [
+     24.06441,
+     -74.52357
+    ],
+    [
+     24.06386,
+     -74.51498
+    ],
+    [
+     24.06362,
+     -74.50855
+    ],
+    [
+     24.06206,
+     -74.50769
+    ],
+    [
+     24.06025,
+     -74.50829
+    ],
+    [
+     24.06088,
+     -74.51498
+    ],
+    [
+     24.06127,
+     -74.52357
+    ],
+    [
+     24.06151,
+     -74.53215
+    ],
+    [
+     24.06143,
+     -74.53773
+    ],
+    [
+     24.06323,
+     -74.53859
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "blanket 2026-10-31",
+   "review": "batch8, no review page (owner: \"I don't need to review it\")"
   },
   {
    "id": "ZSE",
