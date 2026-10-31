@@ -2,9 +2,10 @@ import FernletUI
 import SwiftUI
 import WorldMapStore
 
-/// The airports on Your world (World-Airports-Spec §8): each found airport a small ink dot with its code on a
-/// paper plate (the tower sprite comes in a later round), and each airport only flown through a 9-pt ring
-/// (`.apring`), named only past World or once tapped. A ring is decoration to VoiceOver until it is named; only
+/// The airports on Your world (World-Airports-Spec §8): each found airport its tower (the mockup's `apTower` at 2×,
+/// `worldArcs`' `mark`, ringed in cream so it reads on fog and sea in both modes) standing on the airport with its
+/// code on a paper plate beside its foot, and each airport only flown through a 9-pt ring (`.apring`), named only
+/// past World or once tapped. A ring is decoration to VoiceOver until it is named; only
 /// the marks on screen are drawn, and none takes a touch (the map's tap names a ring).
 struct WorldFlightMarks: View {
     let camera: WorldViewCamera
@@ -16,8 +17,8 @@ struct WorldFlightMarks: View {
     static let maxOnScreen = 400
     /// The ring's diameter.
     private static let ring: CGFloat = 9
-    /// The found dot's diameter.
-    private static let dot: CGFloat = 11
+    /// The tower's points per pixel.
+    private static let towerScale: CGFloat = 2
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -35,11 +36,9 @@ struct WorldFlightMarks: View {
                 .accessibilityHidden(!named)
             }
             ForEach(onScreen(flights.found)) { item in
-                mark(item, size: Self.dot, named: true) {
-                    Circle().fill(WorldViewInk.frame).overlay(Circle().strokeBorder(WorldViewInk.paper, lineWidth: 2))
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(verbatim: WorldFlightCopy.foundSpoken(item.cluster)))
+                towerMark(item)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: WorldFlightCopy.foundSpoken(item.cluster)))
             }
         }
         .frame(width: camera.size.width, height: camera.size.height, alignment: .topLeading)
@@ -51,21 +50,36 @@ struct WorldFlightMarks: View {
                       @ViewBuilder shape: () -> some View) -> some View {
         HStack(spacing: 3) {
             shape().frame(width: size, height: size)
-            if named {
-                Text(verbatim: item.cluster.code)
-                    .font(.custom(FernletFontName.dmSansBold, size: 12, relativeTo: .caption))
-                    .lineLimit(1)
-                    .fixedSize()
-                    // Map art: it grows with Larger Text up to xxxLarge, then stays, so marks don't bury the map.
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .worldAtlasChip(cornerRadius: 5)
-            }
+            if named { codePlate(item.cluster.code) }
         }
         .alignmentGuide(.leading) { _ in size / 2 }
         .alignmentGuide(.top) { d in d[VerticalAlignment.center] }
         .offset(x: item.point.x, y: item.point.y)
+    }
+
+    /// A found airport: its tower standing on the airport (its foot on the point), the code's plate beside the foot.
+    private func towerMark(_ item: WorldAtlasPlaced<WorldFlightAirportMark>) -> some View {
+        let sprite = WorldFlightTower.sprite, width = CGFloat(sprite.width) * Self.towerScale
+        return HStack(alignment: .bottom, spacing: 3) {
+            WorldSpriteView(sprite: sprite, scale: Self.towerScale)
+            codePlate(item.cluster.code)
+        }
+        .alignmentGuide(.leading) { _ in width / 2 }
+        .alignmentGuide(.top) { d in d[VerticalAlignment.bottom] - Self.towerScale }
+        .offset(x: item.point.x, y: item.point.y)
+    }
+
+    /// The code on a paper plate (DM Sans Bold 12), growing with Larger Text up to xxxLarge.
+    private func codePlate(_ code: String) -> some View {
+        Text(verbatim: code)
+            .font(.custom(FernletFontName.dmSansBold, size: 12, relativeTo: .caption))
+            .lineLimit(1)
+            .fixedSize()
+            // Map art: it grows with Larger Text up to xxxLarge, then stays, so marks don't bury the map.
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .worldAtlasChip(cornerRadius: 5)
     }
 
     /// The marks on screen, with where, at most ``maxOnScreen``.
@@ -77,6 +91,40 @@ struct WorldFlightMarks: View {
                              point: camera.screenPoint(x: Double(mark.mercator.x), y: Double(mark.mercator.y)))
         }
         return Array(placed.filter { bounds.contains($0.point) }.prefix(Self.maxOnScreen))
+    }
+}
+
+/// A found airport's tower on Your world: the mockup's `K.SPR.apTower` (9 × 8, one ink), with a one-pixel cream
+/// halo round it (the mockup's `haloed()`), so the ink tower reads on fog, land and sea by day and by night.
+nonisolated enum WorldFlightTower {
+    /// The tower's rows, key for key (`k` is ink).
+    static let rows = ["..kkkkk..", ".k.....k.", ".kkkkkkk.", "...k.k...", "...k.k...", "...k.k...", "..kk.kk..",
+                       ".kkkkkkk."]
+    /// The halo's paper (the plates' `#FFF6E2`).
+    static let halo: UInt32 = 0xFFF6E2
+
+    /// The haloed tower: ink, and `O` (cream) on every clear pixel touching the ink, one pixel all round.
+    static let sprite = WorldSprite(rows: haloed(rows), palette: ["k": WorldSprite.ink, "O": halo])
+
+    /// `rows` padded by one clear pixel all round, every clear pixel next to (or corner to corner with) ink made
+    /// `O`. Bounded by the sprite's size.
+    static func haloed(_ rows: [String]) -> [String] {
+        let width = (rows.first?.count ?? 0) + 2
+        let blank = String(repeating: ".", count: width)
+        let padded = [blank] + rows.map { "." + $0 + "." } + [blank]
+        let grid = padded.map(Array.init)
+        return grid.indices.map { y in
+            String(grid[y].indices.map { x -> Character in
+                guard grid[y][x] == "." else { return grid[y][x] }
+                let near = (-1 ... 1).contains { dy in
+                    (-1 ... 1).contains { dx in
+                        let row = y + dy, col = x + dx
+                        return grid.indices.contains(row) && grid[row].indices.contains(col) && grid[row][col] != "."
+                    }
+                }
+                return near ? "O" : "."
+            })
+        }
     }
 }
 

@@ -11,7 +11,11 @@ import WorldMapStore
 ///   stays unattached, so a landmark's line plays once.
 /// - **New stamps** (``onNewStamp``): every first-visit country, continent, ocean and sea stamp, the two specials on
 ///   the visit that completes them, and each ``PassportEvent/newTrip(_:)``. The passport book attaches here (the
-///   next wave); nil drops them.
+///   next wave); nil drops them. Airport stamps never go there, whatever ``WorldLinePicker/stamps(for:in:)`` lists
+///   (their banners are Home's own: one banner and one haptic for a landing).
+/// - **Airport stamps** (``onAirportStamp``, World-Airports-Spec §3, §6.3): an airport's first visit and each new trip
+///   through it, by token and date, for Home's airport banner (``WorldAirportHomeState``). An airport's first visit
+///   also brings Sprout's new-airport line; a landing's line comes from Home through ``offer(_:)``.
 ///
 /// A decoy hears nothing: the keeper announces nothing in one, and the router checks again.
 @MainActor
@@ -24,6 +28,9 @@ final class WorldDiscoveryRouter {
     /// **The new-stamp hook** for the passport book: called once per stamp a discovery earns, in the order earned.
     /// Nil-safe: nothing listens yet.
     @ObservationIgnored var onNewStamp: ((PassportStamp) -> Void)?
+    /// **The airport hook** for Home's airport banner: called once per airport stamp (a first visit or a new trip),
+    /// with its token and date. Nil drops them.
+    @ObservationIgnored var onAirportStamp: ((_ token: String, _ at: Date) -> Void)?
     /// Whether ``listen(to:places:isDecoy:)`` is running (a second call returns at once).
     @ObservationIgnored private var isListening = false
 
@@ -50,12 +57,21 @@ final class WorldDiscoveryRouter {
                now: Date = Date()) {
         guard !isDecoy else { return }
         if let trip = event.trip {
-            onNewStamp?(trip)
+            if trip.kind == .airport { onAirportStamp?(trip.token, trip.date) } else { onNewStamp?(trip) }
             return
         }
         guard let discovery = event.discovery else { return }
-        for stamp in WorldLinePicker.stamps(for: discovery, in: book) { onNewStamp?(stamp) }
+        if discovery.kind == .airport { onAirportStamp?(discovery.token, discovery.at) }
+        // An airport's stamp is Home's alone (one banner, one haptic: "Landed at Heathrow" never doubles as the
+        // passport's "New stamp: Heathrow").
+        for stamp in WorldLinePicker.stamps(for: discovery, in: book) where stamp.kind != .airport { onNewStamp?(stamp) }
         guard let next = WorldLinePicker.line(for: discovery, in: book, places: places, isDecoy: isDecoy) else { return }
+        offer(next, now: now)
+    }
+
+    /// Puts `next` up as Sprout's line when it beats the waiting one (``WorldLinePicker/better(_:_:)``): a landing's
+    /// line from Home (World-Airports-Spec §6.3) beats the new-airport line of the same reading.
+    func offer(_ next: WorldDiscoveryLine, now: Date = Date()) {
         let chosen = WorldLinePicker.better(line, next)
         guard chosen != line else { return }
         line = chosen

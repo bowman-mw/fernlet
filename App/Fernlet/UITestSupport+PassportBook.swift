@@ -8,7 +8,8 @@ import WorldMapStore
 // with the contents open), `sprout` and `sproutHome` (page 1; the place from `FERNLET_UI_TEST_PASSPORT_PLACE`), `world`, `stamps`, `stamps2`, `new` (the Sea of Japan landing on page 5), `index`,
 // `continent` (North America A to Z), `fresh`, `full` (every stamp found), `decoy`, `flights` (the made-up flights'
 // last Flights page, `UITestSupport+AirportFlights`), `flightsImport` (the import summary over it), `flightsWorld` (Your
-// world with their arcs). Absent in Release.
+// world with their arcs), and the airports' `airportStamps`, `airportArt`, `airportIndex`, `airportNew` and
+// `airportWorld` (``PassportAirportDemoScenes``). Absent in Release.
 
 extension UITestSupport {
     #if DEBUG
@@ -51,6 +52,7 @@ enum PassportBookDemoScenes {
     static func open(_ scene: String, presenter: WorldPassportPresenter, atlas: WorldAtlas?) {
         let world = WorldAtlasMapDemo.content(atlas: atlas)
         let fog = WorldViewContent.make(atlas: atlas, book: PassportBook(), cells: [], start: nil)
+        if PassportAirportDemoScenes.open(scene, presenter: presenter, world: world) { return }
         switch scene {
         case "fresh":
             presenter.demo = PassportBookDemo(entries: [], world: fog)
@@ -127,8 +129,92 @@ enum PassportBookDemoScenes {
         return entries
     }
 
-    private static func date(_ year: Int, _ month: Int, _ day: Int, minute: Int = 0) -> Date {
+    static func date(_ year: Int, _ month: Int, _ day: Int, minute: Int = 0) -> Date {
         DateComponents(calendar: .current, year: year, month: month, day: day, hour: 10, minute: minute).date ?? .now
+    }
+}
+
+/// The airports' passport screenshots (World-Airports-Spec §4; the spec's data rule: the made-up Portland
+/// traveller, never anyone's real trips), in memory only:
+/// - `airportStamps`: the stamp page with Heathrow, Paris CDG and Helsinki's TRANSIT ticket mixed in by date (`ap-stamp`);
+/// - `airportArt`: a page of tickets: Denver's tent roof, the LAX Theme Building, Changi's Jewel, JFK's TWA Flight
+///   Center, Portland's jet and Helsinki's TRANSIT (`ap-art`);
+/// - `airportIndex`: the index's Airports and Flights rows (`ap-index`), over the made-up flights;
+/// - `airportNew`: Portland's third trip landing on its page with the "New stamp" chip;
+/// - `airportWorld`: Your world with the found airports' towers, the rings and the arcs (`ap-arc`).
+enum PassportAirportDemoScenes {
+    /// Opens `scene` on `presenter` when it is one of the airports' scenes; false otherwise.
+    static func open(_ scene: String, presenter: WorldPassportPresenter, world: WorldViewContent) -> Bool {
+        let entries = PassportBookDemoScenes.sample + airports
+        switch scene {
+        case "airportStamps":
+            presenter.demo = PassportBookDemo(entries: entries, world: world)
+            presenter.open(page: page(of: "LHR", in: entries))
+        case "airportArt":
+            presenter.demo = PassportBookDemo(entries: art, world: world)
+            presenter.open(page: PassportBookModel.firstStampPage)
+        case "airportIndex":
+            let flights = AirportFlightsDemo.flights
+            let pages = PassportFlightsModel(flights: flights, point: { _ in nil }).pages.count
+            presenter.demo = PassportBookDemo(entries: entries, world: world, flights: flights)
+            presenter.open(page: PassportBookModel(entries: entries, flightPageCount: pages).indexPage)
+        case "airportNew":
+            presenter.demo = PassportBookDemo(entries: entries, world: world)
+            if let home = airports.last { presenter.noteNewStamp(home) }
+            presenter.open()
+        case "airportWorld":
+            presenter.demo = PassportBookDemo(entries: entries, world: worldWithTowers(world), flights: AirportFlightsDemo.flights,
+                                              opensWorld: true)
+            presenter.open(page: 2)
+        default:
+            return false
+        }
+        return true
+    }
+
+    /// The page holding the first ticket of `token` in `entries`' book.
+    private static func page(of token: String, in entries: [PassportStampEntry]) -> Int {
+        let book = PassportBookModel(entries: entries)
+        return entries.first { $0.kind == .airport && $0.token == token }.flatMap(book.pageNumber(of:))
+            ?? PassportBookModel.firstStampPage
+    }
+
+    /// The traveller's airport tickets, from the made-up flights: Portland found in August and a ticket each trip
+    /// home (pages 3, 4 …), Mexico City, Heathrow, Paris CDG, Helsinki flown through (TRANSIT), Narita.
+    static let airports: [PassportStampEntry] = {
+        let rows: [(String, Int, Int, Int, Bool)] = [
+            ("PDX", 8, 14, 1, false), ("MEX", 9, 20, 1, false), ("PDX", 9, 28, 2, false), ("LHR", 10, 3, 1, false),
+            ("CDG", 10, 21, 1, false), ("HEL", 10, 21, 1, true), ("NRT", 10, 22, 1, false), ("PDX", 10, 23, 3, false)
+        ]
+        return rows.enumerated().map { index, row in
+            PassportStampEntry(kind: .airport, token: row.0,
+                               date: PassportBookDemoScenes.date(2026, row.1, row.2, minute: 30 + index),
+                               trip: row.3, isTransit: row.4)
+        }
+    }()
+
+    /// One page of tickets: the four famous airports' own pictures, Portland's jet and Helsinki's TRANSIT.
+    static let art: [PassportStampEntry] = {
+        let rows: [(String, Bool)] = [("DEN", false), ("LAX", false), ("SIN", false), ("JFK", false), ("PDX", false),
+                                      ("HEL", true)]
+        return rows.enumerated().map { index, row in
+            PassportStampEntry(kind: .airport, token: row.0, date: PassportBookDemoScenes.date(2026, 10, 1 + index),
+                               isTransit: row.1)
+        }
+    }()
+
+    /// `world` with the made-up flights' arcs and the traveller's found airports' towers, from the bundled list.
+    @MainActor
+    static func worldWithTowers(_ world: WorldViewContent) -> WorldViewContent {
+        var book = PassportBook()
+        book.addFlights(AirportFlightsDemo.flights)
+        // Bounded: the eight made-up tickets.
+        for entry in airports {
+            _ = book.recordAirport(token: entry.token, at: entry.date, by: .landing)
+        }
+        var content = world
+        content.flights = WorldFlightMap.live(book: book, airports: WorldAirportsShelf().pack())
+        return content
     }
 }
 #else

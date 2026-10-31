@@ -38,6 +38,9 @@ struct WorldQuickStartButton: View {
     /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a hangout
     /// or an activity."), nil otherwise.
     var spokenStatus: String? = nil
+    /// "Trip to Honolulu" on the day of a calendar flight, at its airport (World-Airports-Spec §10.7): it slides
+    /// out for 3 seconds, and the name says it ("Quick start, Trip to Honolulu").
+    var tripLabel: String? = nil
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -56,8 +59,8 @@ struct WorldQuickStartButton: View {
         }
         .buttonStyle(.plain)
         // Refinement 6 (`ref-blue-how`): the action's word slides out when it changes; the name always says it.
-        .worldQuickStartLabel(for: glyph)
-        .accessibilityLabel(Text(verbatim: WorldQuickStartLabel.buttonName(for: glyph)))
+        .worldQuickStartLabel(for: glyph, tripTo: tripLabel)
+        .accessibilityLabel(Text(verbatim: WorldQuickStartLabel.buttonName(for: glyph, trip: tripLabel)))
         .accessibilityValue(Text(verbatim: spokenStatus ?? ""))
         .accessibilityHint(Text(WorldQuickStartCopy.buttonHint))
         .accessibilityInputLabels([Text(WorldQuickStartCopy.buttonLabel)])
@@ -180,6 +183,7 @@ struct WorldQuickStartOptionRow: View {
         case .walkSavedLine: WorldSprites.tree
         case .runSavedLine: WorldSprites.runner
         case .sessionCamera, .soloCamera: WorldSprites.disposableCamera
+        case .takeATrip, .endTrip: WorldAirportSprites.suitcase
         case .startSession: WorldSprites.pair
         case .startActivity: FriendsSprites.flag
         case .friendsNearby: WorldSprites.face
@@ -202,6 +206,8 @@ struct WorldQuickStartOptionRow: View {
         case .sessionCamera: "sessionCamera"
         case .soloCamera: "soloCamera"
         case .backToWorkout: "backToWorkout"
+        case .takeATrip: "takeATrip"
+        case .endTrip: "endTrip"
         case .startSession: "startSession"
         case .startActivity: "startActivity"
         case .friendsNearby: "friendsNearby"

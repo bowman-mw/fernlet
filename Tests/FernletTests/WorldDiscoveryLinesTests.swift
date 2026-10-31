@@ -51,8 +51,8 @@ struct WorldDiscoveryLinesTests {
     }
 
     @Test func theBoardsHoldThe66LinesInTheMockupsOrder() {
-        #expect(WorldLineBoard.allCases.map { $0.categories.count } == [5, 5, 5, 3, 4])
-        #expect(WorldLineCategory.allCases.count * WorldDiscoveryLine.linesPerCategory == 66)
+        #expect(WorldLineBoard.allCases.map { $0.categories.count } == [5, 5, 5, 3, 4, 2], "the airports' board last")
+        #expect(WorldLineCategory.allCases.count * WorldDiscoveryLine.linesPerCategory == 66 + 6, "with the airports' six")
         for category in WorldLineCategory.allCases {
             let lines = WorldDiscoveryLinesCopy.lines(category, name: "Zed")
             #expect(lines.count == 3, "\(category)")

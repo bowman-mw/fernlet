@@ -7,8 +7,9 @@ import Testing
 ///
 /// A permission text lives in two places that must agree — the app target's `INFOPLIST_KEY_*` build
 /// settings (Debug, Release and Demo) and `App/Fernlet/InfoPlist.xcstrings`, whose `en` value is what users
-/// see — and the Local Network one in a third, `App/Fernlet/Info.plist`. Nothing else compares them,
-/// so a reworded copy in one place shipped beside the old copy in another.
+/// see — and the Local Network one in a third, `App/Fernlet/Info.plist`. A few live only in Info.plist
+/// and the catalog (`plistOnlyApprovedTexts`), because Xcode drops some `INFOPLIST_KEY_*` settings for
+/// iOS. Nothing else compares them, so a reworded copy in one place shipped beside the old copy in another.
 @Suite
 struct AppPermissionDeclarationsTests {
     /// The owner-approved texts (2026-10-15). Changing one is a copy decision: edit it here, in both
@@ -25,6 +26,14 @@ struct AppPermissionDeclarationsTests {
         // Car and bike detection (owner, 2026-10-25: "Approve both"; round 7): asked only when "Log my bike
         // rides" is turned on.
         "NSMotionUsageDescription": "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone."
+    ]
+
+    /// Approved texts declared in `App/Fernlet/Info.plist` itself, never as a build setting (Xcode drops
+    /// some `INFOPLIST_KEY_*` keys for iOS), and in the catalog word for word.
+    private static let plistOnlyApprovedTexts: [String: String] = [
+        // Flights from Calendar (World airports spec §10.2, approved): iOS 17+ gives a reading app only
+        // full access, so this is the full-access key. Fernlet never writes events.
+        "NSCalendarsFullAccessUsageDescription": "Fernlet looks through your calendar for flights, so their arcs and tickets fill in by themselves. It reads only the date, airports and times of flight events, on this iPhone, and never changes your calendar."
     ]
 
     /// The walk's temporary full-accuracy purpose (owner-approved 2026-10-24; "or run" added with the
@@ -59,12 +68,18 @@ struct AppPermissionDeclarationsTests {
         let catalog = try Self.catalogEnglishValues()
         let settingsUsage = settings.filter { $0.key.hasSuffix("UsageDescription") }
         let catalogUsage = catalog.filter { $0.key.hasSuffix("UsageDescription") }
-        #expect(Set(settingsUsage.keys) == Set(catalogUsage.keys))
+        let plistOnly = Set(Self.plistOnlyApprovedTexts.keys)
+        #expect(Set(settingsUsage.keys).isDisjoint(with: plistOnly))
+        #expect(Set(settingsUsage.keys).union(plistOnly) == Set(catalogUsage.keys))
         for (key, text) in settingsUsage {
             #expect(catalogUsage[key] == text, "\(key): the build setting and InfoPlist.xcstrings disagree")
         }
         let plistCopy = try Self.appInfoPlist()["NSLocalNetworkUsageDescription"] as? String
         #expect(plistCopy == catalogUsage["NSLocalNetworkUsageDescription"])
+        let plist = try Self.appInfoPlist()
+        for key in plistOnly {
+            #expect(plist[key] as? String == catalogUsage[key], "\(key): Info.plist and InfoPlist.xcstrings disagree")
+        }
     }
 
     @Test func theApprovedTextsAreTheOnesShipped() throws {
@@ -74,6 +89,11 @@ struct AppPermissionDeclarationsTests {
                 #expect(configuration[key] == text, "\(key) build setting")
                 #expect(catalog[key] == text, "\(key) catalog")
             }
+        }
+        let plist = try Self.appInfoPlist()
+        for (key, text) in Self.plistOnlyApprovedTexts {
+            #expect(plist[key] as? String == text, "\(key) Info.plist")
+            #expect(catalog[key] == text, "\(key) catalog")
         }
     }
 

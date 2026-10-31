@@ -149,6 +149,9 @@ nonisolated enum FlightyImportCopy {
         case .passportClosed:
             LocalizedStringResource("The passport can't be opened right now. Unlock your iPhone and try again.",
                                     comment: "Airports: the passport couldn't be read or saved")
+        case .switchedOff:
+            LocalizedStringResource("Airports and flights is off in Privacy & data, so no new flights are kept.",
+                                    comment: "Airports: an import refused while the Airports and flights switch is off")
         }
     }
 

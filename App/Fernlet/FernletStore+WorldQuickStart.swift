@@ -30,6 +30,9 @@ extension FernletStore {
         context.plannedSession = todaysPlannedGuidedSession?.displayedName
         context.session = quickStartSession
         context.activity = quickStartActivity
+        // Take a trip (World-Airports-Spec §7): the airport's card, and the trip row (`FernletStore+WorldTrip`).
+        context.airportName = worldQuickStartAirportName
+        context.tripOption = worldQuickStartTripOption
         context.soloCameraAvailable = WorldDisposableCamera.soloIsAvailable
         context.canMeetFriends = worldCanMeetFriends
         context.nearbyFriends = worldNearbyFriends.map(\.firstName)

@@ -4021,6 +4021,18 @@ struct LocalizationBoundaryTests {
                      source: "Flighty import sheet, Already in the passport: flights Fernlet saw ('1 flight')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%lld flights already imported, kept once",
                      source: "Flighty import sheet, Already in the passport: earlier imports ('1 flight')"),
+        // World round 7, airports screens (PR 2, 2026-10-31): Flights from Calendar's counts and the passport
+        // index's layovers, which would read "1 flights" and "1 layovers". Authored by its integrator commit.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%lld flight events with no airport codes",
+                     source: "Flights from Calendar summary, Skipped: flight events without codes ('1 flight event')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%lld flights. They'll fill in your ticket on the day.",
+                     source: "Flights from Calendar summary, Upcoming: the upcoming flights ('1 flight. It'll fill in')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Added %lld flights from your calendar",
+                     source: "Flights from Calendar: the note after adding ('Added 1 flight')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Deleted %lld airports and flights",
+                     source: "Privacy & data: announced after deleting the kept airports and flights ('Deleted 1 airport or flight')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%lld layovers",
+                     source: "Sprout's passport index: the Flights row's layovers ('1 layover')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

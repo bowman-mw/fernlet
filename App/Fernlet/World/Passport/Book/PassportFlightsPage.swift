@@ -14,7 +14,8 @@ struct PassportFlightsPage: View {
     /// A trip's airports' cities, by IATA code (the list's English or Spanish city; nil for a points-only code).
     let city: (String) -> String?
     let onOpenTrip: (PassportFlightTrip) -> Void
-    let onAddPastFlights: () -> Void
+    /// "Add past flights", or nil where none may be added ("Airports and flights" is off).
+    let onAddPastFlights: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -37,7 +38,7 @@ struct PassportFlightsPage: View {
                         .fernletWrappingText()
                         .padding(.top, 4)
                 }
-                PassportAddFlightsButton(action: onAddPastFlights)
+                if let onAddPastFlights { PassportAddFlightsButton(action: onAddPastFlights) }
             }
         }
     }
@@ -228,6 +229,22 @@ struct PassportAddFlightsButton: View {
     }
 }
 
+/// The Flights page button's choice (World-Airports-Spec §9.1, "the button offers a Flighty file or Calendar"):
+/// "From a Flighty file" opens the file picker, "From Calendar" turns Flights from Calendar on (iOS asks first).
+struct PassportFlightSourcePicker: ViewModifier {
+    @Binding var isPresented: Bool
+    let onFile: () -> Void
+    let onCalendar: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(Text(FlightyImportCopy.addPastFlights), isPresented: $isPresented, titleVisibility: .visible) {
+            Button { onFile() } label: { Text(PassportFlightsCopy.fromFile) }
+            Button { onCalendar() } label: { Text(PassportFlightsCopy.fromCalendar) }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+}
+
 /// The Flights page's pixel art.
 nonisolated enum PassportFlightSprites {
     /// A small jet in profile (the page's `apJet`, `JET_SIDE`, 15 × 7), one ink.
@@ -263,6 +280,8 @@ nonisolated enum PassportFlightsCopy {
     static let importedSpoken = LocalizedStringResource("imported", comment: "VoiceOver: said after an imported flight's stub")
     /// " to " between the cities VoiceOver reads ("Portland to San Francisco").
     static let toJoiner = LocalizedStringResource(" to ", comment: "VoiceOver: between the cities of a flight's route, with spaces")
+    static let fromFile = LocalizedStringResource("From a Flighty file", comment: "Sprout's passport Flights page: adds past flights from a Flighty export file")
+    static let fromCalendar = LocalizedStringResource("From Calendar", comment: "Sprout's passport Flights page: turns on Flights from Calendar")
     static let noneYet = LocalizedStringResource("No flights yet", comment: "Sprout's passport Flights page before any flight")
     static let noneYetBody = LocalizedStringResource("Flights you take show here with their arcs on Your world. Add past ones from a Flighty file.",
                                                      comment: "Sprout's passport Flights page before any flight: what shows here")

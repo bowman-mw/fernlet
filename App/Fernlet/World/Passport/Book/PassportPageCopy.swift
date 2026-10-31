@@ -35,6 +35,35 @@ nonisolated enum PassportPageCopy {
             : LocalizedStringResource("seas, each its own stamp", comment: "Sprout's passport: after the seas found (not one)")
     }
 
+    /// "airports" after the count ("airport" for one; no total, World-Airports-Spec §4.2).
+    static func airports(_ count: Int) -> LocalizedStringResource {
+        count == 1 ? LocalizedStringResource("airport", comment: "Sprout's passport page 2: after one airport found (no total)")
+            : LocalizedStringResource("airports", comment: "Sprout's passport page 2: after the airports found (not one; no total)")
+    }
+
+    // MARK: Airports and Flights in the index (World-Airports-Spec §4.2)
+
+    /// "Airports" (the index's row).
+    static let airportsRow = LocalizedStringResource("Airports", comment: "Sprout's passport index: the airports row")
+    /// "5 · page 7" (the Flights row's count and its page).
+    static func flightsCount(_ count: Int, page: Int) -> LocalizedStringResource {
+        LocalizedStringResource("\(count) · page \(page)",
+                                comment: "Sprout's passport index: the Flights row, how many flights then the Flights page's number (Spanish: 5 · página 7)")
+    }
+    /// "53 · pages 7 to 9" (the Flights row over several pages).
+    static func flightsCount(_ count: Int, pages first: Int, to last: Int) -> LocalizedStringResource {
+        LocalizedStringResource("\(count) · pages \(first) to \(last)",
+                                comment: "Sprout's passport index: the Flights row, how many flights then the Flights pages' first and last numbers")
+    }
+    /// "1 layover" / "3 layovers" (the Flights row's line).
+    static func layovers(_ count: Int) -> LocalizedStringResource {
+        count == 1 ? LocalizedStringResource("1 layover", comment: "Sprout's passport index: the Flights row, one layover")
+            : LocalizedStringResource("\(count) layovers", comment: "Sprout's passport index: the Flights row, the layovers (not one)")
+    }
+    /// "Turns to the Flights page." (the Flights row's hint).
+    static let turnsToFlights = LocalizedStringResource("Turns to the Flights page.",
+                                                        comment: "VoiceOver hint: the passport index's Flights row turns to the Flights page")
+
     /// "Two to aim for".
     static let twoToAimFor = LocalizedStringResource("Two to aim for", comment: "Sprout's passport page 2: the two special stamps")
     /// "3 to go".

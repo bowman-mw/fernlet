@@ -23,6 +23,10 @@ struct PassportBookScreen: View {
     @State var worldCentre: GeoPoint?
     /// The Flighty import, from the Flights page's "Add past flights".
     @State var importFlow: FlightyImportFlow
+    /// Calendar's look, the Flights page button's second source (World-Airports-Spec §10.1).
+    @State var calendarFlow: CalendarFlightsFlow
+    /// Whether the Flights page button is asking "A Flighty file or Calendar?".
+    @State var picksSource = false
     @State var wiggle: PassportWiggle?
     @State var landing: PassportStampEntry?
     @State var pageOnTop = true
@@ -36,8 +40,10 @@ struct PassportBookScreen: View {
         self.presenter = presenter
         self.store = store
         _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas },
-                                                       seaNeighbours: { store.worldFog.atlas.seaNeighbours() }))
+                                                       seaNeighbours: { store.worldFog.atlas.seaNeighbours() },
+                                                       airports: { store.worldLocation.flights.airportsShelf.pack() }))
         _importFlow = State(initialValue: FlightyImportFlow(store: store))
+        _calendarFlow = State(initialValue: CalendarFlightsFlow(store: store))
     }
 
     var body: some View {
@@ -65,6 +71,9 @@ struct PassportBookScreen: View {
             .containerBackground(.clear, for: .navigation)
         }
         .flightyImport(importFlow)
+        .calendarFlightsImport(calendarFlow)
+        .modifier(PassportFlightSourcePicker(isPresented: $picksSource, onFile: { importFlow.pick() },
+                                             onCalendar: { calendarFlow.setOn(true) }))
         .overlay {
             if showsWorld {
                 WorldYourWorldPage(source: worldSource, initialCentre: worldCentre, onBack: { showsWorld = false },
@@ -115,6 +124,16 @@ struct PassportBookScreen: View {
               let to = trip.codes.last.flatMap({ pack?.point(iata: $0)?.point }) else { return }
         worldCentre = PassportFlightsModel.midpoint(from, to)
         showsWorld = true
+    }
+
+    /// "Add past flights" (§9.1, §10.1): a Flighty file, or Calendar while its switch is off; nil (no button) while
+    /// "Airports and flights" is off, which keeps no new flights.
+    private var addPastFlightsAction: (() -> Void)? {
+        guard presenter.demo != nil || store.keepsWorldAirportsAndFlights() else { return nil }
+        return {
+            calendarFlow.refresh()
+            if calendarFlow.isOn { importFlow.pick() } else { picksSource = true }
+        }
     }
 
     /// The world map's source: the demo's content, or the person's passport and fog.
@@ -216,20 +235,21 @@ struct PassportBookScreen: View {
         case .flights(let index):
             if let flights {
                 PassportFlightsPage(flights: flights, index: index, city: airportCity, onOpenTrip: { openWorld(on: $0) },
-                                    onAddPastFlights: { importFlow.pick() })
+                                    onAddPastFlights: addPastFlightsAction)
             }
         case .stamps(let index):
             PassportStampsPage(book: book, index: index, library: library, landing: landing, wiggle: wiggle,
                                full: isFull(book))
         case .index:
             if let detail {
-                PassportContinentPage(detail: detail, book: book, index: indexModel(book), library: library) {
+                PassportContinentPage(detail: detail, book: book, index: indexModel(book, flights: flights),
+                                      library: library) {
                     turnFromIndex(to: $0, kind: $1, token: $2, in: book)
                 }
             } else {
-                PassportIndexPage(index: indexModel(book), library: library, onTurn: {
+                PassportIndexPage(index: indexModel(book, flights: flights), library: library, onTurn: {
                     turnFromIndex(to: $0, kind: $1, token: $2, in: book)
-                }, onOpen: { stepDetail($0) })
+                }, onOpen: { stepDetail($0) }, onGo: { go(to: $0, in: book) })
             }
         }
     }
@@ -246,8 +266,9 @@ struct PassportBookScreen: View {
         PassportProgress(entries: book.ordered, table: library.countryTable)
     }
 
-    private func indexModel(_ book: PassportBookModel) -> PassportIndexModel {
-        PassportIndexModel(book: book, table: library.countryTable) { library.name(of: $0, onPage: true) }
+    /// The index: places named as the index names them (an airport without "International"), with the Flights row.
+    private func indexModel(_ book: PassportBookModel, flights: PassportFlightsModel?) -> PassportIndexModel {
+        PassportIndexModel(book: book, table: library.countryTable, flights: flights) { library.indexName(of: $0) }
     }
 
     /// Every stamp found: all 194 countries, the seven continents and the five oceans.

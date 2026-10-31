@@ -17,6 +17,9 @@ struct WorldOffMapHome<Companion: View>: View {
     let onOpen: (WorldPanel) -> Void
     /// A print on the photo wall: its photo in the Album (`ref-wall-photo`), or the Album (nil).
     let onOpenPrint: (FriendsRoute?) -> Void
+    /// Home in the air (World-Airports-Spec §6.2, ``WorldFlyingHome``): the scene is sky all the way down, with no
+    /// grass, and grows with what it holds.
+    var inTheAir = false
     @ViewBuilder let companion: () -> Companion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Sprout's passport: while it is open only the scene shows behind it, as the map Home shows only the map
@@ -67,12 +70,17 @@ struct WorldOffMapHome<Companion: View>: View {
                                    .init(color: WorldOffScenePalette.sky.opacity(0.75), location: 0.3),
                                    .init(color: WorldOffScenePalette.skyLow, location: 0.72)],
                            startPoint: .top, endPoint: .bottom)
-            WorldGrassBand()
-                .frame(height: 92)
+            if !inTheAir {
+                WorldGrassBand()
+                    .frame(height: 92)
+            }
             companion()
-                .padding(.bottom, 66)
+                .padding(.bottom, inTheAir ? 0 : 66)
         }
-        .frame(height: large ? 250 : 330)
+        .frame(height: inTheAir ? nil : large ? 250 : 330)
+        // In the air: at least the draft's height, growing with a long line at the largest text.
+        .frame(minHeight: inTheAir ? WorldFlyingLayout(large: large).sceneHeight : nil)
+        .fixedSize(horizontal: false, vertical: inTheAir)
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
         .accessibilityElement(children: .contain)

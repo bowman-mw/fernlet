@@ -12,6 +12,8 @@ import WorldMapStore
 ///   grounds (``WorldFix/atLandedAirport``).
 /// - **A decoy** records nothing (the passport keeps nothing in one) and writes no gate state; the gate still
 ///   refuses readings in the air.
+/// - **"Airports and flights" off** (spec §11, Privacy & data) records no airport, flight or layover: what the
+///   gate found is dropped, never kept for later. The gate itself still refuses every reading in the air.
 extension FernletStore {
     /// Gives the gate the map's vault, the person's homes and the passport (called with the rides' wiring,
     /// before the first reading).
@@ -27,8 +29,10 @@ extension FernletStore {
 
     /// Records what the gate found in the passport (at most ``maxFlightEvents`` at once); false, recording
     /// nothing, when the passport can't be read now (the phone is locked), so the gate hands them again later.
+    /// With "Airports and flights" off nothing is recorded and the events are taken (true), so none comes back.
     @discardableResult
-    func recordWorldFlightEvents(_ events: [FlightEvent]) -> Bool {
+    func recordWorldFlightEvents(_ events: [FlightEvent], defaults: UserDefaults = .standard) -> Bool {
+        guard WorldMapPreferences.keepsAirportsAndFlights(in: defaults) else { return true }
         let atlas = worldFog.atlas
         guard atlas.opensForFlights() else { return false }
         for event in events.prefix(Self.maxFlightEvents) {
