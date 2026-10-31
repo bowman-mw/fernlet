@@ -13,9 +13,10 @@ import WorldMapStore
 ///   ``isOnTrip`` and ``showsTravelLook`` (Sprout's suitcase and mask, §5), and ``latestFind`` (the airport
 ///   banners and Sprout's landing lines, §3, §6.3). DEBUG `FERNLET_UI_TEST_AIRPORT` stands a made-up state in for
 ///   all of them (``UITestSupport/airportHomeState(now:)``), with no readings.
-/// - **Take a trip** (§7, the trip lane's) adds `startTrip(at:)` and `endTrip(at:)` here: each calls the
-///   detector's own, then hands its events on as ``admits(_:)`` does (``rememberFlights(in:)``, ``publish()``,
-///   `save(at:changed: true)`, ``hand(_:)``).
+/// - **Take a trip** (§7): ``startTrip(to:at:)`` and ``endTrip(at:)`` call the detector's own, then hand its
+///   events on as ``admits(_:)`` does. The ticket's destination (``tripDestination``) is sealed in its own vault
+///   file (``tripFile``), never anywhere else, and goes when the trip ends: by End trip, or by itself on getting
+///   home (the detector's `tripEnded`). A decoy starts no trip and writes nothing.
 /// - **The passport hears** each airport found, each flight landed and each layover through ``onEvents``
 ///   (`FernletStore+WorldFlights`); the passport itself keeps nothing in a decoy.
 /// - **A late reading** (older than the newest one weighed: a low-power visit's arrival, a batch out of order) is
@@ -47,6 +48,9 @@ final class WorldFlightKeeper {
     /// The latest airport the gate found, and how (Home's banner says "Ten minutes at the airport found it" or
     /// "Landed at Heathrow", and a landing brings Sprout's landing line, §3, §6.3). Kept in memory only.
     private(set) var latestFind: WorldAirportFind?
+    /// Where the trip under way is going, as the ticket's To field took it; nil without a ticket's destination
+    /// (§7: "Leave To blank; it fills in when you land"). Sealed in ``tripFile`` only.
+    private(set) var tripDestination: WorldTripDestination?
 
     /// Called with what each reading changed (airports found, flights started and landed, layovers), after any
     /// it could not take before; answers whether it took them.
@@ -64,6 +68,8 @@ final class WorldFlightKeeper {
     @ObservationIgnored private var recentFlights: [DateInterval] = []
     @ObservationIgnored private var savedAt: Date?
     @ObservationIgnored private var pending: [FlightEvent] = []
+    /// The sealed ticket while a trip started by one is on.
+    @ObservationIgnored private var ticket: WorldTripTicket?
     /// The bundled airport list, opened once on first use (the import sheet and the Flights page read it too).
     @ObservationIgnored let airportsShelf: WorldAirportsShelf
 
@@ -72,6 +78,10 @@ final class WorldFlightKeeper {
     static let stateFile = WorldMapVault.File(name: "flight-state.bin",
                                               purpose: WorldMapVault.File.placesDevice.purpose,
                                               role: .buffer, context: Data("flightDetector".utf8))
+    /// The sealed file the ticket's destination is kept in while its trip is on (§7, §11), bound to its own context.
+    static let tripFile = WorldMapVault.File(name: "trip-ticket.bin",
+                                             purpose: WorldMapVault.File.placesDevice.purpose,
+                                             role: .buffer, context: Data("tripTicket".utf8))
     /// The state is written at most this often while nothing changes.
     static let saveInterval: TimeInterval = 60
     /// How many ended flights a late reading is checked against.
@@ -108,6 +118,7 @@ final class WorldFlightKeeper {
         } catch {
             FernletAuditLog.log("worldMap.flight.stateUnreadable")
         }
+        readTicket()
     }
 
     /// Whether `fix` may go on to the map's keepers: false while flying, for a reading that may be in the air, and
@@ -120,6 +131,7 @@ final class WorldFlightKeeper {
         let verdict = detector.observe(reading, airports: grounds(), isHome: isHome)
         rememberFlights(in: verdict.events)
         noteFinds(in: verdict.events)
+        noteTripEnd(in: verdict.events)
         publish()
         save(at: fix.at, changed: !verdict.events.isEmpty)
         hand(pending + verdict.events)
@@ -182,6 +194,8 @@ final class WorldFlightKeeper {
         if currentAirport != state.currentAirport { currentAirport = state.currentAirport }
         if isOnTrip != state.isOnTrip { isOnTrip = state.isOnTrip }
         if showsTravelLook != state.showsTravelLook { showsTravelLook = state.showsTravelLook }
+        let destination = UITestSupport.tripSceneDestination ?? ticket?.destination
+        if tripDestination != destination { tripDestination = destination }
     }
 
     /// Seals the detector's state when something changed, or ``saveInterval`` after the last write.
@@ -194,6 +208,82 @@ final class WorldFlightKeeper {
         } catch {
             FernletAuditLog.log("worldMap.flight.saveDeferred")
         }
+    }
+}
+
+extension WorldFlightKeeper {
+    // MARK: Take a trip (§7)
+
+    /// When the trip the ticket started began (the boarding pass reads its flights from then); nil without one.
+    var tripStartedAt: Date? { ticket?.startedAt }
+
+    /// "Start trip": starts a trip going to `destination` (nil: To left blank), which brings the travel look and
+    /// finds the airport the person is at at once (the detector's ticket rule), and seals the ticket. False, doing
+    /// nothing, in a decoy or when a trip is already on.
+    @discardableResult
+    func startTrip(to destination: WorldTripDestination?, at date: Date = Date()) -> Bool {
+        guard mayWrite() else { return false }
+        let events = detector.startTrip(at: date)
+        guard !events.isEmpty else { return false }
+        ticket = WorldTripTicket(destination: destination, startedAt: date)
+        sealTicket()
+        noteFinds(in: events)
+        publish()
+        save(at: date, changed: true)
+        hand(pending + events)
+        return true
+    }
+
+    /// "End trip": ends the trip under way and forgets its destination.
+    func endTrip(at date: Date = Date()) {
+        let events = detector.endTrip(at: date)
+        forgetTicket()
+        publish()
+        guard !events.isEmpty else { return }
+        save(at: date, changed: true)
+        hand(pending + events)
+    }
+
+    /// A trip that ended by itself (getting home, §7) takes its ticket with it.
+    private func noteTripEnd(in events: [FlightEvent]) {
+        guard ticket != nil, events.contains(where: Self.endsTrip) else { return }
+        forgetTicket()
+    }
+
+    /// Whether `event` is a trip's end.
+    private static func endsTrip(_ event: FlightEvent) -> Bool {
+        if case .tripEnded = event { return true }
+        return false
+    }
+
+    /// Reads the sealed ticket, dropping one whose trip is no longer on.
+    private func readTicket() {
+        guard let vault else { return }
+        do {
+            guard let data = try vault.read(Self.tripFile) else { return }
+            let read = try JSONDecoder().decode(WorldTripTicket.self, from: data)
+            if detector.isOnTrip { ticket = read } else { forgetTicket() }
+            publish()
+        } catch {
+            FernletAuditLog.log("worldMap.trip.ticketUnreadable")
+        }
+    }
+
+    /// Seals the ticket (never in a decoy).
+    private func sealTicket() {
+        guard let vault, mayWrite(), let ticket else { return }
+        do {
+            try vault.write(JSONEncoder().encode(ticket), to: Self.tripFile)
+        } catch {
+            FernletAuditLog.log("worldMap.trip.ticketDeferred")
+        }
+    }
+
+    /// Forgets the ticket and removes its file (a decoy leaves the real one alone).
+    private func forgetTicket() {
+        ticket = nil
+        guard let vault, mayWrite() else { return }
+        if !vault.remove(Self.tripFile) { FernletAuditLog.log("worldMap.trip.ticketKept") }
     }
 }
 
