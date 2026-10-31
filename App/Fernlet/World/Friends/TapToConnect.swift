@@ -164,7 +164,7 @@ final class TapToConnectController {
 
     /// The question as Home draws it: the name sanitized, the look decoded within its bound.
     static func question(from question: ProximityTapRendezvousQuestion) -> TapToConnectQuestion {
-        let name = PeerDisplayNames.sanitized(question.displayName, maxLength: 32)
+        let name = ProximityDisplayName.sanitized(question.displayName, maxLength: 32)
         let appearance = try? JSONDecoder().decode(CompanionAppearance.self, from: question.look)
         return TapToConnectQuestion(displayName: name, appearance: appearance)
     }

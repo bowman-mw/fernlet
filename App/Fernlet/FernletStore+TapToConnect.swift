@@ -1,4 +1,5 @@
 import FernletConnections
+import FernletDomainModel
 import Foundation
 import ProximityKit
 
