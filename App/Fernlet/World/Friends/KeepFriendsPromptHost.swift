@@ -59,6 +59,10 @@ struct KeepFriendsPromptHost: ViewModifier {
     /// The prompt's presentation, shared with the Album's heal arm (``FriendsView``), which never
     /// celebrates in the same transaction as this sheet.
     @Binding var keepFriendsPromptPresented: Bool
+    /// Whether the hangout being asked about began with two phones tapped together on Home, so each
+    /// name says "met by tapping phones" under it (World Friends spec §1.3, `fr-tap-keep`). False until
+    /// the tap's hangout says so; the tap lane sets it where the host is applied.
+    var metByTapping = false
 
     /// The promoted batch this host is presenting (consumed via `completeFriendReview` on finalize).
     @State private var reviewBatch: MeshFriendReviewBatch?
@@ -139,6 +143,7 @@ struct KeepFriendsPromptHost: ViewModifier {
         KeepFriendsPromptSheet(
             candidates: friendCandidates,
             keptFingerprints: $keptFriendFingerprints,
+            metByTapping: metByTapping,
             done: { keepFriendsPromptPresented = false }
         )
         .fernletSheet()

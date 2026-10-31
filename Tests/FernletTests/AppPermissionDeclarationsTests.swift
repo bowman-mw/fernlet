@@ -15,9 +15,11 @@ struct AppPermissionDeclarationsTests {
     /// The owner-approved texts (2026-10-15). Changing one is a copy decision: edit it here, in both
     /// build configurations and in the catalog, in one commit.
     private static let approvedTexts: [String: String] = [
-        "NSLocalNetworkUsageDescription": "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background.",
+        // A session is a hangout to the person (owner's form answer 33, "Start a hangout with Sam"; World
+        // Friends spec §2, approved 2026-10-31): the Local Network and camera texts say so.
+        "NSLocalNetworkUsageDescription": "Fernlet connects directly with nearby friends to share recipes and, during a hangout you start, photos, short-lived messages and hearts. A hangout may continue in the background.",
         "NSNearbyInteractionUsageDescription": "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect.",
-        "NSCameraUsageDescription": "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends.",
+        "NSCameraUsageDescription": "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during hangouts with friends.",
         // The World map's location (owner, 2026-10-24; World build step 5c): `b1-loc-prompt`'s purpose
         // line, approved. The background-mapping text is the car round's (owner, 2026-10-26: a detected
         // drive is traced in full, so "using little battery" went).

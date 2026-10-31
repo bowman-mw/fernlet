@@ -519,10 +519,12 @@ struct PrivacyDataSettingsView: View {
         .accessibilityIdentifier("privacy.lock.noLockDeleteCard")
     }
 
-    /// 5f order: protection first, deletion last. The two terracotta controls live only in the
-    /// Delete group at the bottom, so the two reds on this page are the two deletes.
+    /// 5f order: protection first, deletion last, with "Connect by tapping phones" at the very top (World
+    /// Friends spec §1.6). The two terracotta controls live only in the Delete group at the bottom, so the
+    /// two reds on this page are the two deletes.
     private var privacyControls: some View {
         VStack(alignment: .leading, spacing: 16) {
+            connectByTappingSection
             photoProtectionCard
             healthAccessRow
             iCloudCard
@@ -1948,6 +1950,26 @@ struct PrivacyDataSettingsView: View {
                 // B10: the switch the person asked for and waited on ("Switching…") landed; the
                 // conflict banner going away is what it looks like.
                 FernletFeedback.system.play(.done)
+            }
+        }
+    }
+
+    /// "Connect by tapping phones", the page's first switch (World Friends spec §1.6, `fr-tap-switch`,
+    /// approved 2026-10-31): on by default, with the line under it saying what listening means. The line
+    /// describes the tap, which is centimetres; the rings that come before it work at about 3 m. Off,
+    /// phones coming together on Home do nothing; Nearby friends and codes still work.
+    @ViewBuilder
+    private var connectByTappingSection: some View {
+        if let store {
+            FernletFramedSection(header: nil) {
+                Toggle(isOn: Binding(get: { store.settings.allowConnectByTapping },
+                                     set: { store.setAllowConnectByTapping($0) })) {
+                    // A two-line row takes the kit's row padding above and below its words.
+                    FernletRowLabel("Connect by tapping phones",
+                                    detail: "Listens only while Home is on screen, and only for a phone a few centimetres away. Sends no name and nothing that follows you.")
+                        .padding(.vertical, 7)
+                }
+                .accessibilityIdentifier("privacy.connectByTapping")
             }
         }
     }

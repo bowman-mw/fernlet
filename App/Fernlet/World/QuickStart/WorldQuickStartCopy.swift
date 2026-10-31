@@ -138,7 +138,7 @@ nonisolated enum WorldQuickStartCopy {
                           comment: "World Home quick start with a friend nearby: opens Activities to plan one friends nearby can join")
         case .friendsNearby:
             return String(localized: "worldQuickStart.friendsNearby", defaultValue: "Friends nearby",
-                          comment: "World Home quick start: opens Friends nearby, to start a session or make a friend in person")
+                          comment: "World Home quick start: opens Friends nearby, to start or join a hangout with friends in person")
         case .logUsual(let meal, _):
             return String(localized: "worldQuickStart.logUsual", defaultValue: "Log your usual: \(meal)",
                           comment: "World Home quick start at a favourite place to eat: logs the meal logged there most often; its name, e.g. 'Log your usual: tonkotsu ramen'")
@@ -181,8 +181,8 @@ nonisolated enum WorldQuickStartCopy {
             return String(localized: "worldQuickStart.savedRun.detail", defaultValue: "\(distance) · your saved route",
                           comment: "World Home quick start: under 'Run it again'; the saved run route's length")
         case .sessionCamera(let shots):
-            return String(localized: "worldQuickStart.camera.session", defaultValue: "\(shots) shots left · shared with the session",
-                          comment: "World Home quick start in a friend session: the shared film's shots left. Plural on the number")
+            return String(localized: "worldQuickStart.camera.session", defaultValue: "\(shots) shots left · shared with the hangout",
+                          comment: "World Home quick start in a hangout (a friend session): the shared film's shots left. Plural on the number")
         case .soloCamera:
             return String(localized: "worldQuickStart.camera.solo", defaultValue: "Yours only · 10 a day · they appear tonight",
                           comment: "World Home quick start on your own: the disposable camera's rules (10 photos a day, shown after the companion sleeps)")
@@ -197,8 +197,8 @@ nonisolated enum WorldQuickStartCopy {
             return String(localized: "worldQuickStart.startActivity.detail", defaultValue: "A walk, coffee or meal that friends nearby can join",
                           comment: "World Home quick start: under 'Start an activity'")
         case .friendsNearby:
-            return String(localized: "worldQuickStart.friendsNearby.detail", defaultValue: "Start a session or make a friend, in person",
-                          comment: "World Home quick start: under 'Friends nearby'")
+            return String(localized: "worldQuickStart.friendsNearby.detail", defaultValue: "Start or join a hangout, in person",
+                          comment: "World Home quick start: under 'Friends nearby', for people who are already friends (someone new is met by tapping phones) (Spanish: Empieza o únete a una quedada, en persona)")
         case .logUsual(_, let meals):
             return String(localized: "worldQuickStart.logUsual.detail", defaultValue: "From your \(meals) meals here",
                           comment: "World Home quick start: under 'Log your usual'; how many meals were logged at this place. Plural on the number")

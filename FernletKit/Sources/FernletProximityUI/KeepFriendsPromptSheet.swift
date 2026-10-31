@@ -14,6 +14,9 @@ import FernletConnections
 struct KeepFriendsSection: View {
     let candidates: [MeshSessionRosterEntry]
     @Binding var keptFingerprints: Set<String>
+    /// Whether the hangout began with the phones tapped together, so each name says "met by tapping
+    /// phones" under it (World Friends spec §1.3, `fr-tap-keep`). False shows the name alone, as before.
+    var metByTapping = false
     @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
@@ -33,6 +36,7 @@ struct KeepFriendsSection: View {
                     KeepFriendRow(
                         candidate: candidate,
                         isKept: keptFingerprints.contains(candidate.fingerprint),
+                        metByTapping: metByTapping,
                         toggle: { toggle(candidate.fingerprint) }
                     )
                 }
@@ -52,7 +56,8 @@ struct KeepFriendsSection: View {
     }
 }
 
-/// One keep-as-friend row: the person's name and the Keep/Keeping chip.
+/// One keep-as-friend row: the person's name (with "met by tapping phones" under it when the hangout
+/// began with a tap) and the Keep/Keeping chip.
 ///
 /// Private child of ``KeepFriendsSection``; the toggle closure flips membership in the shared
 /// kept-fingerprints binding. No fingerprint (owner decision 2026-09-29): an identifier string
@@ -61,6 +66,8 @@ struct KeepFriendsSection: View {
 private struct KeepFriendRow: View {
     let candidate: MeshSessionRosterEntry
     let isKept: Bool
+    /// Whether the line "met by tapping phones" sits under the name.
+    let metByTapping: Bool
     let toggle: () -> Void
     @Environment(\.fernletFramedLook) private var look
 
@@ -72,9 +79,19 @@ private struct KeepFriendRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(verbatim: displayName)
-                .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.rowTitleBold)
-                .foregroundStyle(look?.text ?? Color.bark)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: displayName)
+                    .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.rowTitleBold)
+                    .foregroundStyle(look?.text ?? Color.bark)
+                if metByTapping {
+                    Text(verbatim: FernletProximityUICopy.KeepFriends.metByTapping)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowDetail)
+                        .foregroundStyle(look?.dim ?? Color.slate)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            // One VoiceOver stop for the name and how you met, beside the chip.
+            .accessibilityElement(children: .combine)
 
             Spacer(minLength: 12)
 
@@ -103,11 +120,22 @@ private struct KeepFriendRow: View {
 public struct KeepFriendsPromptSheet: View {
     let candidates: [MeshSessionRosterEntry]
     @Binding var keptFingerprints: Set<String>
+    /// Whether the hangout began with the phones tapped together: each name then says "met by tapping
+    /// phones" under it (`fr-tap-keep`).
+    let metByTapping: Bool
     let done: () -> Void
 
-    public init(candidates: [MeshSessionRosterEntry], keptFingerprints: Binding<Set<String>>, done: @escaping () -> Void) {
+    /// - Parameters:
+    ///   - candidates: The people met, each with a Keep chip.
+    ///   - keptFingerprints: The people the person switched on.
+    ///   - metByTapping: Whether the hangout began with a tap of two phones on Home (World Friends spec
+    ///     §1.3); false, the default, shows the names alone.
+    ///   - done: Finishes the flow (the presenter mints the keeps on dismiss).
+    public init(candidates: [MeshSessionRosterEntry], keptFingerprints: Binding<Set<String>>, metByTapping: Bool = false,
+                done: @escaping () -> Void) {
         self.candidates = candidates
         self._keptFingerprints = keptFingerprints
+        self.metByTapping = metByTapping
         self.done = done
     }
 
@@ -125,7 +153,7 @@ public struct KeepFriendsPromptSheet: View {
     /// sheet, framed rows. The presenter adds the sheet frame (`fernletSheet()`).
     private var framed: some View {
         ScrollView {
-            KeepFriendsSection(candidates: candidates, keptFingerprints: $keptFingerprints)
+            KeepFriendsSection(candidates: candidates, keptFingerprints: $keptFingerprints, metByTapping: metByTapping)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
         }
@@ -143,7 +171,7 @@ public struct KeepFriendsPromptSheet: View {
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
-                    KeepFriendsSection(candidates: candidates, keptFingerprints: $keptFingerprints)
+                    KeepFriendsSection(candidates: candidates, keptFingerprints: $keptFingerprints, metByTapping: metByTapping)
                 }
                 .padding(20)
                 .padding(.bottom, 10)

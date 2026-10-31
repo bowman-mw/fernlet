@@ -91,6 +91,24 @@
         }
       }
     },
+    "proximity.keepFriends.metByTapping" : {
+      "comment" : "Under a person's name in the keep-as-friends sheet, when the two of you met by holding your phones together. Lowercase, a quiet second line (Spanish: os conocisteis juntando teléfonos).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "met by tapping phones"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "os conocisteis juntando teléfonos"
+          }
+        }
+      }
+    },
     "proximity.keepFriends.sectionTitle" : {
       "comment" : "Heading of the list of people met during the session, each with a keep-or-not choice.",
       "extractionState" : "extracted_with_value",

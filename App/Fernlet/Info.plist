@@ -26,7 +26,7 @@
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Fernlet looks through your calendar for flights, so their arcs and tickets fill in by themselves. It reads only the date, airports and times of flight events, on this iPhone, and never changes your calendar.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background.</string>
+	<string>Fernlet connects directly with nearby friends to share recipes and, during a hangout you start, photos, short-lived messages and hearts. A hangout may continue in the background.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>MBO.Fernlet.mesh-continuation.*</string>

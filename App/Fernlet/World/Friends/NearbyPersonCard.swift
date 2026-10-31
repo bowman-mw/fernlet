@@ -4,17 +4,18 @@ import ProximityKit
 import SwiftUI
 
 /// One nearby phone on Friends nearby, drawn as the approved blue-button card for who they are
-/// (`b4-mem-blue-friend`, `-blue-join`, `-blue-new`): the heading ("Sam is nearby"), a line when there is
-/// one ("Sam is in a hangout with 1 other person."), and the teal choice ("Start a hangout with Sam",
-/// "Join Sam's hangout · Picnic · Sam says yes before you're in", "Make a friend · Show each other a
-/// code, in person") with what the phones are doing under it.
+/// (`b4-mem-blue-friend`, `-blue-join`): the heading ("Sam is nearby"), a line when there is one ("Sam is
+/// in a hangout with 1 other person."), and the teal choice ("Start a hangout with Sam", "Join Sam's
+/// hangout · Picnic · Sam says yes before you're in") with what the phones are doing under it. The "Make a
+/// friend" card (`-blue-new`) is retired (World Friends spec §1.1): someone new is met by tapping phones
+/// on Home, so a phone that isn't a friend's reads only as "Someone nearby".
 ///
 /// The ceremony is today's nearby row's, moved here with it (it lived in `ConnectView` as
 /// `NearbySlotRow`): while ranging, the live distance and "Tap phones together to connect" (the commit is
-/// the phones meeting); on phones without ranging, the choice itself commits (Connect) — or, for someone
-/// new, opens the code exchange (show my code / scan theirs, bound to THIS phone's slot) — with the other
-/// ceremony as a smaller button under it. Joining someone's hangout sends the join request their hangout
-/// answers (`b3-join-request`). The failed-scan alert is raised from the scan sheet's `onDismiss`:
+/// the phones meeting); on phones without ranging, the choice itself commits (Connect), with the code
+/// exchange (show my code / scan theirs, bound to THIS phone's slot) as a smaller button under it. Joining
+/// someone's hangout sends the join request their hangout answers (`b3-join-request`). The failed-scan
+/// alert is raised from the scan sheet's `onDismiss`:
 /// presenting it from the scanner callback landed in the same update that tore the sheet down, and
 /// SwiftUI silently dropped it.
 struct NearbyPersonCard: View {
@@ -71,21 +72,14 @@ struct NearbyPersonCard: View {
 
     // MARK: The choice
 
-    /// The teal choice. On phones without ranging it acts: Connect for a friend or a hangout, the code
-    /// exchange for someone new. While ranging it is a card to read; the phones meeting is the act.
+    /// The teal choice. On phones without ranging it acts: Connect. While ranging it is a card to read;
+    /// the phones meeting is the act.
     @ViewBuilder
     private var choice: some View {
         if case .awaitingManualCommit = slot.coordinator.state {
-            if kind == .newPerson {
-                Menu { codeExchangeButtons } label: { choiceFace }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("friends.verifyQR.menu.\(slot.id)")
-            } else {
-                Button(action: onForceConnect) { choiceFace }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
-            }
+            Button(action: onForceConnect) { choiceFace }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
         } else {
             choiceFace
         }
@@ -113,9 +107,8 @@ struct NearbyPersonCard: View {
 
     // MARK: The other ceremony
 
-    /// Under the choice, on phones without ranging: the code exchange for a friend or a hangout (proof the
-    /// person holds the key; a successful round commits both sides), Connect for someone new. The debug
-    /// tools' Force while ranging.
+    /// Under the choice, on phones without ranging: the code exchange (proof the person holds the key; a
+    /// successful round commits both sides). The debug tools' Force while ranging.
     @ViewBuilder
     private var secondaryControls: some View {
         switch slot.coordinator.state {
@@ -124,16 +117,10 @@ struct NearbyPersonCard: View {
                 .buttonStyle(ChipButtonStyle(selected: true))
                 .accessibilityIdentifier("friends.forceConnect.\(slot.id)")
         case .awaitingManualCommit:
-            if kind == .newPerson {
-                Button("Connect", action: onForceConnect)
-                    .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
-                    .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
-            } else {
-                Menu { codeExchangeButtons } label: { Text("Verify") }
-                    .menuStyle(.button)
-                    .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
-                    .accessibilityIdentifier("friends.verifyQR.menu.\(slot.id)")
-            }
+            Menu { codeExchangeButtons } label: { Text("Verify") }
+                .menuStyle(.button)
+                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+                .accessibilityIdentifier("friends.verifyQR.menu.\(slot.id)")
         default:
             EmptyView()
         }
@@ -274,8 +261,8 @@ struct NearbyPersonCardChrome<Choice: View, Extra: View>: View {
 }
 
 /// The teal choice on a nearby person's card (the quick start's leading choice): the icon in its tile
-/// (two people for a friend or a hangout, the person for someone new, a tick once connected), the name,
-/// the approved line, what the phones are doing, and the live distance while ranging.
+/// (two people, a tick once connected), the name, the approved line, what the phones are doing, and the
+/// live distance while ranging.
 struct NearbyPersonChoice: View {
     let kind: FriendsNearbyKind
     let someoneNearby: String
@@ -322,7 +309,6 @@ struct NearbyPersonChoice: View {
     }
 
     private var sprite: WorldSprite {
-        if connected { return WorldSprites.check }
-        return kind == .newPerson ? WorldSprites.face : WorldSprites.pair
+        connected ? WorldSprites.check : WorldSprites.pair
     }
 }

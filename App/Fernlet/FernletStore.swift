@@ -1944,6 +1944,14 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
+    /// Privacy & data's "Connect by tapping phones" switch (World Friends spec §1.6): writes the synced
+    /// setting and schedules its save. The one setter for it, so the radio that listens for a tap on Home
+    /// has one place to follow the switch from.
+    func setAllowConnectByTapping(_ value: Bool) {
+        settings.allowConnectByTapping = value
+        snapshotSaveCoordinator.schedule()
+    }
+
     /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the
     /// friend mesh — there is no clothing radio to stop): the providers wired in `meshFeatures`'
     /// initializer gate outbound catalogs, inbound catalogs, and the `shop` capability on this setting,

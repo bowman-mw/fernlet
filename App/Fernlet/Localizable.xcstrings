@@ -1,9 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "" : {
-
-    },
+    "" : {},
     " to " : {
       "comment" : "VoiceOver: between the cities of a flight's route, with spaces",
       "localizations" : {
@@ -25,9 +23,7 @@
         }
       }
     },
-    "%@" : {
-
-    },
+    "%@" : {},
     "%@ %@" : {
       "localizations" : {
         "en" : {
@@ -143,7 +139,24 @@
         }
       }
     },
+    "%@ asked to remove %@ from this hangout. A different participant must second the decision." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ asked to remove %2$@ from this hangout. A different participant must second the decision."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ pidió sacar a %2$@ de esta quedada. Otro participante tiene que apoyar la decisión."
+          }
+        }
+      }
+    },
     "%@ asked to remove %@ from this session. A different participant must second the decision." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1177,9 +1190,7 @@
         }
       }
     },
-    "%@h" : {
-
-    },
+    "%@h" : {},
     "%@’s shop" : {
       "localizations" : {
         "es" : {
@@ -1190,9 +1201,7 @@
         }
       }
     },
-    "%lld" : {
-
-    },
+    "%lld" : {},
     "%lld / %lld" : {
       "localizations" : {
         "en" : {
@@ -2165,7 +2174,18 @@
         }
       }
     },
+    "%lld new · only in this hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld nuevos · solo en esta quedada"
+          }
+        }
+      }
+    },
     "%lld new · only in this session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3103,9 +3123,7 @@
         }
       }
     },
-    "%lld%%" : {
-
-    },
+    "%lld%%" : {},
     "%lld%% wound" : {
       "localizations" : {
         "es" : {
@@ -3136,21 +3154,11 @@
         }
       }
     },
-    "%lld/1000" : {
-
-    },
-    "%lld/240" : {
-
-    },
-    "%lld/800" : {
-
-    },
-    "%lldg" : {
-
-    },
-    "%lldh" : {
-
-    },
+    "%lld/1000" : {},
+    "%lld/240" : {},
+    "%lld/800" : {},
+    "%lldg" : {},
+    "%lldh" : {},
     "%lldh %lldm" : {
       "localizations" : {
         "en" : {
@@ -3171,9 +3179,7 @@
         }
       }
     },
-    "+%lld" : {
-
-    },
+    "+%lld" : {},
     "+%lldg" : {
       "localizations" : {
         "es" : {
@@ -3195,12 +3201,8 @@
         }
       }
     },
-    "- %@" : {
-
-    },
-    "--" : {
-
-    },
+    "- %@" : {},
+    "--" : {},
     "1 %@ (%@ g)" : {
       "localizations" : {
         "en" : {
@@ -3243,9 +3245,7 @@
         }
       }
     },
-    "1 %@ =" : {
-
-    },
+    "1 %@ =" : {},
     "1 bottle" : {
       "localizations" : {
         "es" : {
@@ -3328,9 +3328,7 @@
         }
       }
     },
-    "2" : {
-
-    },
+    "2" : {},
     "2 × 12" : {
       "localizations" : {
         "es" : {
@@ -3351,9 +3349,7 @@
         }
       }
     },
-    "20" : {
-
-    },
+    "20" : {},
     "20–30 min" : {
       "localizations" : {
         "es" : {
@@ -3364,18 +3360,10 @@
         }
       }
     },
-    "250" : {
-
-    },
-    "3" : {
-
-    },
-    "3.0" : {
-
-    },
-    "30" : {
-
-    },
+    "250" : {},
+    "3" : {},
+    "3.0" : {},
+    "30" : {},
     "30 lb" : {
       "localizations" : {
         "es" : {
@@ -3406,9 +3394,7 @@
         }
       }
     },
-    "45" : {
-
-    },
+    "45" : {},
     "5 each side" : {
       "localizations" : {
         "es" : {
@@ -3449,15 +3435,9 @@
         }
       }
     },
-    "7" : {
-
-    },
-    "7.5" : {
-
-    },
-    "8" : {
-
-    },
+    "7" : {},
+    "7.5" : {},
+    "8" : {},
     "8 slow" : {
       "localizations" : {
         "es" : {
@@ -3468,9 +3448,7 @@
         }
       }
     },
-    "8-12" : {
-
-    },
+    "8-12" : {},
     "9 km/h" : {
       "localizations" : {
         "es" : {
@@ -6526,7 +6504,18 @@
         }
       }
     },
+    "Blocking %@ will hide their content from you and yours from them, and drop them from this hangout." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Al bloquear a %@, dejarás de ver su contenido, esa persona dejará de ver el tuyo y saldrá de esta quedada."
+          }
+        }
+      }
+    },
     "Blocking %@ will hide their content from you and yours from them, and drop them from this session." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8025,11 +8014,22 @@
       }
     },
     "Connect" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Conectar"
+          }
+        }
+      }
+    },
+    "Connect by tapping phones" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Conectar juntando teléfonos"
           }
         }
       }
@@ -11111,6 +11111,7 @@
       }
     },
     "End Session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11150,6 +11151,26 @@
         }
       }
     },
+    "End hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar quedada"
+          }
+        }
+      }
+    },
+    "End hangout?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Terminar la quedada?"
+          }
+        }
+      }
+    },
     "End session" : {
       "localizations" : {
         "es" : {
@@ -11161,6 +11182,7 @@
       }
     },
     "End session?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -14357,6 +14379,56 @@
         }
       }
     },
+    "Hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quedada"
+          }
+        }
+      }
+    },
+    "Hangout access" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acceso a la quedada"
+          }
+        }
+      }
+    },
+    "Hangout info" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Información de la quedada"
+          }
+        }
+      }
+    },
+    "Hangout name" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombre de la quedada"
+          }
+        }
+      }
+    },
+    "Hangout with %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quedada con %@"
+          }
+        }
+      }
+    },
     "Haptics" : {
       "localizations" : {
         "es" : {
@@ -16600,7 +16672,18 @@
         }
       }
     },
+    "Leave hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salir de la quedada"
+          }
+        }
+      }
+    },
     "Leave session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -16853,6 +16936,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "A la venta"
+          }
+        }
+      }
+    },
+    "Listens only while Home is on screen, and only for a phone a few centimetres away. Sends no name and nothing that follows you." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo escucha con el Inicio en pantalla, y solo un teléfono a pocos centímetros. No envía tu nombre ni nada que te siga."
           }
         }
       }
@@ -18207,7 +18300,18 @@
         }
       }
     },
+    "Messages, hangout info and leave" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mensajes, información de la quedada y salir"
+          }
+        }
+      }
+    },
     "Messages, session info and leave" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -18324,9 +18428,7 @@
         }
       }
     },
-    "Minutes" : {
-
-    },
+    "Minutes" : {},
     "Mirror" : {
       "localizations" : {
         "es" : {
@@ -20720,7 +20822,18 @@
         }
       }
     },
+    "Only in this hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo en esta quedada"
+          }
+        }
+      }
+    },
     "Only in this session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -24282,7 +24395,18 @@
         }
       }
     },
+    "Rename hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambiar nombre de la quedada"
+          }
+        }
+      }
+    },
     "Rename session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -26468,6 +26592,7 @@
       }
     },
     "Session access" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -26478,6 +26603,7 @@
       }
     },
     "Session info" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -26520,6 +26646,7 @@
       }
     },
     "Session name" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -26530,6 +26657,7 @@
       }
     },
     "Session with %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -34266,7 +34394,18 @@
         }
       }
     },
+    "You will stop sharing with everyone in this hangout." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejarás de compartir con todos en esta quedada."
+          }
+        }
+      }
+    },
     "You will stop sharing with everyone in this session." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -34355,7 +34494,28 @@
         }
       }
     },
+    "You're in a hangout with %@. It lives on Home's hangout button." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estás en una quedada con %@. La tienes en el botón de quedada de Inicio."
+          }
+        }
+      }
+    },
+    "You're in a hangout. It lives on Home's hangout button." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estás en una quedada. La tienes en el botón de quedada de Inicio."
+          }
+        }
+      }
+    },
     "You're in a session with %@. It lives on Home's session button." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -34366,6 +34526,7 @@
       }
     },
     "You're in a session. It lives on Home's session button." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -41719,9 +41880,7 @@
         }
       }
     },
-    "distance, level, notes" : {
-
-    },
+    "distance, level, notes" : {},
     "duress.ceremony.done.destroyed" : {
       "comment" : "Recovery-device ceremony, last screen when the recovery device refused and asked for the data to be let go. 'Settings → App lock' names the screen.",
       "extractionState" : "extracted_with_value",
@@ -43369,7 +43528,7 @@
     },
     "friendsNearby.heading.someone" : {
       "comment" : "Friends nearby: a card heading for a nearby person with Fernlet who isn't a friend yet",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -43459,7 +43618,7 @@
     },
     "friendsNearby.makeFriend" : {
       "comment" : "Friends nearby: starts the in-person code exchange with someone who isn't a friend yet",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -43477,7 +43636,7 @@
     },
     "friendsNearby.makeFriend.detail" : {
       "comment" : "Friends nearby: under 'Make a friend'",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -43574,7 +43733,7 @@
     },
     "friendsNearby.note.new" : {
       "comment" : "Friends nearby: under the heading for someone with Fernlet who isn't a friend yet",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -43703,9 +43862,7 @@
         }
       }
     },
-    "g" : {
-
-    },
+    "g" : {},
     "grams — no calories here" : {
       "localizations" : {
         "es" : {
@@ -62123,7 +62280,7 @@
       }
     },
     "worldQuickStart.camera.session" : {
-      "comment" : "World Home quick start in a friend session: the shared film's shots left. Plural on the number",
+      "comment" : "World Home quick start in a hangout (a friend session): the shared film's shots left. Plural on the number",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -62131,13 +62288,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "1 shot left · shared with the session"
+                  "value" : "1 shot left · shared with the hangout"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld shots left · shared with the session"
+                  "value" : "%lld shots left · shared with the hangout"
                 }
               }
             }
@@ -62149,13 +62306,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "needs_review",
-                  "value" : "Queda 1 foto · compartida con la sesión"
+                  "value" : "Queda 1 foto · compartida con la quedada"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "needs_review",
-                  "value" : "Quedan %lld fotos · compartidas con la sesión"
+                  "value" : "Quedan %lld fotos · compartidas con la quedada"
                 }
               }
             }
@@ -62254,7 +62411,7 @@
       }
     },
     "worldQuickStart.friendsNearby" : {
-      "comment" : "World Home quick start: opens Friends nearby, to start a session or make a friend in person",
+      "comment" : "World Home quick start: opens Friends nearby, to start or join a hangout with friends in person",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -62272,19 +62429,19 @@
       }
     },
     "worldQuickStart.friendsNearby.detail" : {
-      "comment" : "World Home quick start: under 'Friends nearby'",
+      "comment" : "World Home quick start: under 'Friends nearby', for people who are already friends (someone new is met by tapping phones) (Spanish: Empieza o únete a una quedada, en persona)",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Start a session or make a friend, in person"
+            "value" : "Start or join a hangout, in person"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Empieza una sesión o haz un amigo, en persona"
+            "value" : "Empieza o únete a una quedada, en persona"
           }
         }
       }
@@ -65665,9 +65822,7 @@
         }
       }
     },
-    "z" : {
-
-    },
+    "z" : {},
     "~%lld min" : {
       "localizations" : {
         "es" : {
@@ -65765,9 +65920,7 @@
         }
       }
     },
-    "…" : {
-
-    },
+    "…" : {},
     "−15 s" : {
       "comment" : "Workout rest button: takes 15 seconds off the rest timer. '−' is a minus sign; 's' abbreviates seconds.",
       "localizations" : {

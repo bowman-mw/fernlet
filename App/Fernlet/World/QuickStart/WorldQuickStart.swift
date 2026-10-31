@@ -103,7 +103,9 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     /// minimum age, or while Delete everything runs (the radios' own hard stops).
     var canMeetFriends = false
     /// Kept friends the presence radio hears nearby right now, by first name (at most two; empty with
-    /// Nearby friends off). Strangers are never here: presence recognises kept friends only.
+    /// Nearby friends off). Strangers are never here: presence recognises kept friends only, and the
+    /// listening Home does for a tap (only while Home is on screen, in the foreground) never feeds this
+    /// list or the button; someone new shows only as Home's rings until the phones touch.
     var nearbyFriends: [String] = []
     /// The home or hotel the person stands at (never in a decoy: a decoy has no homes).
     var base: Base?
@@ -162,8 +164,9 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case startSession(friend: String)
     /// "Start an activity": Activities, a walk, coffee or meal that friends nearby can join.
     case startActivity
-    /// "Friends nearby": the same page, for a session, a hangout or a new friend when the presence
-    /// radio hears no friend (it can't hear people who aren't friends; `b4-mem-blue-join`, `-blue-new`).
+    /// "Friends nearby": the same page, to start or join a hangout with friends when the presence radio
+    /// hears no friend (`b4-mem-blue-join`). It is for people who are already friends: someone new is met
+    /// only by tapping phones on Home, never through the blue button (World Friends spec §1.1).
     case friendsNearby
     /// "Log your usual: tonkotsu ramen" at a favourite place to eat (`b1-qs-food`): logs it again, in one tap.
     case logUsual(meal: String, meals: Int)
@@ -284,12 +287,14 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 ///    run route** that run again, then Walk together (`b1-qs-run`).
 /// 9. **Anywhere else** Walk together.
 ///
-/// Rules 6 to 9 end with "Friends nearby" while friends are offered at all, so a session, a hangout
-/// and a new friend stay reachable when the presence radio hears no friend (`b4-mem-blue-join`,
-/// `-blue-new`). **Take a trip** (World-Airports-Spec §7) is a row wherever the person is, after those:
-/// at an airport it leads instead, the airport's card ahead of rules 6a to 9 (screen 16), and while a trip
-/// is on it reads "End trip · London". A card with no choice is no card: the button hides (for example while walking with no
-/// camera, or in a decoy with location off).
+/// Rules 6 to 9 end with "Friends nearby" while friends are offered at all, so starting or joining a
+/// hangout with friends stays reachable when the presence radio hears no friend (`b4-mem-blue-join`). The
+/// button never offers to meet someone new ("Make a friend", `-blue-new`, is retired): that is the tap of
+/// two phones on Home (World Friends spec §1.1). Friends in a closed hangout are each just a friend nearby
+/// here (nothing says they're together, `fr-home-closed`). **Take a trip** (World-Airports-Spec §7) is a row
+/// wherever the person is, after those: at an airport it leads instead, the airport's card ahead of rules 6a
+/// to 9 (screen 16), and while a trip is on it reads "End trip · London". A card with no choice is no card:
+/// the button hides (for example while walking with no camera, or in a decoy with location off).
 nonisolated enum WorldQuickStart {
     /// The card for `context`, or nil when the button has nothing to offer.
     static func card(for context: WorldQuickStartContext) -> WorldQuickStartCard? {

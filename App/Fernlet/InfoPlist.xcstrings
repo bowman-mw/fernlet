@@ -56,13 +56,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends."
+            "value" : "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during hangouts with friends."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Fernlet usa la cámara para escanear códigos de barras e información nutricional, fotografiar comidas, tomar fotos de progreso y tomar fotos en sesiones con amigos."
+            "value" : "Fernlet usa la cámara para escanear códigos de barras e información nutricional, fotografiar comidas, tomar fotos de progreso y tomar fotos en quedadas con amigos."
           }
         }
       }
@@ -124,13 +124,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background."
+            "value" : "Fernlet connects directly with nearby friends to share recipes and, during a hangout you start, photos, short-lived messages and hearts. A hangout may continue in the background."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Fernlet se conecta directamente con amigos cerca para compartir recetas y, durante una sesión que inicias tú, fotos, mensajes que duran poco y corazones. Una sesión puede seguir en segundo plano."
+            "value" : "Fernlet se conecta directamente con amigos cerca para compartir recetas y, durante una quedada que empiezas tú, fotos, mensajes que duran poco y corazones. Una quedada puede seguir en segundo plano."
           }
         }
       }
