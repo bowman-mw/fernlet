@@ -290,6 +290,8 @@ struct ContentView: View {
             .worldAtlasMapHook(store: store)
             // Round 7: Sprout's passport over the root, opened through the environment.
             .worldPassportBook(passportPresenter, store: store)
+            // World-Airports-Spec §10.6: Flights from Calendar keeps watching (gated: both switches on, no decoy).
+            .worldCalendarFlights(store: store, isReady: launcher.isDone)
             // The world view's city tap shows the city on Home: any panel over Home closes.
             .onChange(of: passportPresenter.cityRequest) { _, request in if request != nil { closeWorldPanel() } }
             .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in

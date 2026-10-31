@@ -20,6 +20,11 @@ import Foundation
 /// - **Bike rides checked through** (round 7): the moment the motion history was last looked through for
 ///   bike rides, so a ride is logged once and never one from before the switch was turned on. A time only;
 ///   no motion data is kept.
+/// - **Airports and flights** (on by default; World-Airports-Spec §11, screen 13): whether airport stamps,
+///   flights and layovers are kept. Off keeps no new ones and stops the calendar's look; what is kept stays until
+///   the person deletes it.
+/// - **Flights from Calendar** (off by default; spec §10.1, screen 25): whether Fernlet looks through the
+///   calendar for flights. On only once iOS gave full access; never read in a decoy.
 /// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
 ///   location and Not now both answer it.
 /// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
@@ -40,6 +45,29 @@ nonisolated enum WorldMapPreferences {
         static let companionHintShown = "fernlet.worldMap.companionHintShown"
         static let logBikeRides = "fernlet.worldMap.logBikeRides"
         static let bikeRidesCheckedThrough = "fernlet.worldMap.bikeRidesCheckedThrough"
+        static let airportsAndFlights = "fernlet.worldMap.airportsAndFlights"
+        static let flightsFromCalendar = "fernlet.worldMap.flightsFromCalendar"
+    }
+
+    /// Whether "Airports and flights" is on (default on).
+    static func keepsAirportsAndFlights(in defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: Key.airportsAndFlights) != nil else { return true }
+        return defaults.bool(forKey: Key.airportsAndFlights)
+    }
+
+    /// Sets "Airports and flights".
+    static func setKeepsAirportsAndFlights(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.airportsAndFlights)
+    }
+
+    /// Whether "Flights from Calendar" is on (default off).
+    static func readsCalendarFlights(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.flightsFromCalendar)
+    }
+
+    /// Sets "Flights from Calendar".
+    static func setReadsCalendarFlights(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.flightsFromCalendar)
     }
 
     /// Whether "Log my bike rides" is on (default off).
@@ -164,5 +192,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.companionHintShown)
         defaults.removeObject(forKey: Key.logBikeRides)
         defaults.removeObject(forKey: Key.bikeRidesCheckedThrough)
+        defaults.removeObject(forKey: Key.airportsAndFlights)
+        defaults.removeObject(forKey: Key.flightsFromCalendar)
     }
 }

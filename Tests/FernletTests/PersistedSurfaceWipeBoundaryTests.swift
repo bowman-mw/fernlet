@@ -208,6 +208,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         // was last looked through for bike rides (a time only; no motion data is kept).
         "fernlet.worldMap.logBikeRides": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.bikeRidesCheckedThrough": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Round 7 airports (World-Airports-Spec §10, §11): the "Airports and flights" switch and "Flights from
+        // Calendar" (switches only: the flights themselves are passport records in the sealed vault).
+        "fernlet.worldMap.airportsAndFlights": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.flightsFromCalendar": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
         "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),

@@ -24,6 +24,8 @@ nonisolated enum FlightyImportProblem: Error, Equatable, Sendable {
     case noAirportList
     /// The passport couldn't be read or saved (the phone is locked, or a save failed).
     case passportClosed
+    /// "Airports and flights" is off in Privacy & data, so no new flights are kept (spec §11).
+    case switchedOff
 }
 
 /// The Flighty import (World-Airports-Spec §9, screens 19–24): "Add past flights" opens iOS's own file picker
@@ -33,7 +35,8 @@ nonisolated enum FlightyImportProblem: Error, Equatable, Sendable {
 ///
 /// **Never on the network** (spec §9.1): no sign-in, no server, no share-sheet "Open in". The file isn't kept; the
 /// airline, flight number and aircraft are never read into memory as text. **A decoy** offers no import (the
-/// entry points hide it) and the keeper keeps nothing in one.
+/// entry points hide it) and the keeper keeps nothing in one. **"Airports and flights" off** (spec §11) keeps no
+/// new flights: the picker doesn't open and a confirm adds nothing, each with a message.
 @MainActor
 @Observable
 final class FlightyImportFlow {
@@ -50,15 +53,20 @@ final class FlightyImportFlow {
 
     @ObservationIgnored private let atlas: WorldAtlasKeeper
     @ObservationIgnored private let airports: () -> WorldAirports?
+    /// Whether "Airports and flights" is on.
+    @ObservationIgnored private let keepsFlights: () -> Bool
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     /// How long the toast stays (the longer window gives assistive tech time to reach Undo).
     static let toastSeconds: Double = 6
 
-    /// A flow adding to `atlas`'s passport and checking codes in `airports` (the bundled pack).
-    init(atlas: WorldAtlasKeeper, airports: @escaping () -> WorldAirports?) {
+    /// A flow adding to `atlas`'s passport and checking codes in `airports` (the bundled pack), while
+    /// `keepsFlights` says "Airports and flights" is on.
+    init(atlas: WorldAtlasKeeper, airports: @escaping () -> WorldAirports?,
+         keepsFlights: @escaping () -> Bool = { WorldMapPreferences.keepsAirportsAndFlights() }) {
         self.atlas = atlas
         self.airports = airports
+        self.keepsFlights = keepsFlights
     }
 
     /// The store's flow: its passport and the flight gate's bundled airport list.
@@ -72,9 +80,13 @@ final class FlightyImportFlow {
         toastTask?.cancel()
     }
 
-    /// "Add past flights": opens the picker.
+    /// "Add past flights": opens the picker, or says why not while "Airports and flights" is off.
     func pick() {
         guard !isReading else { return }
+        guard keepsFlights() else {
+            problem = .switchedOff
+            return
+        }
         isPicking = true
     }
 
@@ -103,6 +115,10 @@ final class FlightyImportFlow {
     func confirm() {
         guard let found else { return }
         self.found = nil
+        guard keepsFlights() else {
+            problem = .switchedOff
+            return
+        }
         guard atlas.importFlights(found.plan.flights) else {
             problem = .passportClosed
             return
