@@ -53,14 +53,15 @@ struct NatureFogDeterminismTests {
         var trees: [String] = []
         for row in 2..<78 {
             for col in 2..<58 {
-                let kind = NatureFogRules.isPond(col, row) ? NatureHexKind.pond : NatureFogRules.ground(col, row)
-                counts[kind, default: 0] += 1
+                // No ponds since the owner's call (2026-10-30, "water is being placed on normal land"): every wild
+                // hex is ground cover; the mockup's 212 pond hexes fall to their kindAt.
+                counts[NatureFogRules.ground(col, row), default: 0] += 1
                 if let tree = NatureFogRules.tree(col, row) {
                     trees.append("\(col),\(row),\(tree.pine ? 1 : 0),\(tree.big ? 1 : 0),\(tree.variant)")
                 }
             }
         }
-        #expect(counts == [.short: 1_985, .long: 1_257, .flowers: 669, .boulder: 133, .pond: 212])
+        #expect(counts == [.short: 2_095, .long: 1_322, .flowers: 697, .boulder: 142])
         #expect(trees.count == 351)
         #expect(Array(trees.prefix(12)) == ["3,2,1,1,3", "15,2,1,0,2", "20,2,0,1,3", "25,2,1,1,3", "28,2,1,0,0", "30,2,0,1,0",
                                             "33,2,0,0,3", "35,2,0,1,0", "40,2,1,0,1", "49,2,0,1,1", "18,3,0,0,3", "31,3,0,0,3"])

@@ -78,7 +78,7 @@ final class NatureFogMapView: UIView {
 
     private static let swayKey = "nf.sway"
     /// Core Animation files every transition under `kCATransition`, whatever key it is added with.
-    private static let clearKey = kCATransition
+    private static let clearKey = "clearing"
     private static let scatterKey = "nf.scatter"
 
     private var scene: NatureFogScene?
@@ -278,7 +278,8 @@ final class NatureFogMapView: UIView {
             guard radius >= NatureFogScale.minimumRadius,
                   let map = Self.acceptedMapping(scene.viewport, size: size, scale: NatureFogScale(radius: radius, reduced: false)) else { continue }
             let scale = NatureFogScale(radius: radius, reduced: radius < NatureFogScale.detailFloor)
-            let spare = spareBooks.first { $0.scale == scale && $0.palette == scene.palette } ?? fresh(scale, scene: scene)
+            let spare = spareBooks.first { $0.scale == scale && $0.palette == scene.palette && $0.terrain == scene.terrain }
+                ?? fresh(scale, scene: scene)
             _ = spare.change(to: scene.clearing)
             spareBooks = Array(([spare] + spareBooks.filter { $0 !== spare }).prefix(Self.spareBookLimit))
             let low = NatureFogTileBook.key(at: CGPoint(x: map.originX, y: map.originY))
@@ -299,7 +300,7 @@ final class NatureFogMapView: UIView {
             guard let self, let next, self.book === next else { return }
             self.arrived(tile)
         }
-        if let book, book.palette == scene.palette { next.borrowPlaceholder(book.placeholder) }
+        if let book, book.palette == scene.palette { next.borrowPlaceholders(from: book) }
         return next
     }
 
@@ -432,7 +433,7 @@ final class NatureFogMapView: UIView {
 
     /// A waiting tile's look until its picture arrives, never wild fog over the person's own ground (the
     /// owner's zoom on the phone, 2026-10-30): nothing where the outgoing tiles cover all of it; the map where
-    /// its ground is uncovered; wild fog (``NatureFogTileBook/placeholder``, the fog's colour until that's
+    /// its ground is uncovered; wild fog (``NatureFogTileBook/placeholder(for:)``, the fog's colour until that's
     /// drawn) where it's fogged; and a tile with both is cut to its fogged hexes (``fogMask(_:book:)``, built
     /// once), or at very small hexes shows whichever covers most of it.
     private func cover(_ container: CALayer, key: NatureTileKey, at frame: CGRect, book: NatureFogTileBook) {
@@ -455,8 +456,8 @@ final class NatureFogMapView: UIView {
             showsMap.insert(key)
             container.mask = nil
         }
-        container.backgroundColor = fogged ? book.palette.color(.grassB) : nil
-        container.contents = fogged ? book.placeholder : nil
+        container.backgroundColor = fogged ? book.placeholderColour(for: key) : nil
+        container.contents = fogged ? book.placeholder(for: key) : nil
     }
 
     /// The tile at `key`'s fogged hexes as a mask in its own points; nil at hexes under 5 pt (too many to
@@ -567,9 +568,10 @@ final class NatureFogMapView: UIView {
         CATransaction.setDisableActions(true)
         // A placeholder sat under everything; its picture goes on top.
         if waiting.remove(tile.key) != nil { layer.insertSublayer(layers.container, below: effects) }
-        if fades { layers.container.add(NatureFogMotion.clearing(), forKey: Self.clearKey) }
+        let old = fades ? Self.oldPicture(of: layers.container) : nil
         let lifted = layers.trees.filter { !tile.trees.contains($0) }
         layers.swaying = fill(layers.container, with: tile)
+        if let old { fadeOut(old, over: layers.container) }
         layers.trees = tile.trees
         if isSwaying { startSway(layers.swaying) }
         shown[tile.key] = layers
@@ -579,6 +581,25 @@ final class NatureFogMapView: UIView {
         onTileArrived?()
         CATransaction.commit()
         drawNeighbours()
+    }
+
+    /// The tile's current picture and sprites, moved into one layer of their own so they can fade out over the
+    /// new ones.
+    private static func oldPicture(of container: CALayer) -> CALayer {
+        let old = CALayer()
+        old.anchorPoint = .zero
+        old.frame = container.bounds
+        for piece in container.sublayers ?? [] { old.addSublayer(piece) }
+        return old
+    }
+
+    /// Lays `old` over the new picture in `container` and fades it out (``NatureFogMotion/clearing()``), then
+    /// lets it go.
+    private func fadeOut(_ old: CALayer, over container: CALayer) {
+        container.addSublayer(old)
+        old.opacity = 0
+        old.add(NatureFogMotion.clearing(), forKey: Self.clearKey)
+        CATransaction.setCompletionBlock { [weak old] in old?.removeFromSuperlayer() }
     }
 
     /// Puts `tile`'s picture and sprites into `container` in depth order, replacing what was there; returns
@@ -725,7 +746,20 @@ extension NatureFogMapView {
     }
 
     /// How many tiles are crossfading after a clearing.
-    var fadingTileCount: Int { shown.values.filter { $0.container.animation(forKey: Self.clearKey) != nil }.count }
+    var fadingTileCount: Int { shown.values.filter { Self.fadingPicture(in: $0.container) != nil }.count }
+
+    /// How many fading tiles fade their old picture over the new one at full strength, never see-through (tests).
+    var fadingOverNewPictureCount: Int {
+        shown.values.filter { layers in
+            guard let old = Self.fadingPicture(in: layers.container), let new = layers.container.sublayers?.first else { return false }
+            return layers.container.sublayers?.last === old && new !== old && new.opacity == 1 && new.animationKeys() == nil
+        }.count
+    }
+
+    /// The old picture fading out in `container`, if one is.
+    private static func fadingPicture(in container: CALayer) -> CALayer? {
+        container.sublayers?.first { $0.animation(forKey: clearKey) != nil }
+    }
 
     /// Pauses the sway while the map moves, and arranges for it to resume once the map sits still.
     private func noteMovement(_ viewport: MapViewport, motion: NatureFogMotion) {
@@ -819,8 +853,8 @@ extension NatureFogMapView {
     private func blank(_ key: NatureTileKey, book: NatureFogTileBook) {
         guard var layers = shown[key] else { return }
         layers.container.sublayers?.forEach { $0.removeFromSuperlayer() }
-        layers.container.backgroundColor = book.palette.color(.grassB)
-        layers.container.contents = book.placeholder
+        layers.container.backgroundColor = book.placeholderColour(for: key)
+        layers.container.contents = book.placeholder(for: key)
         layers.swaying = []
         layers.trees = []
         shown[key] = layers

@@ -6,8 +6,6 @@ nonisolated enum NatureSprite: Hashable {
     case grass(Int)
     /// A wildflower variant.
     case flowers(Int)
-    /// A pond's reeds variant.
-    case reeds(Int)
     /// The boulder.
     case boulder
     /// A round tree of canopy radius `radius` units in one of 4 shapes.
@@ -66,7 +64,6 @@ nonisolated final class NatureFogAtlas {
     /// How many long-grass, flower and reed variants there are.
     static let grassVariants = 6
     static let flowerVariants = 6
-    static let reedVariants = 3
     /// The full-detail trees: canopy radius round(1.45·8) and round(1.05·8) units, pines round(2.4·8) and
     /// round(1.8·8) units tall.
     static let treeRadii = [12, 8]
@@ -100,7 +97,7 @@ nonisolated final class NatureFogAtlas {
     /// The pieces drawn at full detail.
     static var fullDetailSet: [NatureSprite] {
         var keys: [NatureSprite] = (0..<grassVariants).map { .grass($0) } + (0..<flowerVariants).map { .flowers($0) }
-        keys += (0..<reedVariants).map { .reeds($0) } + [.boulder]
+        keys += [.boulder]
         for radius in treeRadii { keys += (0..<4).map { .tree(radius: radius, variant: $0) } }
         for height in pineHeights { keys += [.pine(height: height, odd: false), .pine(height: height, odd: true)] }
         return keys
@@ -133,9 +130,6 @@ nonisolated final class NatureFogAtlas {
         case .flowers(let variant):
             var random = NatureRandom(seed: NatureFogNoise.hash(variant + 7_200, 7_200))
             return NatureFogArt.grass(flowers: true, random: &random)
-        case .reeds(let variant):
-            var random = NatureRandom(seed: NatureFogNoise.hash(variant + 7_300, 7_300))
-            return NatureFogArt.reeds(random: &random)
         case .boulder:
             return NatureFogArt.rock()
         case .tree(let radius, let variant):
@@ -158,7 +152,7 @@ nonisolated final class NatureFogAtlas {
         case .peak(let width, let height, let variant): TerrainArt.peak(width: width, height: height, variant: variant)
         case .house(let variant): TerrainArt.house(variant: variant)
         case .crops(let wheat): TerrainArt.crops(wheat: wheat)
-        case .grass, .flowers, .reeds, .boulder, .tree, .pine: NaturePixelArt()
+        case .grass, .flowers, .boulder, .tree, .pine: NaturePixelArt()
         }
     }
 

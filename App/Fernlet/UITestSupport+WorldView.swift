@@ -30,15 +30,29 @@ enum WorldAtlasMapDebugScreen: String, Identifiable {
     case world
     /// City over Oregon ("Oregon · United States"): `ex-world-zoom`.
     case city
+    /// State over Portland, with the demo walks' crossed roads: the world view's road shot.
+    case state
     /// The passport's small world map (`ps-world`), which opens the world view.
     case preview
 
     var id: String { rawValue }
 
     /// The level it opens at.
-    var level: AtlasZoomLevel { self == .city ? .city : .world }
-    /// Where it opens: the mockup's closest-zoom view south of the Columbia, or home.
-    var centre: GeoPoint? { self == .city ? GeoPoint(45.42, -122.63) : nil }
+    var level: AtlasZoomLevel {
+        switch self {
+        case .city: .city
+        case .state: .state
+        case .world, .preview: .world
+        }
+    }
+    /// Where it opens: the mockup's closest-zoom view south of the Columbia, Portland, or home.
+    var centre: GeoPoint? {
+        switch self {
+        case .city: GeoPoint(45.42, -122.63)
+        case .state: GeoPoint(45.6, -122.6)
+        case .world, .preview: nil
+        }
+    }
 }
 
 /// Presents the requested world map over the root, after the launch settles.
@@ -112,7 +126,8 @@ enum WorldAtlasMapDemo {
                                 start: cityPoints.first)
     }
 
-    /// One fog cell every 1.2 km over each patch and every 800 m along each walk. Bounded: fixed lists.
+    /// One fog cell every 1.2 km over each patch, and along each walk the cells a walk lifts (50 m round a point
+    /// every 25 m, so the walks cross the major roads they meet). Bounded: fixed lists.
     static func fogCells() -> [HexCell] {
         var cells = Set<HexCell>()
         for (centre, radius) in patches {
@@ -126,11 +141,12 @@ enum WorldAtlasMapDemo {
         }
         for trail in trails {
             for (from, to) in zip(trail, trail.dropFirst()) {
-                let pieces = max(Int(from.distance(to: to) / 800), 1)
+                let pieces = min(max(Int(from.distance(to: to) / 25), 1), 2_000)
                 for piece in 0...pieces {
                     let t = Double(piece) / Double(pieces)
-                    cells.insert(MercatorHexGrid.cell(containing: GeoPoint(from.latitude + (to.latitude - from.latitude) * t,
-                                                                           from.longitude + (to.longitude - from.longitude) * t)))
+                    let point = GeoPoint(from.latitude + (to.latitude - from.latitude) * t,
+                                         from.longitude + (to.longitude - from.longitude) * t)
+                    cells.formUnion(MercatorHexGrid.cells(around: point, within: WorldFogKeeper.liftRadius))
                 }
             }
         }

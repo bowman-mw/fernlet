@@ -160,6 +160,32 @@ struct WorldTerrainTests {
         #expect(a.pieces.map { "\($0.sprite)\($0.frame)\($0.look)" } == b.pieces.map { "\($0.sprite)\($0.frame)\($0.look)" })
     }
 
+    /// A waiting tile over the sea shows the sea's wild fog, not the meadow (the lane's call on #92's placeholder):
+    /// open sea, Lake Washington and the Willamette's mouth read as sea or land by the majority of five samples, the
+    /// sea's picture is drawn once over the terrain, a new book borrows it, and with no terrain every tile is the meadow.
+    @Test func waitingTilesOverTheSeaShowTheSeasWildFog() async throws {
+        let atlas = try Self.shippedAtlas()
+        let book = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
+                                     terrain: Self.terrain(atlas, month: 7))
+        let sea = NatureFogTileBook.openSea(at: Self.full)
+        let land = NatureFogTileBook.key(at: Self.full.centre(of: MercatorHexGrid.cell(containing: GeoPoint(45.5205, -122.6255))))
+        let lake = NatureFogTileBook.key(at: Self.full.centre(of: MercatorHexGrid.cell(containing: GeoPoint(47.62, -122.255))))
+        #expect(book.isSea(sea) && book.isSea(lake) && !book.isSea(land))
+        await book.finishDrawing()
+        let seaPicture = try #require(book.seaPlaceholder)
+        #expect(book.placeholder(for: sea) === seaPicture && book.placeholder(for: lake) === seaPicture)
+        #expect(book.placeholder(for: land) === book.placeholder && book.placeholder !== seaPicture)
+        #expect(book.placeholderColour(for: sea) == Self.light.color(.water))
+        #expect(book.placeholderColour(for: land) == Self.light.color(.grassB))
+        let next = NatureFogTileBook(scale: NatureFogScale(radius: 27, reduced: false), palette: Self.light,
+                                     clearing: NatureFogClearing(), pixelScale: 1, terrain: book.terrain)
+        next.borrowPlaceholders(from: book)
+        #expect(next.seaPlaceholder === seaPicture, "the next scale borrows the sea until its own is drawn")
+        let plain = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1)
+        await plain.finishDrawing()
+        #expect(plain.seaPlaceholder == nil && !plain.isSea(sea) && plain.placeholder(for: sea) === plain.placeholder)
+    }
+
     @Test func withNoAtlasTheFogIsTodaysNatureFog() {
         #expect(NatureFogTerrain.home(nil) == nil)
         let plain = NatureFogGrower(scale: Self.full, clearing: NatureFogClearing(), atlas: NatureFogAtlas(palette: Self.light))

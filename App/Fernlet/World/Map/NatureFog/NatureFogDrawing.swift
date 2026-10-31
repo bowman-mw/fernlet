@@ -79,16 +79,10 @@ nonisolated enum NatureFogDrawer {
         }
     }
 
-    /// Water, shores, the coast's sand line, then ripples, lilies and far-off flowers.
+    /// The coast's sand line, then the sea's wave marks and far-off flowers. There are no ponds: water is drawn
+    /// only where the atlas has it (owner, 2026-10-30).
     private static func drawWater(_ layout: NatureFogLayout, scale: NatureFogScale, palettes: inout NatureFogPalettes,
                                   in context: CGContext, origin: CGPoint) {
-        let palette = palettes[.approved]
-        let water = CGMutablePath()
-        for centre in layout.ponds { water.addPath(hexPath(local(centre, origin), radius: scale.radius + 0.5)) }
-        context.addPath(water)
-        context.setFillColor(palette.color(.water))
-        context.fillPath()
-        stroke(layout.shores, colour: palette.color(.shore), width: scale.unit * 0.9, in: context, origin: origin)
         if !layout.coasts.isEmpty {
             let sand = palettes[TerrainLook(set: .water, season: .summer)].color(.shore)
             stroke(layout.coasts, colour: sand, width: scale.unit * 1.4, in: context, origin: origin)
@@ -203,7 +197,7 @@ struct NatureFogPicturePainter {
     }
 
     /// The fogged hexes over `size` as outlines alone, in the picture's own points: no fill, no seam colour,
-    /// no grass, trees or ponds (the map widget's one-colour picture, phone test W-11). Nil when the hexes
+    /// no grass or trees (the map widget's one-colour picture, phone test W-11). Nil when the hexes
     /// would be too small to draw.
     func outlines(in size: CGSize) -> Path? {
         guard let grown = grow(in: size) else { return nil }

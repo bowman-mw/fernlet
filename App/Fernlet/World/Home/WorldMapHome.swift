@@ -31,7 +31,9 @@ import WorldMapStore
 /// and unnamed until the passport finds them; zoomed out a step, the passport's cities get skyline markers; zoomed
 /// in on a found city, the city view's plate. Sprout says a line the first time the person finds a new kind of place
 /// (§4, ``WorldDiscoveryRouter``, the passport's one discovery reader), and once a week a dashed gold hex marks a new
-/// corner near home, which Sprout mentions once (§5, ``WorldCornerLayer``).
+/// corner near home, which Sprout mentions once (§5, ``WorldCornerLayer``). The major roads the person's walks have
+/// crossed draw whole in amber where the map is uncovered, and over the fog in the city view (§2, `ex-roads`,
+/// ``WorldCrossedRoadsModel``: derived from the lifted fog, never stored).
 ///
 /// **The companion** (``WorldMapCompanion``) is Home's: a tap or a hold opens Sprout's passport on page 1, the book
 /// rising from where Sprout stands (World-Passport-Spec §1); a new stamp's banner opens it on the stamp's page, and
@@ -107,6 +109,8 @@ struct WorldMapHome: View {
     @State private var terrain: NatureFogTerrain?
     /// Cities and landmarks (round 7, World-Exploration-Spec §2): the open cards, the viewport's memo, the art.
     @State private var explore = WorldExploreState()
+    /// The major roads the lifted fog has crossed (World-Exploration-Spec §2, `ex-roads`), derived, never stored.
+    @State private var roads = WorldCrossedRoadsModel()
     /// Sprout's discovery lines and the new-stamp hook (round 7, World-Exploration-Spec §4): the one discovery reader.
     @State private var discoveries = WorldDiscoveryRouter()
     /// Sprout's mention of the week's new corner (§5), said once; nil once Home goes behind a panel.
@@ -151,6 +155,7 @@ struct WorldMapHome: View {
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
         .task { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
+        .onChange(of: roadsSource, initial: true) { roads.update(cells: store.worldRoadCells, atlas: store.worldFog.atlas.openedAtlas) }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
         .task(id: tiles.state) { await watchLoading() }
@@ -392,9 +397,23 @@ struct WorldMapHome: View {
         let trace = isWalking ? store.worldWalk.points.map(\.point) : []
         let ride = WorldRideLine.drawn(isCycling: isCycling, readings: rideReadings, isDecoy: store.duressSessionActive)
         let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
-        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged),
-                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride]),
-                           traces: trace.count >= 2 ? [trace] : [])
+        let demo = WorldRoadTestScenes.isOn(decoy: store.duressSessionActive)
+        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged).union(demo ? WorldRoadTestScenes.cells : []),
+                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
+                               + (demo ? [WorldRoadTestScenes.walk] : []),
+                           traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog)
+    }
+
+    /// What the crossed roads are worked out from: the lifted cells' count, whether a decoy shows, and the atlas.
+    private var roadsSource: [Int] {
+        [store.worldFog.visibleCells.count, store.worldFog.isDecoy ? 1 : 0, store.duressSessionActive ? 1 : 0]
+    }
+
+    /// Whether the crossed roads draw over the fog: Home zoomed in on a found city (the city view, `ex-city-view`).
+    private var roadsOverFog: Bool {
+        guard roads.drawing.roadCount > 0, let viewport = geometry.viewport, !WorldExploreSelection.isZoomedOut(viewport),
+              let atlas = store.worldFog.atlas.openedAtlas else { return false }
+        return roads.cityMemo.foundCity(at: viewport.center, atlas: atlas, book: WorldExploreState.book(store)) != nil
     }
 
     /// Reads Home's saved lines again (DEBUG `keptride` stands the finished ride's kept line in).

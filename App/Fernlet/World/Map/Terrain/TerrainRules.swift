@@ -50,7 +50,7 @@ nonisolated enum TerrainRules {
         }
     }
 
-    /// The ground cover of a wild, non-edge, non-pond hex. Meadow and forest keep the approved `kindAt`, with the
+    /// The ground cover of a wild, non-edge hex. Meadow and forest keep the approved `kindAt`, with the
     /// season's flowers (spring adds them, autumn keeps a fifth, winter none) and, where the flora picks, no
     /// wildflowers outside their climate.
     static func ground(_ land: TerrainHex, col: Int, row: Int) -> NatureHexKind {

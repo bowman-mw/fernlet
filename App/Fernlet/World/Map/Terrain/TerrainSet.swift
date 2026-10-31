@@ -34,8 +34,6 @@ nonisolated enum TerrainSet: String, CaseIterable, Hashable {
     var isApproved: Bool { self == .meadow || self == .forest }
     /// The sets the seasons change (spec "Seasons": grassland, temperate forest and cropland only).
     var hasSeasons: Bool { isApproved || self == .crops }
-    /// The sets whose wild ground holds ponds (the mockup's `ponds: true`).
-    var hasPonds: Bool { isApproved || self == .tropical || self == .boreal }
     /// The sea: no seams, wave marks, a sand line where it meets land, nothing standing on it.
     var isWater: Bool { self == .water }
     /// The set whose candidates a stand is weighed against: meadow and forest are one wild, as approved.
