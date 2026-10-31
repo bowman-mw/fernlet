@@ -84,19 +84,22 @@ struct WorldWalkToast: View {
 
 /// The dark note that something was logged, with Undo: the approved `b1-home-bike` note (the kit's
 /// `.toast`), shared by the walk's note (``WorldWalkToast``) and the bike ride's (``WorldRideNote``,
-/// round 7).
+/// round 7). Friend shops' closing note (`fr-shop-close`) is the same note with no Undo.
 struct WorldLoggedNote: View {
     /// What was logged ("Walk logged · 0.6 km · 12 min").
     let line: Text
     /// Whose note it is, for its automation identifiers.
     let identifier: Identifier
-    let onUndo: () -> Void
+    /// The note's Undo; nil draws the note as text only.
+    let onUndo: (() -> Void)?
 
-    /// The note's automation identifiers (frozen tokens): the walk's, the bike ride's, and a Flighty import's.
+    /// The note's automation identifiers (frozen tokens): the walk's, the bike ride's, a Flighty import's and
+    /// Friend shops' closing note.
     enum Identifier: String {
         case walk = "world.walkToast"
         case ride = "world.rideToast"
         case flights = "world.flightsToast"
+        case shopsClosed = "friendShop.closedToast"
 
         /// The Undo button's.
         var undo: String { rawValue + ".undo" }
@@ -109,15 +112,18 @@ struct WorldLoggedNote: View {
                 .foregroundStyle(WorldWalkPalette.toastText)
                 .fernletWrappingText()
             Spacer(minLength: 4)
-            Button(action: onUndo) {
-                Text("Undo")
-                    .font(FernletFramedFont.buttonSmall)
-                    .foregroundStyle(WorldWalkPalette.toastAction)
-                    .frame(minWidth: 44, minHeight: 44)
+            if let onUndo {
+                Button(action: onUndo) {
+                    Text("Undo")
+                        .font(FernletFramedFont.buttonSmall)
+                        .foregroundStyle(WorldWalkPalette.toastAction)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(identifier.undo)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(identifier.undo)
         }
+        .frame(minHeight: 44)
         .padding(EdgeInsets(top: 2, leading: 15, bottom: 2, trailing: 11))
         .background(WorldWalkPalette.toast, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)

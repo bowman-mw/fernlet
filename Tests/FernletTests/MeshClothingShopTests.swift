@@ -3,11 +3,11 @@
 //
 // Ports the deleted standalone-radio suites (ProximityClothingShareEphemeralityTests + the delivery
 // half of FriendShopTests) to the mesh-owned lifecycle. Covers: catalog accumulation during the
-// session (keyed by VERIFIED fingerprint only — never a display name), the post-session shop window
-// (opens at the same teardown moment that promotes pendingFriendReview, 1-hour lazy expiry, early
-// close at the next session FORMATION — the first slot commit, NOT the startJoin/startNewMesh search
-// start, which fires on every Social-tab entry / scene dip and must leave the window intact, exactly
-// like the friend-review batch), the commit-symmetry catalog exchange (a `clothingCatalogRequest`
+// session (keyed by VERIFIED fingerprint only — never a display name), the post-session shop windows
+// (one hour per seller, opening at the same teardown moment that promotes pendingFriendReview, 1-hour
+// lazy expiry, left running by the next session FORMATION and by the startJoin/startNewMesh search
+// start, which fires on every Social-tab entry / scene dip, exactly like the friend-review batch; the
+// per-seller hours themselves are in FriendShopsOpenTests), the commit-symmetry catalog exchange (a `clothingCatalogRequest`
 // from a later-committing peer is answered bypassing the once-per-slot guard; eviction prunes the
 // tracking so rejoiners re-exchange), the payload-layer opt-out (provider nil when off, inbound
 // dropped when off, OFF transition clears held state), the hostile-input guards that must survive
@@ -321,7 +321,7 @@ struct MeshClothingShopTests {
         shop.openWindowAtSessionEnd(now: day)
         shop.openWindowAtSessionEnd(now: day.addingTimeInterval(30 * 60))   // late second funnel call
 
-        #expect(shop.window?.opensAt == day, "Only beginNewSession resets an open window")
+        #expect(shop.window?.opensAt == day, "Only a catalog re-sent in a later session restarts a seller's hour")
     }
 
     /// Spec ("'Next session start' = first slot COMMIT, not search start"): startJoin/startNewMesh
@@ -348,23 +348,24 @@ struct MeshClothingShopTests {
         #expect(features.photos.pendingFriendReview != nil, "The friend-review batch survives search starts by design")
     }
 
-    /// The owner decision "closes when a new session starts" keys on FORMATION: the first slot
-    /// commit after a no-session state closes the previous window and drops its catalogs so the
-    /// fresh session accumulates from a clean slate.
-    @Test func firstSlotCommitClosesTheWindowAndClearsCatalogs() throws {
+    /// One hour per seller (World Friends §3, owner Q35): a new session's FORMATION — the first slot
+    /// commit after a no-session state — no longer closes the shops already open. Each runs out its
+    /// own hour, so friends from two hangouts can both have a shop open.
+    @Test func firstSlotCommitLeavesTheShopsAlreadyOpen() throws {
         let manager = store.meshNetworkManager
         try deliverCatalog(via: manager, senderName: "Robin", senderSigningKey: Data([1, 2, 3]),
                            items: [sellerItem(designer: UUID())])
         manager.leaveSession()
-        #expect(features.clothingShop.isWindowOpen)
+        let window = try #require(features.clothingShop.window)
 
         // photos-only peer: formation runs regardless of capability, and no async catalog-offer
         // task is spawned to outlive this synchronous test (the offer path has its own tests).
         commitSlot(via: manager, name: "Alex", signingKey: Data([4, 5, 6]),
                    capabilities: [ProximityCapability.photos.rawValue])   // session formation
 
-        #expect(features.clothingShop.window == nil, "The first commit closes the previous window")
-        #expect(features.clothingShop.peerCatalogs.isEmpty, "…and drops the previous session's catalogs")
+        #expect(features.clothingShop.window == window, "The first commit leaves the open shop's hour running")
+        #expect(features.clothingShop.peerCatalogs.count == 1, "…and keeps its catalog")
+        #expect(features.clothingShop.openShops().map(\.catalog.senderDisplayName) == ["Robin"])
     }
 
     /// The formation reset is once-per-formation: later commits (promoteToMesh's loop re-enters the
@@ -385,9 +386,9 @@ struct MeshClothingShopTests {
         #expect(features.clothingShop.window == nil)
     }
 
-    /// The transient-drop case the formation model makes coherent: last slot lost mid-outing opens
-    /// the window; further teardowns without a commit never extend it; a re-commit closes it, clears
-    /// catalogs, the exchange re-runs, and the REAL session end opens a fresh 1 h window.
+    /// The transient-drop case under one hour per seller: last slot lost mid-outing opens the seller's
+    /// hour; further teardowns without a catalog never extend it; a re-commit leaves it running, the
+    /// exchange re-runs and replaces the catalog, and the REAL session end restarts a fresh 1 h window.
     @Test func transientDropThenRecommitYieldsAFreshWindowAtTheRealSessionEnd() throws {
         let manager = store.meshNetworkManager
         // photos-only peers: no async catalog-offer tasks outlive this synchronous test.
@@ -404,10 +405,10 @@ struct MeshClothingShopTests {
         manager.leaveSession()
         #expect(features.clothingShop.window == transientWindow, "Repeated teardowns never extend an open window")
 
-        // Re-commit: formation closes the transient window, clears catalogs, the exchange re-runs.
+        // Re-commit: formation leaves the transient hour running and the held catalog; the exchange re-runs.
         let second = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]), capabilities: photosOnly)
-        #expect(features.clothingShop.window == nil)
-        #expect(features.clothingShop.peerCatalogs.isEmpty)
+        #expect(features.clothingShop.window == transientWindow)
+        #expect(features.clothingShop.peerCatalogs.count == 1)
         let (again, againPlain) = try catalogEnvelope(displayName: "Robin", items: [sellerItem(name: "Sun Hat", designer: UUID())])
         manager.proximityCoordinator(second.coordinator, didReceive: again, plaintext: againPlain, from: second.identity)
 

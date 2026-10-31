@@ -3170,6 +3170,7 @@
       }
     },
     "%lldm" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -13649,6 +13650,7 @@
       }
     },
     "Friend shops open, %lld minutes left" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "variations" : {
@@ -21021,6 +21023,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Abre tus recetas guardadas."
+          }
+        }
+      }
+    },
+    "Open shops" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiendas abiertas"
           }
         }
       }
@@ -63601,6 +63613,399 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Paseo en bici eliminado."
+          }
+        }
+      }
+    },
+    "worldShop.button.a11y" : {
+      "comment" : "World Home, VoiceOver: the gold shop button, with how many friends' shops are open. Spanish plurals 'abierta/abiertas'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friend shops, %lld open."
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Tiendas de amigos, %lld abierta."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Tiendas de amigos, %lld abiertas."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldShop.chip.a11y" : {
+      "comment" : "Friend shops, VoiceOver: a friend's chip in the row of open shops; their name, then the minutes left in their shop's hour. Plural on the number (1: '1 minute left')",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %#@minutes@"
+          },
+          "substitutions" : {
+            "minutes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg minute left"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg minutes left"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %#@minutes@"
+          },
+          "substitutions" : {
+            "minutes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "queda %arg minuto"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "quedan %arg minutos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldShop.closed.many" : {
+      "comment" : "Friend shops, a toast as three or more friends' shops close together; the first name, how many more, then how many shops are still open. Plural on both numbers",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s and %#@more@ shops have closed. %#@left@"
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 3,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg is still open."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg are still open."
+                    }
+                  }
+                }
+              }
+            },
+            "more" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg more friend's"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg more friends'"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tienda de %1$@ y %#@more@ han cerrado. %#@left@"
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 3,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "Queda %arg abierta."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Quedan %arg abiertas."
+                    }
+                  }
+                }
+              }
+            },
+            "more" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "la de %arg amigo más"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "las de %arg amigos más"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldShop.closed.one" : {
+      "comment" : "Friend shops, a toast as one friend's shop closes; their name, then how many shops are still open. Plural on the number (1: '1 is still open.')",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s shop has closed. %#@left@"
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg is still open."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg are still open."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tienda de %1$@ ha cerrado. %#@left@"
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "Queda %arg abierta."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Quedan %arg abiertas."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldShop.closed.two" : {
+      "comment" : "Friend shops, a toast as two friends' shops close together; their names, then how many shops are still open. Plural on the number (1: '1 is still open.')",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s and %2$@'s shops have closed. %#@left@"
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 3,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg is still open."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg are still open."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las tiendas de %1$@ y %2$@ han cerrado. %#@left@"
+          },
+          "substitutions" : {
+            "left" : {
+              "argNum" : 3,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "Queda %arg abierta."
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "Quedan %arg abiertas."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldShop.line.more" : {
+      "comment" : "World Home, the companion's speech while several friends' shops are open; the newest friend's name, then how many more. Plural on the number (1: 'and 1 more friend's shops')",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s and %#@others@ shops are open for a bit."
+          },
+          "substitutions" : {
+            "others" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg more friend's"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg more friends'"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tienda de %1$@ y %#@others@ están abiertas un rato."
+          },
+          "substitutions" : {
+            "others" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "la de %arg amigo más"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "las de %arg amigos más"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldShop.line.one" : {
+      "comment" : "World Home, the companion's speech while one friend's shop is open after a hangout; their name. Spanish: 'La tienda de Sam está abierta un rato.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@'s shop is open for a bit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tienda de %@ está abierta un rato."
           }
         }
       }

@@ -96,7 +96,10 @@ engine through its public seams.
   `ClothingShopExchange.swift` and ``ClothingCatalogPayload`` and ``ProximityClothingCatalog`` in
   `Wire/ClothingSharePayloads.swift`): catalogs exchanged during the session, once per slot and
   capability-gated, with a request for the peer's so the exchange does not depend on which side
-  commits first, and the one-hour browse window after the session; the app's
+  commits first, and one hour per seller after the session (World Friends §3): each seller whose
+  catalog arrived gets their own window at the session's end, a new session leaves the shops already
+  open running, and ``MeshClothingShop/openShops(at:)`` lists them newest hangout first, bounded at the
+  mesh's own member cap (`MeshNetworkManager.maxMeshMembers`, 16); the app's
   `allowNearbyClothingShares` opt-out is payload-layer, through the shop's providers.
 - ``ProximityActivityManager`` (`Activities/`, with its payloads in `Wire/ActivityPayloads.swift`:
   ``ActivityOfferPayload``, ``ActivityJoinRequestPayload``, ``ActivityJoinGrantPayload``,

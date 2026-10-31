@@ -64,10 +64,10 @@ public final class FernletMeshFeatures {
     /// The friend vouch list's content, and the "Friend of" labels it composes.
     public let vouchList: FernletVouchList
 
-    /// The friend-mesh clothing shop (Phase 3a): catalogs exchanged during the session + the 1-hour
-    /// post-session browse window. Its lifecycle follows the same moments that drive the friend-review
-    /// batch — but the two deliberately diverge on session FORMATION (the first slot commit): the
-    /// review batch survives it, the shop window closes. Search starts (startJoin/startNewMesh — which
+    /// The friend-mesh clothing shop (Phase 3a): catalogs exchanged during the session + each seller's
+    /// own 1-hour browse window after it (World Friends §3). Its lifecycle follows the same moments that
+    /// drive the friend-review batch; a session FORMATION (the first slot commit) leaves both standing —
+    /// the shops already open run out their own hours. Search starts (startJoin/startNewMesh — which
     /// fire on every Social-tab entry and scene reactivation) touch NEITHER.
     public let clothingShop: MeshClothingShop
 
