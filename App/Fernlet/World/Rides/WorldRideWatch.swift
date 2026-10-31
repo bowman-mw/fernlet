@@ -206,6 +206,22 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         settle(at: date)
     }
 
+    /// A flight is under way (the flight gate, World-Airports-Spec §6.1): a drive ends at `date`, a ride ends
+    /// unlogged, and the motion so far is forgotten (a plane's activity reads as a car); what changed.
+    mutating func takeOff(at date: Date) -> [WorldRideEvent] {
+        let events = isDriving ? endDrive(at: date) : []
+        if isCycling {
+            mode = .onFoot
+            endedAt = date
+        }
+        motionKind = nil
+        motionSince = nil
+        automotiveUntil = nil
+        fastSince = nil
+        fastAt = nil
+        return events
+    }
+
     /// The bike rides in a stretch of motion history (the app was closed through them), oldest first: rides
     /// that had ended by `end`, with no distance (no readings were taken).
     static func rides(in samples: [WorldMotionSample], until end: Date) -> [WorldBikeRide] {

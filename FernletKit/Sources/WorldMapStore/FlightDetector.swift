@@ -21,12 +21,27 @@ public nonisolated struct FlightFix: Equatable, Sendable {
     public var accuracy: Double
     /// CoreLocation's own speed for it, in metres a second; nil (or negative) when it gave none.
     public var speed: Double?
+    /// Its altitude above sea level, in metres; nil when CoreLocation gave none.
+    public var altitude: Double?
+    /// Its altitude's accuracy, in metres; the altitude counts only within ``FlightDetector/altitudeAccuracy``.
+    public var verticalAccuracy: Double?
 
-    public init(point: GeoPoint, at: Date, accuracy: Double, speed: Double? = nil) {
+    public init(point: GeoPoint, at: Date, accuracy: Double, speed: Double? = nil, altitude: Double? = nil,
+                verticalAccuracy: Double? = nil) {
         self.point = point
         self.at = at
         self.accuracy = accuracy
         self.speed = speed
+        self.altitude = altitude
+        self.verticalAccuracy = verticalAccuracy
+    }
+
+    /// The altitude when it is good enough to compare (its accuracy known, within
+    /// ``FlightDetector/altitudeAccuracy``); nil otherwise.
+    var knownAltitude: Double? {
+        guard let altitude, altitude.isFinite, let verticalAccuracy, verticalAccuracy >= 0,
+              verticalAccuracy <= FlightDetector.altitudeAccuracy else { return nil }
+        return altitude
     }
 }
 
@@ -102,7 +117,11 @@ public nonisolated struct FlightVerdict: Equatable, Sendable {
 ///   outside every airport's grounds over ``takeOffSpeed`` (300 km/h) within ``departureWindow`` of the last
 ///   reading on the ground inside an airport's grounds (a reading there under ``groundSpeed``, or with no
 ///   speed). 300, not lower, so a high-speed train (250–350 km/h) isn't taken for a plane; and a train
-///   rushing through grounds never counts as being there, so it never leaves them.
+///   rushing through grounds never counts as being there, so it never leaves them. The take-off-speed start
+///   also needs a climb (open question a, carbike and ideas-data 2026-10-31: a TGV leaving an airport's
+///   station): an altitude at least ``climbMetres`` above the median of the last ``groundAltitudes`` known
+///   altitudes on the ground at the airport (one jumpy reading never hands a train on an embankment its climb).
+///   With either altitude unknown, the speed alone decides, as before.
 /// - **The gap rule** (§6.1, common in flight mode): the last placed reading within ``nearAirportMetres`` of
 ///   an airport whose grounds held the person within ``departureWindow`` before it, and then a reading more
 ///   than ``gapMinMetres`` away, is a flight from that airport: one that has landed, when the reading is inside
@@ -138,6 +157,13 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
 
     /// Faster than this, outside grounds and just after an airport, is a take-off (300 km/h), in m/s.
     public static let takeOffSpeed = 300.0 / 3.6
+    /// How far above the airport's ground a take-off-speed reading must be to start a flight, in metres (a 737 is
+    /// about 600 m up a minute after rotation; high-speed lines out of airport stations stay within about 100 m).
+    public static let climbMetres = 300.0
+    /// The worst altitude accuracy that still counts, in metres.
+    public static let altitudeAccuracy = 50.0
+    /// How many known altitudes on the ground at the airport its ground is the median of.
+    public static let groundAltitudes = 5
     /// Faster than this anywhere is a flight (450 km/h), in m/s.
     public static let anywhereSpeed = 450.0 / 3.6
     /// Slower than this is on the ground (150 km/h), in m/s.
@@ -195,11 +221,21 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
         var airport: String?
     }
 
-    /// The airport last stood at, and when.
+    /// The airport last stood at, and when, with the last known altitudes on the ground there (newest last, at
+    /// most ``FlightDetector/groundAltitudes``).
     struct Departure: Codable, Equatable, Sendable {
         var token: String
         var point: GeoPoint
         var lastInside: Date
+        var altitudes: [Double]? = nil
+
+        /// The airport's ground: the median of ``altitudes``; nil with none.
+        var ground: Double? {
+            guard let altitudes, !altitudes.isEmpty else { return nil }
+            let sorted = altitudes.sorted()
+            let middle = sorted.count / 2
+            return sorted.count % 2 == 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+        }
     }
 
     /// A flight under way.
@@ -240,6 +276,7 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
         }
     }
 
+    /// Where the detector stands: on the ground, flying, or landed and still inside the grounds.
     enum Phase: Codable, Equatable, Sendable {
         case ground
         case flying(Flight)
@@ -497,10 +534,17 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
             return Start(from: from, departed: from?.lastInside ?? at, landing: nil)
         }
         if speed > Self.takeOffSpeed, reading.here.isEmpty, let departure,
-           at.timeIntervalSince(departure.lastInside) <= Self.departureWindow {
+           at.timeIntervalSince(departure.lastInside) <= Self.departureWindow, Self.hasClimbed(reading.fix, from: departure) {
             return Start(from: departure, departed: departure.lastInside, landing: nil)
         }
         return nil
+    }
+
+    /// Whether `fix` is at least ``climbMetres`` above `departure`'s ground; true when either altitude is unknown
+    /// (the speed alone decides, as before the climb rule).
+    static func hasClimbed(_ fix: FlightFix, from departure: Departure) -> Bool {
+        guard let altitude = fix.knownAltitude, let ground = departure.ground else { return true }
+        return altitude - ground >= climbMetres
     }
 
     /// A take-off: a layover becomes a transit, a trip begins if none is on, and the airport left is found.
@@ -543,7 +587,11 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
         if let airport = reading.here.first {
             let pace = reading.speed ?? reading.implied.flatMap { $0.seconds <= Self.pairTime ? $0.speed : nil }
             if pace.map({ $0 < Self.groundSpeed }) ?? true {
-                departure = Departure(token: airport.token, point: airport.point, lastInside: at)
+                var altitudes = departure?.token == airport.token ? departure?.altitudes ?? [] : []
+                if let altitude = reading.fix.knownAltitude { altitudes.append(altitude) }
+                if altitudes.count > Self.groundAltitudes { altitudes.removeFirst(altitudes.count - Self.groundAltitudes) }
+                departure = Departure(token: airport.token, point: airport.point, lastInside: at,
+                                      altitudes: altitudes.isEmpty ? nil : altitudes)
             }
         } else if let departure {
             let stale = at.timeIntervalSince(departure.lastInside) > Self.departureLookBack

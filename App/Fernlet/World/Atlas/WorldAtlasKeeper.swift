@@ -193,6 +193,48 @@ final class WorldAtlasKeeper {
         announce(found, trip: trip)
     }
 
+    // MARK: Airports and flights (the flight gate, World-Airports-Spec §3, §4.2, §6)
+
+    /// Records the person at the airport `token` at `date`, found by `find`, and announces a first visit or a new
+    /// trip on ``discoveries()`` once saved. Nothing in a decoy or before the passport can be read.
+    func recordAirport(token: String, at date: Date, by find: PassportBook.AirportFind) {
+        guard !isDecoy, loadStore() else { return }
+        do {
+            let event = try store.recordAirport(token: token, at: date, by: find)
+            book = store.book
+            onPassportChanged?()
+            if let event { subscriber?.yield(event) }
+        } catch {
+            FernletAuditLog.log("worldMap.passport.saveDeferred")
+        }
+    }
+
+    /// Keeps a flight Fernlet saw (its two airports and times, nothing else) under the one-flight rule. Nothing in
+    /// a decoy or before the passport can be read.
+    func recordFlight(_ flight: PassportFlight) {
+        update { $0.addFlights([flight]) > 0 }
+    }
+
+    /// Marks the latest trip through the airport `token` as a layover: its stamp says TRANSIT. Nothing in a decoy.
+    func markTransit(atAirport token: String) {
+        update { book in
+            guard let start = book.trips(atAirport: token).last else { return false }
+            return book.setTransit(true, atAirport: token, trip: start)
+        }
+    }
+
+    /// Changes the saved passport by `change` (which says whether anything changed), never in a decoy.
+    private func update(_ change: (inout PassportBook) -> Bool) {
+        guard !isDecoy, loadStore() else { return }
+        do {
+            guard try store.update(change) == true else { return }
+            book = store.book
+            onPassportChanged?()
+        } catch {
+            FernletAuditLog.log("worldMap.passport.saveDeferred")
+        }
+    }
+
     /// Enters or leaves a decoy session: entering shows an empty passport, leaving shows the person's again.
     func setDecoy(_ on: Bool) {
         guard on != isDecoy else { return }
