@@ -274,7 +274,9 @@ def s2_scenes(airport, geo, sources_dir, cloud=5):
     scenes = []
     for feature in airports.read_json(path).get("features", [])[:40]:
         bw, bs, be, bn = feature["bbox"]
-        if bw <= west and bs <= south and be >= east and bn >= north and "visual" in feature["assets"]:
+        href = feature["assets"].get("visual", {}).get("href", "")
+        # Only HTTPS copies: an s3:// asset (an older JPEG 2000 scene) reads back blank without credentials.
+        if bw <= west and bs <= south and be >= east and bn >= north and href.startswith("https://"):
             scenes.append({"id": feature["id"], "day": feature["properties"]["datetime"][:10],
                            "href": feature["assets"]["visual"]["href"]})
     return scenes[:S2_CANDIDATES]
@@ -303,7 +305,9 @@ def s2_picture(geo, sources_dir, token):
     right = (geo["x0"] + geo["width"] / 256.0) / n * span - span / 2
     bottom = span / 2 - (geo["y0"] + geo["height"] / 256.0) / n * span
     for scene in geo["candidates"]:
-        cache = os.path.join(sources_dir, "imagery", "s2", "%s-%s.png" % (token, scene["id"]))
+        # The cache key carries the card's geometry: a card redrawn at another size or place reads afresh.
+        key = "%d-%.4f-%.4f-%d-%d" % (geo["zoom"], geo["x0"], geo["y0"], geo["width"], geo["height"])
+        cache = os.path.join(sources_dir, "imagery", "s2", "%s-%s-%s.png" % (token, scene["id"], key))
         if os.path.isfile(cache):
             picture = Image.open(cache).convert("RGB")
         else:
@@ -318,7 +322,8 @@ def s2_picture(geo, sources_dir, token):
             picture = Image.fromarray(np.transpose(data, (1, 2, 0)).astype(np.uint8), "RGB")
             os.makedirs(os.path.dirname(cache), exist_ok=True)
             picture.save(cache)
-        empty = float((np.asarray(picture).max(axis=2) == 0).mean())
+        # Empty means no data (0) or nearly black (a blank read gives 0 or 1 in every band).
+        empty = float((np.asarray(picture).max(axis=2) <= 1).mean())
         if empty <= 0.01:
             geo["scene"], geo["day"] = scene["id"], scene["day"]
             return picture
