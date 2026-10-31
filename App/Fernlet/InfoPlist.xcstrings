@@ -33,6 +33,23 @@
         }
       }
     },
+    "NSCalendarsFullAccessUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet looks through your calendar for flights, so their arcs and tickets fill in by themselves. It reads only the date, airports and times of flight events, on this iPhone, and never changes your calendar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet busca vuelos en tu calendario para que sus arcos y billetes se completen solos. Solo lee la fecha, los aeropuertos y las horas de los vuelos, en este iPhone, y nunca cambia tu calendario."
+          }
+        }
+      }
+    },
     "NSCameraUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {

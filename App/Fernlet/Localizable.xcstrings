@@ -737,6 +737,57 @@
         }
       }
     },
+    "%@, %@, stamp" : {
+      "comment" : "VoiceOver: an airport's passport stamp: the airport's name, then its code (Heathrow, LHR, stamp)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, stamp"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, sello"
+          }
+        }
+      }
+    },
+    "%@, %@, stamp, %@" : {
+      "comment" : "VoiceOver: an airport's stamp on a passport page: its name, its code, then the stamp's date",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, stamp, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, sello, %3$@"
+          }
+        }
+      }
+    },
+    "%@, %@, transit stamp, %@" : {
+      "comment" : "VoiceOver: a layover's airport stamp on a passport page (it says TRANSIT): its name, its code, then the date",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, transit stamp, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, sello de tránsito, %3$@"
+          }
+        }
+      }
+    },
     "%@, %lld grams protein, %lld grams carbs, %lld grams fat" : {
       "localizations" : {
         "en" : {
@@ -1158,6 +1209,17 @@
         }
       }
     },
+    "%lld Fernlet saw: same day, from and to, kept once" : {
+      "comment" : "Airports: calendar flights the passport already holds because Fernlet saw them",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld que vio Fernlet: mismo día, origen y destino, guardados una vez"
+          }
+        }
+      }
+    },
     "%lld added · %lld changed" : {
       "localizations" : {
         "en" : {
@@ -1523,6 +1585,47 @@
         }
       }
     },
+    "%lld flight events with no airport codes" : {
+      "comment" : "Airports: calendar events that look like flights but name no airports, skipped",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flight event with no airport codes"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flight events with no airport codes"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelo sin códigos de aeropuerto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelos sin códigos de aeropuerto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld flights Fernlet saw, kept once" : {
       "comment" : "Airports: import flights the passport already holds because Fernlet saw them",
       "localizations" : {
@@ -1646,6 +1749,47 @@
         }
       }
     },
+    "%lld flights. They'll fill in your ticket on the day." : {
+      "comment" : "Airports: the calendar's upcoming flights, kept for their day",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flight. It'll fill in your ticket on the day."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flights. They'll fill in your ticket on the day."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelo. Completará tu billete ese día."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld vuelos. Completarán tu billete ese día."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld friends connected" : {
       "comment" : "The mesh continuation card's subtitle, e.g. '3 friends connected'. Needs a plural variation per language; English also needs the one-friend form.",
       "localizations" : {
@@ -1683,6 +1827,34 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld from your Flighty file and %lld Fernlet saw: same day, from and to, kept once" : {
+      "comment" : "Airports: calendar flights the passport already holds, from a Flighty file and from Fernlet",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld from your Flighty file and %2$lld Fernlet saw: same day, from and to, kept once"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de tu archivo de Flighty y %2$lld que vio Fernlet: mismo día, origen y destino, guardados una vez"
+          }
+        }
+      }
+    },
+    "%lld from your Flighty file: same day, from and to, kept once" : {
+      "comment" : "Airports: calendar flights the passport already holds from a Flighty file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld de tu archivo de Flighty: mismo día, origen y destino, guardados una vez"
           }
         }
       }
@@ -1749,6 +1921,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Equipo: %1$lld · %2$@"
+          }
+        }
+      }
+    },
+    "%lld layovers" : {
+      "comment" : "Sprout's passport index: the Flights row, the layovers (not one)",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld layover"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld layovers"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld escala"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld escalas"
+                }
+              }
+            }
           }
         }
       }
@@ -2688,6 +2901,40 @@
         }
       }
     },
+    "%lld · page %lld" : {
+      "comment" : "Sprout's passport index: the Flights row, how many flights then the Flights page's number (Spanish: 5 · página 7)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld · page %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld · página %2$lld"
+          }
+        }
+      }
+    },
+    "%lld · pages %lld to %lld" : {
+      "comment" : "Sprout's passport index: the Flights row, how many flights then the Flights pages' first and last numbers",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld · pages %2$lld to %3$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld · páginas %2$lld a %3$lld"
+          }
+        }
+      }
+    },
     "%lld × %@" : {
       "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
       "localizations" : {
@@ -2906,6 +3153,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "1 ejercicio · ~%lld min"
+          }
+        }
+      }
+    },
+    "1 layover" : {
+      "comment" : "Sprout's passport index: the Flights row, one layover",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 escala"
           }
         }
       }
@@ -4404,6 +4662,47 @@
         }
       }
     },
+    "Added %lld flights from your calendar" : {
+      "comment" : "Airports: shown after the calendar's past flights were added; Undo beside it",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld flight from your calendar"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld flights from your calendar"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se añadió %lld vuelo de tu calendario"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se añadieron %lld vuelos de tu calendario"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Added 15 seconds of rest." : {
       "comment" : "VoiceOver, workout runner: spoken after the '+15 s' button lengthened the rest.",
       "localizations" : {
@@ -4761,7 +5060,30 @@
         }
       }
     },
+    "Airport stamps, flights and layovers, kept on this iPhone and only in the passport's sealed backup. Never shared." : {
+      "comment" : "Privacy & data: the line under the Airports and flights switch",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sellos de aeropuerto, vuelos y escalas, guardados en este iPhone y solo en la copia sellada del pasaporte. Nunca se comparten."
+          }
+        }
+      }
+    },
+    "Airport stamps, layovers and flights leave your passport. Countries and everything else stay." : {
+      "comment" : "Privacy & data: what deleting the kept airports and flights does",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los sellos de aeropuerto, las escalas y los vuelos salen de tu pasaporte. Los países y todo lo demás se quedan."
+          }
+        }
+      }
+    },
     "Airports" : {
+      "comment" : "Sprout's passport index: the airports row",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4772,12 +5094,23 @@
       }
     },
     "Airports and flights" : {
-      "comment" : "Privacy & data: the airports and flights card's title",
+      "comment" : "Privacy & data: the airports and flights card's title\nPrivacy & data: the switch that keeps airport stamps and flights",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Aeropuertos y vuelos"
+          }
+        }
+      }
+    },
+    "Airports and flights is off in Privacy & data, so no new flights are kept." : {
+      "comment" : "Airports: an import refused while the Airports and flights switch is off",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aeropuertos y vuelos está desactivado en Privacidad y datos, así que no se guardan vuelos nuevos."
           }
         }
       }
@@ -5035,6 +5368,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Las cantidades escritas en los pasos son las de la receta original para %1$lld, no las de la escala para %2$lld de arriba."
+          }
+        }
+      }
+    },
+    "An airport not found yet" : {
+      "comment" : "VoiceOver: a dashed airport ticket in the passport, not found yet",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un aeropuerto aún sin encontrar"
           }
         }
       }
@@ -8175,6 +8519,17 @@
         }
       }
     },
+    "Couldn't look in your calendar" : {
+      "comment" : "Airports: the alert's title when the calendar couldn't be read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo mirar en tu calendario"
+          }
+        }
+      }
+    },
     "Couldn't open Messages item" : {
       "comment" : "A title for a dialog that appears when a Messages recipe import fails.",
       "isCommentAutoGenerated" : true,
@@ -9016,6 +9371,7 @@
       }
     },
     "Delete" : {
+      "comment" : "Privacy & data: deletes the kept airports and flights",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9175,6 +9531,17 @@
         }
       }
     },
+    "Delete the airports and flights kept?" : {
+      "comment" : "Privacy & data: asked after Airports and flights is turned off",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Borrar los aeropuertos y vuelos guardados?"
+          }
+        }
+      }
+    },
     "Delete this day's cycle log?" : {
       "localizations" : {
         "es" : {
@@ -9301,6 +9668,47 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Borrar, sin tocar Salud"
+          }
+        }
+      }
+    },
+    "Deleted %lld airports and flights" : {
+      "comment" : "VoiceOver: announced after the kept airports and flights were deleted; their number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deleted %lld airport or flight"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Deleted %lld airports and flights"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se borró %lld aeropuerto o vuelo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Se borraron %lld aeropuertos y vuelos"
+                }
+              }
+            }
           }
         }
       }
@@ -11539,6 +11947,17 @@
         }
       }
     },
+    "Fernlet can't read your calendar. To allow it, go to iOS Settings → Fernlet → Calendars, then turn this on again." : {
+      "comment" : "Privacy & data: the note under Flights from Calendar when calendar access isn't allowed",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no puede leer tu calendario. Para permitirlo, ve a Ajustes de iOS → Fernlet → Calendarios y vuelve a activar esto."
+          }
+        }
+      }
+    },
     "Fernlet can't undo this." : {
       "localizations" : {
         "es" : {
@@ -12353,6 +12772,17 @@
         }
       }
     },
+    "Finds flight events and fills in arcs, the Flights page and your tickets. Off until you turn it on." : {
+      "comment" : "Privacy & data: the line under Flights from Calendar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encuentra vuelos y completa los arcos, la página de Vuelos y tus billetes. Desactivado hasta que lo actives."
+          }
+        }
+      }
+    },
     "Finish" : {
       "localizations" : {
         "es" : {
@@ -12526,6 +12956,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Vuelos"
+          }
+        }
+      }
+    },
+    "Flights from Calendar" : {
+      "comment" : "Privacy & data: the switch that finds flights in the calendar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos del Calendario"
+          }
+        }
+      }
+    },
+    "Flights in your calendar" : {
+      "comment" : "Airports: the calendar look's summary sheet's title",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos en tu calendario"
           }
         }
       }
@@ -12833,6 +13285,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Se encontraron %1$lld vuelos, %2$lld aeropuertos, %3$lld países, de %4$@ a %5$@"
+          }
+        }
+      }
+    },
+    "Found %lld flights, %lld airports, %lld upcoming, %@ to %@" : {
+      "comment" : "VoiceOver: the calendar summary's tiles: flights, airports, upcoming flights, first and last year",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Found %1$lld flights, %2$lld airports, %3$lld upcoming, %4$@ to %5$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se encontraron %1$lld vuelos, %2$lld aeropuertos, %3$lld próximos, de %4$@ a %5$@"
           }
         }
       }
@@ -13160,6 +13629,17 @@
         }
       }
     },
+    "From Calendar" : {
+      "comment" : "Sprout's passport Flights page: turns on Flights from Calendar",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Del Calendario"
+          }
+        }
+      }
+    },
     "From a Flighty export file" : {
       "comment" : "Privacy & data: the line under Add past flights",
       "localizations" : {
@@ -13178,6 +13658,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "De un archivo exportado de Flighty. Se lee en este iPhone y nunca se envía."
+          }
+        }
+      }
+    },
+    "From a Flighty file" : {
+      "comment" : "Sprout's passport Flights page: adds past flights from a Flighty export file",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De un archivo de Flighty"
           }
         }
       }
@@ -15667,6 +16158,17 @@
         }
       }
     },
+    "Keep them" : {
+      "comment" : "Privacy & data: keeps the airports and flights already kept",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Conservarlos"
+          }
+        }
+      }
+    },
     "Keep this in your recipe book to log again later." : {
       "localizations" : {
         "es" : {
@@ -16743,6 +17245,17 @@
         }
       }
     },
+    "Looked back to %@" : {
+      "comment" : "Airports: the calendar summary's subtitle; the first year read",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisado hasta %@"
+          }
+        }
+      }
+    },
     "Looking barcodes up online is off. You can turn on Web nutrition lookup in Settings." : {
       "localizations" : {
         "es" : {
@@ -16789,6 +17302,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Buscando personas cerca..."
+          }
+        }
+      }
+    },
+    "Looking through your calendar…" : {
+      "comment" : "Privacy & data: shown while Fernlet looks through the calendar for flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscando en tu calendario…"
           }
         }
       }
@@ -22485,6 +23009,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Se lee"
+          }
+        }
+      }
+    },
+    "Read on this iPhone. Fernlet keeps each flight's date, airports and times, and never changes your calendar." : {
+      "comment" : "Airports: the calendar summary's privacy notice",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se lee en este iPhone. Fernlet guarda la fecha, los aeropuertos y las horas de cada vuelo, y nunca cambia tu calendario."
           }
         }
       }
@@ -28395,6 +28930,17 @@
         }
       }
     },
+    "TRANSIT" : {
+      "comment" : "Sprout's passport: printed on a layover's airport stamp where the city goes (capitals; Spanish TRÁNSITO)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "TRÁNSITO"
+          }
+        }
+      }
+    },
     "TWO-COLUMN LABEL DETECTED" : {
       "localizations" : {
         "es" : {
@@ -30914,6 +31460,17 @@
         }
       }
     },
+    "Turn off Calendar access in iOS Settings → Fernlet too, if you like." : {
+      "comment" : "Privacy & data: the note under Flights from Calendar while it's on",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si quieres, desactiva también el acceso al Calendario en Ajustes de iOS → Fernlet."
+          }
+        }
+      }
+    },
     "Turn off Health integration?" : {
       "localizations" : {
         "es" : {
@@ -31030,6 +31587,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Activar"
+          }
+        }
+      }
+    },
+    "Turn on Airports and flights in Privacy & data first." : {
+      "comment" : "Airports: the calendar can't be read while Airports and flights is off",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Primero activa Aeropuertos y vuelos en Privacidad y datos."
           }
         }
       }
@@ -31151,6 +31719,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Pasa a su página."
+          }
+        }
+      }
+    },
+    "Turns to the Flights page." : {
+      "comment" : "VoiceOver hint: the passport index's Flights row turns to the Flights page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasa a la página de Vuelos."
           }
         }
       }
@@ -31401,6 +31980,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hasta esta cantidad por debajo de lo que se estima que tu cuerpo usa en un día. Tus calorías nunca bajan de un mínimo seguro para tu cuerpo, elijas lo que elijas."
+          }
+        }
+      }
+    },
+    "Upcoming" : {
+      "comment" : "Airports: the calendar summary's heading for flights still to come",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Próximos"
           }
         }
       }
@@ -36029,8 +36619,19 @@
         }
       }
     },
+    "airport" : {
+      "comment" : "Sprout's passport page 2: after one airport found (no total)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "aeropuerto"
+          }
+        }
+      }
+    },
     "airports" : {
-      "comment" : "Airports: the import summary tile under the number of airports",
+      "comment" : "Airports: the import summary tile under the number of airports\nSprout's passport page 2: after the airports found (not one; no total)",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -49236,6 +49837,24 @@
         }
       }
     },
+    "passport.newStampBanner.airportDetail" : {
+      "comment" : "Home banner's second line when ten minutes at a big airport stamped it; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ten minutes at the airport found it. It's in %@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diez minutos en el aeropuerto bastaron. Ya está en el pasaporte de %@."
+          }
+        }
+      }
+    },
     "passport.newStampBanner.detail" : {
       "comment" : "Home banner's second line when a passport stamp is earned; the companion's name (Spanish: Está en el pasaporte de Sprout.)",
       "extractionState" : "extracted_with_value",
@@ -56988,6 +57607,17 @@
         }
       }
     },
+    "upcoming" : {
+      "comment" : "Airports: the calendar summary tile under the number of upcoming flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "próximos"
+          }
+        }
+      }
+    },
     "via %@" : {
       "comment" : "Sprout's passport Flights page: a trip's stop, its length unknown",
       "localizations" : {
@@ -57283,6 +57913,366 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Has sido constante con %@ — puedes seguir así, salvo que algo haya cambiado."
+          }
+        }
+      }
+    },
+    "worldAirport.banner.dwell" : {
+      "comment" : "World Home banner for an airport found by ten minutes inside it, second line; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ten minutes at the airport found it. It's in %@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diez minutos en el aeropuerto bastaron. Ya está en el pasaporte de %@."
+          }
+        }
+      }
+    },
+    "worldAirport.banner.hint" : {
+      "comment" : "VoiceOver hint on a Home airport banner",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens the passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre el pasaporte."
+          }
+        }
+      }
+    },
+    "worldAirport.banner.landed" : {
+      "comment" : "World Home banner just after a flight lands; the airport's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Landed at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aterrizaste en %@"
+          }
+        }
+      }
+    },
+    "worldAirport.banner.landed.both" : {
+      "comment" : "World Home landing banner, second line; the airport's name, the continent's, then the country's (with 'the' in English where it takes one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp: %1$@. %2$@'s and %3$@'s come when you leave the airport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo: %1$@. Los de %2$@ y %3$@ llegan cuando salgas del aeropuerto."
+          }
+        }
+      }
+    },
+    "worldAirport.banner.landed.country" : {
+      "comment" : "World Home landing banner, second line when only the country's stamp waits; the airport's name, then the country's (capitalised, with 'The' in English where it takes one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp: %1$@. %2$@'s comes when you leave the airport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo: %1$@. El de %2$@ llega cuando salgas del aeropuerto."
+          }
+        }
+      }
+    },
+    "worldAirport.banner.landed.none" : {
+      "comment" : "World Home landing banner, second line when no country stamp waits; the airport's name, then the companion's",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp: %1$@. It's in %2$@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sello nuevo: %1$@. Está en el pasaporte de %2$@."
+          }
+        }
+      }
+    },
+    "worldAirport.banner.spoken" : {
+      "comment" : "VoiceOver: a Home airport banner; its title, then its second line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
+    "worldAirport.duration.hours" : {
+      "comment" : "World Home, the layover counter's time on the hour; hours",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld h"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld h"
+          }
+        }
+      }
+    },
+    "worldAirport.duration.hoursMinutes" : {
+      "comment" : "World Home, the layover counter's time; hours, then minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld h %2$lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld h %2$lld min"
+          }
+        }
+      }
+    },
+    "worldAirport.duration.minutes" : {
+      "comment" : "World Home, the layover counter's time under an hour; minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld min"
+          }
+        }
+      }
+    },
+    "worldAirport.flying.line.1" : {
+      "comment" : "Sprout's bubble on Home while flying, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up in the air! Wake me when we land."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡En el aire! Despiértame al aterrizar."
+          }
+        }
+      }
+    },
+    "worldAirport.flying.line.2" : {
+      "comment" : "Sprout's bubble on Home while flying, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clouds look like snacks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las nubes parecen tentempiés."
+          }
+        }
+      }
+    },
+    "worldAirport.flying.line.3" : {
+      "comment" : "Sprout's bubble on Home while flying, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Are we there yet?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Ya llegamos?"
+          }
+        }
+      }
+    },
+    "worldAirport.flying.scene" : {
+      "comment" : "VoiceOver: Home while flying, the scene of the companion looking out of a plane's window; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, flying, its face pressed to the plane's window"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, volando, con la cara pegada a la ventanilla del avión"
+          }
+        }
+      }
+    },
+    "worldAirport.found.spoken" : {
+      "comment" : "World Home, VoiceOver: a found airport's tower on the map; its name, then its code",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, airport, found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, aeropuerto, encontrado"
+          }
+        }
+      }
+    },
+    "worldAirport.layover.detail" : {
+      "comment" : "World Home, the layover counter's second line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Since you landed. Fly on, and its stamp says Transit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desde que aterrizaste. Si sigues volando, su sello dirá Tránsito."
+          }
+        }
+      }
+    },
+    "worldAirport.layover.title" : {
+      "comment" : "World Home, the layover counter after a landing; the airport's city, then the time since landing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Layover at %1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escala en %1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "worldAirport.notFound.spoken" : {
+      "comment" : "World Home, VoiceOver: an airport not found yet, its tower drawn grey and unnamed through the fog",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Airport, not found yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aeropuerto, aún sin encontrar"
+          }
+        }
+      }
+    },
+    "worldAirport.tag" : {
+      "comment" : "World Home, the place tag beside the blue button inside an airport's grounds; the airport's code",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "At the airport · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En el aeropuerto · %@"
+          }
+        }
+      }
+    },
+    "worldAirport.tag.spoken" : {
+      "comment" : "World Home, VoiceOver: the place tag inside an airport's grounds; the airport's code",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "At the airport, %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En el aeropuerto, %@"
           }
         }
       }
@@ -58799,6 +59789,60 @@
         }
       }
     },
+    "worldLines.airport.1" : {
+      "comment" : "Sprout's line on first finding an airport, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "An airport! Are we going somewhere?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Un aeropuerto! ¿Nos vamos a algún sitio?"
+          }
+        }
+      }
+    },
+    "worldLines.airport.2" : {
+      "comment" : "Sprout's line on first finding an airport, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "So many planes. Which one is ours?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Cuántos aviones! ¿Cuál es el nuestro?"
+          }
+        }
+      }
+    },
+    "worldLines.airport.3" : {
+      "comment" : "Sprout's line on first finding an airport, line 3 of 3 (Sprout's leaf is packed)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leaf packed. Let's fly!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoja lista. ¡A volar!"
+          }
+        }
+      }
+    },
     "worldLines.allContinents.1" : {
       "comment" : "Sprout's line on first reaching a new place: all seven continents, line 1 of 3",
       "extractionState" : "extracted_with_value",
@@ -59389,6 +60433,60 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cuidado, resbala."
+          }
+        }
+      }
+    },
+    "worldLines.landing.1" : {
+      "comment" : "Sprout's line just after a flight lands, line 1 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "We flew! My leaf's all fluffy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Volamos! Tengo la hoja toda esponjada."
+          }
+        }
+      }
+    },
+    "worldLines.landing.2" : {
+      "comment" : "Sprout's line just after a flight lands, line 2 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Touchdown! Where are we?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Aterrizamos! ¿Dónde estamos?"
+          }
+        }
+      }
+    },
+    "worldLines.landing.3" : {
+      "comment" : "Sprout's line just after a flight lands, line 3 of 3",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That was a long nap."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Qué siesta tan larga."
           }
         }
       }
@@ -61388,6 +62486,24 @@
         }
       }
     },
+    "worldQuickStart.note.atAirport" : {
+      "comment" : "World Home quick-start card inside an airport's grounds, under its name (Spanish: Estás en el aeropuerto.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're at the airport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estás en el aeropuerto."
+          }
+        }
+      }
+    },
     "worldQuickStart.note.atHome" : {
       "comment" : "World Home quick-start card at one of the person's homes (`ref-home-blue`; Spanish: Estás en casa. Esto tienes a mano.)",
       "extractionState" : "extracted_with_value",
@@ -62872,6 +63988,492 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El tiempo con amigos sube tu puntuación de cuidado al %1$lld %% hasta las %2$@."
+          }
+        }
+      }
+    },
+    "worldTrip.endTrip" : {
+      "comment" : "World Home quick start while a trip with no destination is on: ends it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar el viaje"
+          }
+        }
+      }
+    },
+    "worldTrip.endTrip.detail" : {
+      "comment" : "World Home quick start: under 'End trip'; a trip also ends on its own back home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It ends by itself when you get home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termina sola cuando llegas a casa"
+          }
+        }
+      }
+    },
+    "worldTrip.endTrip.to" : {
+      "comment" : "World Home quick start while a trip is on: ends it; the destination's city (Spanish: Terminar el viaje · …)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End trip · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar el viaje · %@"
+          }
+        }
+      }
+    },
+    "worldTrip.ended" : {
+      "comment" : "VoiceOver: said after End trip in the quick start",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trip ended"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Viaje terminado"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.date" : {
+      "comment" : "The companion's boarding pass: the date's label (Spanish: Fecha)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fecha"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.from" : {
+      "comment" : "The companion's boarding pass: the departure airport's label (Spanish: De)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.fromFillsIn" : {
+      "comment" : "The companion's ticket away from an airport: under an empty From",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fills in at the airport you leave from"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se completa en el aeropuerto de salida"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.header" : {
+      "comment" : "The companion's boarding pass: its green header band (Spanish: Tarjeta de embarque)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Boarding pass"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tarjeta de embarque"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.passenger" : {
+      "comment" : "The companion's boarding pass: the passenger's label (Spanish: Pasajero)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passenger"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasajero"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.seat" : {
+      "comment" : "The companion's boarding pass: the seat's label (Spanish: Asiento)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Asiento"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.spoken" : {
+      "comment" : "VoiceOver: the companion's boarding pass; the companion's name, the departure and arrival (each a code and city), the date (Spanish: Tarjeta de embarque de …. De …, a …. ….)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s boarding pass. From %2$@, to %3$@. %4$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tarjeta de embarque de %1$@. De %2$@, a %3$@. %4$@."
+          }
+        }
+      }
+    },
+    "worldTrip.pass.spoken.open" : {
+      "comment" : "VoiceOver: the companion's boarding pass before landing; the companion's name, the departure (code and name), the date (Spanish: Tarjeta de embarque de …. De …. A: aún no se sabe, se completa al aterrizar. ….)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s boarding pass. From %2$@. To: not known yet, it fills in when you land. %3$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tarjeta de embarque de %1$@. De %2$@. A: aún no se sabe, se completa al aterrizar. %3$@."
+          }
+        }
+      }
+    },
+    "worldTrip.pass.stub" : {
+      "comment" : "The companion's boarding pass before landing: the line beside the barcode; the companion's name (Spanish: Se completa al aterrizar y pasa al pasaporte de …)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fills in when you land, then goes in %@'s passport."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se completa al aterrizar y pasa al pasaporte de %@."
+          }
+        }
+      }
+    },
+    "worldTrip.pass.to" : {
+      "comment" : "The companion's boarding pass: the arrival airport's label, and the ticket's To field (Spanish: A)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "To"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.wherever" : {
+      "comment" : "The companion's boarding pass: under an empty To before landing (Spanish: Donde aterrices)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wherever you land"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Donde aterrices"
+          }
+        }
+      }
+    },
+    "worldTrip.pass.window" : {
+      "comment" : "The companion's boarding pass: its seat, always the window, a joke (Spanish: Ventanilla)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Window"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ventanilla"
+          }
+        }
+      }
+    },
+    "worldTrip.started" : {
+      "comment" : "VoiceOver: said after Start trip on the companion's boarding pass",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trip started"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Viaje empezado"
+          }
+        }
+      }
+    },
+    "worldTrip.suggestion.city" : {
+      "comment" : "The companion's ticket: a suggestion for every airport of a city; the city (Spanish: … · todos los aeropuertos)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · every airport"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · todos los aeropuertos"
+          }
+        }
+      }
+    },
+    "worldTrip.takeATrip" : {
+      "comment" : "World Home quick start and the Home Screen quick action: opens the companion's boarding pass to start a trip (Spanish: Hacer un viaje)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Take a trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hacer un viaje"
+          }
+        }
+      }
+    },
+    "worldTrip.takeATrip.detail" : {
+      "comment" : "World Home quick start: under 'Take a trip'; the companion's name (Spanish: La tarjeta de embarque de …: di adónde vas)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@'s boarding pass: say where you're going"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tarjeta de embarque de %@: di adónde vas"
+          }
+        }
+      }
+    },
+    "worldTrip.ticket.leaveBlank" : {
+      "comment" : "The companion's ticket: under Start trip (Spanish: ¿Aún no lo sabes? Deja A en blanco; se completa al aterrizar.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not sure yet? Leave To blank; it fills in when you land."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Aún no lo sabes? Deja A en blanco; se completa al aterrizar."
+          }
+        }
+      }
+    },
+    "worldTrip.ticket.spoken" : {
+      "comment" : "VoiceOver: the companion's ticket; the companion's name (Spanish: Hacer un viaje. Tarjeta de embarque de ….)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Take a trip. %@'s boarding pass."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hacer un viaje. Tarjeta de embarque de %@."
+          }
+        }
+      }
+    },
+    "worldTrip.ticket.start" : {
+      "comment" : "The companion's ticket: starts the trip (Spanish: Empezar el viaje)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar el viaje"
+          }
+        }
+      }
+    },
+    "worldTrip.ticket.suggestions" : {
+      "comment" : "VoiceOver: the airport suggestions under the companion's ticket (Spanish: Sugerencias)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggestions"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sugerencias"
+          }
+        }
+      }
+    },
+    "worldTrip.ticket.toPrompt" : {
+      "comment" : "The companion's ticket: the To field's placeholder (Spanish: Ciudad, aeropuerto o código)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A city, airport or code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ciudad, aeropuerto o código"
+          }
+        }
+      }
+    },
+    "worldTrip.today.label" : {
+      "comment" : "World Home: the label beside the blue button at the airport on a calendar flight's day; the destination's city (Spanish: Viaje a …)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trip to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Viaje a %@"
+          }
+        }
+      }
+    },
+    "worldTrip.today.line" : {
+      "comment" : "World Home: the companion's line at the airport on a calendar flight's day; the destination's city (Spanish: ¿… hoy? ¡Tu billete está listo!)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ today? Your ticket's ready!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿%@ hoy? ¡Tu billete está listo!"
           }
         }
       }
