@@ -1,7 +1,7 @@
 import Foundation
 
 /// The silly-stat stamps as pixel art, for the World's stamp banner (designs `b1-stamp-banner` and
-/// `b2-stamp-art`, approved 2026-10-23 and 2026-10-24). All nineteen are drawn. The duck, the tooth and
+/// `b2-stamp-art`, approved 2026-10-23 and 2026-10-24). All twenty are drawn (Far Afield's signpost joined in Refinements group 12). The duck, the tooth and
 /// the moon gained ink outlines in `b2-stamp-art` so they read on the banner's gold disc; the cookie, the
 /// leaf and the heart are the World's own sprites.
 enum WorldStampArt {
@@ -37,6 +37,9 @@ enum WorldStampArt {
                                    palette: ["k": 0x4A2E1C, "w": 0xFFFDF8])
     static let floss = WorldSprite(rows: ["..kkkkk.", ".kmmmmmk", ".kmwwwmk", ".kmmmmmk", ".kkkkkkk", "...k....", "....k...", ".....k.."],
                                    palette: ["k": 0x4A2E1C, "m": 0x9FC58D, "w": 0xFFFDF8])
+    /// Far Afield (Furthest from home): a signpost pointing both ways.
+    static let signpost = WorldSprite(rows: ["...kk...", "kkkkkkk.", "kyyyyyyk", "kkkkkkk.", "...kk...", ".kkkkkkk", "kwwwwwwk", ".kkkkkkk", "...kk...", "...kk..."],
+                                      palette: ["k": 0x4A2E1C, "w": 0xD9A56E, "y": 0xF2C14E])
 
     /// The stamp's pixel art.
     static func sprite(for kind: SillyStatKind) -> WorldSprite {
@@ -52,6 +55,7 @@ enum WorldStampArt {
         case .moonwalk: moon
         case .stairwayToSomewhere: stairs
         case .grandTours: wheel
+        case .furthestFromHome: signpost
         case .shakespeareSteps: skull
         case .koalaDays: WorldSprites.leaf
         case .dreamCinema: film

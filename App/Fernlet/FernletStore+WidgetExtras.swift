@@ -12,7 +12,7 @@ import FernletSocial
 /// whole wipe story for both — no new file, no new key.
 extension FernletStore {
 
-    /// The most stamps the widget snapshot carries (R3): the nineteen stats, with headroom for kinds
+    /// The most stamps the widget snapshot carries (R3): the twenty stats, with headroom for kinds
     /// a newer build adds. The stamp book itself is capped at `SillyStampStore.maxRows`.
     static let widgetStampLimit = 64
 

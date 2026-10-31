@@ -381,7 +381,7 @@ struct SillyStatsTokenTests {
     @Test func frozenKindTokens() {
         #expect(SillyStatKind.allCases.map(\.rawValue) == [
             "cookiesPerDay", "bananasForScale", "eggonomics", "pizzaPieChart", "bathtubIndex", "coffeeTower",
-            "signatureDish", "totalTonnage", "moonwalk", "stairwayToSomewhere", "grandTours", "shakespeareSteps",
+            "signatureDish", "totalTonnage", "moonwalk", "stairwayToSomewhere", "grandTours", "furthestFromHome", "shakespeareSteps",
             "koalaDays", "dreamCinema", "flossRope", "brushMarathon", "showerConcerts", "patsGiven",
             "gastrotrichLifetimes",
         ])
