@@ -65,7 +65,7 @@ struct WorldViewMapDrawingTests {
         #expect(abs(drawing.placement(on: across).centre.x - Self.phone.width / 2) < WorldViewMapDrawing.refreshDrift)
     }
 
-    /// The hexes go in one path per colour, in a fixed order; an uncovered hex adds the found colour and the
+    /// The hexes go in one path per colour, the found ones last; an uncovered hex adds the found colour and the
     /// roads' clip; the drawing covers the screen and the margin round it.
     @Test func buildGroupsTheHexesByColour() {
         let camera = WorldViewCamera(level: .state, centre: Self.portland, size: Self.phone)
@@ -76,7 +76,7 @@ struct WorldViewMapDrawingTests {
         let centre = AtlasZoomLevel.state.hexGrid.cell(x: camera.x, y: camera.y)
         var opened = Self.facts(.state, found: [centre])
         let found = WorldViewMapDrawing.build(key, facts: &opened)
-        #expect(found.hexes.map(\.fill) == found.hexes.map(\.fill).sorted() && found.hexes.count == 2)
+        #expect(found.hexes.map(\.found) == [false, true], "the found hexes' edges on top")
         #expect(!found.uncovered.isEmpty)
         let bounds = sea.hexes[0].path.boundingRect, size = key.camera.size
         #expect(bounds.minX <= 0 && bounds.minY <= 0 && bounds.maxX >= size.width && bounds.maxY >= size.height)

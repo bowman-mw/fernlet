@@ -79,9 +79,10 @@ nonisolated struct WorldViewMapDrawing: Sendable {
         let dark: Bool
     }
 
-    /// One fill colour's hexes, with their edge colour.
+    /// One fill colour's hexes, with their edge colour and whether they are uncovered.
     struct HexFill: Sendable {
         let fill: UInt32, edge: UInt32
+        let found: Bool
         var path: Path
     }
 
@@ -93,7 +94,7 @@ nonisolated struct WorldViewMapDrawing: Sendable {
 
     /// What it was built for.
     let key: Key
-    /// The hexes, one path per fill colour (land then water, fogged then found).
+    /// The hexes, one path per fill colour: the fogged ones first, so the found ones' edges lie on top.
     let hexes: [HexFill]
     /// The state and province lines.
     let region: Path
@@ -142,7 +143,7 @@ nonisolated struct WorldViewMapDrawing: Sendable {
             let ink = WorldViewInk.hex(land: land, found: found, dark: key.dark)
             let outline = hexPoints(camera.screenPoint(x: hex.x, y: hex.y), corners)
             // In place: the dictionary's path is the only reference, so adding to it never copies it.
-            fills[ink.fill, default: HexFill(fill: ink.fill, edge: ink.edge, path: Path())].path.addLines(outline)
+            fills[ink.fill, default: HexFill(fill: ink.fill, edge: ink.edge, found: found, path: Path())].path.addLines(outline)
             fills[ink.fill]?.path.closeSubpath()
             if found {
                 uncovered.addLines(outline)
@@ -150,7 +151,7 @@ nonisolated struct WorldViewMapDrawing: Sendable {
             }
         }
         let lines = linePaths(visible, camera: camera, facts: &facts)
-        let ordered = fills.values.sorted { $0.fill < $1.fill }
+        let ordered = fills.values.sorted { ($0.found ? 1 : 0, $0.fill) < ($1.found ? 1 : 0, $1.fill) }
         return WorldViewMapDrawing(key: key, hexes: ordered, region: lines.region, country: lines.country,
                                    uncovered: uncovered, roads: roadPaths(camera, facts: facts, uncovered: uncovered))
     }
