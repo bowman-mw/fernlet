@@ -98,8 +98,9 @@ struct TapToConnectPlate: View {
 
 /// The question each phone shows after the tap (World Friends §1.3, `fr-tap-found`): a full-height sheet titled
 /// "Start a hangout with Rae?", Not now top left, the other person's companion large with the name they appear as,
-/// what a hangout is, and Start hangout. After Start hangout it waits: "Waiting for Rae…" in the button's place and
-/// no Not now, since a yes can't be taken back; it goes when the hangout starts or the other says Not now.
+/// what a hangout is, and Start hangout. After Start hangout it waits: "Waiting for Rae…" in the button's place, with
+/// Not now still there to take the yes back; it goes when the hangout starts, the other says Not now, or two minutes
+/// pass with no answer.
 ///
 /// The companion is decoration (the name says who); VoiceOver's escape gesture is Not now, as the top-left button.
 struct TapToConnectQuestionSheet: View {
@@ -121,12 +122,12 @@ struct TapToConnectQuestionSheet: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             SheetHeader(title: Text(TapToConnectCopy.question(question.shownName))) {
-                if !isWaiting { notNowButton }
+                notNowButton
             }
         }
         .fernletSheet()
-        // VoiceOver's escape gesture (the two-finger scrub) is Not now while Not now is offered.
-        .accessibilityAction(.escape) { if !isWaiting { onAnswer(false) } }
+        // VoiceOver's escape gesture (the two-finger scrub) is Not now, before or after a yes.
+        .accessibilityAction(.escape) { onAnswer(false) }
         .accessibilityIdentifier("tap.question")
     }
 

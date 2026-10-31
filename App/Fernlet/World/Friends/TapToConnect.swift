@@ -95,11 +95,21 @@ final class TapToConnectController {
         self.rendezvous = rendezvous
         self.now = now
         self.presentation = TapToConnectPresentation(rendezvous: rendezvous)
-        presentation.answer = { [weak self] yes in self?.rendezvous.answer(yes) }
+        presentation.answer = { [weak self] yes in self?.answer(yes) }
         rendezvous.onTap = { [weak self] in self?.presentation.tapCount += 1 }
         rendezvous.onMatched = { [weak self] match in self?.matched(match) }
         rendezvous.onEnded = { [weak self] end in
             if end == .declinedThere { self?.presentation.declinedThereCount += 1 }
+        }
+    }
+
+    /// The person's answer: Start hangout or Not now to the question, or Not now while waiting, which
+    /// takes a yes back (the other phone sees the link end; nothing long-term was sent).
+    private func answer(_ yes: Bool) {
+        if !yes, rendezvous.isWaitingForPeer {
+            rendezvous.withdraw()
+        } else {
+            rendezvous.answer(yes)
         }
     }
 
