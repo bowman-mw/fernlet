@@ -4307,6 +4307,16 @@
         }
       }
     },
+    "Airports" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aeropuertos"
+          }
+        }
+      }
+    },
     "Album" : {
       "localizations" : {
         "es" : {
@@ -11167,6 +11177,16 @@
         }
       }
     },
+    "Fernlet draws its own outlines of some airports' grounds. They start from the US Census Bureau's TIGER/Line 2015 airport areas, which are in the public domain, or from CORINE Land Cover 2018, and were traced by eye over the pictures below. Fernlet changed the data: it simplified the outlines and kept only their points; the pictures aren't in the app." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet dibuja sus propios contornos del recinto de algunos aeropuertos. Parten de las zonas de aeropuerto TIGER/Line 2015 de la Oficina del Censo de EE. UU., de dominio público, o de CORINE Land Cover 2018, y se trazaron a ojo sobre las imágenes de abajo. Fernlet cambió los datos: simplificó los contornos y guardó solo sus puntos; las imágenes no están en la app."
+          }
+        }
+      }
+    },
     "Fernlet fits each session into this time: a shorter warm-up first, then fewer extra exercises, then fewer sets. Your main lifts always stay." : {
       "comment" : "Workout setup: how the session-length choice shapes each planned session",
       "localizations" : {
@@ -16124,6 +16144,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Músculos principales"
+          }
+        }
+      }
+    },
+    "Major roads crossed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Grandes carreteras cruzadas"
           }
         }
       }
@@ -27986,6 +28016,16 @@
         }
       }
     },
+    "The World map's land, lakes, seas, countries, states and provinces, cities and major roads come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tierra, los lagos, los mares, los países, los estados y provincias, las ciudades y las carreteras principales del mapa del Mundo vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Las dos fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+          }
+        }
+      }
+    },
     "The World map's land, seas, countries and cities come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -27998,11 +28038,22 @@
       }
     },
     "The World map's land, seas, countries, states and provinces, cities and major roads come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La tierra, los mares, los países, los estados y provincias, las ciudades y las carreteras principales del mapa del Mundo vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Las dos fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+          }
+        }
+      }
+    },
+    "The airports, their codes, positions and runways come from OurAirports, which is in the public domain. Their Spanish names and the cities they serve come from Wikidata, under CC0, and their time zones from the tz database, which is in the public domain. All of it travels inside the app: Fernlet never downloads airport data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los aeropuertos, sus códigos, posiciones y pistas vienen de OurAirports, que es de dominio público. Sus nombres en español y las ciudades a las que sirven vienen de Wikidata, con licencia CC0, y sus husos horarios de la base de datos tz, también de dominio público. Todo viaja dentro de la app: Fernlet nunca descarga datos de aeropuertos."
           }
         }
       }
