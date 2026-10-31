@@ -150,7 +150,7 @@ struct WorldTripHomeDriver: ViewModifier {
             openCard()
         case "ticket":
             var request = store.worldTicketRequest(today: nil)
-            request.text = "Lon"
+            request.text = WorldTripDemo.typed
             trip.ticket = request
         case "pass":
             if let airport = store.worldCurrentAirport { trip.openPass(store, at: airport) }
@@ -158,4 +158,10 @@ struct WorldTripHomeDriver: ViewModifier {
             break
         }
     }
+}
+
+/// The DEBUG ticket scene's typed letters: what a person would type, not display copy (a frozen token for the
+/// screenshot, never shown as Fernlet's own words).
+nonisolated enum WorldTripDemo {
+    static let typed = "Lon"
 }
