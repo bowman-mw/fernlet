@@ -40,7 +40,7 @@ extension WorldAtlas {
 
     /// The city `point` is in, by the rule above, or nil. Bounded: the city index's few cells (see
     /// `AtlasCityIndex`), then, only when the nearest city in reach lies outside its own core, one pass over
-    /// the urban boundaries (decoder-capped, each box tested before its rings).
+    /// the urban boundaries listed in the fix's one-degree cell (each box tested before its rings).
     public func city(at point: GeoPoint) -> AtlasCity? {
         city(at: point, inCountry: country(at: point)?.code)
     }
@@ -58,11 +58,15 @@ extension WorldAtlas {
         return nearest.core.map { cities[$0] }
     }
 
-    /// Whether `point` lies inside any urban boundary. Bounded: one pass over the boundaries (at most
-    /// `WorldAtlasLayers.maxUrbanAreas`), each box tested before its rings.
+    /// Whether `point` lies inside any urban boundary. Bounded: the boundaries whose boxes touch its
+    /// one-degree cell (`AtlasBoxIndex`, at most `WorldAtlasLayers.maxUrbanAreas`), each box tested before its
+    /// rings.
     public func isUrban(_ point: GeoPoint) -> Bool {
         guard point.isValid else { return false }
-        return urbanAreas.contains { $0.contains(point) }
+        // Bounded: the cell's boundaries, each listed once.
+        return urbanBoxes.candidates(at: point).contains { index in
+            urbanAreas.indices.contains(Int(index)) && urbanAreas[Int(index)].contains(point)
+        }
     }
 
     /// The urban boundary that holds `city`'s own point (the pack's `CITY` polygon field), or nil: for the
