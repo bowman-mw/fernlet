@@ -350,6 +350,17 @@
         }
       }
     },
+    "Far Afield" : {
+      "comment" : "Silly stats stamp name, earned when Furthest from home first appears (the map uncovered 5 km or more from a home)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bien lejos"
+          }
+        }
+      }
+    },
     "Fernlet" : {
       "localizations" : {
         "es" : {
