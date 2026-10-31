@@ -54585,6 +54585,24 @@
         }
       }
     },
+    "workoutFallback.travelDayReset" : {
+      "comment" : "Name of the workout Fernlet suggests on a travel day (a flight's date, or the day after an overnight flight): an easy walk and stretches for the legs, hips and back",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Travel-day reset"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reajuste de día de viaje"
+          }
+        }
+      }
+    },
     "workoutFallback.trySomethingSmall" : {
       "comment" : "Name of a suggested workout: a short new walk and one mobility drill",
       "extractionState" : "extracted_with_value",
@@ -55726,6 +55744,24 @@
         }
       }
     },
+    "workoutNote.load.heldAfterTravelDay" : {
+      "comment" : "Workout session note about one lift: the reps fell short last time on a travel day (a flight's date, or the day after an overnight flight), so the weight stays. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: the same weight today — last time fell on a travel day, so it doesn't count as a miss."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: hoy el mismo peso — la vez pasada fue un día de viaje, así que no cuenta como fallo."
+          }
+        }
+      }
+    },
     "workoutNote.load.heldUnfueled" : {
       "comment" : "Workout session note about one lift: its later sets fell short last time in a long session started without having eaten, so the weight stays and it isn't counted as a miss. Calm and factual, never advice to eat. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
@@ -56478,6 +56514,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Muchas sesiones recientes de %@ fueron después de una noche de poco sueño o en un día ligero, así que aún es pronto para saber cómo va. El plan de hoy se queda como está."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.travelDayContext" : {
+      "comment" : "Workout session note giving context to a lift's progress: some sessions were on travel days (a flight's date, or the day after an overnight flight). Arguments: a number written as digits (e.g. '2'), then a number of sessions (e.g. '8 sessions').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of the last %2$@ fell on a travel day, which can take a little off a session."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En %1$@ de las últimas %2$@ tocó un día de viaje, lo que puede restarle un poco a una sesión."
           }
         }
       }
