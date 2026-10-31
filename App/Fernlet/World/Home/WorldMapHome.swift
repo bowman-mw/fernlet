@@ -219,11 +219,14 @@ struct WorldMapHome: View {
 
     /// The live map with everything on it, the plates over it, and the bottom controls.
     private func mapHome(date: Date) -> some View {
-        ZStack(alignment: .topLeading) {
+        // Sprout's line and bedtime are read here, once a minute or when Home's state changes, not on every frame
+        // the overlay below is redrawn to follow the map (perf 2026-10-31: the bedtime asks for the day's score).
+        let line = mapLine, pastBedtime = WorldMapCompanion.isPastBedtime(store: store, at: date)
+        return ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
                           veiled: isOffline, terrain: terrain, isFrontmost: isMapFrontPage, overlay: { viewport, size in
-                onMap(viewport: viewport, size: size)
+                onMap(viewport: viewport, size: size, line: line, pastBedtime: pastBedtime)
             }, geometry: geometry)
             if let sky, sky == .rain || sky == .snow {
                 WorldWeatherLayer(sky: sky, isActive: isFrontmost).ignoresSafeArea()
@@ -233,9 +236,9 @@ struct WorldMapHome: View {
         .overlay { bottomControls.opacity(passport?.isPresented == true ? 0 : 1) }
     }
 
-    /// What stands on the map, placed from the viewport: the space markers, the companion and any friend
-    /// beside it.
-    private func onMap(viewport: MapViewport, size: CGSize) -> some View {
+    /// What stands on the map, placed from the viewport: the space markers, the companion (saying `line`) and any
+    /// friend beside it, and its z's when it is `pastBedtime` at home.
+    private func onMap(viewport: MapViewport, size: CGSize, line: String?, pastBedtime: Bool) -> some View {
         let point = companionPoint(viewport: viewport, size: size)
         return ZStack(alignment: .topLeading) {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
@@ -261,8 +264,8 @@ struct WorldMapHome: View {
                     .fixedSize()
                     .position(x: point.x + (index == 0 ? 92 : -92), y: point.y + 40)
             }
-            companion(at: point)
-            WorldCompanionExtras(store: store, point: point, date: Date())
+            companion(at: point, size: size, line: line)
+            WorldCompanionExtras(store: store, point: point, isPastBedtime: pastBedtime)
             WorldTravelLook(store: store, point: point)
         }
     }
@@ -273,11 +276,13 @@ struct WorldMapHome: View {
         if let route { onFriends(route) } else { onOpen(.friends) }
     }
 
-    /// The companion with its bubble, its feet on `point`.
-    private func companion(at point: CGPoint) -> some View {
-        WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive, mapLine: mapLine,
+    /// The companion with its bubble saying `line` (``mapLine``), its feet on `point`.
+    private func companion(at point: CGPoint, size: CGSize, line: String?) -> some View {
+        WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive, mapLine: line,
                           isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, ride: rideVehicle,
-                          onHintEnded: endHint, onOpenPassport: openPassport)
+                          isOnScreen: Self.isOnScreen(point, in: size), onHintEnded: endHint, onOpenPassport: openPassport)
+        // Rebuilt every map frame only to move it: its body runs when its inputs change (perf 2026-10-31).
+        .equatable()
         // Measured at the bubble's own wrap width, so a line of two or three rows is measured as it is
         // drawn and the feet stay on `point` (an unbounded measure took one row and pushed the sprite
         // down by the rest, off the house, the z's and the suitcase that stand at `point`).
@@ -285,6 +290,13 @@ struct WorldMapHome: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(width: 0, height: 0, alignment: Alignment.bottom)
         .position(point)
+    }
+
+    /// Whether Sprout, standing at `point`, is on a map `size` big or near enough to come on with the next move:
+    /// the screen widened by the bubble's half-width either side, two bubbles' height above the feet and a sprite
+    /// below them.
+    static func isOnScreen(_ point: CGPoint, in size: CGSize) -> Bool {
+        CGRect(x: -160, y: -240, width: size.width + 320, height: size.height + 320).contains(point)
     }
 
     /// The status plate and the prints along the top; the walk bar or the map's notice under them.
