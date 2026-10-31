@@ -1950,6 +1950,8 @@ final class FernletStore {
     func setAllowConnectByTapping(_ value: Bool) {
         settings.allowConnectByTapping = value
         snapshotSaveCoordinator.schedule()
+        // Off stops the tap rendezvous at once, and on starts it if Home is in front (§1.6).
+        _ = reapplyProximityRunPolicy()
     }
 
     /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the

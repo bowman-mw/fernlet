@@ -95,8 +95,9 @@ import ProximityKit
     /// search, arms the tab's timeout, starts presence and leaves recipe stopped.
     @Test func theFirstApplicationTreatsEveryRadioAsAnEdge() {
         let fresh = Self.actions(from: nil, to: Self.verdict(), Self.facts())
-        #expect(fresh == [.startJoin, .armDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.stop)],
-                "a fresh Friends visit: `startJoin()`, the timeout, presence on, recipe off — in that order")
+        #expect(fresh == [.startJoin, .armDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.stop),
+                          .tapRendezvous(.stop)],
+                "a fresh Friends visit: `startJoin()`, the timeout, presence on, recipe off, the tap off — in that order")
     }
 
     /// An unchanged verdict asks for nothing while the radios agree with it — the discipline that
@@ -262,7 +263,7 @@ import ProximityKit
         #expect(searching == [.cancelDiscoveryTimeout, .stopJoin, .presence(.stop)],
                 "a delete-all during a search stands it down")
         let nothing = Self.actions(from: nil, to: Self.verdict(duress: true), Self.facts())
-        #expect(nothing == [.cancelDiscoveryTimeout, .presence(.stop), .recipeShare(.stop)],
+        #expect(nothing == [.cancelDiscoveryTimeout, .presence(.stop), .recipeShare(.stop), .tapRendezvous(.stop)],
                 "a hard stop with nothing up runs no mesh verb — the first application still counts every radio")
     }
 
@@ -351,7 +352,8 @@ import ProximityKit
             mesh: .foregroundOnly, discovery: .run, presence: .stop, recipeShare: .stop, routedAccessGate: .closed
         )
         let answered = Self.actions(from: nil, to: impossible, Self.facts())
-        #expect(answered == [.presence(.stop), .recipeShare(.stop)], "no mesh verb for a value the policy never emits")
+        #expect(answered == [.presence(.stop), .recipeShare(.stop), .tapRendezvous(.stop)],
+                "no mesh verb for a value the policy never emits")
     }
 
     // MARK: The one starter that is not the policy (finding L-4)
@@ -383,7 +385,7 @@ import ProximityKit
         #expect(selects.upperBound < starts.lowerBound,
                 "the tab is selected BEFORE the radios start, so the first verdict never stops them")
         let survived = Self.actions(from: nil, to: Self.verdict(tab: .social, session: .absent), Self.facts(searching: true))
-        #expect(survived == [.presence(.foregroundOnly), .recipeShare(.stop)],
+        #expect(survived == [.presence(.foregroundOnly), .recipeShare(.stop), .tapRendezvous(.stop)],
                 "the harness's start survives its own first verdict: no mesh verb, so no .stopJoin and no .leaveSession")
     }
 
@@ -394,7 +396,8 @@ import ProximityKit
     /// right, and a `startJoin()` that runs outside the policy on this tab is the thing that is not.
     @Test func aHomeTabStartIsTornDownByItsOwnFirstVerdict() {
         let torn = Self.actions(from: nil, to: Self.verdict(tab: .home, session: .absent), Self.facts(searching: true))
-        #expect(torn == [.cancelDiscoveryTimeout, .stopJoin, .presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
+        #expect(torn == [.cancelDiscoveryTimeout, .stopJoin, .presence(.foregroundOnly), .recipeShare(.foregroundOnly),
+                         .tapRendezvous(.stop)],
                 "L-4: the first verdict over a Home-tab start cancels the timeout and calls stopJoin()")
     }
 
@@ -461,13 +464,20 @@ import ProximityKit
         #expect(Self.homes(of: ".endSessionAfterDiscoveryTimeout(", in: sources) == [seams],
                 "door 3's tab half fires from the seams' timeout once")
         let listenerVerbs = ["presenceManager.start(", "presenceManager.stop(",
-                             "recipeShareManager.start(", "recipeShareManager.stop("]
+                             "recipeShareManager.start(", "recipeShareManager.stop(",
+                             "tapToConnect.start(", "tapToConnect.stop("]
         for verb in listenerVerbs {
             let found = Self.homes(of: verb, in: sources)
             #expect(found.isEmpty, "a listener is started or stopped by a qualified call outside its seam")
         }
+        // The tap rendezvous's own start and stop live in its controller's `apply(_:)` alone.
+        #expect(Self.homes(of: "rendezvous.start(", in: sources) == ["TapToConnect.swift"],
+                "the tap rendezvous is started only by its controller's apply(_:)")
+        #expect(Self.homes(of: "rendezvous.stop(", in: sources) == ["TapToConnect.swift"],
+                "the tap rendezvous is stopped only by its controller's apply(_:)")
         let applied = Self.homes(of: ".apply(", in: sources)
-        #expect(applied.filter { $0 == seams }.count == 2, "each listener's `apply(_:)` seam is called exactly once, by the executor")
+        #expect(applied.filter { $0 == seams }.count == 3,
+                "each listener's `apply(_:)` seam (presence, recipe share, the tap rendezvous) is called exactly once, by the executor")
     }
 
     /// **The zero-count wall.** P7's refusal is gone from the app — the action case, the executor
@@ -519,7 +529,10 @@ import ProximityKit
         #expect(viewEdges == 8, "the view hands the funnel seven edges through one helper — tab, the lock transition (the view's duress feed since P9-3-A retired the lock fact), opt-in, age, session liveness, the session-photo review's discovery block (U3), launch — plus that helper's declaration")
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let storeEdges = store.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
-        #expect(storeEdges == 6, "the store's own edges — two opt-in setters, P8 item 6's continuation feed, the wipe's raise and lower — plus the declaration")
+        #expect(storeEdges == 7, "the store's own edges — three opt-in setters (presence, recipe shares, Connect by tapping phones), P8 item 6's continuation feed, the wipe's raise and lower — plus the declaration")
+        let tap = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore+TapToConnect.swift"))
+        let tapEdges = tap.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
+        #expect(tapEdges == 3, "the tap's three edges: Low Power Mode changing, Home coming to the front or leaving it, and a match or hand-off ending")
         let wipe = try #require(
             MeshRoutedSourceScan.bracedBody(after: "func deleteAllData(includingHealthKitSamples", in: store),
             "the wipe funnel is gone"
@@ -534,7 +547,7 @@ import ProximityKit
     /// file — and on the funnel tests, which only ever apply verdicts that start nothing.
     @Test func whatThisTableDoesNotClaim() {
         let held = Self.actions(from: nil, to: Self.verdict(phase: .background, session: .peerCommitted), Self.facts(searching: true, inSession: true, committed: true))
-        #expect(held == [.cancelDiscoveryTimeout, .presence(.stop), .recipeShare(.stop)],
+        #expect(held == [.cancelDiscoveryTimeout, .presence(.stop), .recipeShare(.stop), .tapRendezvous(.stop)],
                 "a first application into a held session runs no mesh verb — the only kind of first application a test may execute for real")
     }
 }

@@ -137,13 +137,20 @@ struct KeepFriendsPromptHost: ViewModifier {
             }
     }
 
+    /// Whether anyone being asked about was met by tapping phones this launch (the tap's controller
+    /// remembers each match's fingerprint), so their name says "met by tapping phones".
+    private var metAnyoneByTapping: Bool {
+        let tapped = store.tapToConnect.metByTappingFingerprints
+        return friendCandidates.contains { tapped.contains($0.fingerprint) }
+    }
+
     /// The compact "keep these as friends?" prompt for a session that produced no photos, in the
     /// one design language (the root's sheets carry it on their content).
     private var keepFriendsPromptSheet: some View {
         KeepFriendsPromptSheet(
             candidates: friendCandidates,
             keptFingerprints: $keptFriendFingerprints,
-            metByTapping: metByTapping,
+            metByTapping: metByTapping || metAnyoneByTapping,
             done: { keepFriendsPromptPresented = false }
         )
         .fernletSheet()
