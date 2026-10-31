@@ -4,7 +4,7 @@ import WorldMapStore
 
 /// A few made-up airports for the flight detector: well-known codes on simple grounds (circles and one
 /// square outline), not the shipped pack's. None comes from the owner's own flights.
-private nonisolated struct FakeAirports: FlightAirportLookup {
+private nonisolated struct FakeAirports: AirportGroundsLookup {
     let all: [WorldAirport]
 
     func airports(containing point: GeoPoint) -> [WorldAirport] {

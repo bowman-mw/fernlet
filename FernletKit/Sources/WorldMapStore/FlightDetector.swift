@@ -2,12 +2,12 @@ import Foundation
 
 /// Where the flight detector learns which airports' grounds hold a point (World-Airports-Spec §2): the
 /// bundled ``WorldAirports`` in the app, a few made-up airports in tests.
-public nonisolated protocol FlightAirportLookup {
+public nonisolated protocol AirportGroundsLookup {
     /// Every unlockable airport whose grounds hold `point`.
     func airports(containing point: GeoPoint) -> [WorldAirport]
 }
 
-extension WorldAirports: FlightAirportLookup {}
+extension WorldAirports: AirportGroundsLookup {}
 
 /// One location reading as the flight detector reads it, in plain values (no CoreLocation type reaches
 /// WorldMapStore).
@@ -310,7 +310,7 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
 
     /// Takes a location reading; whether it may be kept, and what changed. `airports` places it in airports'
     /// grounds; `isHome` says whether a point is at one of the person's homes (asked only during a trip).
-    public mutating func observe(_ fix: FlightFix, airports: some FlightAirportLookup,
+    public mutating func observe(_ fix: FlightFix, airports: some AirportGroundsLookup,
                                  isHome: (GeoPoint) -> Bool = { _ in false }) -> FlightVerdict {
         guard fix.point.isValid, fix.accuracy.isFinite, fix.accuracy >= 0,
               fix.at.timeIntervalSinceReferenceDate.isFinite else { return .ignored }
