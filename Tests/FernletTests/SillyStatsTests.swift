@@ -290,6 +290,7 @@ struct SillyStatsCopyTests {
         tally.brushCount = 60
         tally.showerCount = 25
         tally.pats = 212
+        tally.furthestFromHomeMeters = 8_400_000
         #expect(SillyStatsEngine.revealed(in: tally) == SillyStatKind.allCases)
         for kind in SillyStatKind.allCases {
             let text = SillyStatsCopy.text(for: kind, tally: tally, locale: english)
@@ -381,7 +382,7 @@ struct SillyStatsTokenTests {
     @Test func frozenKindTokens() {
         #expect(SillyStatKind.allCases.map(\.rawValue) == [
             "cookiesPerDay", "bananasForScale", "eggonomics", "pizzaPieChart", "bathtubIndex", "coffeeTower",
-            "signatureDish", "totalTonnage", "moonwalk", "stairwayToSomewhere", "grandTours", "shakespeareSteps",
+            "signatureDish", "totalTonnage", "moonwalk", "stairwayToSomewhere", "grandTours", "furthestFromHome", "shakespeareSteps",
             "koalaDays", "dreamCinema", "flossRope", "brushMarathon", "showerConcerts", "patsGiven",
             "gastrotrichLifetimes",
         ])

@@ -44,6 +44,9 @@ final class SillyStatsService {
     /// False until the first ``refresh(store:now:)`` has read Apple Health. Until then a re-tally
     /// would see the diary without Health's steps and could begin the stamp book short of them.
     @ObservationIgnored private var hasRefreshed = false
+    /// Furthest from home as last worked out, with what it was worked out from (``furthestFromHome(store:)``).
+    /// In memory only, like the tally.
+    @ObservationIgnored var furthestKnown: (basis: SillyFurthestFromHome.Basis, meters: Double)?
     /// The pending after-save re-tally, replaced by each newer request (``scheduleRetally(store:)``).
     @ObservationIgnored private var retallyTask: Task<Void, Never>?
 
@@ -70,10 +73,11 @@ final class SillyStatsService {
         let firstKey = days.filter(\.hasLoggedContent).map(\.date).min() ?? todayKey
         let start = FernletDate.date(fromDayKey: firstKey) ?? now
         let steps = await store.lifetimeHealthSteps(since: start, now: now)
+        let furthest = await furthestFromHome(store: store)
         lastHealthSteps = steps
         hasRefreshed = true
         let held = stamps.count
-        update(with: Self.inputs(store: store, days: days, todayKey: todayKey, healthSteps: steps), now: now)
+        update(with: Self.inputs(store: store, days: days, todayKey: todayKey, healthSteps: steps, furthest: furthest), now: now)
         Self.publishNewStamps(to: store, held: held, now: stamps.count)
     }
 
@@ -101,10 +105,12 @@ final class SillyStatsService {
                 return
             }
             guard let self, let store else { return }
+            let furthest = await self.furthestFromHome(store: store)
+            guard !Task.isCancelled else { return }
             let now = Date.now
             let inputs = Self.inputs(
                 store: store, days: Array(store.loadDays().values), todayKey: FernletDate.dayKey(for: now),
-                healthSteps: self.lastHealthSteps)
+                healthSteps: self.lastHealthSteps, furthest: furthest)
             let held = self.stamps.count
             self.update(with: inputs, now: now)
             Self.publishNewStamps(to: store, held: held, now: self.stamps.count)
@@ -142,6 +148,7 @@ final class SillyStatsService {
     /// the store's wipe clears the book's persisted half with ``SillyStampStore/clearPersistentState(in:)``).
     func clear() {
         retallyTask?.cancel()
+        furthestKnown = nil
         tally = SillyStatsTally()
         revealed = []
         companionLine = nil
@@ -159,14 +166,16 @@ final class SillyStatsService {
         }
     }
 
-    private static func inputs(store: FernletStore, days: [FernletDay], todayKey: String, healthSteps: Int?) -> SillyStatsTallier.Inputs {
+    private static func inputs(store: FernletStore, days: [FernletDay], todayKey: String, healthSteps: Int?,
+                               furthest: Double?) -> SillyStatsTallier.Inputs {
         SillyStatsTallier.Inputs(
             days: days,
             todayKey: todayKey,
             bottleOunces: store.settings.bottleOz,
             healthSteps: healthSteps,
             pats: PetInteractionGovernor.lifetimePats(),
-            unitlessLoadIsPounds: Locale.current.measurementSystem == .us)
+            unitlessLoadIsPounds: Locale.current.measurementSystem == .us,
+            furthestFromHomeMeters: furthest)
     }
 
     /// Tallies `inputs`, reveals what it shows, and stamps any stat that has just appeared — the one
@@ -193,7 +202,7 @@ final class SillyStatsService {
         let added = Set(stampStore.record(award.entries).map(\.kind))
         stamps = stampStore.entries()
         let news = award.announced.filter { added.contains($0) && !pendingStampBanners.contains($0) }
-        // Bounded by the nineteen kinds: a kind is queued at most once, and only on the check that
+        // Bounded by the twenty kinds: a kind is queued at most once, and only on the check that
         // first recorded its stamp.
         pendingStampBanners.append(contentsOf: news)
         if let last = news.last {
