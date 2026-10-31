@@ -89,6 +89,7 @@ final class WorldFogKeeper {
         self.vault = vault
         self.store = FogCellStore(vault: vault)
         self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) },
+                                      openAtlasOffMain: WorldAtlasKeeper.bundledPackOffMain { try WorldAtlas(data: $0) },
                                       openLandmarks: WorldAtlasKeeper.bundledLandmarks())
         self.cornerNudge = WorldCornerNudgeKeeper(vault: vault)
         self.defaults = defaults

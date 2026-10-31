@@ -30,7 +30,8 @@ struct PassportBookScreen: View {
     init(presenter: WorldPassportPresenter, store: FernletStore) {
         self.presenter = presenter
         self.store = store
-        _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas }))
+        _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas },
+                                                       seaNeighbours: { store.worldFog.atlas.seaNeighbours() }))
     }
 
     var body: some View {
@@ -116,7 +117,8 @@ struct PassportBookScreen: View {
 
     private func stage(_ book: PassportBookModel) -> some View {
         PassportBookStage(shown: page, turn: turn, ribbonPage: book.ribbonPage, coverAngle: motion.cover,
-                          onRibbon: { go(to: $0, in: book) }) { number in
+                          turnedPages: motion.turnedPages, onRibbon: { go(to: $0, in: book) },
+                          onTurnDone: { finishTurn($0) }) { number in
             if book.page(at: number) == .sprout {
                 // Page 1 scrolls itself and draws its own insets; the book adds only the page number.
                 PassportPageNumber(number: number) { sproutPage }

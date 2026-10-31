@@ -154,7 +154,8 @@ struct WorldMapHome: View {
         .task(id: cornerLine) { await letCornerLineStand() }
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
-        .task { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
+        // Again once the atlas, opening off the main actor at launch, is open.
+        .task(id: store.worldFog.atlas.isOpeningAtlas) { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
         .onChange(of: roadsSource, initial: true) { roads.update(cells: store.worldRoadCells, atlas: store.worldFog.atlas.openedAtlas) }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
@@ -406,7 +407,8 @@ struct WorldMapHome: View {
 
     /// What the crossed roads are worked out from: the lifted cells' count, whether a decoy shows, and the atlas.
     private var roadsSource: [Int] {
-        [store.worldFog.visibleCells.count, store.worldFog.isDecoy ? 1 : 0, store.duressSessionActive ? 1 : 0]
+        [store.worldFog.visibleCells.count, store.worldFog.isDecoy ? 1 : 0, store.duressSessionActive ? 1 : 0,
+         store.worldFog.atlas.isOpeningAtlas ? 1 : 0]
     }
 
     /// Whether the crossed roads draw over the fog: Home zoomed in on a found city (the city view, `ex-city-view`).

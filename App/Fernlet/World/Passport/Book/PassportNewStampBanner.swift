@@ -24,7 +24,8 @@ struct PassportNewStampBanner: View {
         self.presenter = presenter
         self.store = store
         self.entry = entry
-        _library = State(initialValue: PassportLibrary(openAtlas: { [store] in store.worldFog.atlas.openedAtlas }))
+        _library = State(initialValue: PassportLibrary(openAtlas: { [store] in store.worldFog.atlas.openedAtlas },
+                                                       seaNeighbours: { [store] in store.worldFog.atlas.seaNeighbours() }))
     }
 
     var body: some View {

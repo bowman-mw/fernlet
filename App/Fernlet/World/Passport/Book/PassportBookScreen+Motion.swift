@@ -3,17 +3,19 @@ import SwiftUI
 import WorldMapStore
 
 /// Where the book is in its opening and closing (World-Passport-Spec §1): how far it has risen from Sprout (0 at
-/// Sprout, 1 in place), the cover's swing (0 closed, -180 open), the veil's and the bar's strength, and the whole
-/// screen's fade (Reduce Motion fades instead of rising and swinging).
+/// Sprout, 1 in place), the cover's swing (0 closed, -180 open and lying to the left of the spine), the turned
+/// pages' strength on the open cover, the veil's and the bar's strength, and the whole screen's fade (Reduce Motion
+/// fades instead of rising and swinging).
 nonisolated struct PassportBookMotion: Equatable, Sendable {
     var lift: Double = 0
     var cover: Double = 0
+    var turnedPages: Double = 0
     var veil: Double = 0
     var chrome: Double = 0
     var fade: Double = 1
 
     /// The book open and still.
-    static let open = PassportBookMotion(lift: 1, cover: -180, veil: 1, chrome: 1, fade: 1)
+    static let open = PassportBookMotion(lift: 1, cover: -180, turnedPages: 1, veil: 1, chrome: 1, fade: 1)
 }
 
 /// Moves and scales the book between where Sprout stands (`anchor`, in global coordinates; the screen's centre
@@ -42,7 +44,8 @@ struct PassportRiseEffect: ViewModifier {
 extension PassportBookScreen {
     // MARK: Opening and closing
 
-    /// The first moment: the page this open starts on, then the rise and the swing (or the fade).
+    /// The first moment: the page this open starts on, then the rise and the cover's swing open to lie at the left
+    /// of the spine, the turned pages settling on it (or the fade).
     func start(_ book: PassportBookModel) {
         landing = presenter.landing
         page = presenter.startPage(in: book)
@@ -61,18 +64,23 @@ extension PassportBookScreen {
             withAnimation(.easeInOut(duration: 0.3)) {
                 motion.cover = -180
                 motion.chrome = 1
-            } completion: { pageFocused = true }
+            } completion: {
+                withAnimation(.easeOut(duration: 0.12)) { motion.turnedPages = 1 }
+                pageFocused = true
+            }
         }
     }
 
-    /// The closing: the cover swings shut and the book sinks back to Sprout (or it fades), then it goes.
+    /// The closing: the turned pages lift off the open cover, the cover swings shut over the page round the spine,
+    /// and the book sinks back to Sprout (or it fades), then it goes.
     func finish() {
         showsContents = false
         if reduceMotion {
             withAnimation(.easeInOut(duration: 0.2)) { motion.fade = 0 } completion: { presenter.dismiss() }
             return
         }
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.easeIn(duration: 0.08)) { motion.turnedPages = 0 }
+        withAnimation(.easeInOut(duration: 0.3)) {
             motion.cover = 0
             motion.chrome = 0
         } completion: {
@@ -98,11 +106,12 @@ extension PassportBookScreen {
         go(to: page + by, in: book)
     }
 
-    /// Turns to page `number`: the pixel curl in four steps (0.3 s) with a light haptic, or a 0.15 s cross-fade
-    /// with Reduce Motion. VoiceOver hears the new page.
+    /// Turns to page `number`: the leaf swings away in one smooth motion (``PassportTurn/duration``) with a light
+    /// haptic, or a 0.15 s cross-fade with Reduce Motion. A turn asked for during another lands that one at once
+    /// and swings on from the page it was uncovering, so a quick run of swipes keeps up. VoiceOver hears the new page.
     func go(to number: Int, in book: PassportBookModel) {
         let target = book.clamped(number)
-        guard target != page, turn == nil else { return }
+        guard target != page else { return }
         detail = nil
         pageOnTop = true
         FernletFeedback.system.play(.tick)
@@ -111,24 +120,15 @@ extension PassportBookScreen {
             announce(book)
             return
         }
-        turn = PassportTurn(from: page, to: target, step: 1)
-        Task { await curl(to: target, in: book) }
+        turn = PassportTurn(from: page, to: target, id: (turn?.id ?? 0) &+ 1)
+        page = target
+        announce(book)
     }
 
-    /// The curl's remaining steps, 75 ms apart.
-    private func curl(to target: Int, in book: PassportBookModel) async {
-        for next in 2 ... 4 {
-            do {
-                try await Task.sleep(for: .milliseconds(75))
-            } catch {
-                break
-            }
-            if next < 4 { turn?.step = next } else { turn = nil }
-            if next == 2 { page = target }
-        }
-        page = target
+    /// Ends the turn `id` once its leaf has swung away (a newer turn that replaced it carries on).
+    func finishTurn(_ id: Int) {
+        guard turn?.id == id else { return }
         turn = nil
-        announce(book)
     }
 
     /// "Page 3 of 6, Stamps, 14 August to 21 September".

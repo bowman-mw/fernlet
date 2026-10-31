@@ -15,7 +15,10 @@ import WorldMapStore
 ///
 /// **The atlas** is the bundled `WorldAtlas.pack`, opened once, the first time a fix arrives
 /// (``bundledPack(in:open:)``). A missing or unreadable pack means the passport records nothing this session
-/// and `FernletAuditLog` notes it once; the map and the fog carry on.
+/// and `FernletAuditLog` notes it once; the map and the fog carry on. The app opens it off the main actor while
+/// the launch screen is up (``beginOpening()``): reading the pack's layers held Home's first frame for 2.6 s on
+/// 2026-10-30 (a Debug build on an iPhone 17 Pro Max). Until that ends every reader is answered as if there
+/// were no atlas, the newest fix waits and is read once it is open, and views that asked draw again then.
 ///
 /// **Landmarks** (World-Exploration-Spec §2). The hand-written `WorldLandmarks.json` beside the pack is opened
 /// once, on first use (``bundledLandmarks(in:)``); a missing or malformed file is logged once and means no
@@ -77,8 +80,19 @@ final class WorldAtlasKeeper {
 
     @ObservationIgnored private let store: PassportStore
     @ObservationIgnored private let openAtlas: @MainActor () -> (any AtlasVisitResolving)?
+    /// The opener ``beginOpening()`` runs off the main actor; nil (tests) opens on the main actor on first use.
+    @ObservationIgnored private let openAtlasOffMain: (@Sendable () -> (any AtlasVisitResolving)?)?
     @ObservationIgnored private let openLandmarks: @MainActor () -> WorldLandmarks
     @ObservationIgnored private var atlas: AtlasState = .notOpened
+    /// Whether ``beginOpening()``'s background open is running: readers get nil meanwhile. Observed, so a view
+    /// that read ``openedAtlas`` while it ran draws again when it ends.
+    private(set) var isOpeningAtlas = false
+    /// The newest fix that arrived while the atlas was opening, read once it is open.
+    @ObservationIgnored private var pendingFix: (point: GeoPoint, date: Date)?
+    /// Which of the atlas's seas touch (``seaNeighbours()``), once worked out this session.
+    @ObservationIgnored private var seaNeighbourTable: [String: Set<String>]?
+    /// The session's one background pass that fills ``seaNeighbourTable``, started when the atlas opens.
+    @ObservationIgnored private var seaNeighbourPass: Task<Void, Never>?
     @ObservationIgnored private var openedLandmarks: WorldLandmarks?
     @ObservationIgnored private var lastRead: GeoPoint?
     /// What the atlas said about ``lastRead``.
@@ -95,12 +109,19 @@ final class WorldAtlasKeeper {
     /// A keeper over `vault`, opening the atlas with `openAtlas` when the first fix arrives (the app passes
     /// ``bundledPack(in:open:)``; tests pass a fake). `openAtlas` returns nil when there is no atlas.
     /// `openLandmarks` opens the landmark list on first use (the app passes ``bundledLandmarks(in:)``); the
-    /// default is no landmarks.
+    /// default is no landmarks. `openAtlasOffMain` is the same opener for ``beginOpening()`` to run off the main
+    /// actor (the app passes ``bundledPackOffMain(in:open:)``); the default has none.
     init(vault: WorldMapVault, openAtlas: @escaping @MainActor () -> (any AtlasVisitResolving)?,
+         openAtlasOffMain: (@Sendable () -> (any AtlasVisitResolving)?)? = nil,
          openLandmarks: @escaping @MainActor () -> WorldLandmarks = { .empty }) {
         self.store = PassportStore(vault: vault)
         self.openAtlas = openAtlas
+        self.openAtlasOffMain = openAtlasOffMain
         self.openLandmarks = openLandmarks
+    }
+
+    isolated deinit {
+        seaNeighbourPass?.cancel()
     }
 
     /// The opener for the landmark list bundled in `bundle`: reads `WorldLandmarks.json`. A missing file or
@@ -155,6 +176,44 @@ final class WorldAtlasKeeper {
         }
     }
 
+    /// The opener ``beginOpening()`` runs off the main actor: reads the pack bundled in `bundle` and hands its bytes
+    /// to `open`; it answers nil when they can't be read (``beginOpening()`` logs that). Nil when the pack is
+    /// missing, so the keeper opens on the main actor instead and ``bundledPack(in:open:)`` logs it.
+    static func bundledPackOffMain(in bundle: Bundle = .main,
+                                   open: @escaping @Sendable (Data) throws -> any AtlasVisitResolving)
+        -> (@Sendable () -> (any AtlasVisitResolving)?)? {
+        guard let url = bundle.url(forResource: packResource, withExtension: packExtension) else { return nil }
+        return {
+            do {
+                return try open(Data(contentsOf: url, options: .mappedIfSafe))
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    /// Starts opening the atlas off the main actor (the app calls it while the launch screen is up). Once, and
+    /// only before anything opened it; nothing without an off-main opener.
+    func beginOpening() {
+        guard case .notOpened = atlas, !isOpeningAtlas, let openOffMain = openAtlasOffMain else { return }
+        isOpeningAtlas = true
+        Task { [weak self] in
+            let opened = await Task.detached(priority: .userInitiated) { openOffMain() }.value
+            self?.finishOpening(opened)
+        }
+    }
+
+    /// Takes the atlas ``beginOpening()`` opened (nil: unreadable, logged) and reads the fix that waited for it.
+    private func finishOpening(_ opened: (any AtlasVisitResolving)?) {
+        isOpeningAtlas = false
+        guard case .notOpened = atlas else { return }
+        if opened == nil { FernletAuditLog.log("worldMap.atlas.packUnreadable") }
+        _ = adopt(opened)
+        guard let fix = pendingFix else { return }
+        pendingFix = nil
+        observe(point: fix.point, at: fix.date)
+    }
+
     // MARK: The fog keeper's calls
 
     /// Reads the passport when no decoy is showing and it hasn't been read yet (the fog keeper's `load()`,
@@ -168,9 +227,13 @@ final class WorldAtlasKeeper {
     /// Reads one accepted fix at `point`, taken at `date`, and records its first visits and any trip it starts;
     /// each first visit and new trip is announced on ``discoveries()`` once saved. A fix within ``minimumSpacing`` of the last
     /// one read records that visit again at `date` without asking the atlas. Nothing in a decoy, before the
-    /// passport can be read, or without an atlas.
+    /// passport can be read, or without an atlas; while the atlas is opening, the newest fix waits for it.
     func observe(point: GeoPoint, at date: Date) {
         guard !isDecoy, point.isValid else { return }
+        guard !isOpeningAtlas else {
+            pendingFix = (point, date)
+            return
+        }
         let nearby = lastRead.map { $0.distance(to: point) < Self.minimumSpacing } ?? false
         guard let resolver = resolver(), loadStore() else { return }
         let visit = nearby ? (lastVisit ?? resolver.visit(at: point)) : resolver.visit(at: point)
@@ -247,6 +310,7 @@ final class WorldAtlasKeeper {
         isDecoy = on
         lastRead = nil
         lastVisit = nil
+        pendingFix = nil
         book = on ? PassportBook() : store.book
     }
 
@@ -256,6 +320,7 @@ final class WorldAtlasKeeper {
     func clearAll() -> Bool {
         lastRead = nil
         lastVisit = nil
+        pendingFix = nil
         book = PassportBook()
         let removed = store.removeAll()
         onPassportChanged?()
@@ -340,23 +405,56 @@ final class WorldAtlasKeeper {
         }
     }
 
+    /// Which of the atlas's seas touch (``WorldAtlas/seaNeighbours()``), for the passport's sea inks; empty with no
+    /// atlas. One table a session for every passport screen: a background pass starts as soon as the atlas opens,
+    /// and a screen that asks before it is done works the table out here and keeps it. The pass walks the atlas's
+    /// whole sea raster (about 6.5 million cells): on 2026-10-30 each screen's own pass held the main thread for
+    /// 476 ms on a passport page turn (a Debug build on an iPhone 17 Pro Max).
+    func seaNeighbours() -> [String: Set<String>] {
+        if let seaNeighbourTable { return seaNeighbourTable }
+        guard let world = openedAtlas else { return [:] }
+        let table = world.seaNeighbours()
+        seaNeighbourTable = table
+        return table
+    }
+
+    /// Starts the session's one background pass over `world`'s seas (``seaNeighbours()``). Public data that ships
+    /// in the app, so it may run off the main actor; the first table kept wins.
+    private func startSeaNeighbourPass(over world: WorldAtlas) {
+        guard seaNeighbourTable == nil, seaNeighbourPass == nil else { return }
+        seaNeighbourPass = Task { [weak self] in
+            let table = await Task.detached(priority: .utility) { world.seaNeighbours() }.value
+            guard let self, self.seaNeighbourTable == nil else { return }
+            self.seaNeighbourTable = table
+        }
+    }
+
     private func resolver() -> (any AtlasVisitResolving)? {
+        // Read before the state, so a view that asked during the background open draws again when it ends.
+        guard !isOpeningAtlas else { return nil }
         switch atlas {
         case .ready(let resolver):
             return resolver
         case .unavailable:
             return nil
         case .notOpened:
-            guard let opened = openAtlas() else {
-                atlas = .unavailable
-                return nil
-            }
-            let list = landmarks
-            let resolver: any AtlasVisitResolving = list.isEmpty
-                ? opened : AtlasWithLandmarks(atlas: opened, landmarks: list)
-            atlas = .ready(resolver)
-            return resolver
+            return adopt(openAtlas())
         }
+    }
+
+    /// Keeps `opened` as the session's atlas, read together with ``landmarks`` when the list holds any, and starts
+    /// the sea pass; nil marks the atlas unavailable for the session.
+    private func adopt(_ opened: (any AtlasVisitResolving)?) -> (any AtlasVisitResolving)? {
+        guard let opened else {
+            atlas = .unavailable
+            return nil
+        }
+        if let world = opened as? WorldAtlas { startSeaNeighbourPass(over: world) }
+        let list = landmarks
+        let resolver: any AtlasVisitResolving = list.isEmpty
+            ? opened : AtlasWithLandmarks(atlas: opened, landmarks: list)
+        atlas = .ready(resolver)
+        return resolver
     }
 
     /// Reads the passport if it hasn't been read; whether it is readable now.

@@ -14,22 +14,29 @@ import WorldMapStore
 final class PassportLibrary {
     /// Opens (or hands over the already opened) atlas: `store.worldFog.atlas.openedAtlas`.
     private let openAtlas: @MainActor () -> WorldAtlas?
+    /// Which seas touch, from the session's table (`store.worldFog.atlas.seaNeighbours()`); nil works them out from
+    /// ``atlas`` here (the DEBUG gallery, which opens an atlas of its own).
+    private let openSeaNeighbours: (@MainActor () -> [String: Set<String>])?
     private var atlasState: WorldAtlas??
     private var stampsState: WorldCountryStamps??
     private var tableState: PassportCountryTable?
     private var silhouettes: [AtlasContinent: [[Bool]]] = [:]
     private var seaInksState: PassportSeaInks?
 
-    /// A library over the atlas `openAtlas` gives (called once, on first use).
-    init(openAtlas: @escaping @MainActor () -> WorldAtlas?) {
+    /// A library over the atlas `openAtlas` gives (called once, on first use), its sea inks drawn from the table
+    /// `seaNeighbours` gives (called once, on the first sea; nil works it out from the atlas).
+    init(openAtlas: @escaping @MainActor () -> WorldAtlas?,
+         seaNeighbours: (@MainActor () -> [String: Set<String>])? = nil) {
         self.openAtlas = openAtlas
+        self.openSeaNeighbours = seaNeighbours
     }
 
-    /// The bundled atlas, or nil when it is missing or unreadable (the keeper logs that).
+    /// The bundled atlas, or nil when it is missing, unreadable (the keeper logs that) or still opening at launch;
+    /// kept once there, asked again until then.
     var atlas: WorldAtlas? {
         if let atlasState { return atlasState }
         let opened = openAtlas()
-        atlasState = .some(opened)
+        if let opened { atlasState = .some(opened) }
         return opened
     }
 
@@ -45,7 +52,8 @@ final class PassportLibrary {
     /// The atlas's passport countries (``PassportCountryTable/empty`` with no atlas).
     var countryTable: PassportCountryTable {
         if let tableState { return tableState }
-        let table = atlas.map(PassportCountryTable.init(atlas:)) ?? .empty
+        guard let atlas else { return .empty }
+        let table = PassportCountryTable(atlas: atlas)
         tableState = table
         return table
     }
@@ -130,10 +138,13 @@ final class PassportLibrary {
         atlas?.sea(token: token)
     }
 
-    /// Every sea's ink, worked out once from the atlas's seas and which of them touch.
+    /// Every sea's ink, worked out once from the atlas's seas and which of them touch (the session's table when
+    /// the library was given one: the pass over the atlas's sea raster is too slow for a page turn).
     var seaInks: PassportSeaInks {
         if let seaInksState { return seaInksState }
-        let inks = PassportSeaInks(tokens: atlas?.seas.map(\.token) ?? [], neighbours: atlas?.seaNeighbours() ?? [:])
+        guard let atlas else { return PassportSeaInks(tokens: [], neighbours: [:]) }
+        let neighbours = openSeaNeighbours.map { $0() } ?? atlas.seaNeighbours()
+        let inks = PassportSeaInks(tokens: atlas.seas.map(\.token), neighbours: neighbours)
         seaInksState = inks
         return inks
     }

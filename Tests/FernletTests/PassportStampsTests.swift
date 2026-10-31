@@ -224,6 +224,22 @@ struct PassportStampsTests {
         #expect(PassportSeaInks(tokens: Array(atlas.seas.map(\.token).reversed()), neighbours: neighbours) == inks)
     }
 
+    /// Every passport screen draws its sea inks from the keeper's one table of which seas touch (each screen's own
+    /// pass over the sea raster held the main thread for 476 ms on a page turn): the atlas's own answer, kept, the
+    /// same inks a library works out alone, and empty with no atlas.
+    @Test func theKeeperKeepsOneSeaTableForEveryScreen() throws {
+        let atlas = try #require(Self.atlas)
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = WorldAtlasKeeper(vault: vault, openAtlas: { atlas })
+        let table = keeper.seaNeighbours()
+        #expect(table == atlas.seaNeighbours())
+        #expect(keeper.seaNeighbours() == table)
+        let shared = PassportLibrary(openAtlas: { atlas }, seaNeighbours: { keeper.seaNeighbours() })
+        #expect(shared.seaInks == PassportLibrary(openAtlas: { atlas }).seaInks)
+        #expect(WorldAtlasKeeper(vault: vault, openAtlas: { nil }).seaNeighbours().isEmpty)
+    }
+
     /// A continent's silhouette comes from the atlas: North America is 22 × 11 with land in it, and Antarctica is
     /// drawn round the pole.
     @Test func theSilhouettesComeFromTheAtlas() throws {
