@@ -1,4 +1,5 @@
 import CoreGraphics
+import FernletDomainModel
 import Foundation
 import WorldMapStore
 

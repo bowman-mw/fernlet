@@ -1,3 +1,4 @@
+import FernletDomainModel
 import FernletUI
 import SwiftUI
 import WorldMapStore
