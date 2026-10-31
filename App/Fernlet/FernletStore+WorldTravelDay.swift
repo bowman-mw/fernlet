@@ -28,9 +28,9 @@ extension FernletStore {
                                                    purpose: WorldMapVault.File.placesDevice.purpose,
                                                    role: .buffer, context: Data("travelDays".utf8))
     /// How far back travel days are kept and read: the plateau's lookback, which the planner reads sessions over.
-    static let travelDayLookbackDays = WorkoutPlateau.lookbackDays
+    nonisolated static let travelDayLookbackDays = WorkoutPlateau.lookbackDays
     /// The most remembered day keys (a bound: one a day over the lookback, and a little room).
-    static let maxRememberedTravelDays = WorkoutPlateau.lookbackDays + 8
+    nonisolated static let maxRememberedTravelDays = WorkoutPlateau.lookbackDays + 8
 
     /// Today's travel-day answer (§13.1). `.none` in a decoy or with "Airports and flights" off.
     func workoutTravelDay(now: Date = Date()) -> WorkoutTravelDay {
