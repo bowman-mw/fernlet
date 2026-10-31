@@ -790,6 +790,7 @@ enum WorkoutFallbackCopy {
         case .softRebuild: String(localized: "workoutFallback.note.softRebuild", defaultValue: "Keep the ceiling low today.", bundle: .module, comment: "Note on the suggested workout 'Soft Rebuild'")
         case .trySomethingSmall: String(localized: "workoutFallback.note.trySomethingSmall", defaultValue: "Gather information, not perfection.", bundle: .module, comment: "Note on the suggested workout 'Try Something Small'")
         case .curiousChallenge: String(localized: "workoutFallback.note.curiousChallenge", defaultValue: "A contained experiment for a high-energy day.", bundle: .module, comment: "Note on the suggested workout 'Curious Challenge'")
+        case .travelDayReset: travelDayNote
         case .suggestedLight, .suggestedModerate, .suggestedHard: ""
         }
     }

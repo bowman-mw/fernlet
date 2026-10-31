@@ -25,6 +25,9 @@ protocol WorkoutPlanningContext: AnyObject {
     /// The intensity today's committed guided plan was built with, nil when none is committed today —
     /// an adjusted session gets its warm-up ramp back only when it isn't a light day.
     var committedGuidedIntensity: WorkoutIntensity? { get }
+    /// The travel days of the planner's lookback, as day keys only (World-Airports-Spec §13.4): a session on
+    /// one is forgiven. The composition root's per-day yes/no; never a flight, an airport, a time or a place.
+    var workoutTravelDayKeys: Set<String> { get }
 }
 
 /// Workout split recommendation + day-plan generation + AI day-plan adjustment,
@@ -122,7 +125,7 @@ final class WorkoutPlanningService {
         )
         let load = WorkoutLoadContextBuilder.build(
             days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
-            body: host.effectiveUserProfile
+            body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys
         )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,
@@ -201,7 +204,8 @@ final class WorkoutPlanningService {
         let location = host.settings.activeWorkoutLocation
         let profile = host.settings.workoutProfile
         let load = WorkoutLoadContextBuilder.build(
-            days: host.loadDays(), today: host.day, todayKey: host.todayKey, settings: host.settings
+            days: host.loadDays(), today: host.day, todayKey: host.todayKey, settings: host.settings,
+            travelDays: host.workoutTravelDayKeys
         )
         let intensity = host.committedGuidedIntensity
         // Hidden exercises ("Don't suggest this") never reach the model's candidate list.

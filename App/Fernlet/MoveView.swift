@@ -2,6 +2,7 @@ import SwiftUI
 import LocalPersistence
 import FernletFoundation
 import FernletDomainModel
+import FernletScoring
 import AIProviders
 import PrivateMediaStore
 import FernletUI
@@ -195,6 +196,8 @@ struct MoveView: View {
                 loggedSessionName: loggedGuidedSessionName,
                 isRestDay: store.needsRestToday,
                 readyIsTimed: guidedReadyIsTimed,
+                travelDay: cardTravelDay,
+                readyIsTravelReset: store.isTodaysPlanTravelDayReset,
                 onStart: startTodaysGuidedWorkout
             )
         } else {
@@ -202,9 +205,23 @@ struct MoveView: View {
                 state: .noPlan,
                 loggedSessionName: nil,
                 isRestDay: store.needsRestToday,
-                onStart: { showingSuggestSheet = true }
+                travelDay: cardTravelDay,
+                onStart: suggestToday
             )
         }
+    }
+
+    /// Today's travel day for the card's suitcase and line (World-Airports-Spec §13.2, §13.5); nil on any other
+    /// day, and on a day marked unwell, whose rest copy comes first.
+    private var cardTravelDay: WorkoutTravelDayKind? {
+        store.needsRestToday ? nil : store.workoutTravelDay().kind
+    }
+
+    /// The empty card's primary: on a travel day the Travel-day reset is today's plan and the sheet opens on it
+    /// (§13.2, screen 32); any other day opens the Suggest flow's configurator.
+    private func suggestToday() {
+        if cardTravelDay != nil { store.commitTodaysTravelDayPlan() }
+        showingSuggestSheet = true
     }
 
     /// Whether the session the card would start is timed cardio or stretching rather than sets — the
@@ -498,6 +515,8 @@ struct MoveView: View {
             loadInitialSnapshotsIfNeeded()
             store.reconcileGuidedRunFromAppGroup()
             openRequestedTrainerExportIfNeeded()
+            // Travel days are remembered as day keys for later forgiveness (§13.4).
+            store.rememberWorkoutTravelDays()
             #if DEBUG
             applyUITestMovePage()
             #endif
@@ -783,6 +802,11 @@ struct StartTodaysWorkoutCard: View {
     var isRestDay: Bool = false
     /// The `.ready` session is timed cardio or stretching, not sets: its line says the parts are timed.
     var readyIsTimed: Bool = false
+    /// Today is a travel day (World-Airports-Spec §13.2, §13.5): the suitcase takes the shoe's place, with no
+    /// tag, and the empty card's line says the day's plan. Nil on any other day.
+    var travelDay: WorkoutTravelDayKind? = nil
+    /// The `.ready` session is the Travel-day reset, so its line is the travel line too.
+    var readyIsTravelReset: Bool = false
     /// Opens the runner (`.ready`) or the Suggest flow (`.noPlan`) — the parent decides.
     var onStart: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -819,7 +843,7 @@ struct StartTodaysWorkoutCard: View {
     /// card. Left visible, the audit heard the symbol's name read aloud ("Label not human-readable").
     @ViewBuilder private var cardIcon: some View {
         if look != nil {
-            FernletIconTile(size: 44) { WorldSpriteView(sprite: iconSprite, scale: 3) }
+            FernletIconTile(size: 44) { WorldSpriteView(sprite: iconSprite, scale: showsSuitcase ? 2 : 3) }
                 .accessibilityHidden(true)
         } else {
             Image(systemName: iconName)
@@ -830,13 +854,25 @@ struct StartTodaysWorkoutCard: View {
         }
     }
 
-    /// The pixel twin of ``iconName``.
+    /// The pixel twin of ``iconName``; on a travel day the suitcase (`CASE`) in the shoe's place. Decoration: the
+    /// line says it is a travel day.
     private var iconSprite: WorldSprite {
         switch state {
-        case .ready, .noPlan: WorldSprites.shoe
+        case .ready, .noPlan: travelDay == nil ? WorldSprites.shoe : WorldAirportSprites.suitcase
         case .allComplete: WorldSprites.check
         case .noneToGuide: WorldSprites.leaf
         }
+    }
+
+    /// Whether the suitcase stands in the tile (`CASE` at 2×, §13.2).
+    private var showsSuitcase: Bool {
+        travelDay != nil && (isReady || state == .noPlan)
+    }
+
+    /// Whether the card is in its `.ready` state.
+    private var isReady: Bool {
+        if case .ready = state { return true }
+        return false
     }
 
     /// `.ready` and `.noPlan` both carry a primary; the other states are read-only.
@@ -907,6 +943,9 @@ struct StartTodaysWorkoutCard: View {
     }
 
     private var subtitle: Text {
+        if let travelDay, state == .noPlan || (readyIsTravelReset && isReady) {
+            return Text(MoveTravelDayCopy.cardLine(travelDay))
+        }
         switch state {
         case .ready where isRestDay:
             return Text(MoveRestDayCopy.cardApprovedPlan)
@@ -2356,7 +2395,12 @@ struct WorkoutSuggestionSheet: View {
                 isSuggesting = false
                 return
             }
-            store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext, sessionLength: length)
+            // A travel day's plan is the Travel-day reset (§13.2), chosen by the travel-day yes/no alone.
+            if !store.needsRestToday && store.workoutTravelDay().isTravelDay {
+                store.commitTodaysTravelDayPlan()
+            } else {
+                store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext, sessionLength: length)
+            }
             isSuggesting = false
         }
     }
@@ -2583,7 +2627,33 @@ struct WorkoutSuggestionSheet: View {
     /// The committed-plan reading pane (1d): session cards, the context and explanation lines,
     /// then adjust / equipment / rework. The split eyebrow lives in the pinned header, not here,
     /// and no controls compete with the bottom bar's single green (MOVE-17) — Start now lives there.
-    private func committedPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+    @ViewBuilder private func committedPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        if WorkoutPlanner.isTravelDayPlan(dayPlan) {
+            travelPlanContent(dayPlan)
+        } else {
+            regularPlanContent(dayPlan)
+        }
+    }
+
+    /// The Travel-day reset (World-Airports-Spec §13.2, screen 32): its card, the reason line and "Lift instead,
+    /// lighter". No context line, AI adjust or rework: the footer is unchanged, and nothing travel-related goes
+    /// to the AI.
+    private func travelPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(dayPlan.sessions) { session in
+                TravelDaySessionCard(session: session, onHowTo: { howTo = ExerciseHowToRequest(name: $0) }) {
+                    if store.liftInsteadOnTravelDay() == nil {
+                        FernletAuditLog.log("workout.travel.liftInsteadRefused")
+                    }
+                }
+                .disabled(isAdjusting)
+            }
+        }
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)
+    }
+
+    /// Every other plan's reading pane.
+    private func regularPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(dayPlan.sessions) { session in
                 sessionCard(session)
@@ -2803,6 +2873,12 @@ struct WorkoutSuggestionSheet: View {
         if isConfiguratorDirty { showDiscardConfirm = true } else { dismiss() }
     }
 
+    /// The committed plan's eyebrow: "Travel day" over the Travel-day reset (§13.2), the split and day otherwise.
+    private func planEyebrow(_ plan: WorkoutProgram.DayPlan) -> Text {
+        WorkoutPlanner.isTravelDayPlan(plan)
+            ? Text(MoveTravelDayCopy.travelDay) : Text("\(plan.displayedSplitName) · \(plan.displayedDayTitle)")
+    }
+
     /// The pinned header's title per state; at AX5 "Suggest workout" drops to one word (1b·AX5).
     private var sheetTitle: Text {
         if dayPlan != nil { return Text("Today's session") }
@@ -2817,7 +2893,7 @@ struct WorkoutSuggestionSheet: View {
             // as the first line of the scroll content.
             SheetHeader(
                 title: sheetTitle,
-                eyebrow: dayPlan.map { Text("\($0.displayedSplitName) · \($0.displayedDayTitle)") },
+                eyebrow: dayPlan.map(planEyebrow),
                 onCancel: attemptCancel
             )
             ScrollView {
@@ -5091,6 +5167,27 @@ struct MoveDayDetailView: View {
         }
     }
 
+    /// Under the plan on a travel day (World-Airports-Spec §13.4, screen 34): the forgiven line on today's page
+    /// while a planned session isn't done, and the week's count with that day left out. Nothing otherwise.
+    private var travelDayNotes: some View {
+        let travelDays = store.workoutTravelDayKeys
+        let today = store.todayKey
+        let forgiven = dateKey == today && TravelDayWeekProgress.isForgiven(day, travelDays: travelDays, todayKey: today)
+        let week = travelDays.isEmpty ? nil
+            : TravelDayWeekProgress.make(days: weekDays(), travelDays: travelDays, todayKey: today)
+        return TravelDayPlanNotes(showsForgiven: forgiven, week: week)
+    }
+
+    /// The day records of the calendar week holding this page's day.
+    private func weekDays() -> [FernletDay] {
+        guard let date = FernletDate.date(fromDayKey: dateKey),
+              let week = Calendar.current.dateInterval(of: .weekOfYear, for: date) else { return [day] }
+        let last = week.end.addingTimeInterval(-1)
+        return FernletDate.dayKeys(in: DateInterval(start: week.start, end: max(week.start, last)))
+            .prefix(TravelDayWeekProgress.maxDays)
+            .map { $0 == dateKey ? day : store.loadDay(for: $0) }
+    }
+
     /// The day's logged workouts — hidden on future days (you can plan ahead, not log ahead).
     @ViewBuilder private var workoutsSection: some View {
         if !isFuture {
@@ -5175,6 +5272,7 @@ struct MoveDayDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 pageHeader
                 planSection
+                travelDayNotes
                 workoutsSection
             }
             .padding(20)

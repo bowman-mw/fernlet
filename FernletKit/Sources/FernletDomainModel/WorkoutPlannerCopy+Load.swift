@@ -88,8 +88,16 @@ extension WorkoutPlannerCopy {
                comment: "Workout session note: a lift is at the heaviest weight this place has, so a harder version of it is offered, never required. Arguments: the lift, then the harder exercise.")
     }
 
-    /// G10: the load held after a miss on a flagged day, said as what happened alongside it.
-    static func heldAfterFlag(_ name: String, shortNight: Bool) -> String {
+    /// G10: the load held after a miss on a flagged day, said as what happened alongside it. A travel
+    /// day says so first (World-Airports-Spec §13.4: it never counts as missed), then a short night,
+    /// then a light day.
+    static func heldAfterFlag(_ name: String, shortNight: Bool, travelDay: Bool = false) -> String {
+        if travelDay {
+            return String(localized: "workoutNote.load.heldAfterTravelDay",
+                          defaultValue: "\(name): the same weight today — last time fell on a travel day, so it doesn't count as a miss.",
+                          bundle: .module,
+                          comment: "Workout session note about one lift: the reps fell short last time on a travel day (a flight's date, or the day after an overnight flight), so the weight stays. The argument is the exercise name.")
+        }
         guard shortNight else {
             return String(localized: "workoutNote.load.heldAfterLightDay",
                           defaultValue: "\(name): the same weight today — last time fell on a light day, so it doesn't count as a miss.",

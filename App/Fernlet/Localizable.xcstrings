@@ -444,6 +444,16 @@
         }
       }
     },
+    "%@ was a travel day, so it's left out." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El %@ fue día de viaje, así que no se cuenta."
+          }
+        }
+      }
+    },
     "%@ weight, %@" : {
       "localizations" : {
         "en" : {
@@ -2095,6 +2105,66 @@
         }
       }
     },
+    "%lld moves · ~%lld min · outdoors in daylight if you can" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@moves@ · ~%2$lld min · outdoors in daylight if you can"
+          },
+          "substitutions" : {
+            "moves" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg move"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg moves"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%#@moves@ · ~%2$lld min · al aire libre y con luz si puedes"
+          },
+          "substitutions" : {
+            "moves" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg ejercicio"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg ejercicios"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld new · only in this session" : {
       "localizations" : {
         "es" : {
@@ -2199,6 +2269,66 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Te quedan %1$lld de %2$lld fotos hoy"
+          }
+        }
+      }
+    },
+    "%lld of %lld sessions" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %#@sessions@"
+          },
+          "substitutions" : {
+            "sessions" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg session"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg sessions"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %#@sessions@"
+          },
+          "substitutions" : {
+            "sessions" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg sesión"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg sesiones"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3201,8 +3331,38 @@
     "2" : {
 
     },
+    "2 × 12" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "2 × 12"
+          }
+        }
+      }
+    },
+    "2 × 15" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "2 × 15"
+          }
+        }
+      }
+    },
     "20" : {
 
+    },
+    "20–30 min" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "20–30 min"
+          }
+        }
+      }
     },
     "250" : {
 
@@ -3226,6 +3386,16 @@
         }
       }
     },
+    "30 s each side" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "30 s por lado"
+          }
+        }
+      }
+    },
     "4-digit PIN" : {
       "localizations" : {
         "es" : {
@@ -3238,6 +3408,16 @@
     },
     "45" : {
 
+    },
+    "5 each side" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "5 por lado"
+          }
+        }
+      }
     },
     "5.5 mph" : {
       "localizations" : {
@@ -3277,6 +3457,16 @@
     },
     "8" : {
 
+    },
+    "8 slow" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "8 lentos"
+          }
+        }
+      }
     },
     "8-12" : {
 
@@ -4991,6 +5181,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "África"
+          }
+        }
+      }
+    },
+    "After an overnight flight: an easy walk and stretches." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tras un vuelo nocturno: un paseo tranquilo y estiramientos."
           }
         }
       }
@@ -16550,6 +16750,16 @@
         }
       }
     },
+    "Lift instead, lighter" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pesas, pero más suave"
+          }
+        }
+      }
+    },
     "Light" : {
       "localizations" : {
         "es" : {
@@ -19687,6 +19897,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "No disponible por ahora"
+          }
+        }
+      }
+    },
+    "Not done today, and that's fine. On a travel day it doesn't count as missed, and your weights stay where they were." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy no se hizo, y no pasa nada. En un día de viaje no cuenta como perdido, y tus pesos se quedan como estaban."
           }
         }
       }
@@ -31366,6 +31586,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Transporte"
+          }
+        }
+      }
+    },
+    "Travel day" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día de viaje"
+          }
+        }
+      }
+    },
+    "Travel day: an easy walk and stretches." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día de viaje: un paseo tranquilo y estiramientos."
           }
         }
       }

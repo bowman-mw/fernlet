@@ -613,6 +613,24 @@
         }
       }
     },
+    "workoutFallback.note.travelDayReset" : {
+      "comment" : "The one reason line under the workout Fernlet suggests on a travel day (a flight's date, or the day after an overnight flight)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lots of sitting today: an easy walk and some stretches for your legs, hips and back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy toca mucho rato sentado: un paseo tranquilo y unos estiramientos para piernas, caderas y espalda."
+          }
+        }
+      }
+    },
     "workoutFallback.note.trySomethingSmall" : {
       "comment" : "Note on the suggested workout 'Try Something Small'",
       "extractionState" : "extracted_with_value",

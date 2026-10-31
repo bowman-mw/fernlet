@@ -715,7 +715,9 @@ estimate — so the same history always builds the same plan.
   age inferred. Tough or a miss → repeat; a second miss in a row on days with no sleep or
   readiness flag → lighter; a third → lighter and a set fewer. A flagged miss (``WorkoutSessionFlag``)
   always holds the load and never counts toward a cut (G10, 2026-10-20; `LoadChange.heldAfterFlag`,
-  its note said as what happened alongside it). Two overrides the same way,
+  its note said as what happened alongside it). A travel day is the flag's third reason
+  (World-Airports-Spec §13.4, 2026-10-31: `WorkoutSessionFlag.travelDay`, the light day's trims): the
+  app passes only a per-day yes/no, never a flight, an airport, a time or a place. Two overrides the same way,
   or a "too heavy / too light" answer, re-center the estimate on the lifter's picks; a third override
   in five sessions asks why once (``OverrideReason``).
 - **The trend (G1, 2026-10-20).** ``WorkoutTrend`` fits a robust weighted line through each lift's
@@ -727,8 +729,8 @@ estimate — so the same history always builds the same plan.
   prior and becomes the person's own scatter after ten clean sessions. ``TrendState``: progressing,
   slowing (a soft note), stalled (the upper 80 % bound of the slope under 1 % per four weeks and
   clearly under the expected curve, on three readings in a row), dipping (two clean sessions more
-  than two typical errors under the line) or too early. A session after a short night or on a light
-  day (``WorkoutSessionFlags``: 6 h or less, or 90 minutes under the 14-night median) counts at half
+  than two typical errors under the line) or too early. A session after a short night, on a light
+  day or on a travel day (``WorkoutSessionFlags``: 6 h or less, or 90 minutes under the 14-night median) counts at half
   weight when it falls short and never toward a stall. The trend restarts when the rep scheme moves
   or after four weeks away. A seeded Monte Carlo (`WorkoutPlateauSimulationTests`) holds false
   plateaus to 5 % or fewer of histories over 12 weeks, against nearly all of them for the rule it

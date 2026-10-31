@@ -3,7 +3,8 @@
 //
 // The FROZEN English names of FernletScoring's AI-free fallback workouts (2026-10-20, Spanish round
 // step 2): `WorkoutPlanner.suggestion`'s "Suggested Light" / "Suggested Moderate" / "Suggested Hard"
-// and `WorkoutSuggestionLibrary`'s twelve templates ("Steady Care Walk", "Mood Reset", …).
+// and `WorkoutSuggestionLibrary`'s twelve templates ("Steady Care Walk", "Mood Reset", …), and the
+// travel-day session (World-Airports-Spec §13.2, 2026-10-31): "Travel-day reset".
 //
 // Each one becomes a stored `Workout.name` when the suggestion is taken — persisted, synced, written
 // to Health and keyword-matched by the category inference — so it keeps its exact English spelling,
@@ -35,6 +36,9 @@ public nonisolated enum WorkoutFallbackName: String, CaseIterable, Sendable {
     case softRebuild = "Soft Rebuild"
     case trySomethingSmall = "Try Something Small"
     case curiousChallenge = "Curious Challenge"
+    /// The travel-day session `WorkoutPlanner` chooses from the travel-day yes/no (World-Airports-Spec
+    /// §13.2): an easy walk and stretches, about 40 minutes.
+    case travelDayReset = "Travel-day reset"
 
     /// The energy-matched session name `WorkoutPlanner.suggestion` saves.
     public static func suggested(_ intensity: WorkoutIntensity) -> WorkoutFallbackName {
@@ -47,7 +51,14 @@ public nonisolated enum WorkoutFallbackName: String, CaseIterable, Sendable {
 
     /// The localized name for screens.
     public var displayName: String {
-        suggestedName ?? templateName ?? rawValue
+        suggestedName ?? templateName ?? travelName ?? rawValue
+    }
+
+    /// The travel-day session's name.
+    private var travelName: String? {
+        guard self == .travelDayReset else { return nil }
+        return String(localized: "workoutFallback.travelDayReset", defaultValue: "Travel-day reset", bundle: .module,
+                      comment: "Name of the workout Fernlet suggests on a travel day (a flight's date, or the day after an overnight flight): an easy walk and stretches for the legs, hips and back")
     }
 
     /// The three energy-matched names.

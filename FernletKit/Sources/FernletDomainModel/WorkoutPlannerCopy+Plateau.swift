@@ -159,6 +159,16 @@ extension WorkoutPlannerCopy {
                       comment: "Workout session note giving context to a lift's progress. Arguments: a number written as digits (e.g. '3'), then a number of sessions (e.g. '8 sessions').")
     }
 
+    /// "2 of the last 8 sessions fell on a travel day, which can take a little off a session."
+    /// (World-Airports-Spec §13.4.)
+    static func travelDayContext(_ count: Int, of window: Int) -> String {
+        let flagged = count.formatted()
+        return String(localized: "workoutNote.plateau.travelDayContext",
+                      defaultValue: "\(flagged) of the last \(sessionCount(window)) fell on a travel day, which can take a little off a session.",
+                      bundle: .module,
+                      comment: "Workout session note giving context to a lift's progress: some sessions were on travel days (a flight's date, or the day after an overnight flight). Arguments: a number written as digits (e.g. '2'), then a number of sessions (e.g. '8 sessions').")
+    }
+
     /// "2 of the last 8 sessions fell on a light day, which can take a little off a session."
     static func lightDayContext(_ count: Int, of window: Int) -> String {
         let flagged = count.formatted()
