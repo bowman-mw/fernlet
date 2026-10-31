@@ -112,6 +112,32 @@ struct NatureFogTilePipelineTests {
         #expect(view.outgoingTileCount == 0, "so nothing needs holding over")
     }
 
+    /// Perf review 2026-10-31: the map going behind a panel, sheet or tab gives back every tile only a zoom or a
+    /// pan would use — the spare scales, the outgoing tiles and the ring — and keeps what the screen shows.
+    @Test func goingBehindGivesBackEverythingOffTheScreen() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        view.show(scene(heightMetres: 1_700 * 0.57 / 1.5))
+        view.settle(now: CACurrentMediaTime() + 60)
+        await view.finishDrawing()
+        #expect(!view.spareTileCounts.isEmpty, "the zoom left a spare scale")
+        #expect(view.cachedTileCount > view.shownTileCount, "and the ring round the screen is drawn")
+        let shown = view.shownTileCount
+        var behind = scene(heightMetres: 1_700 * 0.57 / 1.5)
+        behind.isFrontmost = false
+        view.show(behind)
+        #expect(view.spareTileCounts.isEmpty && view.outgoingTileCount == 0)
+        #expect(view.cachedTileCount <= view.shownTileCount && view.shownTileCount == shown,
+                "only the screen's tiles stay, so nothing flashes")
+        var moved = scene(heightMetres: 1_700 * 0.57 / 1.5 * 1.01)
+        moved.isFrontmost = false
+        view.show(moved)
+        await view.finishDrawing()
+        #expect(view.cachedTileCount <= view.shownTileCount + NatureFogTileBook.painterCount,
+                "a reading moving the hidden map draws the screen, never the ring back")
+    }
+
     @Test func aGlideDrawsItsEndFirst() async {
         let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
         let away = Self.park.offset(east: 15_000, north: 0)

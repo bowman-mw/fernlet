@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import WorldMapStore
 
 /// The land under the fog (World-Exploration-Spec §1): which terrain set each fog hex draws, read from the
@@ -61,44 +62,62 @@ nonisolated struct NatureFogTerrain: Sendable, Equatable {
     }
 }
 
-/// One grower's terrain answers (World-Exploration-Spec §1, "classify each hex once"): every hex is read from the
-/// snapshot once and kept (at most ``memoLimit``, then forgotten), so a grower's tiles never ask again. The urban
-/// test keeps, per 0.1° atlas cell, the short list of urban boundaries whose box meets that cell (at most
-/// ``bucketLimit`` cells), instead of passing over every boundary for every hex.
+/// The terrain answers of one snapshot (World-Exploration-Spec §1, "classify each hex once"): every hex is read
+/// from the snapshot once and kept (at most ``memoLimit``, then forgotten). The urban test keeps, per 0.1° atlas
+/// cell, the short list of urban boundaries whose box meets that cell (at most ``bucketLimit`` cells), instead of
+/// passing over every boundary for every hex.
 ///
-/// Local state only: each ``NatureFogGrower`` owns its own memo and nothing shares one, so it needs no actor.
-nonisolated final class NatureTerrainMemo {
+/// **Shared** (perf review 2026-10-31): a hex's land is a pure function of the snapshot and the hex — the hex grid
+/// is the same at every fog scale — so the fog view hands one memo to every painter of every scale's book. A zoom
+/// no longer reads every hex's land again (the urban point-in-polygon test was 73 % of the map's CPU in a pinch).
+/// Both dictionaries sit behind one `Mutex`; a hex two painters miss together is classified twice
+/// and kept once, which is harmless because both answers are the same.
+nonisolated final class NatureTerrainMemo: Sendable {
     /// The most hexes kept before the memo starts again.
     static let memoLimit = 60_000
     /// The most atlas cells whose urban short list is kept.
     static let bucketLimit = 256
 
-    private let classify: (HexCell, NatureTerrainMemo) -> TerrainHex
+    /// The snapshot this memo answers for; nil for a test memo with a fixed answer.
+    let terrain: NatureFogTerrain?
+    private let classify: @Sendable (HexCell, NatureTerrainMemo) -> TerrainHex
     private let urbanAreas: [AtlasPolygon]
     private let grid: AtlasGrid?
-    private var hexes: [HexCell: TerrainHex] = [:]
-    private var buckets: [Int: [Int]] = [:]
+    private let state = Mutex(Answers())
+
+    /// What the memo has read so far.
+    private struct Answers {
+        var hexes: [HexCell: TerrainHex] = [:]
+        var buckets: [Int: [Int]] = [:]
+    }
 
     /// A memo over `terrain`.
     init(terrain: NatureFogTerrain) {
+        self.terrain = terrain
         urbanAreas = terrain.atlas.urbanAreas
         grid = terrain.atlas.grid
         classify = { cell, memo in terrain.classify(cell, urban: memo.isUrban) }
     }
 
     /// A memo answering `answer` for every hex (tests: a field of one set or season).
-    init(answer: @escaping (HexCell) -> TerrainHex) {
+    init(answer: @escaping @Sendable (HexCell) -> TerrainHex) {
+        terrain = nil
         urbanAreas = []
         grid = nil
         classify = { cell, _ in answer(cell) }
     }
 
+    /// How many hexes the memo holds (tests: proof two books read one memo).
+    var knownHexCount: Int { state.withLock { $0.hexes.count } }
+
     /// The hex `cell` draws as.
     func hex(_ cell: HexCell) -> TerrainHex {
-        if let known = hexes[cell] { return known }
-        if hexes.count >= Self.memoLimit { hexes.removeAll(keepingCapacity: true) }
+        if let known = state.withLock({ $0.hexes[cell] }) { return known }
         let found = classify(cell, self)
-        hexes[cell] = found
+        state.withLock { answers in
+            if answers.hexes.count >= Self.memoLimit { answers.hexes.removeAll(keepingCapacity: true) }
+            answers.hexes[cell] = found
+        }
         return found
     }
 
@@ -106,7 +125,7 @@ nonisolated final class NatureTerrainMemo {
     func isUrban(_ point: GeoPoint) -> Bool {
         guard let grid, point.isValid else { return false }
         let spot = grid.spot(of: point), index = grid.index(row: spot.row, col: spot.col)
-        let candidates = buckets[index] ?? bucket(row: spot.row, col: spot.col, grid: grid, index: index)
+        let candidates = state.withLock { $0.buckets[index] } ?? bucket(row: spot.row, col: spot.col, grid: grid, index: index)
         return candidates.contains { urbanAreas.indices.contains($0) && urbanAreas[$0].contains(point) }
     }
 
@@ -121,8 +140,10 @@ nonisolated final class NatureTerrainMemo {
             return Double(area.minLon) <= east && Double(area.maxLon) >= west && Double(area.minLat) <= north
                 && Double(area.maxLat) >= south
         }
-        if buckets.count >= Self.bucketLimit { buckets.removeAll(keepingCapacity: true) }
-        buckets[index] = found
+        state.withLock { answers in
+            if answers.buckets.count >= Self.bucketLimit { answers.buckets.removeAll(keepingCapacity: true) }
+            answers.buckets[index] = found
+        }
         return found
     }
 }

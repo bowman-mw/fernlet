@@ -24,6 +24,9 @@ struct WorldMapStack<Overlay: View>: View {
     var veiled = false
     /// The land under the fog (``NatureFogTerrain``); nil draws today's nature fog.
     var terrain: NatureFogTerrain? = nil
+    /// Whether the map is the front page (Home with nothing over it); behind, the fog gives back the tiles only a
+    /// zoom or a pan would use. True for the maps that are only ever in front.
+    var isFrontmost = true
     /// Drawn over the map in the same coordinate space; receives the current viewport.
     @ViewBuilder let overlay: (MapViewport, CGSize) -> Overlay
     /// Where the caller reads the last viewport back without redrawing (Home: whether Sprout left the
@@ -48,7 +51,8 @@ struct WorldMapStack<Overlay: View>: View {
                 }
                 if let viewport {
                     Group {
-                        WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: isDark, camera: camera, terrain: terrain)
+                        WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: isDark, camera: camera, terrain: terrain,
+                                         isFrontmost: isFrontmost)
                         WorldSkyWash(phase: phase, darkMode: isDark)
                     }
                     .mask { WorldMapCreditClearance(bottomInset: creditInset, active: kind == .appleMuted && !veiled) }

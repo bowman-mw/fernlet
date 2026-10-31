@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Synchronization
 import Testing
 import UIKit
 import WorldMapStore
@@ -34,7 +35,7 @@ struct WorldTerrainTests {
     }
 
     /// A grower over a field whose every hex is `answer`'s.
-    private func grower(_ answer: @escaping (HexCell) -> TerrainHex, clearing: NatureFogClearing = NatureFogClearing()) -> NatureFogGrower {
+    private func grower(_ answer: @escaping @Sendable (HexCell) -> TerrainHex, clearing: NatureFogClearing = NatureFogClearing()) -> NatureFogGrower {
         NatureFogGrower(scale: Self.full, clearing: clearing, atlas: NatureFogAtlas(palette: Self.light),
                         terrain: NatureTerrainMemo(answer: answer))
     }
@@ -45,7 +46,7 @@ struct WorldTerrainTests {
         return CGRect(x: origin.x, y: origin.y, width: 900, height: 900)
     }()
 
-    private static func everywhere(_ set: TerrainSet, season: AtlasSeason = .summer, flora: TerrainFlora = .everything) -> TerrainHex {
+    private nonisolated static func everywhere(_ set: TerrainSet, season: AtlasSeason = .summer, flora: TerrainFlora = .everything) -> TerrainHex {
         TerrainHex(set: set, season: season, flora: flora, floraPicks: !set.isApproved)
     }
 
@@ -92,21 +93,57 @@ struct WorldTerrainTests {
         #expect(forest.followsApproved && forest.look == .approved, "temperate forest in summer is the approved fog")
     }
 
+    /// Counts a memo's questions across the painters' threads.
+    private final class Asked: Sendable {
+        private let count = Mutex(0)
+        var value: Int { count.withLock { $0 } }
+        func tick() { count.withLock { $0 += 1 } }
+    }
+
     @Test func eachHexIsClassifiedOnceAndKept() {
-        var asked = 0
+        let asked = Asked()
         let memo = NatureTerrainMemo { _ in
-            asked += 1
+            asked.tick()
             return .approved
         }
         let cell = NatureFogRules.cell(col: 523_410, row: 761_210)
         _ = memo.hex(cell)
         _ = memo.hex(cell)
-        #expect(asked == 1)
+        #expect(asked.value == 1)
         let field = NatureFogGrower(scale: Self.full, clearing: NatureFogClearing(), atlas: NatureFogAtlas(palette: Self.light), terrain: memo)
         _ = field.layout(in: Self.field)
-        let first = asked
+        let first = asked.value
         _ = field.layout(in: Self.field)
-        #expect(asked == first, "a second layout of the same area asks the atlas nothing")
+        #expect(asked.value == first, "a second layout of the same area asks the atlas nothing")
+    }
+
+    /// Perf review 2026-10-31: one memo serves every scale's book, so a zoom reads only hexes no scale has read,
+    /// and the shared memo draws the same picture a painter's own memo would.
+    @Test func booksAtEveryScaleReadOneSharedMemo() async throws {
+        let atlas = try Self.shippedAtlas()
+        let terrain = Self.terrain(atlas, month: 7)
+        let memo = NatureTerrainMemo(terrain: terrain)
+        let key = NatureFogTileBook.key(at: Self.full.centre(of: MercatorHexGrid.cell(containing: GeoPoint(45.5205, -122.6255))))
+        let shared = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
+                                       terrain: terrain, memo: memo)
+        let own = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
+                                    terrain: terrain)
+        let a = await shared.tile(key)
+        let b = await own.tile(key)
+        let read = memo.knownHexCount
+        #expect(read > 0, "the book's painters read the memo they were handed")
+        let bytes = { (image: CGImage?) in image?.dataProvider?.data.map { $0 as Data } }
+        #expect(bytes(a.ground) != nil && bytes(a.ground) == bytes(b.ground), "a shared memo draws the same picture")
+        let wider = NatureFogScale(radius: 27, reduced: false)
+        let zoomed = NatureFogTileBook(scale: wider, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
+                                       terrain: terrain, memo: memo)
+        _ = await zoomed.tile(NatureFogTileBook.key(at: wider.centre(of: MercatorHexGrid.cell(containing: GeoPoint(45.5205, -122.6255)))))
+        #expect(memo.knownHexCount >= read, "the next scale adds to the same memo, never starts its own")
+        let other = NatureTerrainMemo(terrain: Self.terrain(atlas, month: 1))
+        let winter = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
+                                       terrain: Self.terrain(atlas, month: 7), memo: other)
+        _ = await winter.tile(key)
+        #expect(other.knownHexCount == 0, "a memo for another snapshot is never read")
     }
 
     // MARK: Grassland and temperate forest stay the approved nature fog
