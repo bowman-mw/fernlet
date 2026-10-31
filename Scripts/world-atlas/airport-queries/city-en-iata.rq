@@ -1,0 +1,1 @@
+SELECT DISTINCT ?city ?l WHERE { ?item wdt:P238 [] . ?item wdt:P931 ?city . ?city rdfs:label ?l . FILTER(lang(?l) = "en") }

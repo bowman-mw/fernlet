@@ -1,0 +1,1 @@
+SELECT ?item ?city WHERE { ?item wdt:P238|wdt:P239 [] . ?item wdt:P931 ?city . }
