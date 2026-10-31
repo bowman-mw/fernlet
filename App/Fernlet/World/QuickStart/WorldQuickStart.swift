@@ -81,6 +81,12 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     var hasGentleStretch = false
     var session: Session?
     var activity: Activity = .none
+    /// The airport whose grounds hold the person, by name (World-Airports-Spec §5, §7): its card leads with Take a
+    /// trip. Nil elsewhere, in a decoy, or while flying.
+    var airportName: String?
+    /// Take a trip's row (§7): "Take a trip", or "End trip · London" while one is on; nil where it isn't offered
+    /// (a decoy, "Airports and flights" off).
+    var tripOption: WorldQuickStartOption?
     /// Whether the disposable camera has its on-your-own mode (10 a day;
     /// `WorldDisposableCamera.soloIsAvailable`). Without it the camera is offered only in a session.
     var soloCameraAvailable = false
@@ -131,6 +137,10 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case soloCamera
     /// Back to the guided workout under way.
     case backToWorkout(title: String)
+    /// "Take a trip" (World-Airports-Spec §7): opens Fernlet's ticket; the companion's name for its line.
+    case takeATrip(companion: String)
+    /// "End trip · London" while a trip is on: ends it; the destination's city, nil with none.
+    case endTrip(city: String?)
     /// "Start a hangout with Sam" (`b4-mem-blue-friend`): Friends nearby, where the phones meet.
     case startSession(friend: String)
     /// "Start an activity": Activities, a walk, coffee or meal that friends nearby can join.
@@ -160,6 +170,8 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case savedLine
         /// "Your run from here": a saved run route starts where the person stands (`b1-qs-run`).
         case savedRun
+        /// The airport's name, inside its grounds (World-Airports-Spec §7, screen 16).
+        case airport(String)
         /// "A gentle day": resting, away from a space.
         case gentle
         /// "On your walk": while a walk records.
@@ -186,6 +198,8 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case restingCounts
         /// "You've walked from here 3 times"
         case walkedFromHere(times: Int)
+        /// "You're at the airport." (World-Airports-Spec §7, screen 16)
+        case atAirport
         /// "You've run this route 8 times"
         case ranFromHere(times: Int)
         /// "You've logged meals here 4 times" (`b1-qs-food`)
@@ -238,7 +252,9 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 ///
 /// Rules 6 to 9 end with "Friends nearby" while friends are offered at all, so a session, a hangout
 /// and a new friend stay reachable when the presence radio hears no friend (`b4-mem-blue-join`,
-/// `-blue-new`). A card with no choice is no card: the button hides (for example while walking with no
+/// `-blue-new`). **Take a trip** (World-Airports-Spec §7) is a row wherever the person is, after those:
+/// at an airport it leads instead, the airport's card ahead of rules 6a to 9 (screen 16), and while a trip
+/// is on it reads "End trip · London". A card with no choice is no card: the button hides (for example while walking with no
 /// camera, or in a decoy with location off).
 nonisolated enum WorldQuickStart {
     /// The card for `context`, or nil when the button has nothing to offer.
@@ -259,6 +275,7 @@ nonisolated enum WorldQuickStart {
         case .gentle: return .rest
         case .savedLine: return .trail
         case .savedRun: return .run
+        case .airport: return .walk
         case .session, .walk, .walking, .running: return .walk
         case .friendNearby, .inPerson: return .friends
         case .eatingPlace: return .eat
@@ -293,19 +310,23 @@ nonisolated enum WorldQuickStart {
                                        options: [.sessionCamera(shotsLeft: session.shotsLeft)] + walk)
         }
         let card = usual(context, walk: walk)
-        guard context.canMeetFriends else { return card }
+        let trip = tripLast(context)
+        guard context.canMeetFriends else {
+            return WorldQuickStartCard(heading: card.heading, note: card.note, options: card.options + trip)
+        }
         if let friend = context.nearbyFriends.first {
             return WorldQuickStartCard(heading: .friendNearby(context.nearbyFriends), note: nil,
-                                       options: [.startSession(friend: friend), .startActivity] + card.options)
+                                       options: [.startSession(friend: friend), .startActivity] + card.options + trip)
         }
         guard !card.options.isEmpty else {
-            return WorldQuickStartCard(heading: .inPerson, note: nil, options: [.friendsNearby])
+            return WorldQuickStartCard(heading: .inPerson, note: nil, options: [.friendsNearby] + trip)
         }
-        return WorldQuickStartCard(heading: card.heading, note: card.note, options: card.options + [.friendsNearby])
+        return WorldQuickStartCard(heading: card.heading, note: card.note, options: card.options + [.friendsNearby] + trip)
     }
 
     /// The rules without friends: a place to eat, resting, space, saved walk, anywhere.
     private static func usual(_ context: WorldQuickStartContext, walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
+        if let airport = context.airportName, let trip = context.tripOption { return atAirport(airport, trip: trip, walk: walk) }
         if context.space == nil, let place = context.eatingPlace { return eating(place, context) }
         if context.isResting { return resting(context, walk: walk) }
         if let space = context.space {
@@ -324,6 +345,18 @@ nonisolated enum WorldQuickStart {
                                        options: [.runSavedLine(metres: line.metres)] + walk)
         }
         return WorldQuickStartCard(heading: .walk, note: .nothingSaved, options: walk)
+    }
+
+    /// At an airport (World-Airports-Spec §7, screen 16): its name, "You're at the airport.", Take a trip (or End
+    /// trip) first, then the walk.
+    private static func atAirport(_ name: String, trip: WorldQuickStartOption, walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
+        WorldQuickStartCard(heading: .airport(name), note: .atAirport, options: [trip] + walk)
+    }
+
+    /// Take a trip as the card's last row: anywhere but an airport, whose card already leads with it.
+    private static func tripLast(_ context: WorldQuickStartContext) -> [WorldQuickStartOption] {
+        guard let trip = context.tripOption, context.airportName == nil else { return [] }
+        return [trip]
     }
 
     /// A resting or unwell day: the gentle stretch leads; at a space the workout stays, gently;

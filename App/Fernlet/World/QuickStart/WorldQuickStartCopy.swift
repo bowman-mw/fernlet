@@ -36,6 +36,8 @@ nonisolated enum WorldQuickStartCopy {
         case .running:
             return String(localized: "worldQuickStart.heading.running", defaultValue: "On your run",
                           comment: "World Home quick-start card heading while a run records")
+        case .airport(let name):
+            return name
         case .workout(let title):
             return title
         case .friendNearby(let names):
@@ -86,6 +88,9 @@ nonisolated enum WorldQuickStartCopy {
         case .ranFromHere(let times):
             return String(localized: "worldQuickStart.note.ranFromHere", defaultValue: "You've run this route \(times) times",
                           comment: "World Home quick-start card where a saved run route starts: how many recent runs started here. Plural on the number")
+        case .atAirport:
+            return String(localized: "worldQuickStart.note.atAirport", defaultValue: "You're at the airport.",
+                          comment: "World Home quick-start card inside an airport's grounds, under its name (Spanish: Estás en el aeropuerto.)")
         case .loggedMealsHere(let times):
             return String(localized: "worldQuickStart.note.loggedMealsHere", defaultValue: "You've logged meals here \(times) times",
                           comment: "World Home quick-start card at a favourite place to eat: how many meals were logged there. Plural on the number")
@@ -119,6 +124,10 @@ nonisolated enum WorldQuickStartCopy {
         case .backToWorkout(let title):
             return String(localized: "worldQuickStart.backToWorkout", defaultValue: "Back to \(title)",
                           comment: "World Home quick start during a guided workout: returns to it; the workout's name")
+        case .takeATrip:
+            return String(localized: WorldTripCopy.takeATrip)
+        case .endTrip(let city):
+            return WorldTripCopy.endTrip(city: city)
         case .startSession(let friend):
             return FriendsNearbyCopy.startHangout(with: friend)
         case .startActivity:
@@ -168,6 +177,10 @@ nonisolated enum WorldQuickStartCopy {
         case .backToWorkout:
             return String(localized: "worldQuickStart.backToWorkout.detail", defaultValue: "Your workout is still going",
                           comment: "World Home quick start during a guided workout: under 'Back to …'")
+        case .takeATrip(let companion):
+            return WorldTripCopy.takeATripDetail(companion: companion)
+        case .endTrip:
+            return String(localized: WorldTripCopy.endTripDetail)
         case .startSession:
             return FriendsNearbyCopy.sessionDetail
         case .startActivity:

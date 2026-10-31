@@ -115,6 +115,8 @@ struct WorldMapHome: View {
     @State private var discoveries = WorldDiscoveryRouter()
     /// The airport banners (World-Airports-Spec §3, §6.3).
     @State private var airportHome = WorldAirportHomeState()
+    /// Take a trip: the ticket, the boarding pass and today's calendar flight (World-Airports-Spec §5, §7, §10.7).
+    @State private var trip = WorldTripHomeState()
     /// Sprout's mention of the week's new corner (§5), said once; nil once Home goes behind a panel.
     @State private var cornerLine: String?
     /// DEBUG `FERNLET_UI_TEST_CORNER`: a corner stood in where the person stands (display only).
@@ -156,6 +158,9 @@ struct WorldMapHome: View {
         // Airports (World-Airports-Spec §3, §6.3): the found and landing banners, Sprout's landing line.
         .modifier(WorldAirportHomeDriver(store: store, router: discoveries, state: airportHome, passport: passport,
                                          holdsBanner: !isFrontmost || holdsRootBanners || stampBannerShowing))
+        // Take a trip (World-Airports-Spec §5, §7, §10.7): the ticket, the boarding pass, the quick action, on the day.
+        .modifier(WorldTripHomeDriver(store: store, trip: trip, greeting: $homeGreeting, isFrontmost: isFrontmost,
+                                      openCard: { openCard(spaceID: hereSpaceID) }))
         .task(id: cornerLine) { await letCornerLineStand() }
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
@@ -228,7 +233,8 @@ struct WorldMapHome: View {
         let point = companionPoint(viewport: viewport, size: size)
         return ZStack(alignment: .topLeading) {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
-            WorldAirportLayer(store: store, viewport: viewport, size: size, companion: point)
+            WorldAirportLayer(store: store, viewport: viewport, size: size, companion: point,
+                              onOpenPass: { trip.openPass(store, at: $0) })
             WorldExploreLayer(store: store, explore: explore, viewport: viewport, size: size,
                               showsCityPlate: !isWalking && loggedWalk == nil, companion: point)
             if let corner = shownCorner, let home = cornerHome {
@@ -325,7 +331,7 @@ struct WorldMapHome: View {
                     // Riding along (`b1-home-car`, `ref-ride-home`): quick starts pause until the person is on foot.
                     if !isRiding, let glyph = WorldQuickStart.glyph(for: buttonContext) {
                         WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
-                                              action: toggleCard)
+                                              tripLabel: trip.todayLabel, action: toggleCard)
                     }
                 }
             }
@@ -623,6 +629,10 @@ struct WorldMapHome: View {
             cameraMode = .solo(placeName: placeName)
         case .backToWorkout:
             guidedSession = store.guidedSessionForResume()
+        case .takeATrip:
+            trip.openTicket(store)
+        case .endTrip:
+            trip.end(store)
         case .startSession, .friendsNearby:
             onFriends(.nearby)
         case .startActivity:

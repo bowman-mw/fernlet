@@ -38,18 +38,21 @@ nonisolated enum WorldQuickStartLabel: String, CaseIterable, Sendable {
 
     /// The button's name for VoiceOver and Voice Control: always "Quick start, Camera" while the
     /// button is the camera, whether or not the label is showing; "Quick start" for the unlabelled icons.
-    static func buttonName(for glyph: WorldQuickStartGlyph?) -> String {
+    /// On a calendar flight's day at its airport, "Quick start, Trip to Honolulu" (`trip`, World-Airports-Spec
+    /// §10.7).
+    static func buttonName(for glyph: WorldQuickStartGlyph?, trip: String? = nil) -> String {
         let base = String(localized: WorldQuickStartCopy.buttonLabel)
-        guard let label = label(for: glyph) else { return base }
-        let word = String(localized: label.title)
+        guard let word = trip ?? label(for: glyph).map({ String(localized: $0.title) }) else { return base }
         return String(localized: "worldQuickStart.label.name", defaultValue: "\(base), \(word)",
                       comment: "World Home: the blue button's VoiceOver name with its action, 'Quick start, Camera'")
     }
 
     /// What VoiceOver says, politely, each time the label shows: "Quick start: Camera".
-    var announcement: String {
+    var announcement: String { Self.spokenChange(String(localized: title)) }
+
+    /// "Quick start: `word`" (what VoiceOver says when the label shows).
+    static func spokenChange(_ word: String) -> String {
         let base = String(localized: WorldQuickStartCopy.buttonLabel)
-        let word = String(localized: title)
         return String(localized: "worldQuickStart.label.announcement", defaultValue: "\(base): \(word)",
                       comment: "World Home: what VoiceOver says when the blue button's action changes, 'Quick start: Camera'")
     }
@@ -68,6 +71,8 @@ nonisolated struct WorldQuickStartLabelRule: Equatable, Sendable {
     /// The label slides out in 0.3 s, stays 30 s, then slides back in 0.3 s.
     static let slideDuration: TimeInterval = 0.3
     static let holdDuration: TimeInterval = 30
+    /// "Trip to Honolulu" stays 3 s (World-Airports-Spec §10.7).
+    static let tripHoldDuration: TimeInterval = 3
     static let shrinkDuration: TimeInterval = 0.3
 
     /// Notes the button's glyph and returns what the label does now.
@@ -106,17 +111,20 @@ nonisolated enum WorldQuickStartLabelMotion: Sendable, Equatable {
 
 extension View {
     /// The blue button's label (`ref-blue-how`, form answer 28): watches `glyph` and, every time the action
-    /// changes, slides the action's word out beside the button for 30 seconds and says it to VoiceOver.
-    func worldQuickStartLabel(for glyph: WorldQuickStartGlyph) -> some View {
-        modifier(WorldQuickStartLabelModifier(glyph: glyph))
+    /// changes, slides the action's word out beside the button for 30 seconds and says it to VoiceOver. A
+    /// `tripTo` ("Trip to Honolulu", World-Airports-Spec §10.7) slides out for 3 seconds when it arrives.
+    func worldQuickStartLabel(for glyph: WorldQuickStartGlyph, tripTo: String? = nil) -> some View {
+        modifier(WorldQuickStartLabelModifier(glyph: glyph, tripTo: tripTo))
     }
 }
 
 /// Implements `worldQuickStartLabel(for:)`: the label behind the button's left edge, tucked under it.
 struct WorldQuickStartLabelModifier: ViewModifier {
     let glyph: WorldQuickStartGlyph
+    /// "Trip to Honolulu", while it applies.
+    var tripTo: String? = nil
     @State private var rule = WorldQuickStartLabelRule()
-    @State private var showing: WorldQuickStartLabel?
+    @State private var showing: Text?
     @State private var isOut = false
     @State private var showID = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -125,7 +133,7 @@ struct WorldQuickStartLabelModifier: ViewModifier {
         content
             .background(alignment: .trailing) {
                 if let showing {
-                    WorldQuickStartLabelPill(label: showing)
+                    WorldQuickStartLabelPill(title: showing)
                         .scaleEffect(x: isOut || reduceMotion ? 1 : 0.01, y: 1, anchor: .trailing)
                         .opacity(isOut ? 1 : 0)
                         .offset(x: -56)
@@ -139,28 +147,48 @@ struct WorldQuickStartLabelModifier: ViewModifier {
                 case .tuckAway: tuckAway()
                 }
             }
+            .onChange(of: tripTo) { _, next in
+                if let next { showTrip(next) } else { tuckAway() }
+            }
     }
 
     /// Notes the first glyph (where the button starts, not a change). DEBUG screenshots (`label`) show
     /// its label and keep it out; the scene list is empty in release builds.
     private func start() {
         _ = rule.observe(glyph)
+        // On the day of a calendar flight, arriving at its airport (the button appears with it): "Trip to Honolulu".
+        if let tripTo {
+            showTrip(tripTo, holds: UITestSupport.tripScene == "today")
+            return
+        }
         guard UITestSupport.worldHomeScenes.contains("label"), let label = WorldQuickStartLabel.label(for: glyph) else { return }
         show(label, holds: true)
     }
 
     /// Slides `label` out, says it politely, holds it 30 seconds, then slides it back in (unless `holds`).
     private func show(_ label: WorldQuickStartLabel, holds: Bool = false) {
+        present(Text(label.title), announcement: label.announcement,
+                hold: holds ? nil : WorldQuickStartLabelRule.holdDuration)
+    }
+
+    /// Slides "Trip to Honolulu" out, says it, holds it 3 seconds, then slides it back in (unless `holds`).
+    private func showTrip(_ words: String, holds: Bool = false) {
+        present(Text(verbatim: words), announcement: WorldQuickStartLabel.spokenChange(words),
+                hold: holds ? nil : WorldQuickStartLabelRule.tripHoldDuration)
+    }
+
+    /// Slides `title` out, says `announcement` politely, and after `hold` seconds (never, for nil) slides it back in.
+    private func present(_ title: Text, announcement: String, hold: TimeInterval?) {
         showID += 1
         let id = showID
-        showing = label
+        showing = title
         isOut = false
         withAnimation(.easeOut(duration: WorldQuickStartLabelRule.slideDuration)) { isOut = true }
-        FernletAnnouncer.system.announce(.status, resolved: label.announcement)
-        guard !holds else { return }
+        FernletAnnouncer.system.announce(.status, resolved: announcement)
+        guard let hold else { return }
         Task {
             do {
-                try await Task.sleep(for: .seconds(WorldQuickStartLabelRule.slideDuration + WorldQuickStartLabelRule.holdDuration))
+                try await Task.sleep(for: .seconds(WorldQuickStartLabelRule.slideDuration + hold))
             } catch {
                 return
             }
@@ -181,7 +209,8 @@ struct WorldQuickStartLabelModifier: ViewModifier {
 /// The label itself (`kit-ref.css` `.gopill`): the button's teal, 60 pt tall, open on the right where
 /// it tucks under the button, the word in DM Sans bold 17 (21 at the accessibility sizes) in deep teal.
 struct WorldQuickStartLabelPill: View {
-    let label: WorldQuickStartLabel
+    /// The word: "Camera", or "Trip to Honolulu".
+    let title: Text
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The pill's face and word: the kit's light teal with deep-teal ink in both modes (8.1:1).
@@ -190,7 +219,7 @@ struct WorldQuickStartLabelPill: View {
 
     var body: some View {
         let shape = UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10)
-        Text(label.title)
+        title
             .font(.custom(FernletFontName.dmSansBold, size: dynamicTypeSize.isAccessibilitySize ? 21 : 17, relativeTo: .body))
             // Two steps, as the approved designs draw it beside the 60-pt button: 17, then 21.
             .dynamicTypeSize(...DynamicTypeSize.large)
