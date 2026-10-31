@@ -59,7 +59,7 @@ HLS_LAYERS = ("HLS_S30_Nadir_BRDF_Adjusted_Reflectance", "HLS_L30_Nadir_BRDF_Adj
 HLS_ZOOM = 12
 HLS_PROBES = 40
 S2_SEARCH = "https://earth-search.aws.element84.com/v1/search"
-S2_CANDIDATES = 8
+S2_CANDIDATES = 20
 EARTH_RADIUS = 6378137.0
 CREDIT = {
     "usgs": "Imagery: USGS The National Map (public domain)",
@@ -567,7 +567,12 @@ def main(argv):
                     continue
         card_path = os.path.join(args.out, "%s.png" % token)
         earlier = [tuple(p) for p in compare[token]] if token in compare and seed_kind != "runways" else None
-        card(airport, ring, runways, seed, source, geo, args.sources, card_path, SEED_CREDIT[seed_kind], earlier)
+        try:
+            card(airport, ring, runways, seed, source, geo, args.sources, card_path, SEED_CREDIT[seed_kind], earlier)
+        except SystemExit as error:
+            # One airport's picture failing (no Sentinel-2 scene covers it cleanly) skips that airport, not the run.
+            print("skip %s: %s" % (token, error))
+            continue
         drafts[token] = {"id": token, "points": [[lat, lon] for lat, lon in ring], "imagery": credit_for(source, geo),
                          "imageryDate": {"eox": "2016", "usgs": "USGS current", "s2": geo.get("day", "")}.get(
                              source, " to ".join(sorted({d for _, d in geo.get("days", [])})[::4] or [""])),
