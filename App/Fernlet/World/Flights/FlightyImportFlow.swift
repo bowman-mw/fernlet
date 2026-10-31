@@ -16,7 +16,7 @@ nonisolated struct FlightyImportFound: Identifiable, Equatable, Sendable {
 
 /// Why a picked file isn't imported: a refusal of the whole file (spec §9.1, "a wrong or huge file is turned away
 /// with a message"), or the passport not taking the flights right now.
-nonisolated enum FlightyImportProblem: Equatable, Sendable {
+nonisolated enum FlightyImportProblem: Error, Equatable, Sendable {
     case refused(FlightyImportRefusal)
     /// The picker's file couldn't be opened or read.
     case unreadable
@@ -65,6 +65,11 @@ final class FlightyImportFlow {
     convenience init(store: FernletStore) {
         let shelf = store.worldLocation.flights.airportsShelf
         self.init(atlas: store.worldFog.atlas, airports: { shelf.pack() })
+    }
+
+    /// The toast's timer ends with the flow (a screen that closes mid-toast).
+    isolated deinit {
+        toastTask?.cancel()
     }
 
     /// "Add past flights": opens the picker.
