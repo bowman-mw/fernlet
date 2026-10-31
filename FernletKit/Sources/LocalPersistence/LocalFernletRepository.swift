@@ -422,6 +422,24 @@ public struct LocalFernletRepository: FernletRepository {
     /// reason: in the shipping configuration it is the one file of this repository's that EXISTS,
     /// because the Core Data repository shares it.
     ///
+    /// Deletes the database file once its contents live in the Core Data store (perf review 2026-10-31: a
+    /// 15.7 MB May blob kept only as the first-launch migration source). Only the file goes: the Tier-2 sidecar
+    /// beside it is live and stays, and so do the legacy UserDefaults keys the migration still owns.
+    ///
+    /// - Returns: `true` when no file is left (removed now, or never there); `false`, audited, when the
+    ///   removal failed, so the next launch tries again.
+    @discardableResult
+    public func retireMigratedDatabaseFile() -> Bool {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return true }
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+            return true
+        } catch {
+            PersistenceFailureAudit.record("localStore.retire.failed", error: error)
+            return false
+        }
+    }
+
     /// - Returns: `false` when the file or the Tier-2 sidecar could not be removed. Not discardable
     ///   (R7): "delete everything" reports the store it could not clear.
     public func purgeAllPersistedData() -> Bool {

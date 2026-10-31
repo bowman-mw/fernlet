@@ -676,6 +676,9 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// may have raced us; in both cases the existing cache is the fresher one and must not be replaced).
     private func finishStagedBlobLoad(decoded: LocalFernletDatabase, recordUpdatedAt: Date?) -> LocalFernletDatabase {
         clearReadOnlyRecoveryFlags()
+        // The record decoded, so the first-launch migration is done and the legacy JSON can never be read
+        // again (only a `.missing` record reads it). Left behind, it is stale data a store reset would revive.
+        legacyRepository.retireMigratedDatabaseFile()
         let database = migrateDaysToRowsIfNeeded(decoded)
         if cachedDatabase == nil {
             cachedDatabase = database
