@@ -532,7 +532,7 @@ import ProximityKit
         #expect(storeEdges == 7, "the store's own edges — three opt-in setters (presence, recipe shares, Connect by tapping phones), P8 item 6's continuation feed, the wipe's raise and lower — plus the declaration")
         let tap = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore+TapToConnect.swift"))
         let tapEdges = tap.components(separatedBy: "reapplyProximityRunPolicy(").count - 1
-        #expect(tapEdges == 3, "the tap's three edges: Low Power Mode changing, Home coming to the front or leaving it, and a match or hand-off ending")
+        #expect(tapEdges == 2, "the tap's two edges: Home coming to the front or leaving it, and a match, a hand-off ending or Low Power Mode changing (the controller reports all three)")
         let wipe = try #require(
             MeshRoutedSourceScan.bracedBody(after: "func deleteAllData(includingHealthKitSamples", in: store),
             "the wipe funnel is gone"

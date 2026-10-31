@@ -9,7 +9,8 @@ import ProximityKit
 extension FernletStore {
 
     /// The controller, built once (``tapToConnect``): Fernlet's tap profile, the companion look a
-    /// decoy session hides, the name this person appears as, and a Low Power Mode observer.
+    /// decoy session hides, and the name this person appears as. The controller itself watches Low
+    /// Power Mode and reports it through ``tapToConnectInputsChanged()``.
     func makeTapToConnect() -> TapToConnectController {
         let rendezvous = ProximityTapRendezvous(host: self, profile: .tapToConnect(in: proximityNamespace))
         rendezvous.companionLook = { [weak self] in
@@ -19,11 +20,6 @@ extension FernletStore {
         rendezvous.revealedName = { [weak self] in self?.resolvedProximityDisplayName ?? "" }
         let controller = TapToConnectController(rendezvous: rendezvous)
         controller.onPolicyInputsChanged = { [weak self] in self?.tapToConnectInputsChanged() }
-        lowPowerObserver = NotificationCenter.default.addObserver(
-            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.reapplyProximityRunPolicy() }
-        }
         return controller
     }
 

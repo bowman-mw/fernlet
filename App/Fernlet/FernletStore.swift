@@ -349,8 +349,6 @@ final class FernletStore {
     @ObservationIgnored var homeIsFrontmost = false
     /// The tap hand-off's check loop (``runTapHandOff()``), cancelled when a new one starts.
     @ObservationIgnored var tapHandOffTask: Task<Void, Never>?
-    /// The Low Power Mode observer, which re-runs the run policy when the mode changes.
-    @ObservationIgnored var lowPowerObserver: NSObjectProtocol?
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     ///

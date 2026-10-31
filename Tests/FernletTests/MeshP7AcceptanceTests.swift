@@ -301,8 +301,8 @@ struct MeshP7RadioSeamsAcceptanceTests {
             presenceListening: false, recipeShareListening: false
         )
         #expect(ProximityRunTransition.actions(from: nil, to: fresh, mesh: none)
-                == [.startJoin, .armDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.stop)],
-                "a fresh Friends visit starts a search, arms the timeout, starts presence")
+                == [.startJoin, .armDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.stop), .tapRendezvous(.stop)],
+                "a fresh Friends visit starts a search, arms the timeout, starts presence; the tap stays off")
         let committed = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(session: .peerCommitted))
         let offTab = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(tab: .home, session: .peerCommitted))
         let live = ProximityRunTransition.MeshFacts(

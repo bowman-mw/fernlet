@@ -89,6 +89,8 @@ final class TapToConnectController {
 
     private let rendezvous: ProximityTapRendezvous
     private let now: () -> Date
+    /// The Low Power Mode observer (the rendezvous never runs in it, §1.4), removed in `deinit`.
+    private var lowPowerObserver: (any NSObjectProtocol)?
 
     /// A controller over `rendezvous`, which the store builds on itself as the host.
     init(rendezvous: ProximityTapRendezvous, now: @escaping () -> Date = Date.init) {
@@ -101,6 +103,15 @@ final class TapToConnectController {
         rendezvous.onEnded = { [weak self] end in
             if end == .declinedThere { self?.presentation.declinedThereCount += 1 }
         }
+        lowPowerObserver = NotificationCenter.default.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onPolicyInputsChanged?() }
+        }
+    }
+
+    isolated deinit {
+        if let lowPowerObserver { NotificationCenter.default.removeObserver(lowPowerObserver) }
     }
 
     /// The person's answer: Start hangout or Not now to the question, or Not now while waiting, which

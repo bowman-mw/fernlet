@@ -184,7 +184,8 @@ struct WorldFriendsHomeTests {
         #expect(sheet.contains("metByTapping: Bool = false"), "the sheet's input defaults to off")
         #expect(sheet.contains("if metByTapping {") && sheet.contains("FernletProximityUICopy.KeepFriends.metByTapping"))
         let host = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/World/Friends/KeepFriendsPromptHost.swift"))
-        #expect(host.contains("var metByTapping = false") && host.contains("metByTapping: metByTapping,"))
+        #expect(host.contains("var metByTapping = false") && host.contains("metByTapping: metByTapping || metAnyoneByTapping,"),
+                "the host passes its own flag, or the tap controller's memory of who was met by tapping")
         #expect(try Self.english("proximity.keepFriends.metByTapping", in: Self.proximityUICatalog) == "met by tapping phones")
         #expect(try Self.spanish("proximity.keepFriends.metByTapping", in: Self.proximityUICatalog) == "os conocisteis juntando teléfonos")
     }
