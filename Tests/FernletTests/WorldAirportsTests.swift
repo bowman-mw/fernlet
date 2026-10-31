@@ -30,7 +30,7 @@ struct WorldAirportsTests {
         #expect(airports.airports.map(\.token) == airports.airports.map(\.token).sorted())
         // The owner's approved outlines (batches 1–2 reviewed, 3 on in the owner's blanket approval, 2026-10-31): only large airports, each holding its own point.
         let outlined = airports.airports.filter { $0.grounds.isOurOutline }
-        #expect(outlined.count >= 462)
+        #expect(outlined.count >= 636)
         #expect(outlined.allSatisfy { $0.size == .large && $0.contains($0.point) })
     }
 
