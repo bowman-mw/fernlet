@@ -57497,6 +57497,186 @@
         }
       }
     },
+    "tapToConnect.appearsAs" : {
+      "comment" : "Tap-to-connect question sheet, under the other person's name: it is the name they chose to appear as",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The name %@ appears as"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El nombre con el que aparece %@"
+          }
+        }
+      }
+    },
+    "tapToConnect.explainer" : {
+      "comment" : "Tap-to-connect question sheet, under the other person's companion and name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're both asked. If you both say yes, a hangout starts: photos, messages and walks together while you're in person."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Os lo pregunta a los dos. Si los dos decís que sí, empieza una quedada: fotos, mensajes y caminatas juntos mientras estáis en persona."
+          }
+        }
+      }
+    },
+    "tapToConnect.notNow" : {
+      "comment" : "Tap-to-connect question sheet, top left: says no to the hangout; nothing more is shared",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "tapToConnect.plate.detail" : {
+      "comment" : "World Home plate, under 'Someone with Fernlet is close': hold the two phones top to top to meet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold your phones together to connect"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Juntad los teléfonos para conectar"
+          }
+        }
+      }
+    },
+    "tapToConnect.plate.title" : {
+      "comment" : "World Home plate while another phone with Fernlet, also on Home, is within about 3 m (10 ft). Never names them",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Someone with Fernlet is close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alguien con Fernlet está cerca"
+          }
+        }
+      }
+    },
+    "tapToConnect.question" : {
+      "comment" : "Tap-to-connect question sheet's title; the name the other person appears as",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start a hangout with %@?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Empezar una quedada con %@?"
+          }
+        }
+      }
+    },
+    "tapToConnect.sprout.close" : {
+      "comment" : "World Home, the companion's speech once when another phone with Fernlet comes within about 3 m",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ooh! Who's that?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Uy! ¿Quién es?"
+          }
+        }
+      }
+    },
+    "tapToConnect.sprout.declined" : {
+      "comment" : "World Home, the companion's speech once after the person met by tapping phones said Not now. Gentle; no blame",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Maybe another time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quizá en otro momento."
+          }
+        }
+      }
+    },
+    "tapToConnect.start" : {
+      "comment" : "Tap-to-connect question sheet's button: says yes to a hangout with the person whose phone was tapped",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start hangout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar quedada"
+          }
+        }
+      }
+    },
+    "tapToConnect.waiting" : {
+      "comment" : "Tap-to-connect question sheet after Start hangout, until the other person answers; their name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Waiting for %@…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esperando a %@…"
+          }
+        }
+      }
+    },
     "tempo, form note" : {
       "localizations" : {
         "es" : {

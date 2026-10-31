@@ -32,10 +32,14 @@ enum WorldMapLine {
         var cornerNudge: String?
         /// Whose shop is open (World Friends §3, `fr-shop-line`): "Sam's shop is open for a bit."
         var friendShops: String?
+        /// Sprout's line about meeting someone by tapping phones (World Friends §1.2–1.3), said once; first of all,
+        /// since the moment lasts seconds.
+        var tapToConnect: String?
     }
 
     /// The map's own line for `facts`, or nil for the companion's usual one.
     static func line(_ facts: Facts) -> String? {
+        if let tap = facts.tapToConnect { return tap }
         guard !facts.stampWaiting else { return nil }
         if let greeting = facts.homeGreeting { return greeting }
         if let discovery = facts.discovery { return discovery }
