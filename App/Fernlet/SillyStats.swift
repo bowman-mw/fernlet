@@ -9,7 +9,7 @@
 //  weight, cycle or intimate data, or what a journal says; and numbers that come from Apple Health
 //  are computed on the phone and never stored anywhere that syncs.
 //
-//  This file holds the vocabulary (the nineteen kinds, the tally, the comparison units) and the
+//  This file holds the vocabulary (the twenty kinds, the tally, the comparison units) and the
 //  engine (reveal rules, derived numbers, comparison ladders). The tally is built by
 //  `SillyStatsTallier`, the words come from `SillyStatsCopy`, and the companion's every-few-days
 //  mention is paced by `SillyStatsCompanionPacer`.
@@ -17,7 +17,7 @@
 
 import Foundation
 
-/// The nineteen silly stats, in page order.
+/// The twenty silly stats, in page order.
 ///
 /// `rawValue` is a frozen token: ``SillyStatsCompanionPacer`` persists the last-mentioned kind and
 /// each kind's last-mentioned value under it in device-local `UserDefaults`, and every stamp in the
@@ -36,6 +36,9 @@ enum SillyStatKind: String, CaseIterable, Codable, Sendable {
     case moonwalk
     case stairwayToSomewhere
     case grandTours
+    /// "Furthest from home" (Refinements group 12, owner-approved 2026-10-26): the straight line from the
+    /// nearest home to the furthest bit of map uncovered. The one stat read off the map rather than the diary.
+    case furthestFromHome
     case shakespeareSteps
     case koalaDays
     case dreamCinema
@@ -57,8 +60,9 @@ struct SillySignatureDish: Equatable, Sendable {
 
 /// Lifetime totals the silly stats are computed from — plain numbers, held in memory only.
 ///
-/// Built by ``SillyStatsTallier`` from the diary, the Apple Health step total and the device-local
-/// pat count. Nothing here is persisted: the Health-derived fields (`steps`, sleep hours Health
+/// Built by ``SillyStatsTallier`` from the diary, the Apple Health step total, the device-local
+/// pat count and, for Furthest from home, a distance worked out on this iPhone from the sealed map history
+/// (``SillyStatsService``). Nothing here is persisted: the Health-derived fields (`steps`, sleep hours Health
 /// supplied, `remMinutes`) must never reach synced state, so the tally is rebuilt on read instead
 /// of cached.
 struct SillyStatsTally: Equatable, Sendable {
@@ -79,6 +83,9 @@ struct SillyStatsTally: Equatable, Sendable {
     var stairMeters = 0.0
     var swimKilometers = 0.0
     var cycleKilometers = 0.0
+    /// How far from the nearest home the map has been uncovered, in metres (0 without a home, without map
+    /// history, or in a decoy). Read off the sealed map on this iPhone; never kept, never sent.
+    var furthestFromHomeMeters = 0.0
     var sleepHours = 0.0
     var remMinutes = 0.0
     var flossCount = 0
@@ -163,6 +170,10 @@ enum SillyStatsEngine {
         static let stairMetersPerMinute = 10.0
         static let shininessPercentPerPat = 0.02
         static let signatureDishMinimum = 3
+        /// Furthest from home appears once the map reaches this far from a home (a trip, not the shops).
+        static let furthestRevealMeters = 5_000.0
+        /// Halfway round the world: the furthest anyone can be from home.
+        static let antipodeKilometers = 20_037.5
     }
 
     static let lengthLadder: [SillyUnit] = [
@@ -196,6 +207,8 @@ enum SillyStatsEngine {
             return Double(tally.daysKnown) >= Constant.gastrotrichDays
         case .signatureDish:
             return (tally.signatureDish?.count ?? 0) >= Constant.signatureDishMinimum
+        case .furthestFromHome:
+            return tally.furthestFromHomeMeters >= Constant.furthestRevealMeters
         default:
             return value(kind, in: tally) > 0
         }
@@ -216,6 +229,7 @@ enum SillyStatsEngine {
         case .moonwalk: footKilometers(tally)
         case .stairwayToSomewhere: tally.stairMeters
         case .grandTours: tally.swimKilometers + tally.cycleKilometers
+        case .furthestFromHome: furthestDoublings(tally)
         case .shakespeareSteps: Double(tally.steps)
         case .koalaDays: tally.sleepHours
         case .dreamCinema: tally.remMinutes
@@ -285,6 +299,21 @@ enum SillyStatsEngine {
 
     static func gastrotrichLifetimes(_ tally: SillyStatsTally) -> Double {
         Double(tally.daysKnown) / Constant.gastrotrichDays
+    }
+
+    /// Furthest from home's share of the way to the other side of the world.
+    static func antipodeFraction(_ tally: SillyStatsTally) -> Double {
+        tally.furthestFromHomeMeters / 1_000 / Constant.antipodeKilometers
+    }
+
+    /// The number the companion compares for Furthest from home: how many times the distance has doubled
+    /// past a kilometre (5 km is 2, 10 km is 3). The companion's pacer keeps the number it last spoke of in
+    /// this device's `UserDefaults`, so the distance itself never reaches it, only this coarse step; the
+    /// stat comes up again once the person has gone twice as far.
+    static func furthestDoublings(_ tally: SillyStatsTally) -> Double {
+        let kilometres = tally.furthestFromHomeMeters / 1_000
+        guard kilometres.isFinite, kilometres >= 1 else { return 0 }
+        return log2(kilometres).rounded(.down)
     }
 
     static func furShininessPercent(_ tally: SillyStatsTally) -> Double {

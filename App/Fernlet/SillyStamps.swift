@@ -5,7 +5,7 @@
 //  Stamps: each silly stat earns one the first time it appears, under the engine's
 //  hide-until-meaningful rule ("Your first cookie earns the Crumb Goblin"). Stamps only ever add up:
 //  a stamp is never taken back, whatever the tally does later, and there are none for streaks, body
-//  weight or calories — the nineteen stats count none of those, and a stamp is one per stat.
+//  weight or calories — the twenty stats count none of those, and a stamp is one per stat.
 //
 //  This file holds the row (``SillyStampEntry``), the rule for when a stamp is earned and whether it
 //  is announced (``SillyStampRules``), and the device-local book it is kept in (``SillyStampStore``).

@@ -43,6 +43,7 @@ enum SillyStatsCopy {
         case .moonwalk: moonwalk(tally, locale)
         case .stairwayToSomewhere: stairway(tally, locale)
         case .grandTours: grandTours(tally, locale)
+        case .furthestFromHome: furthestFromHome(tally, locale)
         case .shakespeareSteps: shakespeare(tally, locale)
         case .koalaDays: koala(tally, locale)
         case .dreamCinema: dreams(tally, locale)

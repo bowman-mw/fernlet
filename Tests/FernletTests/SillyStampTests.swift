@@ -274,7 +274,7 @@ struct SillyStampTokenTests {
         let names = SillyStatKind.allCases.map { SillyStampCopy.name(for: $0, locale: english) }
         #expect(names == [
             "Crumb Goblin", "Top Banana", "Sunny Side Up", "Slice of Life", "Rubber Duck", "Bean Counter",
-            "House Special", "Piano Mover", "Small Step", "Up and Up", "Wheels and Waves", "To Step or Not to Step",
+            "House Special", "Piano Mover", "Small Step", "Up and Up", "Wheels and Waves", "Far Afield", "To Step or Not to Step",
             "Eucalyptus Dreams", "Opening Night", "Floss Boss", "Starting Line", "Encore", "Good Bean",
             "Outlived a Gastrotrich",
         ])

@@ -88,7 +88,7 @@ final class SillyStatsCompanionPacer {
     }
 
     /// The last-mentioned number per kind token, keeping only kinds this build knows (bounded by
-    /// the nineteen kinds, whatever an older or newer build left behind).
+    /// the twenty kinds, whatever an older or newer build left behind).
     private func storedValues() -> [String: Double] {
         let raw = defaults.dictionary(forKey: Key.lastValues) ?? [:]
         var values: [String: Double] = [:]

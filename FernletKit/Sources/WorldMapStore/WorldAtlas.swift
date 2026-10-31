@@ -7,10 +7,10 @@ import Foundation
 /// Immutable once built, so one instance is shared freely across tasks. Pure lookups on bundled data: it
 /// opens no connection and writes nothing (the keeper decides which fixes reach it). Every query is bounded:
 /// a raster lookup is one index; the coast mask lookup a binary search of at most 64 steps; the reach search
-/// at most `(2 × maxReachSpan + 1)²` cells of 256 sub-cells each; the country search one pass over the decoded
-/// table, whose size the decoder caps; the admin-1 search one pass over the country's own entries (or over
-/// the decoded table when the country is unknown); the city search at most 51 one-degree cells of `AtlasCityIndex` and at
-/// most one pass over the urban boundaries (`WorldAtlasCities.swift`); a lookup by token (``city(token:)``,
+/// at most `(2 × maxReachSpan + 1)²` cells of 256 sub-cells each; the country search the countries listed in
+/// the fix's one-degree cell (`AtlasBoxIndex`), each tested on its latitude band's edges (`AtlasEdgeBands`);
+/// the admin-1 search the entries listed in the fix's cell (only the country's own when it is known); the city search at most 51 one-degree cells of `AtlasCityIndex` and the urban
+/// boundaries listed in the fix's cell (`WorldAtlasCities.swift`); a lookup by token (``city(token:)``,
 /// ``country(code:)``, ``sea(token:)``) one dictionary read, the dictionaries built once at init.
 public nonisolated final class WorldAtlas: Sendable {
     // MARK: The rules' constants (each one decided once, here)
@@ -89,6 +89,12 @@ public nonisolated final class WorldAtlas: Sendable {
     let roadIndex: [String: Int]
     /// The roads' segments by one-degree cell, for ``roadsCrossed(from:to:)``.
     let roadGrid: AtlasRoadIndex
+    /// The countries by the one-degree cells their boxes touch, for ``country(at:)``.
+    let countryBoxes: AtlasBoxIndex
+    /// The states and provinces by the one-degree cells their boxes touch, for ``admin1(at:inCountry:)``.
+    let admin1Boxes: AtlasBoxIndex
+    /// The urban boundaries by the one-degree cells their boxes touch, for ``isUrban(_:)``.
+    let urbanBoxes: AtlasBoxIndex
 
     /// The atlas in `data` (a whole pack file), or the reason it is refused.
     public convenience init(data: Data) throws {
@@ -122,6 +128,9 @@ public nonisolated final class WorldAtlas: Sendable {
         roads = layers.roads
         roadIndex = Self.firstIndices(of: layers.roads.map(\.token))
         roadGrid = try AtlasRoadIndex(roads: layers.roads)
+        countryBoxes = AtlasBoxIndex(polygons: layers.countries.map(\.polygon))
+        admin1Boxes = AtlasBoxIndex(polygons: layers.admin1s.map(\.polygon))
+        urbanBoxes = AtlasBoxIndex(polygons: layers.urbanAreas)
     }
 
     // MARK: Lookups by token
@@ -197,11 +206,15 @@ public nonisolated final class WorldAtlas: Sendable {
         return AtlasContinent(packCode: continents[index])
     }
 
-    /// The country whose rings hold `point` (each country's box first, then the even-odd rule), or nil.
+    /// The first country, in table order, whose rings hold `point` (each country's box first, then the
+    /// even-odd rule), or nil. Only the countries whose boxes touch the point's one-degree cell are tested.
     public func country(at point: GeoPoint) -> AtlasCountry? {
         guard point.isValid else { return nil }
-        // Bounded: one pass over the countries (at most WorldAtlasLayers.maxCountries).
-        return countries.first { $0.polygon.contains(point) }
+        // Bounded: the cell's countries, each listed once (at most WorldAtlasLayers.maxCountries).
+        for index in countryBoxes.candidates(at: point) where countries.indices.contains(Int(index)) {
+            if countries[Int(index)].polygon.contains(point) { return countries[Int(index)] }
+        }
+        return nil
     }
 
     // MARK: The visit

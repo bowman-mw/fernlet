@@ -84,6 +84,8 @@ struct WorldMapHome: View {
     @State private var savedLine: WorldSavedLine?
     /// The saved line being walked again, drawn to follow.
     @State private var guideLine: [GeoPoint] = []
+    /// The latest loop from the door, read when the card opens at a home (`ref-home-blue`).
+    @State private var loopLine: WorldSavedLine?
     /// The saved walk, run and ride lines Home draws (``FernletStore/worldHomeSavedLines(now:defaults:)``),
     /// read at each front edge and when a walk's or ride's note comes or goes.
     @State private var savedLines: [[GeoPoint]] = []
@@ -299,7 +301,8 @@ struct WorldMapHome: View {
                 WorldMapNotice(kind: notice, onUsePrecise: openSettings)
                     .frame(maxWidth: .infinity)
             }
-            WorldLayoverPlate(store: store, date: date)
+            // The airport banner sits over this column's top: the layover plate waits until it has gone.
+            if airportHome.banner == nil { WorldLayoverPlate(store: store, date: date) }
         }
         .padding(.top, 6)
         .padding(.horizontal, 12)
@@ -532,6 +535,8 @@ struct WorldMapHome: View {
         if testScenes.contains("restaurant"), !context.isDecoy { context.eatingPlace = WorldPlacesTestScenes.restaurant }
         if testScenes.contains("solo") { context.soloCameraAvailable = true }
         if testScenes.contains("run") { context.savedLine = WorldQuickStartContext.SavedLine(metres: 3_200, walks: 8, kind: .run) }
+        context.loopMetres = context.base == nil ? nil : loopLine?.metres
+        if testScenes.contains("loop"), context.base != nil { context.loopMetres = 2_100 }
         if testScenes.contains("friend"), context.canMeetFriends { context.nearbyFriends = nearbyFriends.map(\.firstName) }
         if testScenes.contains("session"), !context.isDecoy {
             context.session = WorldQuickStartContext.Session(names: ["Sam", "Rae"], shotsLeft: 3)
@@ -565,6 +570,7 @@ struct WorldMapHome: View {
     /// place to eat `eatingID` whose icon was tapped.
     private func openCard(spaceID: UUID?, eatingID: UUID? = nil) {
         readSavedLine()
+        loopLine = isWalking ? nil : store.worldLoopFromDoor()
         var context = staged(store.worldQuickStartContext(spaceID: spaceID, includingPlans: true))
         if let eatingID { context.eatingPlace = store.worldEatingOut(id: eatingID) }
         cardContext = context
@@ -596,8 +602,8 @@ struct WorldMapHome: View {
 
     /// Does what a choice says, then closes the card.
     private func choose(_ option: WorldQuickStartOption) {
-        let spaceID = cardContext?.space?.id
-        let placeName = cardContext?.space?.name
+        let spaceID = cardContext?.space?.id ?? cardContext?.homeSpace?.id
+        let placeName = cardContext?.space?.name ?? cardContext?.homeSpace?.name
         let eatingID = cardContext?.eatingPlace?.id
         closeCard()
         switch option {
@@ -637,6 +643,15 @@ struct WorldMapHome: View {
             onFriends(.nearby)
         case .startActivity:
             onFriends(.activities)
+        case .loopFromDoor:
+            // Around the block again: Walk or run together, the loop drawn to follow.
+            guideLine = loopLine?.points ?? []
+            startWalk(decidesByPace: true)
+        case .cookSomething:
+            onSheet(.recipeBook)
+        case .roomWorkout:
+            store.prepareRoomWorkout()
+            onSheet(.workoutSuggestion)
         }
     }
 

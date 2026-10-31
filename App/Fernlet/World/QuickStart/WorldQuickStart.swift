@@ -51,6 +51,15 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
         var kind: WorldWalkRecorder.Kind = .walk
     }
 
+    /// The home or the hotel of the stay the person stands at (`ref-home-blue` draft 2, owner-approved
+    /// 2026-10-26): its name as drawn, and which it is.
+    struct Base: Equatable, Sendable {
+        /// The person's name for it ("Home" until they change it; a hotel's name).
+        let name: String
+        /// A hotel (the room-workout card) rather than a home.
+        let isHotel: Bool
+    }
+
     /// What the person is doing right now.
     enum Activity: Equatable, Sendable {
         case none
@@ -96,6 +105,14 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     /// Kept friends the presence radio hears nearby right now, by first name (at most two; empty with
     /// Nearby friends off). Strangers are never here: presence recognises kept friends only.
     var nearbyFriends: [String] = []
+    /// The home or hotel the person stands at (never in a decoy: a decoy has no homes).
+    var base: Base?
+    /// A workout space the person set up at that home (its pin near the home, or the space they stand
+    /// at): "Suggest today's workout · Home space" leads the home card only with one (draft 2's note).
+    var homeSpace: Space?
+    /// The latest loop from the person's door (a saved walk or run starting and ending near a home), in
+    /// metres: "Around the block again".
+    var loopMetres: Double?
 }
 
 /// A saved walk line of the person's own that starts where they stand (`FernletStore.worldSavedLine`):
@@ -153,6 +170,13 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     /// "Find Hoshi Noodle Bar's menu": the meal sheet, ready for Fernlet's food lookup by the place's name;
     /// the person's location is never sent.
     case findMenu(place: String)
+    /// "Around the block again · 2.1 km loop from your door" (`ref-home-blue`): Walk or run together with
+    /// the latest loop from the door drawn to follow.
+    case loopFromDoor(metres: Double)
+    /// "Cook something · From your recipe book": opens the recipe book.
+    case cookSomething
+    /// "Suggest a room workout" at a hotel: Move's suggestion with no equipment, so nothing to set up.
+    case roomWorkout(gentle: Bool)
 }
 
 /// The card the blue button opens (the design's `.qs` card): a heading, an optional line, and the
@@ -186,6 +210,10 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case inPerson
         /// A favourite place to eat's name (`b1-qs-food`).
         case eatingPlace(String)
+        /// The home's name (`ref-home-blue`).
+        case home(String)
+        /// The hotel's name (`ref-home-blue`'s hotel card).
+        case hotel(String)
     }
 
     /// The line under the heading.
@@ -204,6 +232,8 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case ranFromHere(times: Int)
         /// "You've logged meals here 4 times" (`b1-qs-food`)
         case loggedMealsHere(times: Int)
+        /// "You're home. Here's what's handy." (`ref-home-blue`)
+        case atHome
     }
 
     let heading: Heading
@@ -239,6 +269,10 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 /// 4. **In a session** the session's camera, then Walk together.
 /// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a hangout with Sam,
 ///    Start an activity, and the usual choices below so nothing is taken away.
+/// 6h. **At a home** (`ref-home-blue` draft 2) its name, "You're home. Here's what's handy.": Suggest today's
+///    workout first only with a workout space at that home, Around the block again (the latest loop from the
+///    door), Cook something, Walk or run together. **At a hotel** its name: Suggest a room workout (no
+///    equipment), Walk or run together. On a resting day "Resting counts today", the gentle stretch leading.
 /// 6a. **At a favourite place to eat** (away from a pinned space, round 6: `b1-qs-food`, `b3-qs-food-camera`)
 ///    its name: Log your usual, the disposable camera on your own, Find its menu; on a resting day too. The
 ///    button shows the bowl, never badges or buzzes on arrival.
@@ -276,7 +310,7 @@ nonisolated enum WorldQuickStart {
         case .savedLine: return .trail
         case .savedRun: return .run
         case .airport: return .walk
-        case .session, .walk, .walking, .running: return .walk
+        case .session, .walk, .walking, .running, .home, .hotel: return .walk
         case .friendNearby, .inPerson: return .friends
         case .eatingPlace: return .eat
         }
@@ -327,6 +361,7 @@ nonisolated enum WorldQuickStart {
     /// The rules without friends: a place to eat, resting, space, saved walk, anywhere.
     private static func usual(_ context: WorldQuickStartContext, walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
         if let airport = context.airportName, let trip = context.tripOption { return atAirport(airport, trip: trip, walk: walk) }
+        if let base = context.base { return home(base, context, walk: walk) }
         if context.space == nil, let place = context.eatingPlace { return eating(place, context) }
         if context.isResting { return resting(context, walk: walk) }
         if let space = context.space {
@@ -377,6 +412,28 @@ nonisolated enum WorldQuickStart {
         let camera: [WorldQuickStartOption] = context.soloCameraAvailable ? [.soloCamera] : []
         return WorldQuickStartCard(heading: .eatingPlace(place.name), note: .loggedMealsHere(times: place.meals),
                                    options: usual + camera + [.findMenu(place: place.name)])
+    }
+
+    /// At a home or the hotel (`ref-home-blue` draft 2): the home's workout only with a space set up there
+    /// (today's plan there when one is planned, as at any space), the loop from the door while a walk can
+    /// start, the recipe book and the walk; at a hotel the room workout and the walk. A resting day leads
+    /// with the gentle stretch and asks the workouts gently.
+    private static func home(_ base: WorldQuickStartContext.Base, _ context: WorldQuickStartContext,
+                             walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
+        let stretch: [WorldQuickStartOption] = context.isResting && context.hasGentleStretch ? [.gentleStretch] : []
+        let note: WorldQuickStartCard.Note? = context.isResting ? .restingCounts : (base.isHotel ? nil : .atHome)
+        guard !base.isHotel else {
+            return WorldQuickStartCard(heading: .hotel(base.name), note: note,
+                                       options: stretch + [.roomWorkout(gentle: context.isResting)] + walk)
+        }
+        var workout: [WorldQuickStartOption] = []
+        if let space = context.homeSpace {
+            let planned = context.isResting ? nil : context.plannedSession.map { WorldQuickStartOption.todaysPlan(space: space.name, session: $0) }
+            workout = [planned ?? .suggestWorkout(space: space.name, equipment: space.equipment, gentle: context.isResting)]
+        }
+        let loop: [WorldQuickStartOption] = context.canWalk ? context.loopMetres.map { [.loopFromDoor(metres: $0)] } ?? [] : []
+        return WorldQuickStartCard(heading: .home(base.name), note: note,
+                                   options: stretch + workout + loop + [.cookSomething] + walk)
     }
 
     /// The camera to offer: the session's, else the on-your-own one when it exists.

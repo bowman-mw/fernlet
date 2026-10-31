@@ -12,8 +12,9 @@ import WorldMapStore
 ///
 /// Everything here is read on this iPhone: the space match is the person's own pins within 100 m (the
 /// map's markers, ``worldSpaceMarkers(near:)``, matched by ``WorldMapMarker/space(near:in:)``), the plan
-/// is today's, the session is the one running. Nothing is asked for and nothing leaves the phone; there
-/// are no badges, buzzes or notifications on arrival.
+/// is today's, the session is the one running, the home or hotel is the person's own
+/// (``worldQuickStartBase(at:)``). Nothing is asked for and nothing leaves the phone; there are no badges,
+/// buzzes or notifications on arrival.
 extension FernletStore {
     /// What the blue button sees now. `spaceID` is the person's space they stand at (or whose marker they
     /// tapped), nil for none; `includingPlans` also builds today's plan preview (for the gentle stretch),
@@ -37,6 +38,12 @@ extension FernletStore {
         context.nearbyFriends = worldNearbyFriends.map(\.firstName)
         if includingPlans, context.isResting {
             context.hasGentleStretch = todaysGentleStretch(committing: false) != nil
+        }
+        // At a home or the hotel (`ref-home-blue`): the base is cheap, for the icon too; the home's space
+        // reads the pins, so only the card does.
+        context.base = worldQuickStartBase(at: worldLocation.latest)
+        if includingPlans, context.base?.isHotel == false {
+            context.homeSpace = worldHomeSpace(at: worldLocation.latest, standingAt: context.space?.id)
         }
         return context
     }

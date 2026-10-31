@@ -188,6 +188,9 @@ struct WorldQuickStartOptionRow: View {
         case .startActivity: FriendsSprites.flag
         case .friendsNearby: WorldSprites.face
         case .logUsual, .findMenu: WorldSprites.bowl
+        case .loopFromDoor: WorldSprites.shoe
+        case .cookSomething: WorldSprites.bowlInk
+        case .roomWorkout: WorldPlaceSprites.suitcase
         }
     }
 
@@ -210,6 +213,9 @@ struct WorldQuickStartOptionRow: View {
         case .friendsNearby: "friendsNearby"
         case .logUsual: "logUsual"
         case .findMenu: "findMenu"
+        case .loopFromDoor: "loopFromDoor"
+        case .cookSomething: "cookSomething"
+        case .roomWorkout: "roomWorkout"
         }
     }
 }
