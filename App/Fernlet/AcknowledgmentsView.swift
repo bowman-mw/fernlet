@@ -275,6 +275,7 @@ struct AcknowledgmentsView: View {
         "US Census Bureau, TIGER/Line Shapefiles 2015 (public domain)",
         "Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
         "USGS The National Map: Orthoimagery (public domain)",
+        "Copernicus Sentinel-2 L2A: contains modified Copernicus Sentinel data 2023–2025",
     ]
 
     /// Beck et al.'s citation, as the dataset asks to be cited (a notice, never translated).

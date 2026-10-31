@@ -150,7 +150,8 @@ struct AcknowledgmentsTests {
         for name in ["OurAirports", "Wikidata, under CC0", "tz database", "TIGER/Line 2015", "CORINE Land Cover 2018"] {
             #expect(source.contains(name), "the Airports section names \(name)")
         }
-        #expect(AcknowledgmentsView.airportCredits.count == 4)
+        #expect(AcknowledgmentsView.airportCredits.count == 5)
+        #expect(AcknowledgmentsView.airportCredits.last == "Copernicus Sentinel-2 L2A: contains modified Copernicus Sentinel data 2023–2025")
         #expect(AcknowledgmentsView.airportCredits.first?.contains("© European Union, Copernicus Land Monitoring Service") == true)
         #expect(AcknowledgmentsView.airportCredits.contains {
             $0.contains("EOX IT Services GmbH (CC BY 4.0)") && $0.contains("contains modified Copernicus Sentinel data 2016")
