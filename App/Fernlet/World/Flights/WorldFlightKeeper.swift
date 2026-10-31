@@ -219,9 +219,6 @@ final class WorldFlightKeeper {
 extension WorldFlightKeeper {
     // MARK: Take a trip (§7)
 
-    /// When the trip the ticket started began (the boarding pass reads its flights from then); nil without one.
-    var tripStartedAt: Date? { ticket?.startedAt }
-
     /// "Start trip": starts a trip going to `destination` (nil: To left blank), which brings the travel look and
     /// finds the airport the person is at at once (the detector's ticket rule), and seals the ticket. False, doing
     /// nothing, in a decoy or when a trip is already on.
