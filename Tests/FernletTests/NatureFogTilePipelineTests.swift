@@ -314,4 +314,18 @@ struct NatureFogTilePipelineTests {
                                  motion: NatureFogMotion(reduceMotion: true)))
         #expect(view.outgoingTileCount == 0, "a decoy's map never shows the history through the old scale's tiles")
     }
+
+    /// Perf 2026-10-31: a new zoom step's book shows the fog view's sprites in the same palette instead of drawing
+    /// them again on the main actor; another palette draws its own.
+    @Test func booksInOnePaletteShareTheirSprites() {
+        let first = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1)
+        let wider = NatureFogScale(radius: 27, reduced: false)
+        let next = NatureFogTileBook(scale: wider, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
+                                     atlas: first.atlas)
+        #expect(next.atlas === first.atlas)
+        let dark = NatureFogPalette(dark: true, highContrast: false)
+        let night = NatureFogTileBook(scale: Self.full, palette: dark, clearing: NatureFogClearing(), pixelScale: 1,
+                                      atlas: first.atlas)
+        #expect(night.atlas !== first.atlas && night.atlas.palette == dark)
+    }
 }

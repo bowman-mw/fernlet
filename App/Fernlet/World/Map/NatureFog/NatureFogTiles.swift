@@ -86,16 +86,18 @@ final class NatureFogTileBook {
     private let pixelScale: CGFloat
 
     /// A book drawing `clearing` at `scale` in `palette` over `terrain`'s land, its pictures at `pixelScale`
-    /// pixels a point, reading each hex's land from `memo` when it is given for the same terrain.
+    /// pixels a point, reading each hex's land from `memo` when it is given for the same terrain, and showing
+    /// `atlas`'s sprites when it is given in the same palette (the fog view's one, so a zoom step draws no
+    /// sprites on the main actor; perf 2026-10-31).
     init(scale: NatureFogScale, palette: NatureFogPalette, clearing: NatureFogClearing, pixelScale: CGFloat,
-         terrain: NatureFogTerrain? = nil, memo: NatureTerrainMemo? = nil) {
+         terrain: NatureFogTerrain? = nil, memo: NatureTerrainMemo? = nil, atlas shared: NatureFogAtlas? = nil) {
         self.scale = scale
         self.palette = palette
         self.clearing = clearing
         self.terrain = terrain
         self.memo = memo
         self.pixelScale = max(1, min(pixelScale, 3))
-        atlas = NatureFogAtlas(palette: palette)
+        atlas = shared.flatMap { $0.palette == palette ? $0 : nil } ?? NatureFogAtlas(palette: palette)
         painters = (0..<Self.painterCount).map { _ in NatureFogTilePainter(palette: palette) }
         let first = painters[0], wild = NatureFogTileOrder(key: NatureTileKey(x: 0, y: 0), scale: scale, palette: palette,
                                                           clearing: NatureFogClearing(), generation: -1, pixelScale: self.pixelScale)

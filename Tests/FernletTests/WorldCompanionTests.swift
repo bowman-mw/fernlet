@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import SwiftUI
 import AppServices
 @testable import Fernlet
 
@@ -134,5 +135,33 @@ struct WorldCompanionTests {
         #expect(WorldPhotoPrints.layout.count == 4)
         #expect(WorldPhotoPrints.layout.allSatisfy { $0.x + 72 <= WorldPhotoPrints.size.width + 4 })
         #expect(WorldPhotoPrints.layout.allSatisfy { $0.y + 81 <= WorldPhotoPrints.size.height + 4 })
+    }
+
+    /// Perf 2026-10-31 (owner's call): Sprout's mood is read every 30 s while it is on the screen and waits off it;
+    /// a new schedule (back in view) starts with an entry now.
+    @Test func theMoodClockTicksEvery30SecondsOnScreenAndWaitsOffIt() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        var ticking = WorldMoodSchedule(isRunning: true).entries(from: start, mode: .normal).makeIterator()
+        #expect([ticking.next(), ticking.next(), ticking.next()] == [start, start + 30, start + 60])
+        var waiting = WorldMoodSchedule(isRunning: false).entries(from: start, mode: .normal).makeIterator()
+        #expect(waiting.next() == start, "back in view or not, the first look is now")
+        #expect(waiting.next() == nil, "off the screen the clock waits")
+    }
+
+    /// Home moves Sprout every map frame without running its body: two companions differing only in their actions
+    /// are alike, a change of what it shows is not, and off the screen is its own measure.
+    @Test func movingSproutDoesNotRedrawItsMood() {
+        let store = makeTestStore()
+        let one = WorldMapCompanion(store: store, isActive: true, onOpenPassport: { _ in })
+        let other = WorldMapCompanion(store: store, isActive: true, onHintEnded: { _ = store }, onOpenPassport: { _ in })
+        #expect(one == other)
+        #expect(one != WorldMapCompanion(store: store, isActive: true, mapLine: "Rain soon", onOpenPassport: { _ in }))
+        #expect(one != WorldMapCompanion(store: store, isActive: true, isOnScreen: false, onOpenPassport: { _ in }))
+        #expect(one != WorldMapCompanion(store: makeTestStore(), isActive: true, onOpenPassport: { _ in }))
+        let screen = CGSize(width: 440, height: 956)
+        #expect(WorldMapHome.isOnScreen(CGPoint(x: 220, y: 500), in: screen))
+        #expect(WorldMapHome.isOnScreen(CGPoint(x: -100, y: 1_000), in: screen), "near enough to come on with the next move")
+        #expect(!WorldMapHome.isOnScreen(CGPoint(x: 220, y: -400), in: screen))
+        #expect(!WorldMapHome.isOnScreen(CGPoint(x: 900, y: 500), in: screen))
     }
 }
