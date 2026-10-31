@@ -15,16 +15,16 @@ import WorldMapStore
 ///   every two minutes, one taking off along the runway; parked only with Reduce Motion.
 ///
 /// The fence and the planes are decoration, hidden from VoiceOver. The tower is one element: "Airport, not found
-/// yet", or "Portland International, PDX, airport, found" (a button once the boarding pass is attached:
-/// ``onOpenPass``, the pass lane's seam). Nothing in a decoy.
+/// yet", or "Portland International, PDX, airport, found", a button that opens Sprout's boarding pass (``onOpenPass``,
+/// Home's ``WorldTripHomeState/openPass(_:at:)``). Nothing in a decoy.
 struct WorldAirportLayer: View {
     let store: FernletStore
     let viewport: MapViewport
     let size: CGSize
     /// Where Sprout's feet stand on the screen (a found plate it would cover moves below them).
     var companion: CGPoint? = nil
-    /// Opens Sprout's boarding pass for a found airport's tower (§5, `ap-pass`; the pass lane attaches it). Nil
-    /// leaves found towers as images.
+    /// Opens Sprout's boarding pass for a found airport's tower (§5, `ap-pass`; Home attaches it). Nil leaves found
+    /// towers as images.
     var onOpenPass: ((WorldAirport) -> Void)? = nil
     @State private var memo = WorldAirportMemo()
     @Environment(\.colorScheme) private var colorScheme
@@ -142,6 +142,7 @@ struct WorldAirportTowerView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text(verbatim: WorldAirportCopy.spokenTower(placed.airport)))
                 .accessibilityInputLabels([Text(verbatim: placed.airport.code), Text(verbatim: WorldAirportCopy.name(placed.airport))])
+                .accessibilityHint(Text(WorldTripCopy.boardingPass))
                 .accessibilityIdentifier("world.airport.found")
         } else {
             content

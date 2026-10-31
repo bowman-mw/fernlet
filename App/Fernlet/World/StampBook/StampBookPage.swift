@@ -5,7 +5,7 @@ import FernletUI
 
 /// The Stamp book (designs `b2-milestones` and `b2-keepsakes`, draft 2, approved 2026-10-24): Milestones,
 /// the keepsake shelf and the silly stats in one page, from the owner's note “Merge this into the stamps
-/// view”. Care keepsakes on wooden shelves come first, then the nineteen silly stamps (`b2-stamp-art`),
+/// view”. Care keepsakes on wooden shelves come first, then the twenty silly stamps (`b2-stamp-art`),
 /// then the silly stats themselves.
 ///
 /// Pushed inside the Today panel from its Milestones and Silly stats cards, and from the stamp banner and

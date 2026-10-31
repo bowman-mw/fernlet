@@ -36,6 +36,8 @@ nonisolated enum WorldQuickStartCopy {
         case .running:
             return String(localized: "worldQuickStart.heading.running", defaultValue: "On your run",
                           comment: "World Home quick-start card heading while a run records")
+        case .airport(let name):
+            return name
         case .workout(let title):
             return title
         case .friendNearby(let names):
@@ -43,7 +45,7 @@ nonisolated enum WorldQuickStartCopy {
         case .inPerson:
             return String(localized: "worldQuickStart.heading.inPerson", defaultValue: "Together, in person",
                           comment: "World Home quick-start card heading when friends nearby is the only choice")
-        case .eatingPlace(let name):
+        case .eatingPlace(let name), .home(let name), .hotel(let name):
             return name
         }
     }
@@ -86,9 +88,15 @@ nonisolated enum WorldQuickStartCopy {
         case .ranFromHere(let times):
             return String(localized: "worldQuickStart.note.ranFromHere", defaultValue: "You've run this route \(times) times",
                           comment: "World Home quick-start card where a saved run route starts: how many recent runs started here. Plural on the number")
+        case .atAirport:
+            return String(localized: "worldQuickStart.note.atAirport", defaultValue: "You're at the airport.",
+                          comment: "World Home quick-start card inside an airport's grounds, under its name (Spanish: Estás en el aeropuerto.)")
         case .loggedMealsHere(let times):
             return String(localized: "worldQuickStart.note.loggedMealsHere", defaultValue: "You've logged meals here \(times) times",
                           comment: "World Home quick-start card at a favourite place to eat: how many meals were logged there. Plural on the number")
+        case .atHome:
+            return String(localized: "worldQuickStart.note.atHome", defaultValue: "You're home. Here's what's handy.",
+                          comment: "World Home quick-start card at one of the person's homes (`ref-home-blue`; Spanish: Estás en casa. Esto tienes a mano.)")
         }
     }
 
@@ -119,6 +127,10 @@ nonisolated enum WorldQuickStartCopy {
         case .backToWorkout(let title):
             return String(localized: "worldQuickStart.backToWorkout", defaultValue: "Back to \(title)",
                           comment: "World Home quick start during a guided workout: returns to it; the workout's name")
+        case .takeATrip:
+            return String(localized: WorldTripCopy.takeATrip)
+        case .endTrip(let city):
+            return WorldTripCopy.endTrip(city: city)
         case .startSession(let friend):
             return FriendsNearbyCopy.startHangout(with: friend)
         case .startActivity:
@@ -133,6 +145,15 @@ nonisolated enum WorldQuickStartCopy {
         case .findMenu(let place):
             return String(localized: "worldQuickStart.findMenu", defaultValue: "Find \(place)'s menu",
                           comment: "World Home quick start at a favourite place to eat: searches the web for its menu by the place's name (Spanish: Buscar el menú de …)")
+        case .loopFromDoor:
+            return String(localized: "worldQuickStart.loopFromDoor", defaultValue: "Around the block again",
+                          comment: "World Home quick start at home: walk or run the latest loop from the person's door again (Spanish: Otra vuelta a la manzana)")
+        case .cookSomething:
+            return String(localized: "worldQuickStart.cookSomething", defaultValue: "Cook something",
+                          comment: "World Home quick start at home: opens the recipe book (Spanish: Cocinar algo)")
+        case .roomWorkout:
+            return String(localized: "worldQuickStart.roomWorkout", defaultValue: "Suggest a room workout",
+                          comment: "World Home quick start at a hotel: Move's workout suggestion with no equipment, for the hotel room")
         }
     }
 
@@ -168,6 +189,8 @@ nonisolated enum WorldQuickStartCopy {
         case .backToWorkout:
             return String(localized: "worldQuickStart.backToWorkout.detail", defaultValue: "Your workout is still going",
                           comment: "World Home quick start during a guided workout: under 'Back to …'")
+        case .takeATrip(let companion): return WorldTripCopy.takeATripDetail(companion: companion)
+        case .endTrip: return String(localized: WorldTripCopy.endTripDetail)
         case .startSession:
             return FriendsNearbyCopy.sessionDetail
         case .startActivity:
@@ -182,6 +205,18 @@ nonisolated enum WorldQuickStartCopy {
         case .findMenu:
             return String(localized: "worldQuickStart.findMenu.detail", defaultValue: "Searches the web by name. Your location isn't sent.",
                           comment: "World Home quick start: under 'Find …'s menu'")
+        case .loopFromDoor(let metres):
+            let distance = WorldWalkCopy.distance(metres)
+            return String(localized: "worldQuickStart.loopFromDoor.detail", defaultValue: "\(distance) loop from your door",
+                          comment: "World Home quick start: under 'Around the block again'; the loop's length, e.g. '2.1 km loop from your door' (Spanish: Circuito de 2,1 km desde tu puerta)")
+        case .cookSomething:
+            return String(localized: "worldQuickStart.cookSomething.detail", defaultValue: "From your recipe book",
+                          comment: "World Home quick start: under 'Cook something' (Spanish: De tu recetario)")
+        case .roomWorkout(let gentle):
+            return gentle ? String(localized: "worldQuickStart.roomWorkout.gentle", defaultValue: "No equipment · only if you feel up to it",
+                                   comment: "World Home quick start at a hotel on a resting day: under 'Suggest a room workout'")
+                : String(localized: "worldQuickStart.roomWorkout.detail", defaultValue: "No equipment · nothing to set up",
+                         comment: "World Home quick start at a hotel: under 'Suggest a room workout'; the workout needs no equipment and no workout space")
         }
     }
 }
