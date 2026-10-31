@@ -49,9 +49,10 @@ struct NatureFogChange {
 /// sand line moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
 /// tile within 6 R.
 ///
-/// With a ``NatureFogTerrain`` snapshot each grower gets its own ``NatureTerrainMemo``, so a hex's land is read
-/// from the atlas once per grower however many tiles it draws (World-Exploration-Spec §1); with none, every tile
-/// is today's nature fog.
+/// With a ``NatureFogTerrain`` snapshot every grower reads the ``NatureTerrainMemo`` the book was given (the fog
+/// view's one memo, shared by every scale), so a hex's land is read from the atlas once however many tiles and
+/// scales draw it (World-Exploration-Spec §1); with none given, each painter keeps its own; with no terrain,
+/// every tile is today's nature fog.
 final class NatureFogTileBook {
     /// A tile's side, in points.
     nonisolated static let tileSize = 256.0
@@ -68,6 +69,8 @@ final class NatureFogTileBook {
     let atlas: NatureFogAtlas
     /// The land under the fog; nil for today's nature fog.
     let terrain: NatureFogTerrain?
+    /// The shared answers for ``terrain`` handed to every order; nil and each painter keeps its own.
+    private let memo: NatureTerrainMemo?
     private(set) var clearing: NatureFogClearing
     /// Moves with every change of clearing.
     private(set) var generation = 0
@@ -83,13 +86,14 @@ final class NatureFogTileBook {
     private let pixelScale: CGFloat
 
     /// A book drawing `clearing` at `scale` in `palette` over `terrain`'s land, its pictures at `pixelScale`
-    /// pixels a point.
+    /// pixels a point, reading each hex's land from `memo` when it is given for the same terrain.
     init(scale: NatureFogScale, palette: NatureFogPalette, clearing: NatureFogClearing, pixelScale: CGFloat,
-         terrain: NatureFogTerrain? = nil) {
+         terrain: NatureFogTerrain? = nil, memo: NatureTerrainMemo? = nil) {
         self.scale = scale
         self.palette = palette
         self.clearing = clearing
         self.terrain = terrain
+        self.memo = memo
         self.pixelScale = max(1, min(pixelScale, 3))
         atlas = NatureFogAtlas(palette: palette)
         painters = (0..<Self.painterCount).map { _ in NatureFogTilePainter(palette: palette) }
@@ -97,7 +101,7 @@ final class NatureFogTileBook {
                                                           clearing: NatureFogClearing(), generation: -1, pixelScale: self.pixelScale)
         let sea = terrain.map { NatureFogTileOrder(key: Self.openSea(at: scale), scale: scale, palette: palette,
                                                    clearing: NatureFogClearing(), generation: -1,
-                                                   pixelScale: self.pixelScale, terrain: $0) }
+                                                   pixelScale: self.pixelScale, terrain: $0, memo: memo) }
         let second = painters[1]
         placeholderDrawing = Task { [weak self] in
             let tile = await first.paint(wild)
@@ -318,6 +322,6 @@ final class NatureFogTileBook {
 
     private func order(_ key: NatureTileKey) -> NatureFogTileOrder {
         NatureFogTileOrder(key: key, scale: scale, palette: palette, clearing: clearing, generation: generation,
-                           pixelScale: pixelScale, terrain: terrain)
+                           pixelScale: pixelScale, terrain: terrain, memo: memo)
     }
 }

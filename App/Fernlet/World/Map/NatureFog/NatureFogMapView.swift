@@ -13,6 +13,9 @@ struct NatureFogScene {
     var camera: WorldCamera?
     /// The land under the fog (World-Exploration-Spec §1); nil for today's nature fog.
     var terrain: NatureFogTerrain? = nil
+    /// Whether the map is the front page (no panel, sheet or other tab over it). Going behind gives back the
+    /// tiles only a zoom or a pan would use (``NatureFogMapView/trim()``); the fog keeps drawing.
+    var isFrontmost = true
 }
 
 /// The nature fog on the live map, in the fog's old place in the stack (``WorldGroundLayer``: over the saved
@@ -106,6 +109,9 @@ final class NatureFogMapView: UIView {
     /// that were on its screen or ``spareTileLimit``, whichever is more, plus the ``NatureFogTileBook/painterCount``
     /// still drawing when it was left.
     private var spareBooks: [NatureFogTileBook] = []
+    /// Each hex's land for the current terrain, one memo handed to every book at every scale (perf review
+    /// 2026-10-31): a zoom finds the hexes it has already read. Replaced when the terrain snapshot changes.
+    private var terrainMemo: NatureTerrainMemo?
     /// The last camera request, when it came, whether it's still a glide under way (its end lay more than a
     /// screen away when it came, and the map hasn't since come near it or turned away from it: following the
     /// person moves the camera a little at a time and is no glide, and a pan ends one), and how far off its
@@ -133,6 +139,11 @@ final class NatureFogMapView: UIView {
         backgroundColor = .clear
         effects.frame = bounds
         layer.addSublayer(effects)
+        // Perf review 2026-10-31: nothing gave the fog's pictures back (up to ~220 MB at 2x), so the app kept
+        // a zoom's worth of tiles for the rest of its life.
+        let centre = NotificationCenter.default
+        centre.addObserver(self, selector: #selector(giveBack), name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        centre.addObserver(self, selector: #selector(giveBack), name: UIApplication.didEnterBackgroundNotification, object: nil)
     }
 
     required init?(coder: NSCoder) {
@@ -141,8 +152,25 @@ final class NatureFogMapView: UIView {
 
     /// Shows `next`: moves the tiles with the map, redraws the ones a clearing reaches.
     func show(_ next: NatureFogScene) {
+        let wasFrontmost = scene?.isFrontmost ?? true
         scene = next
+        if wasFrontmost && !next.isFrontmost { trim() }
         apply()
+    }
+
+    /// Gives back what only a zoom or a pan would draw from (perf review 2026-10-31): the spare scales, the
+    /// outgoing tiles and the current book's tiles off the screen. What the screen shows stays, so nothing
+    /// flashes, and every tile given back is drawn again when it's wanted.
+    func trim() {
+        spareBooks.removeAll()
+        dropOutgoing()
+        guard let book else { return }
+        book.evict(around: lastCentre ?? .zero, keeping: Set(shown.keys), limit: shown.count)
+    }
+
+    /// A memory warning or the app leaving the foreground.
+    @objc private func giveBack() {
+        trim()
     }
 
     override func layoutSubviews() {
@@ -292,10 +320,20 @@ final class NatureFogMapView: UIView {
         }
     }
 
+    /// The shared memo for `terrain`, made when the snapshot is new; nil with no terrain.
+    private func memo(for terrain: NatureFogTerrain?) -> NatureTerrainMemo? {
+        guard let terrain else { return nil }
+        if let terrainMemo, terrainMemo.terrain == terrain { return terrainMemo }
+        let fresh = NatureTerrainMemo(terrain: terrain)
+        terrainMemo = fresh
+        return fresh
+    }
+
     /// A new book at `scale` whose tiles reach the screen only while it's the current one.
     private func fresh(_ scale: NatureFogScale, scene: NatureFogScene) -> NatureFogTileBook {
         let next = NatureFogTileBook(scale: scale, palette: scene.palette, clearing: scene.clearing,
-                                     pixelScale: min(traitCollection.displayScale, 2), terrain: scene.terrain)
+                                     pixelScale: min(traitCollection.displayScale, 2), terrain: scene.terrain,
+                                     memo: memo(for: scene.terrain))
         next.onReady = { [weak self, weak next] tile in
             guard let self, let next, self.book === next else { return }
             self.arrived(tile)
@@ -342,7 +380,8 @@ final class NatureFogMapView: UIView {
     }
 
     /// Asks for the screen's tiles and the ring round them, reaching further the way the map is moving
-    /// (``NatureFogRing``), and lets the farthest cached tiles go. While a glide is far from its end, the
+    /// (``NatureFogRing``), and lets the farthest cached tiles go; behind a panel, sheet or tab, the screen's
+    /// tiles only. While a glide is far from its end, the
     /// end's screen and ring come first and the screen's own tiles after, with no ring: the frames between
     /// show the fog's colour rather than tiles that would scroll away before they're drawn (map-perf P3).
     private func prefetch(low: NatureTileKey, high: NatureTileKey, map: Mapping, size: CGSize, book: NatureFogTileBook) {
@@ -352,7 +391,12 @@ final class NatureFogMapView: UIView {
         lastCentre = centre
         let limit = NatureFogTileBook.cacheLimit
         let wanted: [NatureTileKey]
-        if let end = glideEnd(from: centre, low: low, high: high, size: size, book: book) {
+        if scene?.isFrontmost == false {
+            // Behind a panel, sheet or tab (perf review 2026-10-31): the screen only, no ring and no glide's end,
+            // so a reading moving the hidden map never draws back the tiles ``trim()`` gave back.
+            wanted = NatureFogRing.keys(low: low, high: high, centre: centre, motion: .zero, limit: limit)
+                .filter { (low.x...high.x).contains($0.x) && (low.y...high.y).contains($0.y) }
+        } else if let end = glideEnd(from: centre, low: low, high: high, size: size, book: book) {
             let screen = NatureFogRing.keys(low: low, high: high, centre: centre, motion: .zero, limit: limit)
                 .filter { (low.x...high.x).contains($0.x) && (low.y...high.y).contains($0.y) }
             let ahead = NatureFogRing.keys(low: end.low, high: end.high, centre: end.centre, motion: .zero, limit: limit)

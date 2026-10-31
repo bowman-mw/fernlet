@@ -7567,6 +7567,8 @@ final class FernletStore {
         let catalog = foodCatalog
         Task { [brandedCatalogLoader] in await brandedCatalogLoader.loadBrandedCatalog(into: catalog) }
         migrateAndBindOwnPhotoKey()
+        // Perf review 2026-10-31: the June catalog move left 38 MB of decoded-JSON caches nothing reads.
+        Task.detached(priority: .utility) { OrphanedCacheSweep.run() }
     }
 
     /// Security-hardening Phase 5 (5a-3): re-seal every own photo from the pre-split shared media

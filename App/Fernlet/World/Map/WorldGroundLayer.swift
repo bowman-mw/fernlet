@@ -45,6 +45,8 @@ struct WorldGroundLayer: View {
     /// The land under the fog (World-Exploration-Spec §1: the sea, desert, mountains, roofs, the seasons…), from
     /// the bundled atlas; nil, or no atlas, draws today's nature fog everywhere.
     var terrain: NatureFogTerrain? = nil
+    /// Whether the map is the front page; behind, the fog gives back its off-screen tiles.
+    var isFrontmost = true
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -57,7 +59,8 @@ struct WorldGroundLayer: View {
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
                                                  clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
-                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera, terrain: terrain))
+                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera, terrain: terrain,
+                                                 isFrontmost: isFrontmost))
             if ground.roadsOverFog, ground.roads.roadCount > 0 {
                 Canvas { context, size in
                     drawRoads(in: &context, size: size)

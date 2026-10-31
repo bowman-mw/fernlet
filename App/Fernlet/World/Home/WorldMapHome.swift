@@ -166,6 +166,7 @@ struct WorldMapHome: View {
         // the foreground stops it (`updateLocation()`, and the app's own background edge).
         .onAppear { updateLocation() }
         .onChange(of: isFrontmost) { _, front in frontmostChanged(front) }
+        .onChange(of: passport?.isPresented == true) { store.worldLocation.setMapOnScreen(isMapFrontPage) }
         .onChange(of: isLaunched) { updateLocation() }
         .onChange(of: scenePhase) { updateLocation() }
         .onChange(of: store.worldLocation.latest) { old, fix in moved(from: old, to: fix) }
@@ -205,7 +206,7 @@ struct WorldMapHome: View {
         ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
-                          veiled: isOffline, terrain: terrain, overlay: { viewport, size in
+                          veiled: isOffline, terrain: terrain, isFrontmost: isMapFrontPage, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size)
             }, geometry: geometry)
             if let sky, sky == .rain || sky == .snow {
@@ -674,6 +675,7 @@ extension WorldMapHome {
     /// covered.
     private func updateLocation() {
         let location = store.worldLocation
+        location.setMapOnScreen(isMapFrontPage)
         if !isFrontmost || scenePhase != .active {
             store.worldFog.flush()
             if !isFrontmost { cardContext = nil }
@@ -845,6 +847,12 @@ extension WorldMapHome {
 
     /// Whether the companion is live: the map in front and Sprout's passport not open over it.
     private var isCompanionActive: Bool { isFrontmost && passport?.isPresented != true }
+
+    /// Whether the map is the page being used (perf review 2026-10-31): in front, and Sprout's passport not open
+    /// over it. Behind the passport the map still shows round the book, so the fog keeps drawing the screen,
+    /// but gives back its ring and spare scales and the location comes at the off-map pace (the "Your world"
+    /// map's own lookups were starved by Home's fog painting behind it).
+    private var isMapFrontPage: Bool { isFrontmost && passport?.isPresented != true }
 
     /// A tap or hold on Sprout (World-Passport-Spec §1): the passport on page 1 (or, the first open after a new
     /// stamp, that stamp's page), the book rising from `anchor`, where Sprout stands.

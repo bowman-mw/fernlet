@@ -190,11 +190,10 @@ enum ProximityRunPolicyProduct {
     }
 
     /// The presence rule, flat, with `.inactive` counted as foreground. The `!appLockEngaged` leg
-    /// it carried over from `ContentView.shouldRunPresence` is gone (P9-3-A).
+    /// it carried over from `ContentView.shouldRunPresence` is gone (P9-3-A), and so is its tab leg
+    /// (perf review 2026-10-31): presence runs on every tab.
     static func expectedPresence(_ r: ProximityRunPolicy.Input) -> ProximityRunState {
-        let mainTab = r.selectedTab == .home || r.selectedTab == .food
-            || r.selectedTab == .move || r.selectedTab == .social
-        let runs = r.allowNearbyPresence && foreground(r) && mainTab && !hardStop(r)
+        let runs = r.allowNearbyPresence && foreground(r) && !hardStop(r)
         return runs ? .foregroundOnly : .stop
     }
 
@@ -319,8 +318,8 @@ enum ProximityRunPolicyProduct {
                 "and Home runs both listeners")
 
         let privateTab = Product.verdict(Product.row(tab: .personal, session: .peerCommitted))
-        #expect(privateTab.presence == .stop && privateTab.recipeShare == .stop,
-                "the Private tab runs no listener")
+        #expect(privateTab.presence == .foregroundOnly && privateTab.recipeShare == .stop,
+                "the Private tab keeps presence up (no restart per visit) and runs no recipe listener")
         #expect(privateTab.discovery == .hold, "but keeps a committed link")
     }
 
@@ -468,10 +467,10 @@ enum ProximityRunPolicyProduct {
         #expect(Product.count == 23_040,
                 "the product lost its lock dimension and gained the review block: 2⁷ flag rows, not 2⁸")
         let presenceRows = rows.filter { r in
-            r.allowNearbyPresence && Product.foreground(r) && !Product.hardStop(r) && r.selectedTab != .personal
+            r.allowNearbyPresence && Product.foreground(r) && !Product.hardStop(r)
         }
-        #expect(presenceRows.count == 768,
-                "2 foreground phases × 4 presence tabs × 4 tasks × 3 presences × the 8 opted-in, hard-stop-free flag rows")
+        #expect(presenceRows.count == 960,
+                "2 foreground phases × 5 tabs × 4 tasks × 3 presences × the 8 opted-in, hard-stop-free flag rows")
         let everyPresenceRowRuns = presenceRows.allSatisfy { Product.verdict($0).presence == .foregroundOnly }
         #expect(everyPresenceRowRuns,
                 "presence runs on every one of them — a configured lock at rest can no longer park it")
@@ -507,7 +506,7 @@ enum ProximityRunPolicyProduct {
     @Test func thePresenceAndRecipeRulesAreTodaysListenerChains() {
         let rows = Product.rows()
         let presenceAgrees = rows.allSatisfy { Product.verdict($0).presence == Product.expectedPresence($0) }
-        #expect(presenceAgrees, "presence: opted in, foreground, unlocked, on Home / Food / Move / Friends")
+        #expect(presenceAgrees, "presence: opted in, foreground, unlocked, on every tab")
         let recipeAgrees = rows.allSatisfy { Product.verdict($0).recipeShare == Product.expectedRecipeShare($0) }
         #expect(recipeAgrees, "recipe: opted in, foreground, unlocked, on Home / Food / Move")
         let recipeNeverOnFriends = rows.filter { $0.selectedTab == .social }

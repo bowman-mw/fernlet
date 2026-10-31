@@ -475,8 +475,12 @@ nonisolated enum ProximityRunPolicy {
         }
     }
 
-    /// The presence radio: opted in, foreground, on Home / Food / Move / Friends — with
-    /// `.inactive` counted as foreground.
+    /// The presence radio: opted in, foreground, on every tab — with `.inactive` counted as foreground.
+    ///
+    /// Perf review 2026-10-31: the Private tab no longer stops it. Stopping there was carried over from
+    /// `ContentView.shouldRunPresence` with no rule of its own, and every visit cost a teardown and a fresh
+    /// start (a new P-256 key, TLS identity and radio) on the way back. Which tab is open says nothing about
+    /// who is nearby, for the reason P9-3-A gives for the lock.
     ///
     /// P9-3-A (2026-09-22): the `!input.appLockEngaged` leg this row inherited from
     /// `ContentView.shouldRunPresence` is GONE. `FernletLockState.locked` is the resting state of a
@@ -486,10 +490,7 @@ nonisolated enum ProximityRunPolicy {
     /// switch, and there was no surface telling anyone it had become one.
     private static func presenceState(_ input: Input, foreground: Bool, hardStop: Bool) -> ProximityRunState {
         guard !hardStop, foreground, input.allowNearbyPresence else { return .stop }
-        switch input.selectedTab {
-        case .home, .food, .move, .social: return .foregroundOnly
-        case .personal: return .stop
-        }
+        return .foregroundOnly
     }
 
     /// The recipe-share listener: opted in, foreground, on Home / Food / Move (never Friends) —

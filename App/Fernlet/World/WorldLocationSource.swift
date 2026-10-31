@@ -72,7 +72,8 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///
 /// - **While Using:** updates run only while Fernlet is open, a panel or sheet over the map or not (W-09 (i),
 ///   owner 2026-10-26), and stop when the app goes to the background (``startForeground()`` /
-///   ``stopForeground()``), every 10 m of movement. Every reading iOS delivers is handed on, in order.
+///   ``stopForeground()``), every 10 m of movement — every 25 m at ten-metre accuracy while the map is behind
+///   a panel, sheet or tab and nothing records (``offMapPace``). Every reading iOS delivers is handed on, in order.
 /// - **Always, low power (opt-in, off by default):** iOS's visit and significant-change updates
 ///   (``setLowPowerAlways(_:)``), which need no `location` background mode and use little battery.
 /// - **A drive, traced (round 7; owner 2026-10-26: "For the car it should show where you've been while
@@ -150,6 +151,19 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var walkSession: CLBackgroundActivitySession?
     /// What the manager was set to before a drive's trace or a ride's follow, put back when it ends.
     @ObservationIgnored private var beforeTrace: (activity: CLActivityType, pauses: Bool)?
+    /// Whether Home's map is the front page (``setMapOnScreen(_:)``); behind, readings come at ``offMapPace``.
+    @ObservationIgnored private var mapOnScreen = true
+    /// Whether car and bike detection says a drive or a ride is under way.
+    @ObservationIgnored private var riding = (driving: false, cycling: false)
+
+    /// How readings come while the map is in front, or a walk, drive or ride records: iOS's best, every 10 m.
+    nonisolated static let fullPace = (accuracy: kCLLocationAccuracyBest, distanceFilter: 10.0)
+    /// How readings come with the map behind a panel, sheet or tab and nothing recording (owner 2026-10-31,
+    /// perf review): every 25 m at iOS's ten-metre accuracy. Unlocking is unchanged: a reading lifts every hex
+    /// within ``WorldFogKeeper/liftRadius`` (50 m), so lifts 25 m apart overlap with no gap, and ten-metre
+    /// readings sit far inside the fog's and ride detection's 65 m limit. Never iOS's hundred-metre mode,
+    /// whose readings often miss that limit and would quietly stop the map uncovering.
+    nonisolated static let offMapPace = (accuracy: kCLLocationAccuracyNearestTenMeters, distanceFilter: 25.0)
 
     /// The Info.plist purpose key the walk's temporary full-accuracy request names (a frozen token).
     static let walkAccuracyPurposeKey = "WorldWalk"
@@ -157,15 +171,40 @@ final class WorldLocationSource: NSObject {
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = 10
+        manager.desiredAccuracy = Self.fullPace.accuracy
+        manager.distanceFilter = Self.fullPace.distanceFilter
         apply(status: manager.authorizationStatus, accuracy: manager.accuracyAuthorization, observed: false)
         rides.onDrivingChanged = { [weak self] driving in
+            self?.riding.driving = driving
             if driving { self?.startTrace(.drive) } else { self?.stopTrace(.drive) }
+            self?.applyPace()
         }
         rides.onCyclingChanged = { [weak self] cycling in
+            self?.riding.cycling = cycling
             if cycling { self?.startTrace(.ride) } else { self?.stopTrace(.ride) }
+            self?.applyPace()
         }
+    }
+
+    /// Home's map came to the front or went behind a panel, a sheet or another tab.
+    func setMapOnScreen(_ onScreen: Bool) {
+        guard onScreen != mapOnScreen else { return }
+        mapOnScreen = onScreen
+        applyPace()
+    }
+
+    /// The pace readings come at: ``fullPace`` while the map is in front or a walk, a drive or a ride records
+    /// (their lines keep only readings within 25 m), ``offMapPace`` otherwise.
+    nonisolated static func pace(mapOnScreen: Bool, recording: Bool) -> (accuracy: CLLocationAccuracy, distanceFilter: CLLocationDistance) {
+        mapOnScreen || recording ? fullPace : offMapPace
+    }
+
+    /// Sets the manager to ``pace(mapOnScreen:recording:)`` now, touching only what changed.
+    private func applyPace() {
+        let recording = isWalking || trace != nil || riding.driving || riding.cycling
+        let pace = Self.pace(mapOnScreen: mapOnScreen, recording: recording)
+        if manager.desiredAccuracy != pace.accuracy { manager.desiredAccuracy = pace.accuracy }
+        if manager.distanceFilter != pace.distanceFilter { manager.distanceFilter = pace.distanceFilter }
     }
 
     /// Whether iOS's location prompt is up: asked for, not answered yet (the companion hint waits for it).
@@ -208,6 +247,7 @@ final class WorldLocationSource: NSObject {
         // in a car or on a bike picks it up again once the walk is over).
         stopTrace()
         isWalking = true
+        applyPace()
         startForeground()
         if !isPrecise, Self.declares("NSLocationTemporaryUsageDescriptionDictionary") {
             manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: Self.walkAccuracyPurposeKey)
@@ -223,6 +263,7 @@ final class WorldLocationSource: NSObject {
     func stopWalk() {
         guard isWalking else { return }
         isWalking = false
+        applyPace()
         walkSession?.invalidate()
         walkSession = nil
         if Self.declaresBackgroundLocation { manager.allowsBackgroundLocationUpdates = false }
@@ -292,6 +333,7 @@ final class WorldLocationSource: NSObject {
                                declaresBackground: Self.declaresBackgroundLocation, walking: isWalking) else { return }
         if trace != nil { stopTrace() }
         trace = kind
+        applyPace()
         beforeTrace = (manager.activityType, manager.pausesLocationUpdatesAutomatically)
         manager.allowsBackgroundLocationUpdates = true
         manager.activityType = Self.activityType(for: kind)
@@ -307,6 +349,7 @@ final class WorldLocationSource: NSObject {
     private func stopTrace(_ kind: WorldTrace? = nil) {
         guard let trace, kind.map({ $0 == trace }) ?? true else { return }
         self.trace = nil
+        applyPace()
         if let beforeTrace {
             manager.activityType = beforeTrace.activity
             manager.pausesLocationUpdatesAutomatically = beforeTrace.pauses
