@@ -21,33 +21,43 @@ nonisolated struct WorldViewContent: Sendable {
     var liftedCells: [HexCell]
     /// Where the view opens: the person's first home, else their latest fix, else nil (0°, 0°).
     var start: GeoPoint?
+    /// The flights' arcs, the airports' marks and the plate's counts (World-Airports-Spec §8; none in a decoy,
+    /// and none in fixed demo content unless it carries flights).
+    var flights = WorldFlightMap.none
 
     /// Nothing at all: no atlas, no cities, no fog.
     static let empty = WorldViewContent(atlas: nil, pins: [], cityCount: 0, countryCount: 0, liftedCells: [], start: nil)
 
     /// The content for `book` and `cells` over `atlas`: each city the book keeps that the atlas knows, named
-    /// in the app's language. Bounded: at most the book's own cap on cities.
-    static func make(atlas: WorldAtlas?, book: PassportBook, cells: [HexCell], start: GeoPoint?) -> WorldViewContent {
+    /// in the app's language, and the book's flights drawn between `airports`' points (``WorldFlightMap/live(book:airports:)``).
+    /// Bounded: at most the book's own cap on cities.
+    static func make(atlas: WorldAtlas?, book: PassportBook, cells: [HexCell], start: GeoPoint?,
+                     airports: WorldAirports? = nil) -> WorldViewContent {
         let tokens = book.visits(of: .city).keys.sorted().prefix(WorldViewCluster.maxPins)
         let pins = tokens.compactMap { token in
             atlas?.city(token: token).map { WorldViewCityPin(city: $0, name: WorldViewNames.city($0)) }
         }
         return WorldViewContent(atlas: atlas, pins: pins, cityCount: book.count(of: .city),
                                 countryCount: book.count(of: .country),
-                                liftedCells: Array(cells.prefix(WorldViewHexGrid.maxLiftedCells)), start: start)
+                                liftedCells: Array(cells.prefix(WorldViewHexGrid.maxLiftedCells)), start: start,
+                                flights: WorldFlightMap.live(book: book, airports: airports))
     }
 }
 
 extension WorldViewContent {
     /// The person's world view from the store: the passport the screens show (empty in a decoy), the lifted
-    /// fog (none in a decoy), and their first home (the latest fix in a decoy or with no home).
+    /// fog (none in a decoy), and their first home (the latest fix in a decoy or with no home). The bundled airport
+    /// list is opened only when the book holds a flight or an airport (a decoy's empty book never opens it).
     @MainActor
     static func live(store: FernletStore) -> WorldViewContent {
         let fog = store.worldFog
         let decoy = fog.isDecoy
         let home = decoy ? nil : store.worldHomes.homes.first { $0.kind == .home }?.point
-        return make(atlas: fog.atlas.openedAtlas, book: fog.atlas.book, cells: decoy ? [] : Array(fog.visibleCells),
-                    start: home ?? store.worldLocation.latest?.point)
+        let book = fog.atlas.book
+        let flown = !book.flights.isEmpty || book.count(of: .airport) > 0
+        return make(atlas: fog.atlas.openedAtlas, book: book, cells: decoy ? [] : Array(fog.visibleCells),
+                    start: home ?? store.worldLocation.latest?.point,
+                    airports: flown ? store.worldLocation.flights.airportsShelf.pack() : nil)
     }
 }
 

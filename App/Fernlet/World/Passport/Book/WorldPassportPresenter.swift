@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import WorldMapStore
 
 /// Opens and closes Sprout's passport (World-Passport-Spec §1, §6, §9), from anywhere in the app: Home's tap or hold
 /// on Sprout (page 1, rising from Sprout), the Stamp book's Passport row (`open(page: 2)`), Customize from Today
@@ -122,4 +123,10 @@ struct PassportBookDemo {
     var opensContents = false
     /// The A to Z view it opens in (`ps-continent`).
     var detail: PassportIndexDetail?
+    /// Its flights (the screenshots' made-up history, World-Airports-Spec §8): nil shows no Flights page.
+    var flights: [PassportFlight]?
+    /// A Flighty file's summary to open over the book (the import sheet's screenshot, §9.4).
+    var importFound: FlightyImportFound?
+    /// Whether it opens on Your world, full screen (the arcs' screenshot, §8).
+    var opensWorld = false
 }

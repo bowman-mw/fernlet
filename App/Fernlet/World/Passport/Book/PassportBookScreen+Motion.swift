@@ -51,6 +51,8 @@ extension PassportBookScreen {
         page = presenter.startPage(in: book)
         detail = presenter.demo?.detail
         showsContents = presenter.demo?.opensContents ?? false
+        if let found = presenter.demo?.importFound { importFlow.found = found }
+        if presenter.demo?.opensWorld == true { showsWorld = true }
         if reduceMotion {
             motion = PassportBookMotion.open
             motion.fade = 0

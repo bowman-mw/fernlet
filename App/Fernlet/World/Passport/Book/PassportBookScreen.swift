@@ -1,3 +1,4 @@
+import FernletDomainModel
 import FernletUI
 import SwiftUI
 import WorldMapStore
@@ -18,6 +19,10 @@ struct PassportBookScreen: View {
     @State var turn: PassportTurn?
     @State var showsContents = false
     @State var showsWorld = false
+    /// Where Your world opens: a tapped flight's arc, or home (nil).
+    @State var worldCentre: GeoPoint?
+    /// The Flighty import, from the Flights page's "Add past flights".
+    @State var importFlow: FlightyImportFlow
     @State var wiggle: PassportWiggle?
     @State var landing: PassportStampEntry?
     @State var pageOnTop = true
@@ -32,17 +37,19 @@ struct PassportBookScreen: View {
         self.store = store
         _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas },
                                                        seaNeighbours: { store.worldFog.atlas.seaNeighbours() }))
+        _importFlow = State(initialValue: FlightyImportFlow(store: store))
     }
 
     var body: some View {
-        let book = PassportBookModel(entries: entries)
+        let flights = flightsModel
+        let book = PassportBookModel(entries: entries, flightPageCount: flights?.pages.count ?? 0)
         NavigationStack {
             GeometryReader { proxy in
                 ZStack {
                     PassportBookPalette.veil.ignoresSafeArea().opacity(motion.veil)
                     VStack(spacing: 0) {
                         topBar(book).frame(height: 48).padding(.horizontal, 16).opacity(motion.chrome)
-                        stage(book)
+                        stage(book, flights: flights)
                             .frame(height: Self.bookHeight(in: proxy.size.height))
                             .padding(EdgeInsets(top: 6, leading: 30, bottom: 16, trailing: 30))
                             .modifier(PassportRiseEffect(lift: motion.lift, anchor: presenter.anchor, in: proxy))
@@ -57,9 +64,10 @@ struct PassportBookScreen: View {
             .toolbar(.hidden, for: .navigationBar)
             .containerBackground(.clear, for: .navigation)
         }
+        .flightyImport(importFlow)
         .overlay {
             if showsWorld {
-                WorldYourWorldPage(source: worldSource, onBack: { showsWorld = false },
+                WorldYourWorldPage(source: worldSource, initialCentre: worldCentre, onBack: { showsWorld = false },
                                    onClose: { showsWorld = false; presenter.close() },
                                    onOpenCity: { showsWorld = false; presenter.openCity($0) })
                     .background(WorldPalette.page.ignoresSafeArea())
@@ -78,6 +86,35 @@ struct PassportBookScreen: View {
     /// The stamps to show: the presenter's demo, or the person's passport (empty in a decoy).
     private var entries: [PassportStampEntry] {
         presenter.demo?.entries ?? PassportStampEntry.entries(of: store.worldFog.atlas.book)
+    }
+
+    /// The Flights pages' model: the person's flights (World-Airports-Spec §8), or nil in a decoy and the demo,
+    /// which show no Flights page (§11: a decoy shows no flights).
+    private var flightsModel: PassportFlightsModel? {
+        let flights: [PassportFlight]
+        if let demo = presenter.demo {
+            guard let demoFlights = demo.flights, !demo.isDecoy else { return nil }
+            flights = demoFlights
+        } else {
+            guard !store.worldFog.isDecoy else { return nil }
+            flights = store.worldFog.atlas.book.flights
+        }
+        let pack = store.worldLocation.flights.airportsShelf.pack()
+        return PassportFlightsModel(flights: flights) { pack?.point(iata: $0)?.point }
+    }
+
+    /// An airport's city in the app's language, by IATA code (nil for a points-only code).
+    private func airportCity(_ code: String) -> String? {
+        store.worldLocation.flights.airportsShelf.pack()?.airport(code: code)?.city(spanish: FernletLanguage.app == .spanish)
+    }
+
+    /// Opens Your world on `trip`'s arc (a stub tapped).
+    private func openWorld(on trip: PassportFlightTrip) {
+        let pack = store.worldLocation.flights.airportsShelf.pack()
+        guard let from = trip.codes.first.flatMap({ pack?.point(iata: $0)?.point }),
+              let to = trip.codes.last.flatMap({ pack?.point(iata: $0)?.point }) else { return }
+        worldCentre = PassportFlightsModel.midpoint(from, to)
+        showsWorld = true
     }
 
     /// The world map's source: the demo's content, or the person's passport and fog.
@@ -115,7 +152,7 @@ struct PassportBookScreen: View {
         }
     }
 
-    private func stage(_ book: PassportBookModel) -> some View {
+    private func stage(_ book: PassportBookModel, flights: PassportFlightsModel?) -> some View {
         PassportBookStage(shown: page, turn: turn, ribbonPage: book.ribbonPage, coverAngle: motion.cover,
                           turnedPages: motion.turnedPages, onRibbon: { go(to: $0, in: book) },
                           onTurnDone: { finishTurn($0) }) { number in
@@ -123,7 +160,8 @@ struct PassportBookScreen: View {
                 // Page 1 scrolls itself and draws its own insets; the book adds only the page number.
                 PassportPageNumber(number: number) { sproutPage }
             } else {
-                PassportPageScroll(number: number, content: { content(number, in: book) }, onTop: { pageOnTop = $0 })
+                PassportPageScroll(number: number, content: { content(number, in: book, flights: flights) },
+                                   onTop: { pageOnTop = $0 })
             }
         }
         .id(reduceMotion ? "\(page)-\(detail.map { "\($0)" } ?? "")" : "book")
@@ -169,12 +207,17 @@ struct PassportBookScreen: View {
 
     /// Page `number`'s content.
     @ViewBuilder
-    private func content(_ number: Int, in book: PassportBookModel) -> some View {
+    private func content(_ number: Int, in book: PassportBookModel, flights: PassportFlightsModel?) -> some View {
         switch book.page(at: number) {
         case .sprout:
             sproutPage
         case .world:
-            PassportWorldPage(book: book, progress: progress(book), world: worldSource) { showsWorld = true }
+            PassportWorldPage(book: book, progress: progress(book), world: worldSource) { worldCentre = nil; showsWorld = true }
+        case .flights(let index):
+            if let flights {
+                PassportFlightsPage(flights: flights, index: index, city: airportCity, onOpenTrip: { openWorld(on: $0) },
+                                    onAddPastFlights: { importFlow.pick() })
+            }
         case .stamps(let index):
             PassportStampsPage(book: book, index: index, library: library, landing: landing, wiggle: wiggle,
                                full: isFull(book))

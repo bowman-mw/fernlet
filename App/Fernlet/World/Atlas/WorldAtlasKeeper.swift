@@ -292,15 +292,58 @@ final class WorldAtlasKeeper {
         }
     }
 
+    /// Adds a file's flights (World-Airports-Spec §9.4: records only, never a stamp or fog) under the one-flight
+    /// rule. Whether the passport took them: false in a decoy and while the passport can't be read or saved.
+    func importFlights(_ flights: [PassportFlight]) -> Bool {
+        apply { book in
+            book.addFlights(flights)
+            return true
+        }
+    }
+
+    /// An import's Undo: takes `source` off the flights that are `flights` (``FlightImportPlan/undoFlights``).
+    /// Whether the passport took it.
+    func undoImport(_ source: PassportFlight.Sources, flights: [PassportFlight]) -> Bool {
+        apply { book in
+            book.removeSource(source, fromFlightsMatching: flights)
+            return true
+        }
+    }
+
+    /// "Remove imported flights" (spec §9.5): every Flighty and calendar source goes, and a flight Fernlet also
+    /// saw stays as Fernlet's. How many flights were removed, or nil when the passport couldn't take it.
+    func removeImportedFlights() -> Int? {
+        var removed = 0
+        let taken = apply { book in
+            removed = book.removeSource(.imported)
+            return true
+        }
+        return taken ? removed : nil
+    }
+
+    /// How many flights carry an imported source (the Remove row shows only when some do).
+    var importedFlightCount: Int {
+        book.flights.filter { !$0.sources.isDisjoint(with: .imported) }.count
+    }
+
     /// Changes the saved passport by `change` (which says whether anything changed), never in a decoy.
     private func update(_ change: (inout PassportBook) -> Bool) {
-        guard !isDecoy, loadStore() else { return }
+        apply(change)
+    }
+
+    /// ``update(_:)`` that says whether the change was taken: false in a decoy, while the passport can't be
+    /// read, and when saving failed; true when it was saved or changed nothing.
+    @discardableResult
+    private func apply(_ change: (inout PassportBook) -> Bool) -> Bool {
+        guard !isDecoy, loadStore() else { return false }
         do {
-            guard try store.update(change) == true else { return }
+            guard try store.update(change) == true else { return true }
             book = store.book
             onPassportChanged?()
+            return true
         } catch {
             FernletAuditLog.log("worldMap.passport.saveDeferred")
+            return false
         }
     }
 

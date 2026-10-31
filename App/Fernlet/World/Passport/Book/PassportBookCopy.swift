@@ -18,12 +18,13 @@ nonisolated enum PassportBookCopy {
     /// "Close" (Voice Control's name for the ✕).
     static let closeShort = LocalizedStringResource("Close", comment: "Voice Control: the passport's close button")
 
-    /// A page's name in the page bar: "Sprout", "Your world", "Stamps", "Index".
+    /// A page's name in the page bar: "Sprout", "Your world", "Stamps", "Flights", "Index".
     static func name(of page: PassportBookPage) -> LocalizedStringResource {
         switch page {
         case .sprout: LocalizedStringResource("Sprout", comment: "Sprout's passport: page 1's name, the companion's own page")
         case .world: yourWorld
         case .stamps: stamps
+        case .flights: PassportFlightsCopy.title
         case .index: index
         }
     }

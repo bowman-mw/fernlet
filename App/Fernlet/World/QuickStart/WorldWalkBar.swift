@@ -92,10 +92,11 @@ struct WorldLoggedNote: View {
     let identifier: Identifier
     let onUndo: () -> Void
 
-    /// The note's automation identifiers (frozen tokens): the walk's, and the bike ride's.
+    /// The note's automation identifiers (frozen tokens): the walk's, the bike ride's, and a Flighty import's.
     enum Identifier: String {
         case walk = "world.walkToast"
         case ride = "world.rideToast"
+        case flights = "world.flightsToast"
 
         /// The Undo button's.
         var undo: String { rawValue + ".undo" }

@@ -19,7 +19,12 @@ import WorldMapStore
 ///   `onOpenCity` with the city's token (the city view is wired by the lane).
 /// - **The plate** under the host's top chips (``WorldAtlasPlate``), and at City the state names as framed
 ///   letter-spaced capitals.
-/// - **VoiceOver**: the land is decoration, each marker a button, the zoom level one adjustable element.
+/// - **Flights** (World-Airports-Spec §8, screen 22): every route one dotted great-circle arc
+///   (``WorldFlightArcsLayer``), rings for airports only flown through and labelled dots for found ones
+///   (``WorldFlightMarks``); a tap on an arc opens its card (``WorldFlightCard``), and the plate adds
+///   "6 airports · 53 flights". Only this full-screen page draws them (Home never shows arcs).
+/// - **VoiceOver**: the land is decoration, each marker a button, each arc on screen a button
+///   (``WorldFlightArcButtons``), the zoom level one adjustable element.
 struct WorldAtlasMapView: View {
     /// Where the map's data comes from.
     enum Source {
@@ -47,6 +52,8 @@ struct WorldAtlasMapView: View {
     @State private var pinchAnchor = UnitPoint.center
     @State private var blend: CGFloat = 1
     @State private var centreDescription: AtlasZoomDescription?
+    /// The flight arc whose card shows, and the ring named by a tap.
+    @State private var flightPick = WorldFlightPick()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -81,10 +88,20 @@ struct WorldAtlasMapView: View {
                 .contentShape(Rectangle())
                 .gesture(dragGesture)
                 .simultaneousGesture(pinchGesture(size: size))
+                .simultaneousGesture(SpatialTapGesture().onEnded { tapFlights(at: $0.location) })
+            if !flights.arcs.isEmpty {
+                WorldFlightArcsLayer(camera: camera, arcs: flights.arcs, picked: flightPick.arc)
+            }
             WorldAtlasStateLabels(camera: camera, model: model, generation: model.placeGeneration,
                                   insets: chromeInsets)
+            if !flights.rings.isEmpty || !flights.found.isEmpty {
+                WorldFlightMarks(camera: camera, flights: flights, namedRing: flightPick.ring)
+            }
             WorldAtlasMarkers(camera: camera, clusters: model.clusters(at: camera.level)) { cluster in
                 tap(cluster)
+            }
+            if !flights.arcs.isEmpty {
+                WorldFlightArcButtons(camera: camera, arcs: flights.arcs) { flightPick = WorldFlightPick(arc: $0.id) }
             }
         }
         .scaleEffect(pinch * blend, anchor: pinchAnchor)
@@ -95,7 +112,9 @@ struct WorldAtlasMapView: View {
     private func controls(_ camera: WorldViewCamera) -> some View {
         ZStack {
             Text(verbatim: WorldAtlasPlate.text(level: camera.level, place: centreDescription?.place,
-                                                cities: model.content.cityCount, countries: model.content.countryCount))
+                                                cities: model.content.cityCount, countries: model.content.countryCount,
+                                                airports: model.content.flights.airportCount,
+                                                flights: model.content.flights.flightCount))
                 .font(.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .footnote))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -111,7 +130,29 @@ struct WorldAtlasMapView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .padding(.trailing, chromeInsets.trailing)
                 .padding(.bottom, chromeInsets.bottom)
+            if let arc = pickedArc {
+                WorldFlightCard(arc: arc) { flightPick.arc = nil }
+                    .id(arc.id)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, max(chromeInsets.bottom - 88, 16))
+            }
         }
+    }
+
+    /// The flights Your world draws (World-Airports-Spec §8; none in a decoy).
+    private var flights: WorldFlightMap { model.content.flights }
+
+    /// The arc whose card shows.
+    private var pickedArc: WorldFlightArc? {
+        guard let id = flightPick.arc else { return nil }
+        return flights.arcs.first { $0.id == id }
+    }
+
+    /// A tap on the map: names a ring, opens an arc's card, or closes the card.
+    private func tapFlights(at point: CGPoint) {
+        guard let camera, !flights.arcs.isEmpty || !flights.rings.isEmpty else { return }
+        flightPick = WorldFlightPick.at(point, camera: camera, flights: flights, current: flightPick)
     }
 
     /// What the map's drawing depends on beyond the camera: the uncovered hexes, the raster, the places.

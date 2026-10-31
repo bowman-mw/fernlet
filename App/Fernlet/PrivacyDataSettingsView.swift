@@ -526,6 +526,8 @@ struct PrivacyDataSettingsView: View {
             photoProtectionCard
             healthAccessRow
             iCloudCard
+            // World-Airports-Spec §9: the Flighty import and "Remove imported flights" (none in a decoy).
+            if let store, !store.worldFog.isDecoy { PrivacyAirportsFlightsCard(store: store) }
             multiDeviceWarningBanner
             sealedBackupStatusBanner
             localBackupCard

@@ -40,6 +40,19 @@ public nonisolated struct FlightyImportSummary: Equatable, Sendable {
     public let unknownCodes: [String]
     /// Rows with a missing or malformed date or airport code, or a route that starts and ends at one airport.
     public let unreadableRows: Int
+
+    /// A summary from its counts (the reader's, and the app's made-up screenshots).
+    public init(flights: Int, airports: Int, countries: Int?, years: ClosedRange<Int>?, cancelled: Int,
+                repeatedRows: Int, unknownCodes: [String], unreadableRows: Int) {
+        self.flights = flights
+        self.airports = airports
+        self.countries = countries
+        self.years = years
+        self.cancelled = cancelled
+        self.repeatedRows = repeatedRows
+        self.unknownCodes = unknownCodes
+        self.unreadableRows = unreadableRows
+    }
 }
 
 /// A Flighty CSV export, read once on this iPhone and not kept (spec §9).
