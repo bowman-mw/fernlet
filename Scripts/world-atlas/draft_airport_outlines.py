@@ -58,12 +58,15 @@ HLS_URL = ("https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/%s/default/%s/Goo
 HLS_LAYERS = ("HLS_S30_Nadir_BRDF_Adjusted_Reflectance", "HLS_L30_Nadir_BRDF_Adjusted_Reflectance")
 HLS_ZOOM = 12
 HLS_PROBES = 40
+S2_SEARCH = "https://earth-search.aws.element84.com/v1/search"
+S2_CANDIDATES = 8
+EARTH_RADIUS = 6378137.0
 CREDIT = {
     "usgs": "Imagery: USGS The National Map (public domain)",
     "eox": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), "
            "contains modified Copernicus Sentinel data 2016",
 }
-MAX_ZOOM = {"usgs": 16, "eox": 14, "hls": 14}
+MAX_ZOOM = {"usgs": 16, "eox": 14, "hls": 14, "s2": 14}
 SEED_MARGIN_METRES = 800.0
 PAD_METRES = 1_000.0
 MAX_POINTS = 24
@@ -79,7 +82,7 @@ SEED_CREDIT = {
     "tiger": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
     "corine": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
     "runways": "Outline seed: OurAirports runways (public domain)",
-    "earlier": "Outline seed: the earlier by-eye trace on the 2016 picture",
+    "earlier": "Outline seed: the earlier draft",
 }
 STATE_FIPS = {
     "AL": "01", "AK": "02", "AZ": "04", "AR": "05", "CA": "06", "CO": "08", "CT": "09", "DE": "10", "DC": "11",
@@ -249,6 +252,79 @@ def hls_days(airport, sources_dir):
     return [(layer, day) for _, layer, day in scored[:5]]
 
 
+def s2_scenes(airport, geo, sources_dir, cloud=5):
+    """Up to S2_CANDIDATES Sentinel-2 L2A scenes from 2023–2025 (Copernicus, free with "Contains modified
+    Copernicus Sentinel data <year>") whose footprint covers the card, least cloudy first, from the open AWS
+    copies via Element 84's earth-search catalogue (no login). The answer is cached per airport."""
+    west, north = card_lonlat(geo, 0, 0)
+    east, south = card_lonlat(geo, geo["width"], geo["height"])
+    path = os.path.join(sources_dir, "imagery", "s2", "search-%s%s.json" % (airport["ident"],
+                                                                           "" if cloud == 5 else "-%d" % cloud))
+    if not os.path.isfile(path):
+        body = json.dumps({
+            "collections": ["sentinel-2-l2a"], "bbox": [west, south, east, north],
+            "datetime": "2023-01-01T00:00:00Z/2025-12-31T23:59:59Z", "query": {"eo:cloud_cover": {"lt": cloud}},
+            "sortby": [{"field": "properties.eo:cloud_cover", "direction": "asc"}], "limit": 40}).encode()
+        request = urllib.request.Request(S2_SEARCH, data=body, method="POST",
+                                         headers={"User-Agent": AGENT, "Content-Type": "application/json"})
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with urllib.request.urlopen(request, timeout=120) as response, open(path + ".partial", "wb") as handle:
+            handle.write(response.read())
+        os.replace(path + ".partial", path)
+    scenes = []
+    for feature in airports.read_json(path).get("features", [])[:40]:
+        bw, bs, be, bn = feature["bbox"]
+        if bw <= west and bs <= south and be >= east and bn >= north and "visual" in feature["assets"]:
+            scenes.append({"id": feature["id"], "day": feature["properties"]["datetime"][:10],
+                           "href": feature["assets"]["visual"]["href"]})
+    return scenes[:S2_CANDIDATES]
+
+
+def card_lonlat(geo, px, py):
+    lat, lon = tile_latlon(geo["x0"] + px / 256.0, geo["y0"] + py / 256.0, geo["zoom"])
+    return lon, lat
+
+
+def s2_picture(geo, sources_dir, token):
+    """The card's picture from the first candidate scene that covers it with no empty pixels (a scene's edge
+    or a gap), reprojected to the card's Web Mercator grid; the scene chosen is written into `geo`."""
+    import site
+    user_site = site.getusersitepackages()
+    if user_site not in sys.path:
+        sys.path.append(user_site)
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.transform import from_bounds
+    from rasterio.warp import reproject
+    n = 2 ** geo["zoom"]
+    span = 2 * math.pi * EARTH_RADIUS
+    left = geo["x0"] / n * span - span / 2
+    top = span / 2 - geo["y0"] / n * span
+    right = (geo["x0"] + geo["width"] / 256.0) / n * span - span / 2
+    bottom = span / 2 - (geo["y0"] + geo["height"] / 256.0) / n * span
+    for scene in geo["candidates"]:
+        cache = os.path.join(sources_dir, "imagery", "s2", "%s-%s.png" % (token, scene["id"]))
+        if os.path.isfile(cache):
+            picture = Image.open(cache).convert("RGB")
+        else:
+            data = np.zeros((3, geo["height"], geo["width"]), dtype=np.uint8)
+            target = from_bounds(left, bottom, right, top, geo["width"], geo["height"])
+            with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", AWS_NO_SIGN_REQUEST="YES"):
+                with rasterio.open(scene["href"]) as src:
+                    # Bounded: three bands.
+                    for band in range(3):
+                        reproject(rasterio.band(src, band + 1), data[band], dst_transform=target,
+                                  dst_crs="EPSG:3857", dst_nodata=0, resampling=Resampling.bilinear)
+            picture = Image.fromarray(np.transpose(data, (1, 2, 0)).astype(np.uint8), "RGB")
+            os.makedirs(os.path.dirname(cache), exist_ok=True)
+            picture.save(cache)
+        empty = float((np.asarray(picture).max(axis=2) == 0).mean())
+        if empty <= 0.01:
+            geo["scene"], geo["day"] = scene["id"], scene["day"]
+            return picture
+    raise SystemExit("error: no Sentinel-2 scene covers %s's card" % token)
+
+
 def geometry(airport, ring, source):
     """The card's zoom and its top-left corner in tile coordinates, padded 1 km around the outline."""
     lats = [p[0] for p in ring] + [airport["lat"]]
@@ -282,6 +358,9 @@ def from_pixel(geo, px, py):
 
 def credit_for(source, geo):
     """The imagery credit printed on a card and kept in its draft."""
+    if source == "s2":
+        return "Imagery: Copernicus Sentinel-2 L2A 10 m, %s (contains modified Copernicus Sentinel data %s)" % (
+            geo["day"], geo["day"][:4])
     if source == "hls":
         days = sorted(day for _, day in geo["days"])
         extra = ", contains modified Copernicus Sentinel data" if any(l.startswith("HLS_S30") for l, _ in geo["days"]) else ""
@@ -301,7 +380,10 @@ def card(airport, ring, runways, seed, source, geo, sources_dir, out_path, seed_
     tiles = [(tx, ty) for tx in range(tx0, tx1 + 1) for ty in range(ty0, ty1 + 1)]
     if len(tiles) > MAX_TILES:
         raise SystemExit("error: %s needs %d tiles, over %d" % (airport["ident"], len(tiles), MAX_TILES))
-    if source == "hls":
+    if source == "s2":
+        mosaic = s2_picture(geo, sources_dir, os.path.splitext(os.path.basename(out_path))[0])
+        tx0, ty0 = geo["x0"], geo["y0"]
+    elif source == "hls":
         # Zoom-12 tiles (about 30 m), upscaled to the card's zoom.
         factor = 2 ** (zoom - HLS_ZOOM)
         sx0, sy0, sx1, sy1 = tx0 // factor, ty0 // factor, tx1 // factor, ty1 // factor
@@ -328,7 +410,7 @@ def card(airport, ring, runways, seed, source, geo, sources_dir, out_path, seed_
             path = os.path.join(sources_dir, "imagery", source, str(zoom), str(tx), "%d.jpg" % ty)
             fetch(url, path)
             mosaic.paste(Image.open(path).convert("RGB"), ((tx - tx0) * 256, (ty - ty0) * 256))
-    left, top = int((geo["x0"] - tx0) * 256), int((geo["y0"] - ty0) * 256)
+    left, top = int(round((geo["x0"] - tx0) * 256)), int(round((geo["y0"] - ty0) * 256))
     picture = mosaic.crop((left, top, left + geo["width"], top + geo["height"]))
     draw = ImageDraw.Draw(picture)
     try:
@@ -379,7 +461,7 @@ def main(argv):
     parser.add_argument("--tokens-file", default="", help="a file of tokens, one per line (keep it outside the repo)")
     parser.add_argument("--out", required=True, help="a folder OUTSIDE the repo for cards and drafts")
     parser.add_argument("--corrections", default="", help="JSON of outlines traced on the cards, in card pixels")
-    parser.add_argument("--imagery", choices=("open", "hls"), default="open",
+    parser.add_argument("--imagery", choices=("open", "hls", "s2"), default="open",
                         help="open: USGS (US) or Sentinel-2 cloudless 2016; hls: NASA HLS 30 m, clearest recent day")
     parser.add_argument("--seed", choices=("runways", "public", "earlier"), default="runways",
                         help="runways: the 800 m auto-draft; public: TIGER 2015 (US) or CORINE 2018 (Europe)")
@@ -428,7 +510,7 @@ def main(argv):
                                 (float(row["he_latitude_deg"]), float(row["he_longitude_deg"]))))
             except ValueError:
                 continue
-        source = "hls" if args.imagery == "hls" else ("usgs" if airport["country"] == "US" else "eox")
+        source = args.imagery if args.imagery in ("hls", "s2") else ("usgs" if airport["country"] == "US" else "eox")
         if token in corrections:
             old = previous.get(token)
             if old is None or "geometry" not in old:
@@ -467,17 +549,22 @@ def main(argv):
                 ring = simplified(published)
                 seed = {"tiger": "TIGER K2451", "corine": "CORINE 124", "earlier": "earlier by-eye trace"}[seed_kind]
             geo = geometry(airport, ring + (compare.get(token) and [tuple(p) for p in compare[token]] or []), source)
+            if source == "s2":
+                # The tropics rarely give a scene under 5 % cloud: fall back to 30 %, checked on the card.
+                geo["candidates"] = s2_scenes(airport, geo, args.sources) or s2_scenes(airport, geo, args.sources, 30)
+                if not geo["candidates"]:
+                    print("skip %s: no clear Sentinel-2 scene covers it" % token)
+                    continue
             if source == "hls":
                 geo["days"] = hls_days(airport, args.sources)
                 if not geo["days"]:
                     print("skip %s: no HLS day found" % token)
                     continue
         card_path = os.path.join(args.out, "%s.png" % token)
-        earlier = ([tuple(p) for p in compare[token]] if token in compare and seed_kind not in ("runways", "earlier")
-                   else None)
+        earlier = [tuple(p) for p in compare[token]] if token in compare and seed_kind != "runways" else None
         card(airport, ring, runways, seed, source, geo, args.sources, card_path, SEED_CREDIT[seed_kind], earlier)
         drafts[token] = {"id": token, "points": [[lat, lon] for lat, lon in ring], "imagery": credit_for(source, geo),
-                         "imageryDate": {"eox": "2016", "usgs": "USGS current"}.get(
+                         "imageryDate": {"eox": "2016", "usgs": "USGS current", "s2": geo.get("day", "")}.get(
                              source, " to ".join(sorted({d for _, d in geo.get("days", [])})[::4] or [""])),
                          "seed": seed,
                          "seedKind": seed_kind, "seedName": seed.split(",")[0], "seedCredit": SEED_CREDIT[seed_kind],
