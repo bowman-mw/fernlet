@@ -240,8 +240,8 @@ nonisolated struct CSVScanner {
     mutating func nextRecord(row: Int) throws(FlightyImportRefusal) -> [Field]? {
         guard position < bytes.count else { return nil }
         var fields: [Field] = []
-        // Bounded: each pass consumes at least one byte or ends the record, and fields past maxFields throw.
-        while true {
+        // Bounded: one pass per field, and fields past maxFields throw before another pass.
+        while fields.count <= FlightyImport.maxFields {
             let field = try nextField(row: row)
             guard field.range.count <= FlightyImport.maxFieldBytes else { throw .fieldTooLong(row: row) }
             fields.append(field)
@@ -263,6 +263,7 @@ nonisolated struct CSVScanner {
                 throw .badQuoting(row: row)
             }
         }
+        throw .tooManyFields(row: row)
     }
 
     /// One field, leaving `position` on the comma, line break or end that follows it.

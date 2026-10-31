@@ -114,7 +114,8 @@ struct FlightDetectorTests {
         ])
         #expect(landing.mayKeep && landing.airport == "LHR")
         #expect(!detector.isFlying && detector.layoverAirport == "LHR")
-        #expect(detector.layoverDuration(at: at(11 * 3_600 + 60)) == 2 * 3_600)
+        // Date arithmetic leaves a hair under or over two hours.
+        #expect(abs((detector.layoverDuration(at: at(11 * 3_600 + 60)) ?? 0) - 2 * 3_600) < 0.001)
         #expect(detector.showsTravelLook)
     }
 
