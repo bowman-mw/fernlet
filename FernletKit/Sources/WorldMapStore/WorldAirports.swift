@@ -94,6 +94,8 @@ public nonisolated struct WorldAirport: Equatable, Identifiable, Sendable {
 public nonisolated struct WorldAirportPoint: Equatable, Sendable {
     public let iata: String
     public let point: GeoPoint
+    /// Its ISO 3166-1 alpha-2 country.
+    public let countryCode: String
     public let timeZoneIdentifier: String
     /// Whether it's also an unlockable (``WorldAirports/airport(code:)`` finds it).
     public let isUnlockable: Bool
@@ -137,7 +139,7 @@ public nonisolated struct WorldAirports: Sendable {
     public static let requiredTags = ["TZNS", "APTS", "PNTS", "AIRL"]
     /// The shipped `WorldAirports.pack`'s SHA-256 (generated 2026-10-31 by
     /// `Scripts/world-atlas/build_world_airports.py`). Regenerating the pack changes it on purpose.
-    public static let expectedSHA256 = "5a0c37862375648fd13d4b3802713c9b99744b5dc677073855dcaf60a440ace5"
+    public static let expectedSHA256 = "3aadfacccc27631a37859b7cb7b69a95f6ab77a04bc96837467a475e07346a4c"
     /// Degrees per grid cell of the grounds index.
     static let indexCellDegrees = 1.0
 
@@ -399,11 +401,12 @@ public nonisolated struct WorldAirports: Sendable {
         for _ in 0..<count {
             let code = try reader.ascii(3, field: "code")
             let point = GeoPoint(Double(try reader.i32()) / 100_000, Double(try reader.i32()) / 100_000)
+            let country = try reader.ascii(2, field: "country")
             let zone = Int(try reader.u16()), unlockable = Int(try reader.u16())
             guard point.isValid, zone < zones.count, unlockable == 0xFFFF || unlockable < unlockables else {
                 throw WorldAtlasPackError.malformed("PNTS", "point")
             }
-            out.append(WorldAirportPoint(iata: code, point: point, timeZoneIdentifier: zones[zone],
+            out.append(WorldAirportPoint(iata: code, point: point, countryCode: country, timeZoneIdentifier: zones[zone],
                                          isUnlockable: unlockable != 0xFFFF))
         }
         try reader.expectEnd()

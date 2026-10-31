@@ -244,8 +244,11 @@ def decode(sections):
     points = {}
     for _ in range(count):
         code = r.raw(3).decode()
-        lat, lon, zone, index = r.take("<iiHH")
-        points[code] = {"lat": lat / 1e5, "lon": lon / 1e5, "zone": zones[zone], "unlockable": index != 0xFFFF}
+        lat, lon = r.take("<ii")
+        country = r.raw(2).decode()
+        zone, index = r.take("<HH")
+        points[code] = {"lat": lat / 1e5, "lon": lon / 1e5, "country": country, "zone": zones[zone],
+                        "unlockable": index != 0xFFFF}
     r = Bytes(sections["AIRL"])
     (count,) = r.take("<H")
     airlines = [(r.raw(3).decode(), r.raw(2).decode(), r.text()) for _ in range(count)]
@@ -314,6 +317,7 @@ def main():
         check(airports["VPS"]["zone"] == "America/Chicago", "the airport list overrides its region")
         check(airports["ZED"]["zone"] == "Africa/Nairobi", "elsewhere, the nearest zone point in the country")
         check(points["SML"]["zone"] == "America/New_York", "points carry zones too")
+        check(points["SML"]["country"] == "US" and points["LHR"]["country"] == "GB", "and countries")
         check(meta["tzdata"] == "2026test", "META records the tzdata version")
 
         # Grounds.

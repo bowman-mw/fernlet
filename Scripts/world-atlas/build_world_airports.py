@@ -608,12 +608,13 @@ def build_apts(unlockables, zone_index, report):
 
 
 def build_pnts(points, zone_index, apt_index):
-    """u16 count · sorted by IATA: 3 ASCII bytes · i32 lat · i32 lon · u16 zone · u16 unlockable index."""
+    """u16 count · sorted by IATA: 3 ASCII bytes · i32 lat · i32 lon · 2 ASCII country · u16 zone · u16
+    unlockable index."""
     out = [struct.pack("<H", len(points))]
     for p in points:
-        out.append(p["iata"].encode("ascii") + struct.pack(
-            "<iiHH", round(p["lat"] * SCALE), round(p["lon"] * SCALE), zone_index[p["zone"]],
-            apt_index.get(p["id"], NO_AIRPORT)))
+        out.append(p["iata"].encode("ascii") + struct.pack("<ii", round(p["lat"] * SCALE), round(p["lon"] * SCALE))
+                   + p["country"].encode("ascii")[:2].ljust(2, b"?")
+                   + struct.pack("<HH", zone_index[p["zone"]], apt_index.get(p["id"], NO_AIRPORT)))
     return b"".join(out)
 
 
@@ -737,6 +738,9 @@ def main(argv):
         ends = runway_ends(runways_by_airport.get(str(a["id"]), []), a, report)
         # Near the poles a local flat projection fails (cos(lat) -> 0): those airports keep a circle.
         polar = abs(a["lat"]) > 80
+        # The airport's own point joins the hull (OurAirports puts it at a terminal or the field's middle, up to
+        # 8 km from a runway end), so its grounds always hold it.
+        ends = ends + [(a["lat"], a["lon"])] if ends else ends
         ring = ground_ring(a["lat"], a["lon"], ends, RUNWAY_MARGIN_METRES) if ends and not polar else None
         a["ground"] = (GROUND_RUNWAYS, ring) if ring is not None else (GROUND_CIRCLE, None)
     unknown_outlines = sorted(set(outlines) - {a["token"] for a in unlockables})

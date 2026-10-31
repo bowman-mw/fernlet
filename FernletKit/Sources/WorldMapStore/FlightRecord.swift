@@ -26,10 +26,9 @@ public extension FlightAirportLookup {
 }
 
 extension WorldAirports: FlightAirportLookup {
-    /// The country of an unlockable (points alone carry none, so a small airport gives nil).
+    /// The airport's country (every IATA point carries one).
     public func countryCode(iata: String) -> String? {
-        guard point(iata: iata)?.isUnlockable == true else { return nil }
-        return airport(code: iata)?.countryCode
+        point(iata: iata)?.countryCode
     }
 
     public func airportPoint(iata: String) -> GeoPoint? {
