@@ -9,16 +9,18 @@ import AppServices
 import FernletUI
 import FernletProximityUI
 
-/// Session info (`b3-session-info`, World Review Batch 3): the session's name (tap the pencil to rename
-/// it), how many people are connected, the shots left, open or closed access, the people with a heart
-/// and a ••• menu each, the removal requests, and End session.
+/// Session info (`b3-session-info`, World Review Batch 3), which the person sees as Hangout info (owner's
+/// form answer 33; World Friends spec §2): the hangout's name (tap the pencil to rename it), how many
+/// people are connected, the shots left, open or closed access, the people with a heart and a ••• menu
+/// each, the removal requests, and End hangout. Only the words say hangout; its types and identifiers
+/// (`sessionInfo.*`) keep the session's names.
 ///
 /// It lived inside the disposable camera's info sheet until the World build moved it to Home's session
 /// button (owner, 2026-10-24: "Messages, Session info and Leave" on the button; the camera has no info
 /// or messages buttons any more). Its rules are the camera's, unchanged: names are always
 /// `PeerNameDisplay`-filtered (never an identifier, 2026-09-29), Block asks first, a removal needs a
 /// second participant, and the heart takes the transport order ``sessionHeartTransport(meshLinked:presenceReachable:meshAddressable:)``
-/// pins. End session hands back to the presenter, which asks "End session?" and leaves.
+/// pins. End hangout hands back to the presenter, which asks "End hangout?" and leaves.
 struct SessionInfoSheet: View {
     var store: FernletStore
     /// The person tapped End session: the presenter closes this sheet and asks first.
@@ -70,15 +72,15 @@ struct SessionInfoSheet: View {
             }
             Button("Cancel", role: .cancel) { participantToBlock = nil }
         } message: { participant in
-            Text("Blocking \(shownName(participant)) will hide their content from you and yours from them, and drop them from this session.")
+            Text("Blocking \(shownName(participant)) will hide their content from you and yours from them, and drop them from this hangout.")
         }
         .fernletSheet()
         .accessibilityIdentifier("sessionInfo.sheet")
     }
 
-    /// The session's name, or "Session" before the mesh has one.
+    /// The hangout's name, or "Hangout" before the mesh has one.
     private var titleText: Text {
-        guard let mesh = manager.currentMesh else { return Text("Session") }
+        guard let mesh = manager.currentMesh else { return Text("Hangout") }
         return Text(verbatim: mesh.name)
     }
 
@@ -92,7 +94,7 @@ struct SessionInfoSheet: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Rename session")
+            .accessibilityLabel("Rename hangout")
             .accessibilityIdentifier("sessionInfo.rename")
         }
     }
@@ -129,8 +131,8 @@ struct SessionInfoSheet: View {
     /// Open vs closed session access.
     private var accessPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Session access")
-            FernletSegmentedPicker("Session access", selection: Binding(
+            SectionLabel("Hangout access")
+            FernletSegmentedPicker("Hangout access", selection: Binding(
                 get: { manager.isSessionOpen ? MeshMode.open : MeshMode.closed },
                 set: { manager.setSessionOpen($0 == .open) }
             ), options: [MeshMode.open, MeshMode.closed]) { mode in
@@ -290,10 +292,10 @@ struct SessionInfoSheet: View {
         }
     }
 
-    /// Ends the session: the presenter asks "End session?" first.
+    /// Ends the hangout: the presenter asks "End hangout?" first.
     private var endSessionButton: some View {
         Button(action: onEndSession) {
-            Text("End session").frame(maxWidth: .infinity)
+            Text("End hangout").frame(maxWidth: .infinity)
         }
         .buttonStyle(ActionPillButtonStyle(.destructive))
         .padding(.top, 4)
@@ -482,10 +484,10 @@ struct SessionRenameSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 SheetField("New name") {
-                    TextField("Session name", text: Binding(
+                    TextField("Hangout name", text: Binding(
                         get: { newMeshName },
                         set: { newMeshName = String($0.prefix(Self.maxMeshNameLength)) }
-                    ), prompt: .fieldPrompt("Session name"))
+                    ), prompt: .fieldPrompt("Hangout name"))
                     .sheetTextInput()
                     .accessibilityIdentifier("sessionInfo.renameField")
                     // How much of the 40 is used (b3-session-rename); the field stops at 40.
@@ -513,7 +515,7 @@ struct SessionRenameSheet: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            SheetHeader(title: Text("Rename session"), onCancel: onClose)
+            SheetHeader(title: Text("Rename hangout"), onCancel: onClose)
         }
         .onAppear { newMeshName = String(initialName.prefix(Self.maxMeshNameLength)) }
         .fernletSheet()

@@ -123,6 +123,8 @@ struct WorldMapHome: View {
     @State private var cornerLine: String?
     /// DEBUG `FERNLET_UI_TEST_CORNER`: a corner stood in where the person stands (display only).
     @State private var testCorner: HexCell?
+    /// Meeting someone new by tapping phones (World Friends §1.2): the rings, the plate and Sprout's line.
+    @State private var tapCue = TapToConnectHomeCue()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -167,6 +169,8 @@ struct WorldMapHome: View {
         // Take a trip (World-Airports-Spec §5, §7, §10.7): the ticket, the boarding pass, the quick action, on the day.
         .modifier(WorldTripHomeDriver(store: store, trip: trip, greeting: $homeGreeting, isFrontmost: isFrontmost,
                                       openCard: { openCard(spaceID: hereSpaceID) }))
+        // World Friends §1.2–1.4: the tap's rings, plate, haptic and question; the radio listens only while Home is in front.
+        .modifier(TapToConnectHomeLayer(store: store, cue: tapCue, isFrontmost: isTapFrontPage))
         .task(id: cornerLine) { await letCornerLineStand() }
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
@@ -319,6 +323,7 @@ struct WorldMapHome: View {
             }
             // The airport banner sits over this column's top: the layover plate waits until it has gone.
             if airportHome.banner == nil { WorldLayoverPlate(store: store, date: date) }
+            TapToConnectPlate()
         }
         .padding(.top, 6)
         .padding(.horizontal, 12)
@@ -418,11 +423,13 @@ struct WorldMapHome: View {
         facts.presence = presence
         facts.isOffline = isOffline
         let now = Date()
+        facts.friendShops = WorldShopCopy.sproutLine(WorldFriendShops.open(store: store, at: now))
         // DEBUG `FERNLET_UI_TEST_CORNER` (`ex-nudge`, a day scene) holds the night line back; nil in release builds.
         facts.isNight = testCorner == nil && (phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now))
         facts.homeGreeting = homeGreeting
         facts.discovery = store.duressSessionActive ? nil : discoveries.line?.text
         facts.cornerNudge = store.duressSessionActive ? nil : cornerLine
+        facts.tapToConnect = store.duressSessionActive ? nil : tapCue.line.map { String(localized: $0.text) }
         // While a bike ride's note shows: "Wheee! That was a ride." (`b1-home-bike`).
         return WorldRideCopy.bubbleLine(noteShowing: store.worldLocation.rides.loggedRide != nil) ?? WorldMapLine.line(facts)
     }
@@ -906,6 +913,15 @@ extension WorldMapHome {
     /// but gives back its ring and spare scales and the location comes at the off-map pace (the "Your world"
     /// map's own lookups were starved by Home's fog painting behind it).
     private var isMapFrontPage: Bool { isFrontmost && passport?.isPresented != true }
+
+    /// Whether Home (the map, or the location-off scene) is the front page of an active app with nothing of its own
+    /// over it either: no runner, camera, map intro, photo place, place sheet, menu search or explore card. The tap
+    /// rendezvous listens only then (World Friends §1.4).
+    private var isTapFrontPage: Bool {
+        isMapFrontPage && scenePhase == .active && guidedSession == nil && cameraMode == nil && !isLocationIntroUp
+            && openPhotoPlace == nil && placeSheet == nil && menuSearch == nil && explore.openCity == nil
+            && explore.openLandmark == nil
+    }
 
     /// A tap or hold on Sprout (World-Passport-Spec §1): the passport on page 1 (or, the first open after a new
     /// stamp, that stamp's page), the book rising from `anchor`, where Sprout stands.

@@ -341,6 +341,14 @@ final class FernletStore {
         saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }
     )
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
+    /// Meeting someone new by tapping phones on Home (World Friends §1): the tap rendezvous, what Home
+    /// draws for it, and the hand-off to the hangout mesh (`FernletStore+TapToConnect.swift`).
+    @ObservationIgnored private(set) lazy var tapToConnect: TapToConnectController = makeTapToConnect()
+    /// Whether Home (the map, or the location-off Home) is the front page; Home reports it
+    /// (``setHomeFrontmost(_:)``) and the tap rendezvous listens only while it is true.
+    @ObservationIgnored var homeIsFrontmost = false
+    /// The tap hand-off's check loop (``runTapHandOff()``), cancelled when a new one starts.
+    @ObservationIgnored var tapHandOffTask: Task<Void, Never>?
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     ///
@@ -1934,6 +1942,16 @@ final class FernletStore {
         snapshotSaveCoordinator.schedule()
     }
 
+    /// Privacy & data's "Connect by tapping phones" switch (World Friends spec §1.6): writes the synced
+    /// setting and schedules its save. The one setter for it, so the radio that listens for a tap on Home
+    /// has one place to follow the switch from.
+    func setAllowConnectByTapping(_ value: Bool) {
+        settings.allowConnectByTapping = value
+        snapshotSaveCoordinator.schedule()
+        // Off stops the tap rendezvous at once, and on starts it if Home is in front (§1.6).
+        _ = reapplyProximityRunPolicy()
+    }
+
     /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the
     /// friend mesh — there is no clothing radio to stop): the providers wired in `meshFeatures`'
     /// initializer gate outbound catalogs, inbound catalogs, and the `shop` capability on this setting,
@@ -2335,7 +2353,11 @@ final class FernletStore {
                 ),
                 allowNearbyPresence: settings.allowNearbyPresence,
                 allowNearbyRecipeShares: settings.allowNearbyRecipeShares,
-                sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery
+                sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery,
+                allowConnectByTapping: settings.allowConnectByTapping,
+                lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                homeIsFrontmost: homeIsFrontmost,
+                tapHangoutPending: tapToConnect.isHangoutPending
             )
         }
         let gate = ProximityRunPolicy.verdict(for: sampledInput()).routedAccessGate
@@ -2348,8 +2370,11 @@ final class FernletStore {
             isInSession: meshNetworkManager.isInSession,
             hasCommittedPeer: meshNetworkManager.hasCommittedPeer,
             presenceListening: presenceManager.isListening,
-            recipeShareListening: recipeShareManager.isListening
+            recipeShareListening: recipeShareManager.isListening,
+            tapRendezvousListening: tapToConnect.isListening
         )
+        // World Friends P1: the join doors admit kept friends and the people a tap matched, no one else.
+        meshNetworkManager.admissibleStrangerSigningKeys = tapToConnect.meshDoorKeys(friends: trustedProximityPeers)
         executeProximityRunActions(
             ProximityRunTransition.actions(from: previous, to: verdict, mesh: meshFacts)
         )

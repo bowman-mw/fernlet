@@ -11,9 +11,11 @@ import FernletProximityUI
 
 /// The session on Home (`b3-home-session` draft 2, `b3-session-menu`, `b3-leave`; owner 2026-10-24):
 /// no session bar — a green session button sits bottom left, the mirror of the blue button, with a
-/// badge for how many friends are here. It opens a card with Messages, Session info and Leave session;
-/// Leave asks "End session?" in a framed dialog over the map, and a session with photos then shows the
-/// app-wide photo review (``SessionPhotoReviewCoordinator``) as it always has.
+/// badge for how many friends are here. The person sees it as a hangout (owner's form answer 33, "Start a
+/// hangout with Sam"; World Friends spec §2): it opens a card with Messages, Hangout info and Leave
+/// hangout; Leave asks "End hangout?" in a framed dialog over the map, and a hangout with photos then
+/// shows the app-wide photo review (``SessionPhotoReviewCoordinator``) as it always has. The code keeps
+/// its session names and identifiers (`world.session.*`): only the words changed.
 ///
 /// It is the session's host while the map is in front: Session info and Messages present from here,
 /// the session's prompts (join requests, the session alert, removal requests) ride it while
@@ -33,7 +35,7 @@ struct WorldSessionButton: View {
     @State private var showInfo = false
     @State private var showChat = false
     @State private var leaveConfirm = false
-    /// Session info's End session closed the sheet; ask "End session?" once it has gone.
+    /// Hangout info's End hangout closed the sheet; ask "End hangout?" once it has gone.
     @State private var endAfterInfo = false
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
@@ -107,15 +109,16 @@ struct WorldSessionButton: View {
         .buttonStyle(.plain)
         .padding(.leading, 14)
         .accessibilityLabel(buttonLabel)
-        .accessibilityHint(Text("Messages, session info and leave"))
-        .accessibilityInputLabels([Text("Session"), buttonLabel])
+        .accessibilityHint(Text("Messages, hangout info and leave"))
+        // Voice Control answers to the new name and still to the old one, as the Album does to Friends.
+        .accessibilityInputLabels([Text("Hangout"), Text("Session"), buttonLabel])
         .accessibilityIdentifier("world.session.button")
     }
 
-    /// "Session with Sam and Rae", or "Session" before anyone's name is known.
+    /// "Hangout with Sam and Rae", or "Hangout" before anyone's name is known.
     private var buttonLabel: Text {
         let names = friendNames
-        return names.isEmpty ? Text("Session") : Text("Session with \(FriendsSessionNames.sentence(names))")
+        return names.isEmpty ? Text("Hangout") : Text("Hangout with \(FriendsSessionNames.sentence(names))")
     }
 
     @ViewBuilder
@@ -166,7 +169,7 @@ struct WorldSessionButton: View {
 
     // MARK: - Leaving
 
-    /// End Session in the dialog: the session ends for this phone, its photos go to the review that
+    /// End hangout in the dialog: the session ends for this phone, its photos go to the review that
     /// follows every ending, and the people met without photos are asked about on the Friends panel.
     private func endSession() {
         leaveConfirm = false
@@ -235,9 +238,9 @@ struct WorldSessionButton: View {
     }
 }
 
-/// The session button's card (`b3-session-menu`): "Session with Sam and Rae" with a framed ✕, the
-/// session's name and head count, then Messages (with how many are new, and only offered past the
-/// 13+ gate), Session info and Leave session as framed rows with teal icon squares, as drawn.
+/// The session button's card (`b3-session-menu`): "Hangout with Sam and Rae" with a framed ✕, the
+/// hangout's name and head count, then Messages (with how many are new, and only offered past the
+/// 13+ gate), Hangout info and Leave hangout as framed rows with teal icon squares, as drawn.
 struct SessionMenuCard: View {
     let title: Text
     let subtitle: Text
@@ -289,19 +292,19 @@ struct SessionMenuCard: View {
                         highlighted: unreadCount > 0, action: onMessages)
                     .accessibilityIdentifier("world.session.messages")
             }
-            menuRow(sprite: FriendsSprites.info, title: Text("Session info"),
+            menuRow(sprite: FriendsSprites.info, title: Text("Hangout info"),
                     detail: Text("Who's here, rename, open or closed"), highlighted: false, action: onInfo)
                 .accessibilityIdentifier("world.session.info")
-            menuRow(sprite: FriendsSprites.prints, title: Text("Leave session"),
+            menuRow(sprite: FriendsSprites.prints, title: Text("Leave hangout"),
                     detail: Text("Asks first; your photos develop as they would"), highlighted: false, action: onLeave)
                 .accessibilityIdentifier("world.session.leave")
         }
         .padding(16)
     }
 
-    /// "1 new · only in this session", or "Only in this session".
+    /// "1 new · only in this hangout", or "Only in this hangout".
     private var messagesDetail: Text {
-        unreadCount > 0 ? Text("\(unreadCount) new · only in this session") : Text("Only in this session")
+        unreadCount > 0 ? Text("\(unreadCount) new · only in this hangout") : Text("Only in this hangout")
     }
 
     /// One row, drawn as the blue button's card draws its choices (`b3-session-menu` is that card on the
@@ -340,8 +343,8 @@ struct SessionMenuCard: View {
     }
 }
 
-/// "End session?" over the map (`b3-leave`): a framed paper dialog on a dim, with End Session and
-/// Cancel. The words are today's.
+/// "End hangout?" over the map (`b3-leave`): a framed paper dialog on a dim, with End hangout and
+/// Cancel. The words are `b3-leave`'s with the hangout's name for it (form answer 33).
 struct SessionLeaveDialog: View {
     let onEnd: () -> Void
     let onCancel: () -> Void
@@ -354,16 +357,16 @@ struct SessionLeaveDialog: View {
                 .onTapGesture(perform: onCancel)
                 .accessibilityHidden(true)
             VStack(spacing: 14) {
-                Text("End session?")
+                Text("End hangout?")
                     .font(FernletFramedFont.sheetTitle)
                     .foregroundStyle(WorldPalette.bark)
                     .accessibilityAddTraits(.isHeader)
-                Text("You will stop sharing with everyone in this session.")
+                Text("You will stop sharing with everyone in this hangout.")
                     .font(FernletFramedFont.body)
                     .foregroundStyle(WorldPalette.dim)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Button(action: onEnd) { Text("End Session").frame(maxWidth: .infinity) }
+                Button(action: onEnd) { Text("End hangout").frame(maxWidth: .infinity) }
                     .buttonStyle(ActionPillButtonStyle(.destructive))
                     .accessibilityIdentifier("world.session.leave.end")
                 Button(action: onCancel) { Text("Cancel").frame(maxWidth: .infinity) }

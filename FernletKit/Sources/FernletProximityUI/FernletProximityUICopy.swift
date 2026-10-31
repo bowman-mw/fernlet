@@ -228,6 +228,13 @@ enum FernletProximityUICopy {
                    comment: "The keep-as-friend chip in its selected state. Present participle: it describes what will happen, not a completed action.")
         }
 
+        /// Under a person's name when the hangout began with the phones tapped together (World Friends
+        /// spec §1.3, `fr-tap-keep`).
+        static var metByTapping: String {
+            String(localized: "proximity.keepFriends.metByTapping", defaultValue: "met by tapping phones", bundle: .module,
+                   comment: "Under a person's name in the keep-as-friends sheet, when the two of you met by holding your phones together. Lowercase, a quiet second line (Spanish: os conocisteis juntando teléfonos).")
+        }
+
         /// Finishes the flow and mints the keeps.
         static var done: String {
             String(localized: "proximity.keepFriends.done", defaultValue: "Done", bundle: .module,

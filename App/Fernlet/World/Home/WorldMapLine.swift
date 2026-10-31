@@ -8,7 +8,7 @@ import Foundation
 /// A stamp just earned speaks first, as everywhere: that is the usual line's own first rule, so the map
 /// stays quiet while one is waiting. Then Sprout's greeting at a home or hotel (round 6), said once, then a
 /// place found for the first time (round 7, World-Exploration-Spec §4, ``WorldDiscoveryRouter``), said once, then a
-/// friend arriving, then the day marked unwell, then the night
+/// friend arriving, then whose shop is open (World Friends §3), then the day marked unwell, then the night
 /// (`b1-home-night`: the map's night or the companion's bedtime, so no day's line is said over the
 /// sleepy face), then the weather, then where the map is (no signal, approximate, location off), and last the
 /// week's new corner (round 7, spec §5), mentioned once when nothing else has a line, never at night or in rain.
@@ -30,10 +30,16 @@ enum WorldMapLine {
         var discovery: String?
         /// Sprout's mention of the week's new corner (round 7, spec §5), said once.
         var cornerNudge: String?
+        /// Whose shop is open (World Friends §3, `fr-shop-line`): "Sam's shop is open for a bit."
+        var friendShops: String?
+        /// Sprout's line about meeting someone by tapping phones (World Friends §1.2–1.3), said once; first of all,
+        /// since the moment lasts seconds.
+        var tapToConnect: String?
     }
 
     /// The map's own line for `facts`, or nil for the companion's usual one.
     static func line(_ facts: Facts) -> String? {
+        if let tap = facts.tapToConnect { return tap }
         guard !facts.stampWaiting else { return nil }
         if let greeting = facts.homeGreeting { return greeting }
         if let discovery = facts.discovery { return discovery }
@@ -41,6 +47,7 @@ enum WorldMapLine {
             return String(localized: "worldLine.friend", defaultValue: "\(name)'s here!",
                           comment: "World Home, the companion's speech when a friend comes into range; their first name")
         }
+        if let shops = facts.friendShops { return shops }
         if facts.isUnwell {
             return String(localized: "worldLine.unwell", defaultValue: "Staying in today. The map will keep.",
                           comment: "World Home, the companion's speech on a day marked unwell")

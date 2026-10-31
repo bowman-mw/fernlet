@@ -99,6 +99,9 @@ nonisolated enum ProximityRunAction: Equatable, Sendable {
 
     /// `ProximityRecipeShareManager.apply(_:)` with the recipe-share verdict.
     case recipeShare(ProximityRunState)
+
+    /// Apply the tap rendezvous's state (World Friends §1.4): `start()` or `stop()` on the rendezvous.
+    case tapRendezvous(ProximityRunState)
 }
 
 // MARK: - ProximityRunTransition
@@ -133,15 +136,19 @@ nonisolated enum ProximityRunTransition {
         ///   - hasCommittedPeer: Whether a slot holds a committed fingerprint now.
         ///   - presenceListening: Whether the presence radio is up now.
         ///   - recipeShareListening: Whether the recipe listener is up now.
+        /// `TapToConnectController.isListening` — whether the tap rendezvous's radio is up.
+        let tapRendezvousListening: Bool
+
         init(
             isSearching: Bool, isInSession: Bool, hasCommittedPeer: Bool,
-            presenceListening: Bool, recipeShareListening: Bool
+            presenceListening: Bool, recipeShareListening: Bool, tapRendezvousListening: Bool = false
         ) {
             self.isSearching = isSearching
             self.isInSession = isInSession
             self.hasCommittedPeer = hasCommittedPeer
             self.presenceListening = presenceListening
             self.recipeShareListening = recipeShareListening
+            self.tapRendezvousListening = tapRendezvousListening
         }
     }
 
@@ -168,6 +175,10 @@ nonisolated enum ProximityRunTransition {
         if previous?.recipeShare != verdict.recipeShare
             || listenerNeedsReconciling(verdict.recipeShare, listening: mesh.recipeShareListening) {
             actions.append(.recipeShare(verdict.recipeShare))
+        }
+        if previous?.tapRendezvous != verdict.tapRendezvous
+            || listenerNeedsReconciling(verdict.tapRendezvous, listening: mesh.tapRendezvousListening) {
+            actions.append(.tapRendezvous(verdict.tapRendezvous))
         }
         return actions
     }
@@ -296,6 +307,8 @@ extension FernletStore {
                 presenceManager.apply(state)
             case .recipeShare(let state):
                 recipeShareManager.apply(state)
+            case .tapRendezvous(let state):
+                tapToConnect.apply(state)
             }
         }
     }

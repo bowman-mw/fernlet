@@ -6,8 +6,9 @@ import ProximityKit
 
 /// The friend-mesh clothing shop (Phase 3a, Docs/Proximity-Mesh-Redesign-2026-07-10.md). Replaces the
 /// standalone `fernlet-clothes` radio (`ProximityClothingShareManager`, deleted): catalogs now ride the
-/// friend mesh as `.clothingCatalog` payloads, exchanged pairwise-sealed during the live session, and the
-/// shop OPENS at session end — a 1-hour, memory-only browse window on the Friends tab.
+/// friend mesh as `.clothingCatalog` payloads, exchanged pairwise-sealed during the live session, and each
+/// friend's shop OPENS at the session's end — a 1-hour, memory-only browse window of its own, reached from
+/// Home's gold shop button (World Friends §3, "whose shop is open").
 ///
 /// Owned by FernletSocial's mesh composition (`FernletMeshFeatures`), whose shop exchange
 /// (`ClothingShopExchange`) and session observer drive the whole lifecycle over the mesh:
@@ -19,15 +20,19 @@ import ProximityKit
 ///    there is no mid-session scene-dip clearing (radio privacy is the mesh lifecycle's job).
 ///  - **Outbound** — the exchange sends `localCatalogProvider()` once per slot at commit, pairwise
 ///    sealed, and only to peers advertising the `shop` capability.
-///  - **Window** — `openWindowAtSessionEnd()` fires at the same last-committed-slot-gone moment that
-///    promotes `pendingFriendReview` (the mesh's session end, told to the composition's observer); the
-///    window stays open `windowDuration` (1 h) and closes early on the next session FORMATION
-///    (`beginNewSession()`, from the observer at the mesh's first slot commit — NOT
-///    from startJoin/startNewMesh, which fire automatically on every Social-tab entry and scene
-///    reactivation and must never touch the window) or app quit (state is memory-only). Unlike
-///    `pendingFriendReview` — which survives search starts AND session formations — the shop window
-///    survives searches but not formations. Expiry is lazy: `isWindowOpen`/`remainingWindowMinutes`
-///    are pure reads and `cleanupIfExpired()` drops expired state; no background timers.
+///  - **One hour per seller** — `openWindowAtSessionEnd()` fires at the same last-committed-slot-gone
+///    moment that promotes `pendingFriendReview` (the mesh's session end, told to the composition's
+///    observer) and gives every seller whose catalog arrived in that session an hour of their own from
+///    then (`windows`, keyed by the catalog's id). A hangout holds up to 16 people, so up to
+///    `maxPeerCatalogs` sellers are held. A new session's FORMATION (`beginNewSession()`, from the
+///    observer at the mesh's first slot commit — NOT from startJoin/startNewMesh, which fire
+///    automatically on every Social-tab entry and scene reactivation) no longer closes the shops already
+///    open (owner, Q35: "Meshes can have like 8+ people and each one can have their own shop"): each
+///    stays for the rest of its own hour, and ``openShops(at:)`` lists them newest hangout first. A
+///    seller met again re-sends their catalog, which replaces the held one, and their hour restarts at
+///    the new session's end. App quit drops everything (state is memory-only). Expiry is lazy:
+///    `openShops(at:)`, `isWindowOpen` and `remainingWindowMinutes` are pure reads and
+///    `cleanupIfExpired()` drops the lapsed shops; no background timers.
 ///
 /// Opt-out is payload-layer (`allowNearbyClothingShares` no longer stops a radio): the app wires
 /// `isSharingEnabledProvider` + `localCatalogProvider` (both gate on the setting app-side, so
@@ -40,23 +45,59 @@ import ProximityKit
 @Observable
 public final class MeshClothingShop {
 
-    /// The post-session browse window. Value-typed and observable so views can key countdowns off it.
+    /// One seller's browse hour after their session. Value-typed and observable so views can key
+    /// countdowns off it.
     public struct Window: Equatable {
         public let opensAt: Date
         public let expiresAt: Date
     }
 
+    /// One friend's shop while its hour runs: the catalog they sent and their own window (World
+    /// Friends §3). ``MeshClothingShop/openShops(at:)`` lists them newest hangout first.
+    public struct OpenShop: Identifiable, Equatable {
+        /// The seller's catalog, as held.
+        public let catalog: ProximityClothingCatalog
+        /// The seller's own hour.
+        public let window: Window
+
+        /// A shop open for `window`.
+        public init(catalog: ProximityClothingCatalog, window: Window) {
+            self.catalog = catalog
+            self.window = window
+        }
+
+        /// The seller's id: the catalog's (the transport-verified fingerprint).
+        public var id: String { catalog.id }
+
+        /// Whole minutes left in this shop's hour at `now`, rounded up and floored at 1, as the
+        /// switcher's chip and the passport's row read it.
+        public func minutesLeft(at now: Date) -> Int {
+            MeshClothingShop.wholeMinutes(until: window.expiresAt, from: now)
+        }
+    }
+
     public static let windowDuration: TimeInterval = 60 * 60
-    static let maxPeerCatalogs = 8
+    /// The most sellers held at once (Power of 10, rule 3): a whole hangout's membership, the mesh
+    /// engine's own member cap (16, public so a feature bounds by the engine's number rather than a copy
+    /// that could drift), so every friend in the largest hangout keeps a shop. Over it — only possible
+    /// across hangouts inside one hour — the shop from the oldest hangout gives way.
+    static let maxPeerCatalogs = MeshNetworkManager.maxMeshMembers
     static let perSenderRateLimitSeconds: TimeInterval = 3
 
     /// Catalogs received from committed peers, keyed by VERIFIED fingerprint only (a re-broadcast
-    /// replaces the sender's prior catalog rather than stacking). Accumulate during the session and stay
-    /// browsable through the post-session window.
+    /// replaces the sender's prior catalog rather than stacking), most recently received first. Held
+    /// during the session and through each seller's own hour after it.
     public private(set) var peerCatalogs: [ProximityClothingCatalog] = []
-    /// Non-nil from session end (with catalogs held) until expiry / early close. Lazy-expired: check
-    /// `isWindowOpen`, not just nil-ness.
-    public private(set) var window: Window?
+    /// Each seller's own hour, keyed by their catalog's id: set at their session's end, dropped by
+    /// `cleanupIfExpired()` once it lapses. Lazy-expired: read `openShops(at:)`, not the raw map.
+    public private(set) var windows: [String: Window] = [:]
+
+    /// The newest seller's hour — the one that closes last — or nil when no shop holds one. Kept for the
+    /// readers that ask about the shops as a whole (the pushed shop page closes when it lapses).
+    /// Lazy-expired: check `isWindowOpen`, not just nil-ness.
+    public var window: Window? {
+        windows.values.max { $0.expiresAt < $1.expiresAt }
+    }
 
     /// The app supplies this device's current shop catalog; the shop's exchange sends it once per slot
     /// at commit. Returning `nil` (sharing disabled) sends nothing.
@@ -67,23 +108,52 @@ public final class MeshClothingShop {
     @ObservationIgnored public var isSharingEnabledProvider: (() -> Bool)?
 
     @ObservationIgnored private var lastAcceptedBySender: [String: Date] = [:]
+    /// The sellers whose catalog arrived in the live session: their hour starts at its end. Never
+    /// larger than `peerCatalogs` (an evicted or dropped seller leaves it too).
+    @ObservationIgnored private var awaitingSessionEnd: Set<String> = []
 
     public init() {}
 
     public var isSharingEnabled: Bool { isSharingEnabledProvider?() ?? false }
 
+    /// Whether any friend's shop is open now.
     public var isWindowOpen: Bool { isWindowOpen(at: Date()) }
 
+    /// Whether any friend's shop is open at `now`.
     public func isWindowOpen(at now: Date) -> Bool {
         guard let window else { return false }
         return now < window.expiresAt
     }
 
-    /// Whole minutes left in the open window (rounded up, floored at 1 so "Shop open — 0 min" never
-    /// renders), or nil when no window is open. Pure read — pair with `cleanupIfExpired()`.
+    /// Whole minutes until the last open shop closes (rounded up, floored at 1 so "Shop open — 0 min"
+    /// never renders), or nil when none is open. Pure read — pair with `cleanupIfExpired()`.
     public func remainingWindowMinutes(at now: Date = Date()) -> Int? {
         guard let window, now < window.expiresAt else { return nil }
-        return max(1, Int((window.expiresAt.timeIntervalSince(now) / 60).rounded(.up)))
+        return Self.wholeMinutes(until: window.expiresAt, from: now)
+    }
+
+    /// The friends' shops open at `now`, newest hangout first (and, within one hangout, the catalog
+    /// received last first). Pure read: a lapsed shop is left out before `cleanupIfExpired()` drops it.
+    public func openShops(at now: Date = Date()) -> [OpenShop] {
+        guard !windows.isEmpty else { return [] }
+        let open = peerCatalogs.compactMap { catalog -> OpenShop? in
+            guard let window = windows[catalog.id], now < window.expiresAt else { return nil }
+            return OpenShop(catalog: catalog, window: window)
+        }
+        return open.sorted(by: Self.isNewer)
+    }
+
+    /// Whole minutes from `now` until `end`, rounded up and floored at 1.
+    static func wholeMinutes(until end: Date, from now: Date) -> Int {
+        max(1, Int((end.timeIntervalSince(now) / 60).rounded(.up)))
+    }
+
+    /// The switcher's order: the later hangout first, then the catalog received later, then the id, so
+    /// the order never wobbles between two reads.
+    static func isNewer(_ lhs: OpenShop, _ rhs: OpenShop) -> Bool {
+        if lhs.window.opensAt != rhs.window.opensAt { return lhs.window.opensAt > rhs.window.opensAt }
+        if lhs.catalog.receivedAt != rhs.catalog.receivedAt { return lhs.catalog.receivedAt > rhs.catalog.receivedAt }
+        return lhs.id < rhs.id
     }
 
     // MARK: - Inbound (called by ClothingShopExchange's registered handler)
@@ -126,56 +196,102 @@ public final class MeshClothingShop {
             receivedAt: now,
             payload: sanitized
         )
+        // A seller met again keeps any hour still running until this session's end restarts it.
         peerCatalogs.removeAll { $0.id == catalog.id }
         peerCatalogs.insert(catalog, at: 0)
-        if peerCatalogs.count > Self.maxPeerCatalogs {
-            peerCatalogs = Array(peerCatalogs.prefix(Self.maxPeerCatalogs))
-        }
+        awaitingSessionEnd.insert(catalog.id)
+        evictOldestIfOverCap()
+    }
+
+    /// Holds at most `maxPeerCatalogs` sellers. One catalog arrives at a time, so the list is at most one
+    /// over: the seller from the oldest hangout goes (``isOlder(_:than:)``), never one from the live
+    /// session while an earlier hangout's shop is held.
+    private func evictOldestIfOverCap() {
+        guard peerCatalogs.count > Self.maxPeerCatalogs else { return }
+        guard let oldest = peerCatalogs.min(by: { isOlder($0, than: $1) }) else { return }
+        forget(oldest.id)
+    }
+
+    /// Whether `lhs` belongs to an earlier hangout than `rhs`: a shop from an ended session before one
+    /// from the live session; among ended ones, the earlier hour; then the catalog received earlier.
+    private func isOlder(_ lhs: ProximityClothingCatalog, than rhs: ProximityClothingCatalog) -> Bool {
+        let lhsLive = awaitingSessionEnd.contains(lhs.id)
+        let rhsLive = awaitingSessionEnd.contains(rhs.id)
+        if lhsLive != rhsLive { return rhsLive }
+        let lhsOpens = windows[lhs.id]?.opensAt ?? .distantFuture
+        let rhsOpens = windows[rhs.id]?.opensAt ?? .distantFuture
+        if lhsOpens != rhsOpens { return lhsOpens < rhsOpens }
+        return lhs.receivedAt < rhs.receivedAt
+    }
+
+    /// Drops one seller: their catalog, their hour and their wait for a session's end.
+    private func forget(_ id: String) {
+        peerCatalogs.removeAll { $0.id == id }
+        windows[id] = nil
+        awaitingSessionEnd.remove(id)
     }
 
     // MARK: - Session lifecycle (called by the composition's session observer)
 
     /// A NEW session has FORMED — the first slot COMMIT after a no-session state (the spec's
-    /// "'Next session start' = first slot COMMIT, not search start"): the previous window closes early —
-    /// the owner decision is "closes when a new session starts" — and its catalogs drop so the fresh
-    /// session accumulates from a clean slate. The caller (the composition's session observer, on the
+    /// "'Next session start' = first slot COMMIT, not search start"). The shops already open stay open,
+    /// each for the rest of its own hour (World Friends §3); what goes is any catalog still waiting for
+    /// a session's end that never came (it has no hour to run) and the per-sender rate limiter's memory,
+    /// so the fresh session accumulates cleanly. The caller (the composition's session observer, on the
     /// mesh's session-formation fact) fires this exactly once per formation; startJoin/startNewMesh
     /// (which run on every Social-tab entry / scene reactivation) must NOT call it, mirroring why
     /// `pendingFriendReview` deliberately survives them.
     public func beginNewSession() {
-        window = nil
-        peerCatalogs.removeAll()
+        let unopened = awaitingSessionEnd.filter { windows[$0] == nil }
+        peerCatalogs.removeAll { unopened.contains($0.id) }
+        awaitingSessionEnd.removeAll()
         lastAcceptedBySender.removeAll()
     }
 
-    /// The last committed slot is gone (the same moment `pendingFriendReview` promotes): if any catalogs
-    /// are held, open the 1-hour browse window. Because `beginNewSession()` fires at session FORMATION
-    /// (first slot commit) and nils the window, an invariant holds here: `window != nil` means NO commit
-    /// has happened since that window opened — so the `window == nil` guard is exactly "only (re)open
-    /// when a commit happened since the last open". Held catalogs therefore always belong to the
-    /// just-ended session (a fresh window covers them), and repeated teardown funnels with no
-    /// intervening commit can never extend an open window.
+    /// The last committed slot is gone (the same moment `pendingFriendReview` promotes): every seller
+    /// whose catalog arrived in the session just ended gets their own 1-hour browse window from now.
+    /// A seller's catalog marks them waiting only when it arrives, which needs a committed slot, so
+    /// repeated teardown funnels with no intervening catalog find nobody waiting and can never extend
+    /// an open window; and a seller met again restarts their hour here, over the catalog they re-sent.
     public func openWindowAtSessionEnd(now: Date = Date()) {
         cleanupIfExpired(now: now)
-        guard window == nil, !peerCatalogs.isEmpty else { return }
-        window = Window(opensAt: now, expiresAt: now.addingTimeInterval(Self.windowDuration))
+        guard !awaitingSessionEnd.isEmpty else { return }
+        let window = Window(opensAt: now, expiresAt: now.addingTimeInterval(Self.windowDuration))
+        for catalog in peerCatalogs where awaitingSessionEnd.contains(catalog.id) {
+            windows[catalog.id] = window
+        }
+        awaitingSessionEnd.removeAll()
     }
 
-    /// Lazy expiry: once the window has lapsed, drop it and every held catalog (memory-only state, gone
-    /// one hour after the session regardless of anyone looking). Safe to call any time.
-    public func cleanupIfExpired(now: Date = Date()) {
-        guard let window, now >= window.expiresAt else { return }
-        self.window = nil
-        peerCatalogs.removeAll()
-        lastAcceptedBySender.removeAll()
+    /// Lazy expiry: every shop whose hour has lapsed closes — its catalog and its hour go (memory-only
+    /// state, gone an hour after its session regardless of anyone looking). A seller in the live session
+    /// keeps the catalog they just sent; its next hour starts at that session's end. Safe to call any
+    /// time.
+    ///
+    /// - Returns: The shops that closed, newest hangout first — the ones whose hours lapsed together, which
+    ///   the shop page announces in one toast.
+    @discardableResult
+    public func cleanupIfExpired(now: Date = Date()) -> [OpenShop] {
+        let lapsed = windows.filter { now >= $0.value.expiresAt }
+        guard !lapsed.isEmpty else { return [] }
+        let closed = peerCatalogs.compactMap { catalog -> OpenShop? in
+            guard let window = lapsed[catalog.id], !awaitingSessionEnd.contains(catalog.id) else { return nil }
+            return OpenShop(catalog: catalog, window: window)
+        }
+        for id in lapsed.keys { windows[id] = nil }
+        let closedIDs = Set(closed.map(\.id))
+        peerCatalogs.removeAll { closedIDs.contains($0.id) }
+        if peerCatalogs.isEmpty { lastAcceptedBySender.removeAll() }
+        return closed.sorted(by: Self.isNewer)
     }
 
     /// The opt-out's OFF transition (`setAllowNearbyClothingShares(false)`): drop every held catalog and
-    /// close the window immediately — WITHOUT touching the mesh radio, which belongs to the friend
+    /// close every shop immediately — WITHOUT touching the mesh radio, which belongs to the friend
     /// session lifecycle.
     public func clearAll() {
-        window = nil
+        windows.removeAll()
         peerCatalogs.removeAll()
+        awaitingSessionEnd.removeAll()
         lastAcceptedBySender.removeAll()
     }
 }

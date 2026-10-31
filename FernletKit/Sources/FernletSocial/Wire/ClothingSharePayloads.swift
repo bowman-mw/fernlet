@@ -48,8 +48,8 @@ public nonisolated struct ClothingCatalogPayload: Codable, Equatable, Identifiab
     }
 }
 
-/// A peer's catalog held in memory from receipt (during the friend-mesh session) through the 1-hour
-/// post-session shop window (`MeshClothingShop`). The shop is the inverse of recipe-share: the BUYER
+/// A peer's catalog held in memory from receipt (during the friend-mesh session) through that seller's
+/// own 1-hour post-session shop window (`MeshClothingShop`). The shop is the inverse of recipe-share: the BUYER
 /// holds the SELLER's broadcast catalog. Keyed by the transport-VERIFIED sender fingerprint (the mesh
 /// accepts catalogs from committed slots only, so the fingerprint is always present in production; the
 /// display-name fallback in `id` is retained for the legacy initializer shape) so a re-broadcast

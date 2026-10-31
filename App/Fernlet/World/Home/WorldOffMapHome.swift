@@ -46,6 +46,9 @@ struct WorldOffMapHome<Companion: View>: View {
             Spacer(minLength: 0)
         }
         .padding(.top, 8)
+        // World Friends §1.2 (`fr-locoff` draft 2): someone with Fernlet within 3 m. It stands on the scene's grass;
+        // at the largest sizes, too tall for the grass or the room under the status plate, it covers the header.
+        .overlay(alignment: .top) { if large { TapToConnectPlate(topPadding: 8).padding(.horizontal, 12) } }
         .background { WorldPalette.page.ignoresSafeArea() }
     }
 
@@ -76,6 +79,7 @@ struct WorldOffMapHome<Companion: View>: View {
             }
             companion()
                 .padding(.bottom, inTheAir ? 0 : 66)
+            if !large, !inTheAir { TapToConnectPlate().padding(.bottom, 4) }
         }
         .frame(height: inTheAir ? nil : large ? 250 : 330)
         // In the air: at least the draft's height, growing with a long line at the largest text.

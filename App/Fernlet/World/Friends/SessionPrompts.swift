@@ -10,8 +10,8 @@ import FernletUI
 import FernletProximityUI
 
 /// The session's interruptive prompts: the join requests (`b3-join-request`), the session alert (a
-/// refused routed share, or the mesh's own notice), the removal-proposal alert, and the "End session?"
-/// confirmation.
+/// refused routed share, or the mesh's own notice), the removal-proposal alert, and the "End hangout?"
+/// confirmation (the person sees a session as a hangout, form answer 33; World Friends spec §2).
 ///
 /// They used to hang off the disposable camera alone, which was the Friends tab's whole surface during
 /// a session. The World build shows the album there and puts the camera behind a button, so the same
@@ -28,7 +28,7 @@ struct SessionPromptsModifier: ViewModifier {
     var isActive = true
     @Binding var activeRemovalProposal: MeshRemovalProposalPayload?
     @Binding var leaveSessionConfirm: Bool
-    /// "End Session" in the confirmation: the host's leave (the camera develops first).
+    /// "End hangout" in the confirmation: the host's leave (the camera develops first).
     let onConfirmEnd: () -> Void
 
     /// The session alert's sentence: a refused routed share forks its frozen cause into localized
@@ -123,13 +123,13 @@ struct SessionRemovalPromptsModifier: ViewModifier {
                     activeRemovalProposal = nil
                 }
             } message: { proposal in
-                Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint, in: .fernlet)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint, in: .fernlet)) from this session. A different participant must second the decision.")
+                Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint, in: .fernlet)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint, in: .fernlet)) from this hangout. A different participant must second the decision.")
             }
-            .alert("End session?", isPresented: $leaveSessionConfirm) {
-                Button("End Session", role: .destructive) { onConfirmEnd() }
+            .alert("End hangout?", isPresented: $leaveSessionConfirm) {
+                Button("End hangout", role: .destructive) { onConfirmEnd() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("You will stop sharing with everyone in this session.")
+                Text("You will stop sharing with everyone in this hangout.")
             }
     }
 }

@@ -38,21 +38,23 @@ struct WorldAlbumTests {
         #expect(waiting.lowerBound < resume.lowerBound, "Photos waiting for you is the first card")
     }
 
-    // MARK: Friends nearby (b4-mem-blue-friend, -blue-join, -blue-new)
+    // MARK: Friends nearby (b4-mem-blue-friend, -blue-join; -blue-new retired 2026-10-31)
 
-    /// Who a nearby phone is: a friend, someone in an open hangout, someone new, or not known yet.
-    @Test func aNearbyPhoneIsAFriendAHangoutOrSomeoneNew() {
-        #expect(FriendsNearbyKind.classify(friendName: "Sam", identified: true, discoveryInfo: ["v": "1"]) == .friend(name: "Sam"))
-        #expect(FriendsNearbyKind.classify(friendName: nil, identified: true, discoveryInfo: nil) == .newPerson)
-        #expect(FriendsNearbyKind.classify(friendName: nil, identified: false, discoveryInfo: nil) == .unknown)
+    /// Who a nearby phone is: a friend, someone in an open hangout, or "Someone nearby" — a phone that
+    /// isn't a friend's has no someone-new kind any more (World Friends spec §1.1: someone new is met by
+    /// tapping phones on Home).
+    @Test func aNearbyPhoneIsAFriendAHangoutOrSomeoneNearby() {
+        #expect(FriendsNearbyKind.classify(friendName: "Sam", discoveryInfo: ["v": "1"]) == .friend(name: "Sam"))
+        #expect(FriendsNearbyKind.classify(friendName: nil, discoveryInfo: nil) == .unknown,
+                "a phone that isn't a friend's reads as Someone nearby, never as someone new")
         let open = ["v": "1", "meshName": "Picnic", "memberCount": "2"]
-        #expect(FriendsNearbyKind.classify(friendName: "Sam", identified: true, discoveryInfo: open)
+        #expect(FriendsNearbyKind.classify(friendName: "Sam", discoveryInfo: open)
                 == .hangout(friend: "Sam", hangoutName: "Picnic", others: 1))
-        #expect(FriendsNearbyKind.classify(friendName: nil, identified: true, discoveryInfo: open)
+        #expect(FriendsNearbyKind.classify(friendName: nil, discoveryInfo: open)
                 == .hangout(friend: nil, hangoutName: "Picnic", others: 1))
         // A blank or missing hangout name is no hangout (a closed one advertises nothing).
-        #expect(FriendsNearbyKind.classify(friendName: "Sam", identified: true, discoveryInfo: ["meshName": "  "]) == .friend(name: "Sam"))
-        #expect(FriendsNearbyKind.classify(friendName: nil, identified: true, discoveryInfo: ["meshName": "Picnic"])
+        #expect(FriendsNearbyKind.classify(friendName: "Sam", discoveryInfo: ["meshName": "  "]) == .friend(name: "Sam"))
+        #expect(FriendsNearbyKind.classify(friendName: nil, discoveryInfo: ["meshName": "Picnic"])
                 == .hangout(friend: nil, hangoutName: "Picnic", others: 0))
     }
 
@@ -69,11 +71,11 @@ struct WorldAlbumTests {
         #expect(FriendsNearbyCopy.note(.hangout(friend: nil, hangoutName: "Picnic", others: 1)) == "They're in a hangout with 1 other person.")
         #expect(FriendsNearbyCopy.title(picnic, someoneNearby: someone) == "Join Sam's hangout")
         #expect(FriendsNearbyCopy.detail(picnic) == "Picnic · Sam says yes before you're in")
-        #expect(FriendsNearbyCopy.heading(.newPerson, someoneNearby: someone) == "Someone with Fernlet is nearby")
-        #expect(FriendsNearbyCopy.note(.newPerson) == "Not a friend yet. Nothing is shared until you both say yes.")
-        #expect(FriendsNearbyCopy.title(.newPerson, someoneNearby: someone) == "Make a friend")
-        #expect(FriendsNearbyCopy.detail(.newPerson) == "Show each other a code, in person")
+        // No someone-new words: a phone that isn't a friend's, in a hangout or not, is the placeholder.
         #expect(FriendsNearbyCopy.heading(.unknown, someoneNearby: someone) == someone)
+        #expect(FriendsNearbyCopy.title(.unknown, someoneNearby: someone) == someone)
+        #expect(FriendsNearbyCopy.note(.unknown) == nil && FriendsNearbyCopy.detail(.unknown) == nil)
+        #expect(FriendsNearbyCopy.heading(.hangout(friend: nil, hangoutName: "Picnic", others: 1), someoneNearby: someone) == someone)
     }
 
     // MARK: The blue button (b4-mem-blue-friend)
@@ -101,8 +103,8 @@ struct WorldAlbumTests {
         #expect(WorldQuickStartCopy.heading(.friendNearby(["Sam", "Rae"])) == "Sam and Rae are nearby")
     }
 
-    /// No friend heard: the usual card, with Friends nearby last, so a session, a hangout and a new
-    /// friend stay reachable (presence can't hear people who aren't friends).
+    /// No friend heard: the usual card, with Friends nearby last, so starting or joining a hangout with
+    /// friends stays reachable (presence can't hear people who aren't friends; someone new is a tap).
     @Test func withoutAFriendNearbyFriendsNearbyComesLast() throws {
         let context = Self.friendly()
         let card = try #require(WorldQuickStart.card(for: context))

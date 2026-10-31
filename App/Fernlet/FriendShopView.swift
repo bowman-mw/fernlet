@@ -4,21 +4,27 @@ import ProximityKit
 import FernletSocial
 import FernletUI
 
-/// Browse the shops of friends from your last session and buy items with coins.
+/// Browse the shops of friends from your hangouts and buy items with coins.
 ///
-/// Catalogs are exchanged over the friend mesh while you're together; the shop OPENS when the
-/// session ends and stays browsable for one hour (Phase 3a post-session window — the entry card
-/// on the Friends tab carries the countdown). Only items you actually buy persist (stamped
-/// "designed by <friend>"). Every rendered item is re-sanitized through ``ClothingShareCodec``
-/// and filtered against hidden items and banned sellers; the ••• menu is the report path App
-/// Store UGC compliance points at, and purchases run through `FernletStore.buyClothingItem`
-/// against the coin ledger.
+/// Catalogs are exchanged over the friend mesh while you're together; each friend's shop OPENS when
+/// the hangout ends and stays browsable for its own hour (World Friends §3, screens 10–11). The page
+/// opens on the newest shop, with the row of open shops across the top (``FriendShopSwitcher``) to
+/// switch between them; as a shop's hour ends its friend leaves the row, the page moves on if it was
+/// showing that shop, and one toast says which closed (``WorldShopClosing``). Only items you actually
+/// buy persist (stamped "designed by <friend>"). Every rendered item is re-sanitized through
+/// ``ClothingShareCodec`` and filtered against hidden items and banned sellers; the ••• menu is the
+/// report path App Store UGC compliance points at, and purchases run through
+/// `FernletStore.buyClothingItem` against the coin ledger.
 struct FriendShopView: View {
     var store: FernletStore
     var shop: MeshClothingShop
 
     @State private var feedback: String?
     @State private var reportTarget: ReportTarget?
+    /// The shop the row picked; nil shows the newest, which is where Friend shops opens.
+    @State private var selectedShopID: String?
+    /// The closing toast up now (`fr-shop-close`), if any.
+    @State private var closedNote: String?
 
     /// The item (plus its seller's identity) a report confirmation is currently about.
     ///
@@ -32,36 +38,24 @@ struct FriendShopView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                topRow
-                if visibleCatalogs.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(visibleCatalogs) { catalog in
-                        shopSection(catalog, isFirst: catalog.id == visibleCatalogs.first?.id)
-                    }
-                }
-                // The empty state already says when shops open; the note is for a page with shops.
-                if !visibleCatalogs.isEmpty {
-                    Text("A friend's shop opens here for an hour after you part. Report an item from its ··· menu.")
-                        .font(FernletFramedFont.body)
-                        .foregroundStyle(WorldPalette.dim)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                yourShopLink
-            }
-            .padding(16)
+        let shops = WorldFriendShops.browsable(store: store, at: Date())
+        return ScrollView {
+            page(shops: shops, shown: shops.first { $0.id == selectedShopID } ?? shops.first)
+                .padding(16)
         }
         // The title is on the panel's plate (`fernletPushedPage` at the push); the dots show here.
         .fernletPageBackground()
+        .overlay(alignment: .bottom) { closedToast }
         .onAppear {
-            // Lazy window expiry: entering the shop is a natural moment to drop a lapsed window's
-            // catalogs (no background timers — the entry card already hides itself on expiry).
+            // Lazy window expiry: entering the shop is a natural moment to drop lapsed shops' catalogs
+            // (no background timers — the gold button already hides itself once the last one lapses).
             shop.cleanupIfExpired()
             learnDesignerNames()
         }
         .onChange(of: shop.peerCatalogs.count) { _, _ in learnDesignerNames() }
+        // Restarts whenever the next closing moment changes: a shop closed, or the row changed.
+        .task(id: shops.map(\.window.expiresAt).min()) { await closeShopsAsTheyLapse() }
+        .task(id: closedNote) { await holdClosedNote() }
         .alert("Shop", isPresented: $feedback.isPresent()) {
             Button("OK", role: .cancel) { feedback = nil }
         } message: {
@@ -82,16 +76,35 @@ struct FriendShopView: View {
         }
     }
 
-    /// The catalogs drawn: every one held, minus sellers banned on this phone.
-    private var visibleCatalogs: [ProximityClothingCatalog] {
-        shop.peerCatalogs.filter { !store.isProximitySellerBanned(fingerprint: $0.senderFingerprint) }
+    /// The page over `shops` (open now, newest hangout first, banned sellers left out), showing `shown`:
+    /// the row of open shops, the shown shop's "Made by …" line beside the coins, its items and the
+    /// note, then Your shop; with none open, the empty note instead.
+    @ViewBuilder
+    private func page(shops: [MeshClothingShop.OpenShop], shown: MeshClothingShop.OpenShop?) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !shops.isEmpty {
+                FriendShopSwitcher(shops: shops, selectedID: shown?.id) { selectedShopID = $0 }
+            }
+            topRow(shown?.catalog)
+            if let shown {
+                shopSection(shown.catalog)
+                // The empty state already says when shops open; the note is for a page with shops.
+                Text("A friend's shop opens here for an hour after you part. Report an item from its ··· menu.")
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                emptyState
+            }
+            yourShopLink
+        }
     }
 
-    /// The first shop's "Made by …" line beside the framed coin balance (b2-friend-shop draft 2).
-    private var topRow: some View {
+    /// The shown shop's "Made by …" line beside the framed coin balance (b2-friend-shop draft 2).
+    private func topRow(_ shown: ProximityClothingCatalog?) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            if let first = visibleCatalogs.first {
-                Text("Made by \(sellerName(first)), for your companion.")
+            if let shown {
+                Text("Made by \(sellerName(shown)), for your companion.")
                     .font(FernletFramedFont.body)
                     .foregroundStyle(WorldPalette.dim)
                     .fixedSize(horizontal: false, vertical: true)
@@ -145,22 +158,16 @@ struct FriendShopView: View {
         .padding(.vertical, 20)
     }
 
-    private func shopSection(_ catalog: ProximityClothingCatalog, isFirst: Bool) -> some View {
+    /// The shown shop: its heading, then its items (the "Made by" line is in the top row, beside the
+    /// coins).
+    private func shopSection(_ catalog: ProximityClothingCatalog) -> some View {
         let items = ClothingShareCodec.sanitizedItems(from: catalog.payload)
             .filter { !store.isClothingItemHidden($0, sellerFingerprint: catalog.senderFingerprint) }
         return VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(sellerName(catalog))’s shop")
-                    .font(FernletFramedFont.cardTitle)
-                    .foregroundStyle(WorldPalette.bark)
-                    .accessibilityAddTraits(.isHeader)
-                // The first shop's line is in the top row, beside the coins.
-                if !isFirst {
-                    Text("Made by \(sellerName(catalog)), for your companion.")
-                        .font(FernletFramedFont.body)
-                        .foregroundStyle(WorldPalette.dim)
-                }
-            }
+            Text("\(sellerName(catalog))’s shop")
+                .font(FernletFramedFont.cardTitle)
+                .foregroundStyle(WorldPalette.bark)
+                .accessibilityAddTraits(.isHeader)
             if items.isEmpty {
                 FernletCard {
                     Text("Nothing for sale right now.")
@@ -260,18 +267,61 @@ struct FriendShopView: View {
     // MARK: - Behavior
 
     /// The seller's display name, sanitized with the SAME rule the store applies before persisting
-    /// it (`DiaryStore.setKnownDesignerName`), so a hostile wire-claimed name — multi-kilobyte, or
-    /// carrying bidi overrides — can neither render raw here nor disagree with what is stored.
+    /// it (``WorldFriendShops/sellerName(_:)``, which the row, Sprout's line and the toast read too).
     ///
     /// The envelope's own `senderDisplayName` is sanitized too, not just the payload's: it is the
-    /// FALLBACK, it comes off the same wire, and nothing bounds it there — so the branch that
-    /// rendered it raw was the one case the paragraph above already claimed was impossible. It
-    /// mattered less while the byline was pinned to one line; now that it wraps for Dynamic Type
-    /// (T2-11), an unbounded name would be an unbounded tile.
+    /// FALLBACK, it comes off the same wire, and nothing bounds it there. Now that the byline wraps
+    /// for Dynamic Type (T2-11), an unbounded name would be an unbounded tile.
     private func sellerName(_ catalog: ProximityClothingCatalog) -> String {
-        let name = ItemNameModeration.sanitizedName(catalog.payload.displayName)
-        guard name.isEmpty else { return name }
-        return ItemNameModeration.sanitizedName(catalog.senderDisplayName)
+        WorldFriendShops.sellerName(catalog)
+    }
+
+    /// The closing toast, over the page's bottom edge: the kit's dark note, text only.
+    @ViewBuilder
+    private var closedToast: some View {
+        if let closedNote {
+            WorldLoggedNote(line: Text(verbatim: closedNote), identifier: .shopsClosed, onUndo: nil)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+                .transition(.opacity)
+        }
+    }
+
+    /// Waits for the next shop's hour to end, then closes the lapsed shops (`fr-shop-close`): their
+    /// friends leave the row, the page moves on if it was showing one of them, and one toast — spoken
+    /// too — names every shop that closed at that moment. Superseded (cancelled) when the row changes.
+    private func closeShopsAsTheyLapse() async {
+        let before = WorldFriendShops.browsable(store: store, at: Date())
+        guard let closesAt = before.map(\.window.expiresAt).min() else { return }
+        do {
+            // A quarter second past the hour, so the clock read after the sleep is past it too.
+            try await Task.sleep(for: .seconds(max(0, closesAt.timeIntervalSinceNow) + 0.25))
+        } catch {
+            return
+        }
+        let now = Date()
+        shop.cleanupIfExpired(now: now)
+        let step = WorldShopClosing.step(before: before, after: WorldFriendShops.browsable(store: store, at: now),
+                                         selectedID: selectedShopID, now: now)
+        selectedShopID = step.selectedID
+        guard let toast = step.toast else { return }
+        withAnimation(.easeOut(duration: 0.2)) { closedNote = toast }
+        FernletAnnouncer.system.announce(.status, resolved: toast)
+    }
+
+    /// Holds the closing toast for its window (four seconds, or the longer assistive one for a note
+    /// that is text only), then lets it go unless a newer one replaced it.
+    private func holdClosedNote() async {
+        guard let note = closedNote else { return }
+        let window = FernletDismissalWindow.system.window(standard: .seconds(4),
+                                                          assistive: FernletDismissalWindow.assistiveNoticeWindow)
+        do {
+            try await Task.sleep(for: window)
+        } catch {
+            return
+        }
+        guard closedNote == note else { return }
+        withAnimation(.easeOut(duration: 0.2)) { closedNote = nil }
     }
 
     private func buy(_ item: CustomizationItem, from catalog: ProximityClothingCatalog) {

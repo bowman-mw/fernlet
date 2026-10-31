@@ -9,7 +9,8 @@ The SwiftUI screens of Fernlet's in-person features: the session-end photo revie
 (`MeshSessionPhotos`); this module owns what a person sees and touches when a session ends. ``FriendPhotoReviewSheet`` lets them choose which of a session's
 photos to keep, with the keep-as-friend rows riding along when the session left eligible
 candidates. ``KeepFriendsPromptSheet`` asks the keep-as-friend question on its own when the session
-produced no photos. ``FriendPhotoLibrarySaver`` copies photos that are already on the wall to the
+produced no photos; with `metByTapping` (World Friends spec §1.3, default off) each name says "met by
+tapping phones" under it. ``FriendPhotoLibrarySaver`` copies photos that are already on the wall to the
 system Photos library, and ``PhotoSaveFailure`` with the `photoSaveFailureAlert(_:failure:)`
 modifier gives every save surface the same failure wording. ``FingerprintText`` is the one view
 that shows a peer's identity fingerprint.

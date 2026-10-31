@@ -6,18 +6,20 @@ import FernletUI
 import ProximityKit
 import SwiftUI
 
-/// Friends nearby: where a session starts, a hangout is joined and a friend is made (World Review Batch 4,
-/// `b4-mem-blue-friend`, `b4-mem-blue-join`, `b4-mem-blue-new`, approved 2026-10-24). The Album page is
-/// only the album now (`b4-mem-root`), so the rows that lived under its header — "Looking for nearby
-/// friends…", each nearby phone with its connect ceremony, the discovery failure and "Change name" —
-/// live here, each nearby phone drawn as the approved blue-button card for who they are.
+/// Friends nearby: where a hangout with a friend starts and an open hangout is joined (World Review Batch
+/// 4, `b4-mem-blue-friend`, `b4-mem-blue-join`, approved 2026-10-24). The Album page is only the album now
+/// (`b4-mem-root`), so the rows that lived under its header — "Looking for nearby friends…", each nearby
+/// phone with its connect ceremony, the discovery failure and "Change name" — live here, each nearby phone
+/// drawn as the approved blue-button card for who they are. It is for people who are already friends:
+/// someone new is met only by tapping phones on Home (World Friends spec §1.1), so the page has no
+/// someone-new card ("Make a friend", `b4-mem-blue-new`, is retired).
 ///
 /// It is a page of the Album panel's own stack (`FriendsRoute.nearby`), opened from Home's blue button
-/// ("Start a hangout with Sam", or "Friends nearby"). That is deliberate: the discovery radio runs only
-/// while the Album tab is in front (`ProximityRunPolicy`), exactly as it did for the Friends tab, so this
-/// page adds no new radio behaviour; strangers are never drawn on the map. Starting works as today: tap
-/// the phones together (or Connect / the code exchange on phones without ranging), and the session's
-/// celebration plays; the Album panel then closes back to Home, where the session button now sits.
+/// ("Start a hangout with Sam", or "Friends nearby"). The page starts no radio of its own: discovery runs
+/// only where `ProximityRunPolicy` lets it, in the foreground, and strangers are never drawn on the map.
+/// Starting works as today: tap the phones together (or Connect / the code exchange on phones without
+/// ranging), and the hangout's celebration plays; the Album panel then closes back to Home, where the
+/// hangout's button now sits.
 ///
 /// Activities (planned hangouts others can join) are one link down, since they left the Album page.
 struct FriendsNearbyPage: View {
@@ -82,13 +84,14 @@ struct FriendsNearbyPage: View {
         return FriendsUITestHooks.nearbyDemo
     }
 
-    /// "You're in a session with Sam and Rae." — first names only, never an identifier.
+    /// "You're in a hangout with Sam and Rae." (owner's form answer 33: a hangout, not a session) — first
+    /// names only, never an identifier.
     private var sessionLine: LocalizedStringKey {
         let names = manager.sessionParticipants.filter { !$0.isLocal }.map {
             PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet)
         }
-        guard !names.isEmpty else { return "You're in a session. It lives on Home's session button." }
-        return "You're in a session with \(FriendsSessionNames.sentence(names)). It lives on Home's session button."
+        guard !names.isEmpty else { return "You're in a hangout. It lives on Home's hangout button." }
+        return "You're in a hangout with \(FriendsSessionNames.sentence(names)). It lives on Home's hangout button."
     }
 
     /// One nearby phone as the card for who they are.
@@ -109,19 +112,20 @@ struct FriendsNearbyPage: View {
     }
 
     /// Who this phone is: a kept friend by first name (blocked and removed people are not friends), in
-    /// an open hangout, or someone new.
+    /// an open hangout, or not a friend's ("Someone nearby").
     private func kind(of slot: PeerSlot) -> FriendsNearbyKind {
         let identity = NearbyPersonCard.identity(in: slot.coordinator.state)
         let friend = identity.flatMap { peer in
             store.trustedProximityPeers.first { $0.fingerprint == peer.fingerprint && $0.blockedAt == nil && $0.revokedAt == nil }
         }
         let name = friend.map { PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet) }
-        return FriendsNearbyKind.classify(friendName: name, identified: identity != nil,
-                                          discoveryInfo: slot.peer.discoveryInfo)
+        return FriendsNearbyKind.classify(friendName: name, discoveryInfo: slot.peer.discoveryInfo)
     }
 
-    /// "You appear as iPhone · Change" while no name is set: nearby people see this device's name, which
-    /// rides the discovery broadcast, so it is said where the connecting happens, and links to the field.
+    /// "You appear as iPhone · Change" while no name is set: the person on the other phone sees this
+    /// device's name once the phones say who they are (it travels in the connection, never in the
+    /// discovery broadcast, whose name is random), so it is said where the connecting happens, and links
+    /// to the field.
     @ViewBuilder
     private var displayNameHint: some View {
         if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -201,8 +205,8 @@ struct FriendsDiscoveryFailureCard: View {
 }
 
 /// DEBUG screenshots only (`FERNLET_UI_TEST_NEARBY_DEMO`; the hook is false in Release): Friends
-/// nearby's three cards over stand-in people, as a phone without ranging draws them — Sam nearby, Sam in
-/// a picnic with one other, and someone new — since a simulator has no nearby phones. Display only.
+/// nearby's cards over stand-in people, as a phone without ranging draws them — Sam nearby, and Sam in a
+/// picnic with one other — since a simulator has no nearby phones. Display only.
 struct FriendsNearbyDemoCards: View {
     var body: some View {
         let someone = PeerNameDisplay.text(for: .nearby)
@@ -214,7 +218,7 @@ struct FriendsNearbyDemoCards: View {
                 NearbyPersonCardChrome(kind: kind, someoneNearby: someone) {
                     NearbyPersonChoice(kind: kind, someoneNearby: someone, stateLabel: confirm)
                 } extra: {
-                    (kind == .newPerson ? Text("Connect") : Text("Verify"))
+                    Text("Verify")
                         .frame(minWidth: 88)
                         .modifier(FriendsNearbyDemoPill())
                 }
@@ -222,11 +226,10 @@ struct FriendsNearbyDemoCards: View {
         }
     }
 
-    /// The three people.
+    /// The stand-in people: a friend, and a friend in an open hangout.
     private static let kinds: [FriendsNearbyKind] = [
         .friend(name: "Sam"),
-        .hangout(friend: "Sam", hangoutName: "Picnic", others: 1),
-        .newPerson
+        .hangout(friend: "Sam", hangoutName: "Picnic", others: 1)
     ]
 }
 
