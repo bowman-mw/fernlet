@@ -101,6 +101,13 @@ final class WorldRideKeeper {
         queryEnd = nil
     }
 
+    /// A flight is under way (the flight gate): a drive or ride ends, the ride unlogged, and the motion through
+    /// `date` is never read, since a plane's activity reads as a car.
+    func takeOff(at date: Date) {
+        queryEnd = max(queryEnd ?? date, date)
+        apply(watch.takeOff(at: date))
+    }
+
     /// Takes a location reading from the map's source, and asks for the motion since the last query when
     /// it is due.
     func handle(_ fix: WorldFix) {

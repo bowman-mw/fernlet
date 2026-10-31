@@ -21,6 +21,14 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// while "Log my bike rides" is on and allowed); nil when Motion is off, and the stop watch then keeps its
     /// speed rule (W-14).
     var inCar: Bool? = nil
+    /// Whether the reading is inside the grounds of the airport just landed at (the flight gate): the passport
+    /// reads nothing from it, so a country and its continent stamp only once the person leaves (World-Airports-Spec
+    /// §4.2, the owner's note on 9).
+    var atLandedAirport = false
+    /// The reading's altitude above sea level and its accuracy, in metres; nil when CoreLocation gave none (the
+    /// flight gate tells a climb-out from a train leaving an airport's station by it).
+    var altitude: Double? = nil
+    var verticalAccuracy: Double? = nil
 }
 
 /// A stop iOS noticed in Always mode's low-power visits, in plain values: where, how sure, and when the
@@ -97,7 +105,8 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   launch when the switch is on, W-09 B1). Allowing Always later, in iOS's Settings, turns the switch on
 ///   (``turnsOnBackgroundMapping(from:to:)``).
 ///
-/// Every reading goes first to car and bike detection (``rides``), then to ``onFix`` as a ``WorldFix``
+/// Every reading goes first to the flight gate (``flights``: nothing flown over goes further), then to car and
+/// bike detection (``rides``), then to ``onFix`` as a ``WorldFix``
 /// carrying its in-car answer, and every low-power visit to ``onVisit`` as a ``WorldVisit``; what to do with
 /// them (lift the fog, note a stop) is the keepers' call. Delegate
 /// callbacks arrive off the main actor and hop to it with the values they carry, as `WeatherKitService` does.
@@ -117,6 +126,8 @@ final class WorldLocationSource: NSObject {
 
     /// Car and bike detection (round 7), fed every reading this source hands on.
     let rides = WorldRideKeeper()
+    /// The flight gate (World-Airports-Spec §6.1): weighs every reading first, and none it refuses goes further.
+    let flights = WorldFlightKeeper()
 
     /// Whether a walk is recording (updates keep running off the map).
     private(set) var isWalking = false
@@ -334,15 +345,22 @@ final class WorldLocationSource: NSObject {
         }
     }
 
-    /// Hands a reading on, as plain values: car and bike detection hears it first, so the reading handed to
-    /// ``onFix`` carries its in-car answer (round 7), and a drive still on picks its trace up again after
-    /// iOS paused it. Internal so tests can hand readings in; the delegate is the only caller in the app.
+    /// Hands a reading on, as plain values: the flight gate weighs it first, and a reading it refuses (in the air,
+    /// or maybe climbing out) goes nowhere, not even to ``latest`` (Home keeps the last place on the ground), and
+    /// ends any drive or ride once a flight is under way. Then car and bike detection hears it, so the reading
+    /// handed to ``onFix`` carries its in-car answer (round 7), and a drive still on picks its trace up again
+    /// after iOS paused it. Internal so tests can hand readings in; the delegate is the only caller in the app.
     func deliver(_ fix: WorldFix) {
         guard fix.point.isValid, fix.accuracy.isFinite, fix.accuracy >= 0 else { return }
+        guard flights.admits(fix) else {
+            if flights.isFlying { rides.takeOff(at: fix.at) }
+            return
+        }
         rides.handle(fix)
         if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
         var stamped = fix
         stamped.inCar = rides.inCarFlag
+        stamped.atLandedAirport = flights.layoverAirport != nil
         latest = stamped
         onFix?(stamped)
     }
@@ -358,10 +376,12 @@ final class WorldLocationSource: NSObject {
         stopTrace()
     }
 
-    /// Hands a low-power visit on, as plain values (a visit with no known time is dropped).
+    /// Hands a low-power visit on, as plain values (a visit with no known time is dropped, and so is one that
+    /// arrived during a flight).
     private func deliverVisit(_ visit: WorldVisit) {
         guard visit.point.isValid, visit.accuracy.isFinite, visit.accuracy >= 0,
-              visit.arrived != .distantPast, visit.arrived != .distantFuture else { return }
+              visit.arrived != .distantPast, visit.arrived != .distantFuture,
+              !flights.isInFlight(visit.arrived) else { return }
         onVisit?(visit)
     }
 
@@ -398,7 +418,9 @@ extension WorldLocationSource: CLLocationManagerDelegate {
             // A negative speed is CoreLocation's "unknown".
             WorldFix(point: GeoPoint(location.coordinate.latitude, location.coordinate.longitude),
                      accuracy: location.horizontalAccuracy, at: location.timestamp, isPrecise: precise,
-                     speed: location.speed >= 0 ? location.speed : nil)
+                     speed: location.speed >= 0 ? location.speed : nil,
+                     altitude: location.verticalAccuracy >= 0 ? location.altitude : nil,
+                     verticalAccuracy: location.verticalAccuracy >= 0 ? location.verticalAccuracy : nil)
         }
     }
 

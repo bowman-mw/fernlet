@@ -177,7 +177,8 @@ final class WorldFogKeeper {
         let lifted = store.lift(cells)
         let gaps = FogGapCloser.closing(around: cells, in: store.cells)
         let added = lifted + store.lift(gaps)
-        atlas.observe(point: fix.point, at: fix.at)
+        // Inside the grounds just landed at, the passport waits for the person to leave (the flight gate).
+        if !fix.atLandedAirport { atlas.observe(point: fix.point, at: fix.at) }
         cornerNudge.noteRevealed(cells + gaps)
         visibleCells = store.cells
         sinceSave += added
