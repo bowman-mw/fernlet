@@ -8,7 +8,14 @@ import WorldMapStore
 /// Owned by `WorldLocationSource` (`flights`), so the foreground, Always mode's low-power readings and a traced
 /// drive or followed ride all pass through it.
 ///
-/// - **Home reads** ``isFlying`` (the plane in place of the map, §6.2, the UI lane's) and ``layoverAirport``.
+/// - **Home reads** ``isFlying`` (the plane in place of the map, §6.2, the UI lane's), ``layoverAirport`` and
+///   ``layoverStart`` (the layover counter, §5), ``currentAirport`` (the tag "At the airport · PDX"),
+///   ``isOnTrip`` and ``showsTravelLook`` (Sprout's suitcase and mask, §5), and ``latestFind`` (the airport
+///   banners and Sprout's landing lines, §3, §6.3). DEBUG `FERNLET_UI_TEST_AIRPORT` stands a made-up state in for
+///   all of them (``UITestSupport/airportHomeState(now:)``), with no readings.
+/// - **Take a trip** (§7, the trip lane's) adds `startTrip(at:)` and `endTrip(at:)` here: each calls the
+///   detector's own, then hands its events on as ``admits(_:)`` does (``rememberFlights(in:)``, ``publish()``,
+///   `save(at:changed: true)`, ``hand(_:)``).
 /// - **The passport hears** each airport found, each flight landed and each layover through ``onEvents``
 ///   (`FernletStore+WorldFlights`); the passport itself keeps nothing in a decoy.
 /// - **A late reading** (older than the newest one weighed: a low-power visit's arrival, a batch out of order) is
@@ -28,6 +35,18 @@ final class WorldFlightKeeper {
     /// The airport just landed at, while the person is still inside its grounds: its country and continent wait
     /// until they leave (§4.2, the owner's note on 9).
     private(set) var layoverAirport: String?
+    /// When the person landed at ``layoverAirport``, while still inside its grounds ("Layover at Helsinki · 2 h
+    /// 14 min", §5).
+    private(set) var layoverStart: Date?
+    /// The airport whose grounds held the last placed reading, when not flying (Home's tag, §5).
+    private(set) var currentAirport: String?
+    /// Whether a trip is on: a ticket, or a flight found by its speed (§5, §7).
+    private(set) var isOnTrip = false
+    /// Whether Sprout wears the travel look: on a trip, inside an airport's grounds (§5, amended by 18).
+    private(set) var showsTravelLook = false
+    /// The latest airport the gate found, and how (Home's banner says "Ten minutes at the airport found it" or
+    /// "Landed at Heathrow", and a landing brings Sprout's landing line, §3, §6.3). Kept in memory only.
+    private(set) var latestFind: WorldAirportFind?
 
     /// Called with what each reading changed (airports found, flights started and landed, layovers), after any
     /// it could not take before; answers whether it took them.
@@ -67,6 +86,8 @@ final class WorldFlightKeeper {
         airportsShelf = shelf
         self.grounds = grounds ?? { shelf.lookup() }
         self.iataCode = iataCode ?? { shelf.iata(of: $0) }
+        publish()
+        latestFind = UITestSupport.airportHomeFind(now: Date())
     }
 
     /// Places readings in `grounds` and names airports by `iataCode` from now on (tests' made-up airports).
@@ -98,10 +119,16 @@ final class WorldFlightKeeper {
                                 altitude: fix.altitude, verticalAccuracy: fix.verticalAccuracy)
         let verdict = detector.observe(reading, airports: grounds(), isHome: isHome)
         rememberFlights(in: verdict.events)
+        noteFinds(in: verdict.events)
         publish()
         save(at: fix.at, changed: !verdict.events.isEmpty)
         hand(pending + verdict.events)
         return verdict.mayKeep
+    }
+
+    /// How long since the landing, while still inside the grounds (the layover counter, §5); nil when not landed.
+    func layoverDuration(at now: Date) -> TimeInterval? {
+        layoverStart.map { max(0, now.timeIntervalSince($0)) }
     }
 
     /// Whether `date` falls inside the flight under way or one that ended recently.
@@ -137,10 +164,24 @@ final class WorldFlightKeeper {
         if recentFlights.count > Self.maxRecentFlights { recentFlights.removeFirst(recentFlights.count - Self.maxRecentFlights) }
     }
 
-    /// Mirrors the detector's state for the screens.
+    /// Notes the latest airport found among `events` (the last one wins: a landing's find comes with it).
+    private func noteFinds(in events: [FlightEvent]) {
+        for event in events {
+            if case .airportFound(let token, let how, let at) = event {
+                latestFind = WorldAirportFind(token: token, how: how, at: at)
+            }
+        }
+    }
+
+    /// Mirrors the detector's state for the screens (or the DEBUG scene's made-up state), writing only what changed.
     private func publish() {
-        if isFlying != detector.isFlying { isFlying = detector.isFlying }
-        if layoverAirport != detector.layoverAirport { layoverAirport = detector.layoverAirport }
+        let state = UITestSupport.airportHomeState(now: Date()) ?? WorldFlightGateState(detector, at: lastAt)
+        if isFlying != state.isFlying { isFlying = state.isFlying }
+        if layoverAirport != state.layoverAirport { layoverAirport = state.layoverAirport }
+        if layoverStart != state.layoverStart { layoverStart = state.layoverStart }
+        if currentAirport != state.currentAirport { currentAirport = state.currentAirport }
+        if isOnTrip != state.isOnTrip { isOnTrip = state.isOnTrip }
+        if showsTravelLook != state.showsTravelLook { showsTravelLook = state.showsTravelLook }
     }
 
     /// Seals the detector's state when something changed, or ``saveInterval`` after the last write.
@@ -154,6 +195,50 @@ final class WorldFlightKeeper {
             FernletAuditLog.log("worldMap.flight.saveDeferred")
         }
     }
+}
+
+/// What Home reads of the flight gate at one moment (World-Airports-Spec §5, §6.2): a plain value mirrored from the
+/// ``FlightDetector`` after each reading, or made up by a DEBUG scene. No display strings; airport tokens only.
+nonisolated struct WorldFlightGateState: Equatable, Sendable {
+    var isFlying = false
+    /// The airport landed at, while still inside its grounds.
+    var layoverAirport: String?
+    /// When that landing was.
+    var layoverStart: Date?
+    /// The airport whose grounds hold the person, when not flying.
+    var currentAirport: String?
+    var isOnTrip = false
+    var showsTravelLook = false
+
+    /// A state with every field given (the DEBUG scenes').
+    init(isFlying: Bool = false, layoverAirport: String? = nil, layoverStart: Date? = nil, currentAirport: String? = nil,
+         isOnTrip: Bool = false, showsTravelLook: Bool = false) {
+        self.isFlying = isFlying
+        self.layoverAirport = layoverAirport
+        self.layoverStart = layoverStart
+        self.currentAirport = currentAirport
+        self.isOnTrip = isOnTrip
+        self.showsTravelLook = showsTravelLook
+    }
+
+    /// The detector's state as of its last reading at `lastAt`: the landing's time is that reading's less the
+    /// layover so far (the detector keeps the landing itself private).
+    init(_ detector: FlightDetector, at lastAt: Date?) {
+        isFlying = detector.isFlying
+        layoverAirport = detector.layoverAirport
+        layoverStart = lastAt.flatMap { at in detector.layoverDuration(at: at).map { at.addingTimeInterval(-$0) } }
+        currentAirport = detector.currentAirport
+        isOnTrip = detector.isOnTrip
+        showsTravelLook = detector.showsTravelLook
+    }
+}
+
+/// An airport the flight gate found: its token, how, and when (the reading's own time, which the passport's first
+/// visit or new trip carries too, so Home can tell a landing's stamp from a ten minutes' one).
+nonisolated struct WorldAirportFind: Equatable, Sendable {
+    let token: String
+    let how: FlightFinding
+    let at: Date
 }
 
 /// No airports: nothing is inside any grounds.

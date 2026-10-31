@@ -3,7 +3,8 @@ import WorldMapStore
 
 /// What kind of new place one of Sprout's discovery lines is for (World-Exploration-Spec §4, the mockup's `LINES`):
 /// the terrain classes, a sea or lake shore, the five city sizes, a landmark, a new country, continent, ocean or
-/// sea, and the two specials. Frozen tokens (they name the lines' catalog keys and the DEBUG hook's words).
+/// sea, the two specials, and a new airport and a landing (World-Airports-Spec §3, §6.3). Frozen tokens (they name
+/// the lines' catalog keys and the DEBUG hook's words).
 ///
 /// Cropland has lines but nothing selects it: the atlas carries no land cover (lane call, round 7).
 nonisolated enum WorldLineCategory: String, CaseIterable, Sendable {
@@ -12,6 +13,7 @@ nonisolated enum WorldLineCategory: String, CaseIterable, Sendable {
     case village, town, city, bigCity, megacity
     case landmark, country, continent
     case ocean, sea, allContinents, allOceans
+    case airport, landing
 
     /// The lines board the category sits on (the mockup's `land`, `open`, `towns`, `marks`, `world`).
     var board: WorldLineBoard {
@@ -21,23 +23,26 @@ nonisolated enum WorldLineCategory: String, CaseIterable, Sendable {
         case .village, .town, .city, .bigCity, .megacity: .towns
         case .landmark, .country, .continent: .marks
         case .ocean, .sea, .allContinents, .allOceans: .world
+        case .airport, .landing: .airports
         }
     }
 
     /// Which line wins when one fix finds several new places (one line at a time): the two specials, then a
     /// continent, a country, an ocean, a sea, a landmark, a city (any size) and last the ground under it, so a
-    /// city always beats a biome (spec §4). Higher wins.
+    /// city always beats a biome (spec §4). A landing beats everything (World-Airports-Spec §6.3: its line, not the
+    /// new airport's, greets the landing), and a new airport ranks with a landmark. Higher wins.
     var priority: Int {
         switch board {
         case .land, .open: 0
         case .towns: 1
-        case .marks, .world: Self.markPriority[self] ?? 2
+        case .marks, .world, .airports: Self.markPriority[self] ?? 2
         }
     }
 
     /// The order among the landmark, country, continent, ocean, sea and the specials (lane call, for the owner).
     private static let markPriority: [WorldLineCategory: Int] = [
-        .landmark: 2, .sea: 3, .ocean: 4, .country: 5, .continent: 6, .allOceans: 7, .allContinents: 8
+        .landmark: 2, .sea: 3, .ocean: 4, .country: 5, .continent: 6, .allOceans: 7, .allContinents: 8,
+        .airport: 2, .landing: 9,
     ]
 
     /// The category for a passport terrain class: the classifier's classes as the terrain sets map them
@@ -68,9 +73,11 @@ nonisolated enum WorldLineCategory: String, CaseIterable, Sendable {
     }
 }
 
-/// The five lines boards of the approved page (`ex-lines-land`, `-open`, `-towns`, `-marks`, `-world`). Frozen tokens.
+/// The five lines boards of the approved page (`ex-lines-land`, `-open`, `-towns`, `-marks`, `-world`), and the
+/// airports' (World-Airports-Spec §3, §6.3: a new airport and a landing, drafts for the owner's string review).
+/// Frozen tokens.
 nonisolated enum WorldLineBoard: String, CaseIterable, Sendable, Identifiable {
-    case land, open, towns, marks, world
+    case land, open, towns, marks, world, airports
 
     /// The board's token.
     var id: String { rawValue }
@@ -175,8 +182,8 @@ enum WorldLinePicker {
             let all = completes(discovery, of: AtlasOcean.allCases.count, in: book)
             return (all ? .allOceans : .ocean, String(localized: ocean.passportName))
         case .airport:
-            // Sprout's new-airport lines are their own (World-Airports-Spec §3), drawn with the airports' screens.
-            return nil
+            // Sprout's new-airport lines (World-Airports-Spec §3): once per airport, taking turns; no name.
+            return (.airport, "")
         }
     }
 

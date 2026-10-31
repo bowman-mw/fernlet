@@ -3,7 +3,8 @@ import Foundation
 /// The words of Sprout's discovery lines (World-Exploration-Spec §4: all 66 approved, three per category, Sprout
 /// taking turns), the mockup's `LINES` verbatim. Catalog keys `worldLines.<category>.<1…3>` (the category's frozen
 /// token); a line that fills in the place's name takes it as its one argument. The Spanish is the mockup's own,
-/// drafted in `r7-explore-ui-es-lines.json` for the usual review.
+/// drafted in `r7-explore-ui-es-lines.json` for the usual review. The airports' six (World-Airports-Spec §3, §6.3)
+/// are the spec's drafts, their Spanish in `r7-airports-ui-es-home.json`.
 nonisolated enum WorldDiscoveryLinesCopy {
     /// Line `index` (0…2, wrapping) of `category`, with `name` filled in where the line has one.
     static func line(_ category: WorldLineCategory, index: Int, name: String) -> String {
@@ -21,6 +22,7 @@ nonisolated enum WorldDiscoveryLinesCopy {
         case .towns: towns(category, name: name)
         case .marks: marks(category, name: name)
         case .world: world(category, name: name)
+        case .airports: airports(category)
         }
     }
 
@@ -256,6 +258,32 @@ nonisolated enum WorldDiscoveryLinesCopy {
                        comment: "Sprout's line on first reaching a new place: all five oceans, line 2 of 3"),
                 String(localized: "worldLines.allOceans.3", defaultValue: "The whole world's water. Wow.",
                        comment: "Sprout's line on first reaching a new place: all five oceans, line 3 of 3"),
+            ]
+        default:
+            []
+        }
+    }
+
+    /// A new airport's lines and a landing's (World-Airports-Spec §3, §6.3; drafts for the owner's string review).
+    private static func airports(_ category: WorldLineCategory) -> [String] {
+        switch category {
+        case .airport:
+            [
+                String(localized: "worldLines.airport.1", defaultValue: "An airport! Are we going somewhere?",
+                       comment: "Sprout's line on first finding an airport, line 1 of 3"),
+                String(localized: "worldLines.airport.2", defaultValue: "So many planes. Which one is ours?",
+                       comment: "Sprout's line on first finding an airport, line 2 of 3"),
+                String(localized: "worldLines.airport.3", defaultValue: "Leaf packed. Let's fly!",
+                       comment: "Sprout's line on first finding an airport, line 3 of 3 (Sprout's leaf is packed)"),
+            ]
+        case .landing:
+            [
+                String(localized: "worldLines.landing.1", defaultValue: "We flew! My leaf's all fluffy.",
+                       comment: "Sprout's line just after a flight lands, line 1 of 3"),
+                String(localized: "worldLines.landing.2", defaultValue: "Touchdown! Where are we?",
+                       comment: "Sprout's line just after a flight lands, line 2 of 3"),
+                String(localized: "worldLines.landing.3", defaultValue: "That was a long nap.",
+                       comment: "Sprout's line just after a flight lands, line 3 of 3"),
             ]
         default:
             []

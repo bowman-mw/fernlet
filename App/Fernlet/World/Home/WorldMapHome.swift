@@ -113,6 +113,8 @@ struct WorldMapHome: View {
     @State private var roads = WorldCrossedRoadsModel()
     /// Sprout's discovery lines and the new-stamp hook (round 7, World-Exploration-Spec §4): the one discovery reader.
     @State private var discoveries = WorldDiscoveryRouter()
+    /// The airport banners (World-Airports-Spec §3, §6.3).
+    @State private var airportHome = WorldAirportHomeState()
     /// Sprout's mention of the week's new corner (§5), said once; nil once Home goes behind a panel.
     @State private var cornerLine: String?
     /// DEBUG `FERNLET_UI_TEST_CORNER`: a corner stood in where the person stands (display only).
@@ -151,6 +153,9 @@ struct WorldMapHome: View {
         .modifier(WorldExplorePresenter(store: store, explore: explore))
         // Round 7: Sprout's lines on finding somewhere new (World-Exploration-Spec §4).
         .modifier(WorldDiscoveryLinesDriver(store: store, router: discoveries, isSaying: isFrontmost && !isBubbleQuiet))
+        // Airports (World-Airports-Spec §3, §6.3): the found and landing banners, Sprout's landing line.
+        .modifier(WorldAirportHomeDriver(store: store, router: discoveries, state: airportHome, passport: passport,
+                                         holdsBanner: !isFrontmost || holdsRootBanners || stampBannerShowing))
         .task(id: cornerLine) { await letCornerLineStand() }
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
@@ -223,6 +228,7 @@ struct WorldMapHome: View {
         let point = companionPoint(viewport: viewport, size: size)
         return ZStack(alignment: .topLeading) {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
+            WorldAirportLayer(store: store, viewport: viewport, size: size, companion: point)
             WorldExploreLayer(store: store, explore: explore, viewport: viewport, size: size,
                               showsCityPlate: !isWalking && loggedWalk == nil, companion: point)
             if let corner = shownCorner, let home = cornerHome {
@@ -245,6 +251,7 @@ struct WorldMapHome: View {
             }
             companion(at: point)
             WorldCompanionExtras(store: store, point: point, date: Date())
+            WorldTravelLook(store: store, point: point)
         }
     }
 
@@ -286,6 +293,7 @@ struct WorldMapHome: View {
                 WorldMapNotice(kind: notice, onUsePrecise: openSettings)
                     .frame(maxWidth: .infinity)
             }
+            WorldLayoverPlate(store: store, date: date)
         }
         .padding(.top, 6)
         .padding(.horizontal, 12)
@@ -307,7 +315,9 @@ struct WorldMapHome: View {
                 }
                 HStack(alignment: .bottom, spacing: 10) {
                     // Round 7 (`ref-tag-home` d2): beside the blue button anywhere the person stays.
-                    if cardContext == nil, !isRiding, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
+                    if cardContext == nil, !isRiding, let code = WorldAirportTag.code(store) {
+                        WorldAirportTag(code: code)
+                    } else if cardContext == nil, !isRiding, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
                         // Above the blue button's label, which slides out over it for 30 s (form answer 28).
                         WorldTagPlaceButton(onRemember: { placeSheet = .spot(spot) }, onNotHere: store.dismissWorldRememberSpot)
                             .zIndex(1)
@@ -464,7 +474,9 @@ struct WorldMapHome: View {
 
     /// Whether the prints show: not at accessibility sizes (as Home's photo wall), not while walking (the
     /// walk bar takes their place), not under a stamp's banner.
-    private var showsPrints: Bool { !dynamicTypeSize.isAccessibilitySize && !isWalking && !stampBannerShowing }
+    private var showsPrints: Bool {
+        !dynamicTypeSize.isAccessibilitySize && !isWalking && !stampBannerShowing && airportHome.banner == nil
+    }
 
     /// The markers on the map (a DEBUG screenshot can pin the first saved space near the companion).
     private var shownMarkers: [WorldMapMarker] {
