@@ -6,9 +6,15 @@ import WorldMapStore
 /// World and Country and at sea; from State in, the place at the view's centre ("Oregon · United States"), or
 /// the country alone where the pack names no state there.
 nonisolated enum WorldAtlasPlate {
-    /// The plate at `level` for the place `place` at the view's centre, with the passport's counts.
-    static func text(level: AtlasZoomLevel, place: AtlasPlaceName?, cities: Int, countries: Int) -> String {
-        guard level.showsPlaceName, let place else { return WorldViewCopy.found(cities: cities, countries: countries) }
+    /// The plate at `level` for the place `place` at the view's centre, with the passport's counts; with any
+    /// flights the counts gain a second line, "6 airports · 53 flights" (World-Airports-Spec §8).
+    static func text(level: AtlasZoomLevel, place: AtlasPlaceName?, cities: Int, countries: Int,
+                     airports: Int = 0, flights: Int = 0) -> String {
+        guard level.showsPlaceName, let place else {
+            let found = WorldViewCopy.found(cities: cities, countries: countries)
+            guard flights > 0 else { return found }
+            return found + "\n" + WorldFlightCopy.plate(airports: airports, flights: flights)
+        }
         let country = WorldViewNames.country(place.countryCode)
         guard let names = place.regionNames else { return country }
         return WorldViewCopy.place(region: WorldViewNames.pick(names), country: country)
