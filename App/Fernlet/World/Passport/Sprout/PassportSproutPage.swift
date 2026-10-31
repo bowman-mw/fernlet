@@ -47,6 +47,7 @@ struct PassportSproutPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.passportPageIsLeafCopy) private var isLeafCopy
 
     /// The page's insets inside the paper (`.pppage` padding): 12 on top and on the outer side, 23 on the spine
     /// side (over the gutter shade), 30 at the foot for the page number.
@@ -63,6 +64,29 @@ struct PassportSproutPage: View {
     }
 
     var body: some View {
+        inNavigation(page)
+            .sheet(item: $placeSheet) { mode in
+                WorldRememberPlaceSheet(store: store, mode: mode) { placeSheet = nil }
+            }
+            .sheet(isPresented: $managesHomes) {
+                WorldHomesManageSheet(store: store) { managesHomes = false }
+            }
+    }
+
+    /// The page's title and pushed slot pages in the passport's navigation stack; none for a turning leaf's copy.
+    @ViewBuilder
+    private func inNavigation(_ page: some View) -> some View {
+        if isLeafCopy {
+            page
+        } else {
+            page
+                .navigationTitle(Text(verbatim: PassportSproutCopy.passport))
+                .navigationDestination(item: $route, destination: destination)
+        }
+    }
+
+    /// The page itself, its clock moved on each minute.
+    private var page: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = companion(at: context.date)
             let model = makeModel(now: now, date: context.date)
@@ -83,14 +107,6 @@ struct PassportSproutPage: View {
                 onTop(top)
             }
             .overlay(alignment: .bottom) { if showsFade { PassportSproutFade() } }
-        }
-        .navigationTitle(Text(verbatim: PassportSproutCopy.passport))
-        .navigationDestination(item: $route, destination: destination)
-        .sheet(item: $placeSheet) { mode in
-            WorldRememberPlaceSheet(store: store, mode: mode) { placeSheet = nil }
-        }
-        .sheet(isPresented: $managesHomes) {
-            WorldHomesManageSheet(store: store) { managesHomes = false }
         }
     }
 

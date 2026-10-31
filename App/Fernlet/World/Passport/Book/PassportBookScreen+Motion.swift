@@ -3,17 +3,19 @@ import SwiftUI
 import WorldMapStore
 
 /// Where the book is in its opening and closing (World-Passport-Spec §1): how far it has risen from Sprout (0 at
-/// Sprout, 1 in place), the cover's swing (0 closed, -180 open), the veil's and the bar's strength, and the whole
-/// screen's fade (Reduce Motion fades instead of rising and swinging).
+/// Sprout, 1 in place), the cover's swing (0 closed, -180 open and lying to the left of the spine), the turned
+/// pages' strength on the open cover, the veil's and the bar's strength, and the whole screen's fade (Reduce Motion
+/// fades instead of rising and swinging).
 nonisolated struct PassportBookMotion: Equatable, Sendable {
     var lift: Double = 0
     var cover: Double = 0
+    var turnedPages: Double = 0
     var veil: Double = 0
     var chrome: Double = 0
     var fade: Double = 1
 
     /// The book open and still.
-    static let open = PassportBookMotion(lift: 1, cover: -180, veil: 1, chrome: 1, fade: 1)
+    static let open = PassportBookMotion(lift: 1, cover: -180, turnedPages: 1, veil: 1, chrome: 1, fade: 1)
 }
 
 /// Moves and scales the book between where Sprout stands (`anchor`, in global coordinates; the screen's centre
@@ -42,7 +44,8 @@ struct PassportRiseEffect: ViewModifier {
 extension PassportBookScreen {
     // MARK: Opening and closing
 
-    /// The first moment: the page this open starts on, then the rise and the swing (or the fade).
+    /// The first moment: the page this open starts on, then the rise and the cover's swing open to lie at the left
+    /// of the spine, the turned pages settling on it (or the fade).
     func start(_ book: PassportBookModel) {
         landing = presenter.landing
         page = presenter.startPage(in: book)
@@ -61,18 +64,23 @@ extension PassportBookScreen {
             withAnimation(.easeInOut(duration: 0.3)) {
                 motion.cover = -180
                 motion.chrome = 1
-            } completion: { pageFocused = true }
+            } completion: {
+                withAnimation(.easeOut(duration: 0.12)) { motion.turnedPages = 1 }
+                pageFocused = true
+            }
         }
     }
 
-    /// The closing: the cover swings shut and the book sinks back to Sprout (or it fades), then it goes.
+    /// The closing: the turned pages lift off the open cover, the cover swings shut over the page round the spine,
+    /// and the book sinks back to Sprout (or it fades), then it goes.
     func finish() {
         showsContents = false
         if reduceMotion {
             withAnimation(.easeInOut(duration: 0.2)) { motion.fade = 0 } completion: { presenter.dismiss() }
             return
         }
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.easeIn(duration: 0.08)) { motion.turnedPages = 0 }
+        withAnimation(.easeInOut(duration: 0.3)) {
             motion.cover = 0
             motion.chrome = 0
         } completion: {
