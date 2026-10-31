@@ -13,7 +13,7 @@ extension View {
     }
 }
 
-/// Implements ``SwiftUI/View/flightyImport(_:)``.
+/// Implements ``SwiftUI/View/flightyImport(_:showsToast:)``.
 private struct FlightyImportHost: ViewModifier {
     @Bindable var flow: FlightyImportFlow
     let showsToast: Bool
@@ -22,7 +22,7 @@ private struct FlightyImportHost: ViewModifier {
         content
             .fileImporter(isPresented: $flow.isPicking, allowedContentTypes: [.commaSeparatedText]) { flow.picked($0) }
             .sheet(item: $flow.found) { found in
-                FlightyImportSheet(found: found, onAdd: { flow.confirm() }, onCancel: { flow.found = nil })
+                FlightImportSummarySheet(content: found.content, onAdd: { flow.confirm() }, onCancel: { flow.found = nil })
             }
             .alert(Text(FlightyImportCopy.problemTitle), isPresented: problemShown) {
                 Button("OK", role: .cancel) { flow.problem = nil }
@@ -44,6 +44,36 @@ private struct FlightyImportHost: ViewModifier {
                     FernletAnnouncer.system.announce(.status, resolved: String(localized: FlightyImportCopy.addedToast(added.count)))
                 }
         }
+    }
+
+    private var problemShown: Binding<Bool> {
+        Binding(get: { flow.problem != nil }, set: { if !$0 { flow.problem = nil } })
+    }
+}
+
+extension View {
+    /// Hosts the calendar's first look on this screen (World-Airports-Spec §10.5): the same summary sheet as a
+    /// Flighty file's, "Flights in your calendar", and a problem's alert. The switch's entry point is
+    /// ``CalendarFlightsFlow/setOn(_:)``; the note after adding, with Undo, is the screen's to show.
+    func calendarFlightsImport(_ flow: CalendarFlightsFlow) -> some View {
+        modifier(CalendarFlightsHost(flow: flow))
+    }
+}
+
+/// Implements ``SwiftUI/View/calendarFlightsImport(_:)``.
+private struct CalendarFlightsHost: ViewModifier {
+    @Bindable var flow: CalendarFlightsFlow
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $flow.found) { found in
+                FlightImportSummarySheet(content: found.content, onAdd: { flow.confirm() }, onCancel: { flow.found = nil })
+            }
+            .alert(Text(CalendarFlightsCopy.problemTitle), isPresented: problemShown) {
+                Button("OK", role: .cancel) { flow.problem = nil }
+            } message: {
+                if let problem = flow.problem { Text(CalendarFlightsCopy.message(problem)) }
+            }
     }
 
     private var problemShown: Binding<Bool> {

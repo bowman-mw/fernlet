@@ -334,7 +334,7 @@ final class WorldAtlasKeeper {
     /// ``update(_:)`` that says whether the change was taken: false in a decoy, while the passport can't be
     /// read, and when saving failed; true when it was saved or changed nothing.
     @discardableResult
-    private func apply(_ change: (inout PassportBook) -> Bool) -> Bool {
+    func apply(_ change: (inout PassportBook) -> Bool) -> Bool {
         guard !isDecoy, loadStore() else { return false }
         do {
             guard try store.update(change) == true else { return true }
