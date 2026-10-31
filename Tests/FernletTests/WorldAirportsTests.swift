@@ -119,6 +119,8 @@ struct WorldAirportsTests {
         #expect(refusal(Data(count: WorldAirports.maxPackBytes + 1)) == .tooLarge)
         // The atlas's own pack is not an airports pack.
         let atlasURL = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
-        #expect(refusal(try Data(contentsOf: atlasURL)) == .tooLarge || refusal(try Data(contentsOf: atlasURL)) == .badMagic)
+        let atlasData = try Data(contentsOf: atlasURL)
+        let atlasRefusal = refusal(atlasData)
+        #expect(atlasRefusal == .tooLarge || atlasRefusal == .badMagic)
     }
 }
