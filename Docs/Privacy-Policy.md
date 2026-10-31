@@ -91,13 +91,20 @@
      everyday places …" replaces "Both cover everyday places only …", because the person may now add any
      spot they stay at (a flat, a friend's), and places like doctors' offices are never named for them.
      Everything stays on the device; nothing new is sent to the developer and no promise is weakened
+     under §13), and 2026-10-31 (the World build's airports and flights, approved by the owner on
+     2026-10-31: §6 gains an "Airports and flights" paragraph — the airports and flights the passport
+     keeps from your location, the Flighty export file read on this iPhone, and Flights from Calendar,
+     which reads the calendar on this iPhone and keeps only each flight's date, airports and times;
+     §4's sealed-backup list adds the passport (its stamps, trips and flights), and §6's "never …
+     backed up" for map data now names the passport's own sealed backup as the one exception. The
+     passport backup is off by default. Nothing new is sent to the developer and no promise is weakened
      under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** October 29, 2026
+**Effective date:** October 31, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -308,7 +315,8 @@ During setup you choose whether to keep your data **only on this device** or **s
   delete the cloud copy at any time in Settings → Privacy & Data. Deleting the cloud copy never
   deletes your local copy or your Apple Health history.
 - **Encrypted sealed backup (separate, off by default):** You may separately opt in to back up
-  **period data**, **journal entries**, **intimate logs** and/or **your own photos** (see §5).
+  **period data**, **journal entries**, **intimate logs**, **your passport** (its stamps, trips and
+  flights) and/or **your own photos** (see §5).
   Before this data leaves your device it is encrypted
   with a key derived from a dedicated backup key (AES-256-GCM). Apple stores only unreadable
   ciphertext. Because the key lives in your iCloud Keychain, **if you permanently lose access to your
@@ -402,7 +410,9 @@ a coarse record of the parts of the map you have uncovered (cells about 35 m acr
 "Save new routes" is on, the line of each walk you record yourself, plus where your workout spaces
 are if you ask it to remember them. All of it is encrypted on this iPhone only: never synced, backed
 up, exported, shared with friends, given to the AI or sent to us, and you can delete it at any time
-in Settings → Home map. Fernlet uses location in the background only during a walk you started, or
+in Settings → Home map.
+The one exception is your passport: its stamps, trips and flights go in the passport's own sealed backup if you use it.
+Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
 you're driving or riding, the road you take. If you turn on Log my bike rides, Fernlet uses your iPhone's
 motion data to tell when you're cycling or riding in a car, on this iPhone only; it logs your bike
@@ -434,6 +444,11 @@ To name a place you stop at, or to check where a photo you take on your own was 
 Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
 keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
 you look at your places.
+
+**Airports and flights.** With Airports and flights on, Fernlet notes the airports you visit and the flights you take from your location, and keeps them in your passport, encrypted on this iPhone and carried only in the passport's own sealed backup if you use it.
+If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports and gate times; it doesn't keep the file and never contacts Flighty.
+If you turn on Flights from Calendar (iOS asks for full access to your calendar), Fernlet reads your calendar's events on this iPhone to find flights, keeping only each flight's date, airports and times, plus a scrambled tag so it won't add an event twice, and dropping booking codes, links and notes as it reads; it never opens a link or changes your calendar.
+It looks from two days back to 60 days ahead each time you open Fernlet, and once further back when you turn it on; the flights it finds draw your routes and fill the passport's Flights page, but never stamp an airport or uncover the map.
 
 ## 7. Artificial intelligence
 
