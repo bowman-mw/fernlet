@@ -252,15 +252,73 @@ struct SealedBackupWorldPassportTests {
         #expect(try await Self.cloudPassport(cloud) == Self.oldPassport)
     }
 
-    /// A passport set a newer Fernlet wrote (a kind this build does not know) is never dropped or written
-    /// over: the restore names it as needing a newer Fernlet, and nothing of it is merged.
-    @Test func aNewerPassportNeedsANewerFernletAndMergesNothing() async throws {
+    /// Airports, their trips and layovers, flights and upcoming flights come back on a new iPhone (World-Airports-Spec
+    /// §11: they are passport records, carried only in its sealed backup), and no airport code reaches CloudKit in
+    /// the clear.
+    @Test func airportsAndFlightsComeBackOnANewPhone() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let week = 8 * 86_400.0
+        var travelled = Self.book([(Self.us, Self.t1)])
+        _ = travelled.recordAirport(token: "PDX", at: Self.t1, by: .ticket)
+        _ = travelled.recordAirport(token: "HEL", at: Self.t2, by: .landing)
+        _ = travelled.setTransit(true, atAirport: "HEL", trip: Self.t2)
+        _ = travelled.recordAirport(token: "PDX", at: Self.t2.addingTimeInterval(week), by: .landing)
+        let out = try #require(PassportFlight(from: "PDX", to: "HEL", departure: Self.t1.addingTimeInterval(3_600),
+                                              arrival: Self.t2, sources: [.fernlet, .flighty]))
+        let ahead = try #require(PassportFlight(from: "PDX", to: "MEX", departure: Self.t2.addingTimeInterval(4 * week),
+                                                sources: .calendar))
+        travelled.addFlights([out])
+        travelled.setUpcomingFlights([ahead])
+        #expect(travelled.trips(atAirport: "PDX").count == 2)
+        try await Self.writeOldBackup(cloud, passport: travelled)
+        #expect(try await Self.cloudPassport(cloud) == travelled)
+        for bytes in try Self.cloudBytes(cloud) {
+            #expect(bytes.range(of: Data("PDX>HEL".utf8)) == nil, "a flight reached CloudKit in the clear")
+        }
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", preferences: Self.passportOn)
+        defer { phone.host.tearDownWorldPassport() }
+        await phone.coordinator.settleV2Backup(.worldPassport)
+        #expect(phone.host.worldPassport.book == travelled)
+        #expect(phone.host.worldPassport.book.isTransit(atAirport: "HEL", trip: Self.t2))
+        #expect(phone.host.worldPassport.book.flights == [out] && phone.host.worldPassport.book.upcomingFlights == [ahead])
+    }
+
+    /// A passport set a newer Fernlet wrote (World-Airports-Spec §11, "Backups across builds"): a record of a kind
+    /// this build does not know is SKIPPED on restore, the rest merges, and it is KEPT, so the follow-through
+    /// export carries it again under this iPhone's writer.
+    @Test func aRecordOfAKindThisBuildDoesNotKnowIsSkippedAndKept() async throws {
         let cloud = try PeriodBackupDevice.makeCloud()
         defer { cloud.tearDown() }
         let tag = PeriodBackupDevice.tag("newer")
         let records = [
             PassportBackupRecord(id: UUID(), kind: "country", token: "US", date: Self.t1),
-            PassportBackupRecord(id: UUID(), kind: "galaxy", token: "milkyWay", date: Self.t1)
+            PassportBackupRecord(id: UUID(), kind: "galaxy", token: "milkyWay", date: Self.t1, extra: ["arms": .integer(4)])
+        ]
+        let envelope = SealedBackupV2Envelope(writer: tag, set: tag, total: records.count, records: records)
+        try await Self.plant(try SealedBackupV2Format.encode(envelope), payload: .worldPassport, tag: tag, in: cloud)
+
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", preferences: Self.passportOn)
+        defer { phone.host.tearDownWorldPassport() }
+        await phone.coordinator.settleV2Backup(.worldPassport)
+        #expect(phone.host.recordedOutcomes[.worldPassport] == .restored(2), "the country, and the kept record")
+        let book = phone.host.worldPassport.book
+        #expect(book.trips(inCountry: "US") == [Self.t1], "the rest merges")
+        #expect(book.keptBackupRecords.count == 1, "skipped, and kept")
+        let published = try #require(try await Self.cloudPassport(cloud))
+        #expect(published.keptBackupRecords == book.keptBackupRecords, "carried again, with every key it had")
+        #expect(try await Self.cloudWriter(cloud) == phone.writer)
+    }
+
+    /// A passport set this build can't read whole (a token it would refuse, for a kind it knows) is never dropped
+    /// or written over: the restore names it as needing a newer Fernlet, and nothing of it is merged.
+    @Test func anUnreadableSetNeedsANewerFernletAndMergesNothing() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let tag = PeriodBackupDevice.tag("newer")
+        let records = [
+            PassportBackupRecord(id: UUID(), kind: "country", token: "US", date: Self.t1),
+            PassportBackupRecord(id: UUID(), kind: "country", token: "U S", date: Self.t1)
         ]
         let envelope = SealedBackupV2Envelope(writer: tag, set: tag, total: records.count, records: records)
         try await Self.plant(try SealedBackupV2Format.encode(envelope), payload: .worldPassport, tag: tag, in: cloud)

@@ -122,9 +122,11 @@ nonisolated struct PassportStampKey: Hashable, Sendable {
 
 extension PassportStampEntry {
     /// The page entry for one stamp of the per-trip store (`PassportBook.stamps`), the specials mapped to this
-    /// layer's tokens.
-    nonisolated init(stamp: PassportStamp) {
+    /// layer's tokens; nil for an airport's stamp, which this layer doesn't draw yet (its ticket stamp,
+    /// World-Airports-Spec §4.1, comes with the airports' screens).
+    nonisolated init?(stamp: PassportStamp) {
         switch stamp.kind {
+        case .airport: return nil
         case .country: self.init(kind: .country, token: stamp.token, date: stamp.date, trip: stamp.trip)
         case .continent: self.init(kind: .continent, token: stamp.token, date: stamp.date)
         case .ocean: self.init(kind: .ocean, token: stamp.token, date: stamp.date)
@@ -135,9 +137,9 @@ extension PassportStampEntry {
     }
 
     /// Every stamp `book` holds, as page entries (the book's own visit order; ``PassportBookModel`` orders them
-    /// again by day). Bounded by the book's caps.
+    /// again by day), airports' stamps left out until this layer draws them. Bounded by the book's caps.
     nonisolated static func entries(of book: PassportBook) -> [PassportStampEntry] {
-        book.stamps.prefix(maxEntries).map(PassportStampEntry.init(stamp:))
+        Array(book.stamps.compactMap(PassportStampEntry.init(stamp:)).prefix(maxEntries))
     }
 }
 

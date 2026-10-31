@@ -86,6 +86,33 @@ public final class PassportStore {
         return found
     }
 
+    /// Records the person at the airport `token` at `date`, found by `find` (``PassportBook/recordAirport(token:at:by:)``,
+    /// World-Airports-Spec §3), and returns what the passport announces, if anything. Saves whenever the book
+    /// changed (airports are found and landed at rarely, so the clock is written with them). Nothing before
+    /// ``load()``. When the save fails the book is left as it was and the error is thrown, so a find or trip is
+    /// announced only once it is on disk.
+    public func recordAirport(token: String, at date: Date, by find: PassportBook.AirportFind) throws -> PassportEvent? {
+        try update { $0.recordAirport(token: token, at: date, by: find) } ?? nil
+    }
+
+    /// Applies `change` to the book (a layover mark, flights added or removed, the upcoming list) and saves it
+    /// when it changed; returns what `change` returned. Nothing before ``load()`` (`change` is not applied and nil
+    /// is returned). When the save fails the book is left as it was and the error is thrown.
+    @discardableResult
+    public func update<Result>(_ change: (inout PassportBook) -> Result) throws -> Result? {
+        guard isLoaded else { return nil }
+        let before = book
+        let result = change(&book)
+        guard book != before else { return result }
+        do {
+            try write()
+        } catch {
+            book = before
+            throw error
+        }
+        return result
+    }
+
     /// Whether the clock of the country `code` has moved on by ``clockWriteInterval`` since it was last saved
     /// (or was never saved).
     private func clockIsOwed(_ code: String?) -> Bool {
