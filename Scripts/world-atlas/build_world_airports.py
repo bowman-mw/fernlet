@@ -646,13 +646,18 @@ def assemble(sections, report):
     return head + table + b"".join(body for _, _, body in stored)
 
 
-def meta_json(args, sources, tz_version):
+def meta_json(args, sources, tz_version, outlines=None):
     listed = [{"file": info["file"], "url": info["url"], "sha256": info["sha256"],
                "licence": SOURCE_LICENCES[info["subdir"]]} for _, info in sorted(sources.items())]
     listed.append({"file": "zone.tab", "url": "tzdata " + tz_version, "sha256": "", "licence":
                    SOURCE_LICENCES["tzdata"]})
     meta = {"generator": "Scripts/world-atlas/build_world_airports.py", "generatorVersion": GENERATOR_VERSION,
             "date": args.date, "tzdata": tz_version, "sources": listed}
+    if outlines:
+        # Each approved outline's picture and seed, credited once each (USGS, Sentinel-2 cloudless by EOX, NASA
+        # GIBS HLS; TIGER/Line, CORINE).
+        meta["outlineCredits"] = sorted({o["imagery"] for o in outlines.values()} |
+                                        {o["seedCredit"] for o in outlines.values() if o.get("seedCredit")})
     return json.dumps(meta, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
@@ -762,7 +767,7 @@ def main(argv):
     sections = [("TZNS", build_tzns(zone_names)), ("APTS", build_apts(unlockables, zone_index, report)),
                 ("PNTS", build_pnts(points, zone_index, apt_index)),
                 ("AIRL", build_airl(os.path.join(hand, "airlines.json"), report)),
-                ("META", meta_json(args, sources, tz_version))]
+                ("META", meta_json(args, sources, tz_version, outlines))]
     pack = assemble(sections, report)
     print("World airports pack: %s (%d bytes, cap %d)" % (args.out, len(pack), SIZE_CAP))
     print("sections (raw -> stored bytes):")
