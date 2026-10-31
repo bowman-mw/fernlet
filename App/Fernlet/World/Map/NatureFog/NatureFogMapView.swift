@@ -78,7 +78,7 @@ final class NatureFogMapView: UIView {
 
     private static let swayKey = "nf.sway"
     /// Core Animation files every transition under `kCATransition`, whatever key it is added with.
-    private static let clearKey = kCATransition
+    private static let clearKey = "clearing"
     private static let scatterKey = "nf.scatter"
 
     private var scene: NatureFogScene?
@@ -568,9 +568,10 @@ final class NatureFogMapView: UIView {
         CATransaction.setDisableActions(true)
         // A placeholder sat under everything; its picture goes on top.
         if waiting.remove(tile.key) != nil { layer.insertSublayer(layers.container, below: effects) }
-        if fades { layers.container.add(NatureFogMotion.clearing(), forKey: Self.clearKey) }
+        let old = fades ? Self.oldPicture(of: layers.container) : nil
         let lifted = layers.trees.filter { !tile.trees.contains($0) }
         layers.swaying = fill(layers.container, with: tile)
+        if let old { fadeOut(old, over: layers.container) }
         layers.trees = tile.trees
         if isSwaying { startSway(layers.swaying) }
         shown[tile.key] = layers
@@ -580,6 +581,25 @@ final class NatureFogMapView: UIView {
         onTileArrived?()
         CATransaction.commit()
         drawNeighbours()
+    }
+
+    /// The tile's current picture and sprites, moved into one layer of their own so they can fade out over the
+    /// new ones.
+    private static func oldPicture(of container: CALayer) -> CALayer {
+        let old = CALayer()
+        old.anchorPoint = .zero
+        old.frame = container.bounds
+        for piece in container.sublayers ?? [] { old.addSublayer(piece) }
+        return old
+    }
+
+    /// Lays `old` over the new picture in `container` and fades it out (``NatureFogMotion/clearing()``), then
+    /// lets it go.
+    private func fadeOut(_ old: CALayer, over container: CALayer) {
+        container.addSublayer(old)
+        old.opacity = 0
+        old.add(NatureFogMotion.clearing(), forKey: Self.clearKey)
+        CATransaction.setCompletionBlock { [weak old] in old?.removeFromSuperlayer() }
     }
 
     /// Puts `tile`'s picture and sprites into `container` in depth order, replacing what was there; returns
@@ -726,7 +746,20 @@ extension NatureFogMapView {
     }
 
     /// How many tiles are crossfading after a clearing.
-    var fadingTileCount: Int { shown.values.filter { $0.container.animation(forKey: Self.clearKey) != nil }.count }
+    var fadingTileCount: Int { shown.values.filter { Self.fadingPicture(in: $0.container) != nil }.count }
+
+    /// How many fading tiles fade their old picture over the new one at full strength, never see-through (tests).
+    var fadingOverNewPictureCount: Int {
+        shown.values.filter { layers in
+            guard let old = Self.fadingPicture(in: layers.container), let new = layers.container.sublayers?.first else { return false }
+            return layers.container.sublayers?.last === old && new !== old && new.opacity == 1 && new.animationKeys() == nil
+        }.count
+    }
+
+    /// The old picture fading out in `container`, if one is.
+    private static func fadingPicture(in container: CALayer) -> CALayer? {
+        container.sublayers?.first { $0.animation(forKey: clearKey) != nil }
+    }
 
     /// Pauses the sway while the map moves, and arranges for it to resume once the map sits still.
     private func noteMovement(_ viewport: MapViewport, motion: NatureFogMotion) {
