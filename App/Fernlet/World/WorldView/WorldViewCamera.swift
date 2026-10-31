@@ -22,6 +22,9 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
     static let antarcticEdgeLatitude = -78.0
     /// The most hexes one frame enumerates (an iPhone screen holds about 5,000 of the 10-pt hexes).
     static let maxVisibleHexes = 16_000
+    /// The most hexes one map drawing enumerates: the screen and ``WorldViewMapDrawing/margin`` past each edge
+    /// (about 13,000 on an iPhone, more on an iPad).
+    static let maxDrawnHexes = 40_000
 
     /// The zoom level.
     private(set) var level: AtlasZoomLevel
@@ -115,6 +118,15 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
         clamp()
     }
 
+    /// The same view grown by `margin` points on every side, keeping the centre (not clamped again, so it
+    /// shows exactly what this camera shows, and more round it).
+    func overscanned(by margin: Double) -> WorldViewCamera {
+        guard margin.isFinite, margin > 0 else { return self }
+        var grown = self
+        grown.size = CGSize(width: size.width + 2 * margin, height: size.height + 2 * margin)
+        return grown
+    }
+
     /// The range the centre's `y` may take at this level in this view.
     var yRange: ClosedRange<Double> {
         let half = Double(size.height) / 2 / scale
@@ -166,27 +178,27 @@ nonisolated struct WorldViewVisibleHex: Sendable {
     let x: Double, y: Double
 }
 
-extension WorldViewCamera {
+nonisolated extension WorldViewCamera {
     /// The level's hexes that touch the view, with `margin` hexes more on each side, row by row. Bounded: at
-    /// most ``maxVisibleHexes``.
-    func visibleHexes(margin: Int = 1) -> [WorldViewVisibleHex] {
-        let grid = level.hexGrid
+    /// most `limit` (``maxVisibleHexes``; a map drawing passes ``maxDrawnHexes``).
+    func visibleHexes(margin: Int = 1, limit: Int = maxVisibleHexes) -> [WorldViewVisibleHex] {
+        let grid = level.hexGrid, cap = min(max(limit, 0), Self.maxDrawnHexes)
         let radius = grid.radius, across = 3.0.squareRoot() * radius
         guard radius > 0, radius.isFinite else { return [] }
         let view = viewport, pad = Double(max(margin, 0) + 1) * across
         let firstRow = Int(((view.minY - pad) / (1.5 * radius)).rounded(.down))
         let lastRow = Int(((view.minY + view.height + pad) / (1.5 * radius)).rounded(.up))
-        guard lastRow >= firstRow, lastRow - firstRow < Self.maxVisibleHexes else { return [] }
+        guard lastRow >= firstRow, lastRow - firstRow < cap else { return [] }
         var hexes: [WorldViewVisibleHex] = []
-        hexes.reserveCapacity(min(Self.maxVisibleHexes, 6_000))
-        // Bounded: the rows on screen, and maxVisibleHexes in all.
+        hexes.reserveCapacity(min(cap, 16_000))
+        // Bounded: the rows on screen, and `limit` in all.
         for r in firstRow...lastRow {
             let shift = Double(r) / 2
             let firstQ = Int(((view.minX - pad) / across - shift).rounded(.down))
             let lastQ = Int(((view.minX + view.width + pad) / across - shift).rounded(.up))
             guard lastQ >= firstQ else { continue }
             for q in firstQ...lastQ {
-                guard hexes.count < Self.maxVisibleHexes else { return hexes }
+                guard hexes.count < cap else { return hexes }
                 let cx = across * (Double(q) + shift), cy = 1.5 * radius * Double(r)
                 hexes.append(WorldViewVisibleHex(cell: Self.canonical((cx, cy), in: grid), x: cx, y: cy))
             }

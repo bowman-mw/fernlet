@@ -162,7 +162,7 @@ nonisolated enum WorldRoadStyle {
 /// past each edge), so no point handed to Core Graphics is ever far off screen however long the road.
 enum WorldRoadPainter {
     /// How a piece's Mercator points reach the screen: `screen = ((x + shift) - originX) × scale, (y - originY) × scale`.
-    struct Projection {
+    nonisolated struct Projection {
         let originX: Double, originY: Double, scale: Double
         /// A per-piece shift in Mercator `x` (the world view's wrap; 0 on Home).
         var shift: (WorldRoadPiece) -> Double = { _ in 0 }
@@ -175,19 +175,23 @@ enum WorldRoadPainter {
         for kind in AtlasRoadKind.allCases {
             let path = self.path(drawing.pieces.filter { $0.kind == kind }, size: size, projection: projection)
             guard !path.isEmpty else { continue }
-            let w = width(kind)
-            context.stroke(path, with: .color(WorldPalette.rgb(WorldRoadStyle.ink)),
-                           style: StrokeStyle(lineWidth: w + WorldRoadStyle.edgeExtra, lineCap: .round, lineJoin: .round))
-            context.stroke(path, with: .color(WorldPalette.rgb(WorldRoadStyle.amber)),
-                           style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round))
-            context.stroke(path, with: .color(WorldPalette.rgb(WorldRoadStyle.dash)),
-                           style: StrokeStyle(lineWidth: WorldRoadStyle.dashWidth, dash: WorldRoadStyle.dashPattern))
+            stroke(path, width: width(kind), in: &context)
         }
+    }
+
+    /// Strokes one kind's `path`, `width` wide: the edge, the road, the dash.
+    static func stroke(_ path: Path, width w: CGFloat, in context: inout GraphicsContext) {
+        context.stroke(path, with: .color(WorldPalette.rgb(WorldRoadStyle.ink)),
+                       style: StrokeStyle(lineWidth: w + WorldRoadStyle.edgeExtra, lineCap: .round, lineJoin: .round))
+        context.stroke(path, with: .color(WorldPalette.rgb(WorldRoadStyle.amber)),
+                       style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round))
+        context.stroke(path, with: .color(WorldPalette.rgb(WorldRoadStyle.dash)),
+                       style: StrokeStyle(lineWidth: WorldRoadStyle.dashWidth, dash: WorldRoadStyle.dashPattern))
     }
 
     /// The path of the visible `pieces`, clipped. Bounded: the pieces (at most ``WorldRoadDrawing/maxPieces``),
     /// each at most ``WorldRoadDrawing/maxPiecePoints`` points.
-    static func path(_ pieces: [WorldRoadPiece], size: CGSize, projection: Projection) -> Path {
+    nonisolated static func path(_ pieces: [WorldRoadPiece], size: CGSize, projection: Projection) -> Path {
         let limit = WorldLayerGuard.viewMultiple * Double(max(size.width, size.height))
         let reach = CGRect(origin: .zero, size: size).insetBy(dx: -limit, dy: -limit)
         let margin = 40 / projection.scale
@@ -214,7 +218,7 @@ enum WorldRoadPainter {
     }
 
     /// The part of segment `a`–`b` inside `rect` (Liang–Barsky), or nil when none is, or a point is not finite.
-    static func clip(_ a: CGPoint, _ b: CGPoint, to rect: CGRect) -> (CGPoint, CGPoint)? {
+    nonisolated static func clip(_ a: CGPoint, _ b: CGPoint, to rect: CGRect) -> (CGPoint, CGPoint)? {
         guard a.x.isFinite, a.y.isFinite, b.x.isFinite, b.y.isFinite else { return nil }
         let dx = b.x - a.x, dy = b.y - a.y
         var t0: CGFloat = 0, t1: CGFloat = 1
