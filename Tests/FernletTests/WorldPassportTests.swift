@@ -236,6 +236,27 @@ struct WorldPassportTests {
         #expect(reopened.book.discoveries(of: .sea) == 0, "the decoy's fix was never written")
     }
 
+    /// The app opens the atlas off the main actor at launch (it held Home's first frame 2.6 s): while it opens,
+    /// readers are answered as without an atlas and the newest fix waits; once open, that fix is read and kept.
+    @Test func aFixThatArrivesWhileTheAtlasOpensIsReadOnceItIsOpen() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = WorldAtlasKeeper(vault: vault, openAtlas: { Self.atlas }, openAtlasOffMain: { Self.atlas })
+        keeper.beginOpening()
+        #expect(keeper.isOpeningAtlas)
+        #expect(!keeper.isWater(MercatorHexGrid.cell(containing: Self.caribbeanPoint)), "no atlas answers yet")
+        keeper.observe(point: Self.portlandPoint, at: Self.t1)
+        #expect(keeper.book.isEmpty, "the fix waits for the atlas")
+        for _ in 0..<5_000 {
+            guard keeper.isOpeningAtlas else { break }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        #expect(!keeper.isOpeningAtlas)
+        #expect(keeper.book.firstVisit(.country, token: "US") == Self.t1, "read once the atlas is open, at its own time")
+        keeper.beginOpening()
+        #expect(!keeper.isOpeningAtlas, "an open atlas is never opened again")
+    }
+
     /// The wipe forgets the passport and removes its file; a new keeper starts empty.
     @Test func clearAllEmptiesThePassport() throws {
         let vault = WorldMapVault.ephemeral()

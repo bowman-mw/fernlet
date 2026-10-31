@@ -11,7 +11,8 @@ struct StampBookPassportRow: View {
 
     init(store: FernletStore) {
         self.store = store
-        _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas }))
+        _library = State(initialValue: PassportLibrary(openAtlas: { store.worldFog.atlas.openedAtlas },
+                                                       seaNeighbours: { store.worldFog.atlas.seaNeighbours() }))
     }
 
     var body: some View {

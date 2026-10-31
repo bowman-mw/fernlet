@@ -479,6 +479,8 @@ struct ContentView: View {
     /// scoring contexts first (before any load can observe a missing gate), then the lock / worry-box
     /// activation and the delete-all hooks, then the post-launch sequence.
     private func performLaunchWiring() async {
+        // The world atlas opens off the main actor while the launch screen is up, never in Home's first frame.
+        store.worldFog.atlas.beginOpening()
         #if DEBUG
         UITestPrivateHubSeed.applyLaunchHooks(lockService: lockService)
         #endif
