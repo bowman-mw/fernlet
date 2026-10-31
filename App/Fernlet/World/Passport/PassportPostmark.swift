@@ -3,16 +3,20 @@ import FernletUI
 import SwiftUI
 import WorldMapStore
 
-/// The three postmark shapes: a ring (continents), a hexagon (oceans and seas), a rounded rectangle (countries).
+/// The postmark shapes: a ring (continents), a hexagon (oceans and seas), a rounded rectangle (countries) and a
+/// ticket notched on both sides (airports, World-Airports-Spec §4.1, so it never reads as a country's).
 nonisolated enum PassportPostmarkShape: Hashable, Sendable {
-    case round, hex, rect
+    case round, hex, rect, ticket
 
-    /// The postmark's drawing size in points at scale 1: 56 × 44 for a country, 48 × 48 for the rest.
-    var size: CGSize { self == .rect ? CGSize(width: 56, height: 44) : CGSize(width: 48, height: 48) }
+    /// The postmark's drawing size in points at scale 1: 56 × 44 for a country or an airport, 48 × 48 for the rest.
+    var size: CGSize {
+        self == .rect || self == .ticket ? CGSize(width: 56, height: 44) : CGSize(width: 48, height: 48)
+    }
 }
 
-/// An earned stamp, ready to draw: its ink (light mode), its pixel art, its printed label (countries only), and the
-/// key its tilt and wear are seeded from.
+/// An earned stamp, ready to draw: its ink (light mode), its pixel art, its printed label (a country's lines; an
+/// airport's code then its city or TRANSIT), the key its tilt and wear are seeded from, and (an airport's) the key
+/// its wear is seeded from when that differs.
 nonisolated struct PassportStampDrawing: Hashable, Sendable {
     /// The light-mode ink, `0xRRGGBB` (dark mode lifts it with `PassportInk.mix2`).
     let ink: UInt32
@@ -22,11 +26,14 @@ nonisolated struct PassportStampDrawing: Hashable, Sendable {
     let label: [String]
     /// The stamp's frozen key (``PassportStampSeed``).
     let key: String
+    /// The key the wear is seeded from when it isn't ``key`` (an airport's: its token, the mockup's `seedOf(code)`).
+    var wearKey: String?
 }
 
 /// One passport stamp drawn as the mockup's `postmark()` draws it (World-Exploration-Spec §3): the shape's double
 /// outline in one ink, the art as pixel squares with about 7 % worn away, a country's label in DM Sans Bold
-/// capitals, and the stamp's tilt; or, not yet earned, the shape dashed with a "?" and no name.
+/// capitals, and the stamp's tilt; or, not yet earned, the shape dashed with a "?" and no name. An airport's
+/// ticket is drawn by ``PassportTicketPainter`` (its code and city, a dashed outline alone when not found).
 ///
 /// Drawn in a Canvas in the postmark's own 56 × 44 or 48 × 48 points, scaled, so it stays crisp at any size. The
 /// label is glyph outlines from Core Text in the stamp's ink, so its size is the stamp's, never Dynamic Type's
@@ -65,6 +72,10 @@ enum PassportPostmarkPainter {
     /// An earned stamp: outline, art, label.
     static func drawEarned(_ stamp: PassportStampDrawing, shape: PassportPostmarkShape, dark: Bool,
                            in context: inout GraphicsContext) {
+        guard shape != .ticket else {
+            PassportTicketPainter.drawEarned(stamp, dark: dark, in: &context)
+            return
+        }
         let ink = PassportInk.color(PassportInk.resolved(stamp.ink, dark: dark))
         drawOutline(shape: shape, ink: ink, in: &context)
         drawArt(stamp.art, shape: shape, seed: PassportStampSeed.seed(stamp.key), ink: ink, in: &context)
@@ -81,6 +92,8 @@ enum PassportPostmarkPainter {
     /// The shape's two outlines (and a ring's eight dots).
     private static func drawOutline(shape: PassportPostmarkShape, ink: Color, in context: inout GraphicsContext) {
         switch shape {
+        case .ticket:
+            context.stroke(PassportTicketPainter.ticket(), with: .color(ink), lineWidth: 2)
         case .rect:
             context.stroke(Path(roundedRect: CGRect(x: 2.5, y: 2.5, width: 51, height: 39), cornerRadius: 5),
                            with: .color(ink), lineWidth: 2)
@@ -124,11 +137,16 @@ enum PassportPostmarkPainter {
     /// A space not earned yet: the shape dashed and a "?", in the page's ink at low strength (stronger under
     /// Increase Contrast).
     static func drawSpace(shape: PassportPostmarkShape, dark: Bool, strong: Bool, in context: inout GraphicsContext) {
+        guard shape != .ticket else {
+            PassportTicketPainter.drawSpace(dark: dark, strong: strong, in: &context)
+            return
+        }
         let base = dark ? Color(red: 1, green: 241 / 255, blue: 207 / 255) : Color(red: 74 / 255, green: 46 / 255,
                                                                                     blue: 28 / 255)
         let line = base.opacity(strong ? 0.7 : (dark ? 0.4 : 0.35))
         let mark = base.opacity(strong ? 0.75 : (dark ? 0.45 : 0.4))
         let outline: Path = switch shape {
+        case .ticket: PassportTicketPainter.ticket()
         case .rect: Path(roundedRect: CGRect(x: 3, y: 3, width: 50, height: 38), cornerRadius: 5)
         case .hex: hexagon(radius: 21)
         case .round: circle(radius: 21)

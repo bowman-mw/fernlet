@@ -9,8 +9,8 @@ import WorldMapStore
 ///   fix's finds (``WorldLinePicker/better(_:_:)``: a city beats the ground under it). A new trip says nothing.
 ///   Landmark lines come from here and only here: `WorldExploreState.onLandmarkFound` (the cities piece's seam)
 ///   stays unattached, so a landmark's line plays once.
-/// - **New stamps** (``onNewStamp``): every first-visit country, continent, ocean and sea stamp, the two specials on
-///   the visit that completes them, and each ``PassportEvent/newTrip(_:)``. The passport book attaches here (the
+/// - **New stamps** (``onNewStamp``): every first-visit airport, country, continent, ocean and sea stamp, the two
+///   specials on the visit that completes them, and each ``PassportEvent/newTrip(_:)`` (an airport's too). The passport book attaches here (the
 ///   next wave); nil drops them.
 ///
 /// A decoy hears nothing: the keeper announces nothing in one, and the router checks again.

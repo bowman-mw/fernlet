@@ -155,6 +155,7 @@ struct PassportStampGallery: View {
     /// A stamp's caption (English; DEBUG copy).
     private func name(of kind: PassportStampKind) -> String {
         switch kind {
+        case .airport(let token, _): library.airport(token)?.englishName ?? token
         case .country(let code): library.countryStamp(code)?.englishName ?? code
         case .continent(let continent): String(localized: continent.passportName)
         case .ocean(let ocean): String(localized: ocean.passportName)

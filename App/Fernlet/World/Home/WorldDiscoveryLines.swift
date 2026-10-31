@@ -199,16 +199,17 @@ enum WorldLinePicker {
     }
 
     /// The stamps a first visit earns, for the passport's new-stamp moment: a country, continent, ocean or sea
-    /// stamp, followed by the all-seven or all-five special when it completes them; none for a city, a landmark
-    /// or the ground, and none for an airport (its stamp has its own banners, World-Airports-Spec §3, §6.3).
+    /// stamp, followed by the all-seven or all-five special when it completes them, or an airport's first ticket
+    /// (World-Airports-Spec §3: "New stamp: Portland International"); none for a city, a landmark or the ground.
     static func stamps(for discovery: AtlasDiscovery, in book: PassportBook) -> [PassportStamp] {
         let kind: PassportStamp.Kind
         switch discovery.kind {
+        case .airport: kind = .airport
         case .country: kind = .country
         case .continent: kind = .continent
         case .ocean: kind = .ocean
         case .sea: kind = .sea
-        case .city, .landmark, .terrain, .airport: return []
+        case .city, .landmark, .terrain: return []
         }
         var stamps = [PassportStamp(kind: kind, token: discovery.token, date: discovery.at)]
         if kind == .continent, completes(discovery, of: AtlasContinent.allCases.count, in: book) {

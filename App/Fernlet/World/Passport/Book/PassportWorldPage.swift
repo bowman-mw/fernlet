@@ -45,7 +45,8 @@ struct PassportPageHeading: View {
 
 /// Page 2, Your world (World-Passport-Spec §5): the header with the first stamp's date, the approved description,
 /// the world preview, the four approved counts (countries, continents and oceans with their bars, the seas with
-/// none) and the two specials, greyed with how many to go until earned.
+/// none), the airports found once there is one ("6 airports", no total: World-Airports-Spec §4.2) and the two
+/// specials, greyed with how many to go until earned.
 struct PassportWorldPage: View {
     let book: PassportBookModel
     let progress: PassportProgress
@@ -72,6 +73,10 @@ struct PassportWorldPage: View {
                 PassportCountLine(count: progress.oceanCount, total: PassportProgress.oceanTotal,
                                   words: Text(PassportPageCopy.ofOceans(PassportProgress.oceanTotal)))
                 PassportCountLine(count: progress.seaCount, total: nil, words: Text(PassportPageCopy.seas(progress.seaCount)))
+                if progress.airportCount > 0 {
+                    PassportCountLine(count: progress.airportCount, total: nil,
+                                      words: Text(PassportPageCopy.airports(progress.airportCount)))
+                }
             }
             PassportPageHeading(text: Text(PassportPageCopy.twoToAimFor))
             HStack(alignment: .top, spacing: 8) {

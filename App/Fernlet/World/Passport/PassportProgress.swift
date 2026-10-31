@@ -4,7 +4,8 @@ import WorldMapStore
 /// How far a passport has come, read from one ``PassportBook`` against the bundled atlas (World-Exploration-Spec §3):
 /// countries N of 194 (each one of the passport's countries, a territory counting toward its sovereign state, as
 /// the atlas's `CTRY` table says), continents N of 7, oceans N of 5, the seas (no fixed total), the two specials,
-/// and each continent's countries, in first-visit order.
+/// the airports found (no total, World-Airports-Spec §4.2: "6 airports"), and each continent's countries, in
+/// first-visit order.
 ///
 /// A value built from the book its caller hands it (the screens hand it `store.worldFog.atlas.book`: the person's,
 /// or an empty one in a decoy, so a decoy counts nothing) and the atlas's country table (``PassportCountryTable``,
@@ -19,6 +20,8 @@ nonisolated struct PassportProgress: Equatable, Sendable {
     let oceans: Set<AtlasOcean>
     /// The seas reached (their frozen tokens), earliest first visit first.
     let seas: [String]
+    /// The airports found (their frozen tokens), earliest first trip first; each once however many trips.
+    let airports: [String]
     /// Each earned country's continent (from the atlas).
     private let continentOfEarned: [String: AtlasContinent]
     /// Each continent's number of passport countries.
@@ -43,6 +46,7 @@ nonisolated struct PassportProgress: Equatable, Sendable {
     init(entries: [PassportStampEntry], table: PassportCountryTable) {
         var earned: [String] = [], seen = Set<String>(), continentOf: [String: AtlasContinent] = [:]
         var continents = Set<AtlasContinent>(), oceans = Set<AtlasOcean>(), seas: [String] = [], seenSeas = Set<String>()
+        var airports: [String] = [], seenAirports = Set<String>()
         // Bounded: the ordering function keeps at most PassportStampEntry.maxEntries.
         for entry in PassportStampEntry.ordered(entries) {
             switch entry.kind {
@@ -53,6 +57,7 @@ nonisolated struct PassportProgress: Equatable, Sendable {
             case .continent: if let continent = AtlasContinent(rawValue: entry.token) { continents.insert(continent) }
             case .ocean: if let ocean = AtlasOcean(rawValue: entry.token) { oceans.insert(ocean) }
             case .sea: if seenSeas.insert(entry.token).inserted { seas.append(entry.token) }
+            case .airport: if seenAirports.insert(entry.token).inserted { airports.append(entry.token) }
             case .special: continue
             }
         }
@@ -61,6 +66,7 @@ nonisolated struct PassportProgress: Equatable, Sendable {
         self.continents = continents
         self.oceans = oceans
         self.seas = seas
+        self.airports = airports
         totals = table.totals
     }
 
@@ -82,6 +88,8 @@ nonisolated struct PassportProgress: Equatable, Sendable {
     var oceanCount: Int { oceans.count }
     /// The seas found (each its own stamp; no total).
     var seaCount: Int { seas.count }
+    /// The airports found ("6 airports"; no total).
+    var airportCount: Int { airports.count }
     /// How many of the two specials are earned.
     var specialsEarned: Int { (hasAllContinents ? 1 : 0) + (hasAllOceans ? 1 : 0) }
 
