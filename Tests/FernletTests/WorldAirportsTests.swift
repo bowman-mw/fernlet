@@ -28,9 +28,9 @@ struct WorldAirportsTests {
         #expect(airports.airports.filter { $0.size == .large }.count > 1_000)
         #expect(airports.points.count > 9_000 && airports.points.count < 10_000)
         #expect(airports.airports.map(\.token) == airports.airports.map(\.token).sorted())
-        // The owner's approved outlines (batches 1 and 2, 2026-10-31): only large airports, each holding its own point.
+        // The owner's approved outlines (batches 1–2 reviewed, 3 on in the owner's blanket approval, 2026-10-31): only large airports, each holding its own point.
         let outlined = airports.airports.filter { $0.grounds.isOurOutline }
-        #expect(outlined.count >= 107)
+        #expect(outlined.count >= 285)
         #expect(outlined.allSatisfy { $0.size == .large && $0.contains($0.point) })
     }
 
