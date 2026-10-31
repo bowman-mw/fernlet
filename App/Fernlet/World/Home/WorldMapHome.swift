@@ -128,7 +128,11 @@ struct WorldMapHome: View {
 
     var body: some View {
         TimelineView(.everyMinute) { timeline in
-            if presence == .off {
+            if WorldFlyingHome.shows(store) {
+                // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
+                WorldFlyingHome(store: store, date: timeline.date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
+                                isActive: isCompanionActive, isNight: phase(at: timeline.date) == .night)
+            } else if presence == .off {
                 offHome(date: timeline.date)
             } else {
                 mapHome(date: timeline.date)
