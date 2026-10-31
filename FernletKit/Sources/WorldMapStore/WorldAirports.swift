@@ -139,7 +139,7 @@ public nonisolated struct WorldAirports: Sendable {
     public static let requiredTags = ["TZNS", "APTS", "PNTS", "AIRL"]
     /// The shipped `WorldAirports.pack`'s SHA-256 (generated 2026-10-31 by
     /// `Scripts/world-atlas/build_world_airports.py`). Regenerating the pack changes it on purpose.
-    public static let expectedSHA256 = "3aadfacccc27631a37859b7cb7b69a95f6ab77a04bc96837467a475e07346a4c"
+    public static let expectedSHA256 = "8271eae548720a53c3117c35448b38fafcf11d68c71135a8719e05545b4b476e"
     /// Degrees per grid cell of the grounds index.
     static let indexCellDegrees = 1.0
 

@@ -1,4 +1,1129 @@
 {
-  "about": "Our own airport outlines (World-Airports-Spec §2.1): each record is one large airport's grounds, traced from public-domain or open imagery (never OpenStreetMap, Apple, Google or Bing), simplified to 12-24 points, and approved by the owner on a review card. Fields: id (the airport's frozen token), points ([lat, lon] pairs, open ring), imagery (source and credit), imageryDate, seed (where the first draft came from), reviewer, approved (date). build_world_airports.py refuses any record without an approval.",
-  "outlines": []
+ "about": "Our own airport outlines (World-Airports-Spec §2.1): each record is one large airport's grounds, traced from public-domain or open imagery (never OpenStreetMap, Apple, Google or Bing), simplified to 12-24 points, and approved by the owner on a review card. Fields: id (the airport's frozen token), points ([lat, lon] pairs, open ring), imagery (source and credit), imageryDate, seed (where the first draft came from), reviewer, approved (date). build_world_airports.py refuses any record without an approval.",
+ "outlines": [
+  {
+   "id": "ALB",
+   "points": [
+    [
+     42.76498,
+     -73.80791
+    ],
+    [
+     42.76454,
+     -73.8043
+    ],
+    [
+     42.76045,
+     -73.80216
+    ],
+    [
+     42.7595,
+     -73.79992
+    ],
+    [
+     42.75654,
+     -73.79975
+    ],
+    [
+     42.75414,
+     -73.80147
+    ],
+    [
+     42.75131,
+     -73.80104
+    ],
+    [
+     42.75143,
+     -73.7819
+    ],
+    [
+     42.74967,
+     -73.78096
+    ],
+    [
+     42.74753,
+     -73.78259
+    ],
+    [
+     42.74709,
+     -73.79374
+    ],
+    [
+     42.74185,
+     -73.79443
+    ],
+    [
+     42.74154,
+     -73.79932
+    ],
+    [
+     42.73334,
+     -73.80018
+    ],
+    [
+     42.73303,
+     -73.80576
+    ],
+    [
+     42.73681,
+     -73.80834
+    ],
+    [
+     42.74343,
+     -73.80902
+    ],
+    [
+     42.74248,
+     -73.81306
+    ],
+    [
+     42.74532,
+     -73.81348
+    ],
+    [
+     42.74816,
+     -73.81649
+    ],
+    [
+     42.74847,
+     -73.81812
+    ],
+    [
+     42.75068,
+     -73.8176
+    ],
+    [
+     42.75131,
+     -73.81005
+    ],
+    [
+     42.76045,
+     -73.80919
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:20Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "ATL",
+   "points": [
+    [
+     33.63501,
+     -84.45666
+    ],
+    [
+     33.63694,
+     -84.45649
+    ],
+    [
+     33.64137,
+     -84.46027
+    ],
+    [
+     33.64881,
+     -84.46078
+    ],
+    [
+     33.64966,
+     -84.451
+    ],
+    [
+     33.64781,
+     -84.44963
+    ],
+    [
+     33.6468,
+     -84.44791
+    ],
+    [
+     33.65674,
+     -84.43486
+    ],
+    [
+     33.65752,
+     -84.41941
+    ],
+    [
+     33.65581,
+     -84.41212
+    ],
+    [
+     33.65188,
+     -84.40551
+    ],
+    [
+     33.65245,
+     -84.39967
+    ],
+    [
+     33.64781,
+     -84.39985
+    ],
+    [
+     33.63744,
+     -84.40293
+    ],
+    [
+     33.63423,
+     -84.40422
+    ],
+    [
+     33.63316,
+     -84.40911
+    ],
+    [
+     33.6298,
+     -84.42156
+    ],
+    [
+     33.62387,
+     -84.42199
+    ],
+    [
+     33.62179,
+     -84.41684
+    ],
+    [
+     33.61893,
+     -84.41667
+    ],
+    [
+     33.61908,
+     -84.44946
+    ],
+    [
+     33.62565,
+     -84.45031
+    ],
+    [
+     33.63058,
+     -84.45486
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "TIGER K2451, corrected by eye",
+   "seedCredit": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:22Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "BCN",
+   "points": [
+    [
+     41.31496,
+     2.10453
+    ],
+    [
+     41.30813,
+     2.10839
+    ],
+    [
+     41.29646,
+     2.10204
+    ],
+    [
+     41.28975,
+     2.10608
+    ],
+    [
+     41.28833,
+     2.10359
+    ],
+    [
+     41.28672,
+     2.09243
+    ],
+    [
+     41.28375,
+     2.08582
+    ],
+    [
+     41.28053,
+     2.07423
+    ],
+    [
+     41.28878,
+     2.06376
+    ],
+    [
+     41.29459,
+     2.05818
+    ],
+    [
+     41.29846,
+     2.05861
+    ],
+    [
+     41.30768,
+     2.07492
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:25Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "BOS",
+   "points": [
+    [
+     42.3682,
+     -71.03008
+    ],
+    [
+     42.37118,
+     -71.02596
+    ],
+    [
+     42.3741,
+     -71.02896
+    ],
+    [
+     42.37752,
+     -71.02639
+    ],
+    [
+     42.38088,
+     -71.01454
+    ],
+    [
+     42.37727,
+     -71.01952
+    ],
+    [
+     42.3715,
+     -71.01137
+    ],
+    [
+     42.37911,
+     -71.00442
+    ],
+    [
+     42.37708,
+     -70.99824
+    ],
+    [
+     42.36915,
+     -71.00184
+    ],
+    [
+     42.36687,
+     -70.99961
+    ],
+    [
+     42.36547,
+     -71.00373
+    ],
+    [
+     42.36053,
+     -70.99712
+    ],
+    [
+     42.36192,
+     -70.98828
+    ],
+    [
+     42.3578,
+     -70.98622
+    ],
+    [
+     42.35393,
+     -70.99171
+    ],
+    [
+     42.35697,
+     -70.99901
+    ],
+    [
+     42.35583,
+     -71.00579
+    ],
+    [
+     42.35412,
+     -71.00373
+    ],
+    [
+     42.3474,
+     -71.00613
+    ],
+    [
+     42.35786,
+     -71.02596
+    ],
+    [
+     42.36458,
+     -71.02536
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "TIGER K2451, corrected by eye",
+   "seedCredit": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:27Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "CPH",
+   "points": [
+    [
+     55.60627,
+     12.67074
+    ],
+    [
+     55.60719,
+     12.67623
+    ],
+    [
+     55.61345,
+     12.68215
+    ],
+    [
+     55.62929,
+     12.68095
+    ],
+    [
+     55.63162,
+     12.67735
+    ],
+    [
+     55.63249,
+     12.65632
+    ],
+    [
+     55.63007,
+     12.62654
+    ],
+    [
+     55.62028,
+     12.62851
+    ],
+    [
+     55.62159,
+     12.63237
+    ],
+    [
+     55.6182,
+     12.63907
+    ],
+    [
+     55.6022,
+     12.61443
+    ],
+    [
+     55.59614,
+     12.59984
+    ],
+    [
+     55.5907,
+     12.59864
+    ],
+    [
+     55.59022,
+     12.60482
+    ],
+    [
+     55.59643,
+     12.61452
+    ],
+    [
+     55.60084,
+     12.62319
+    ],
+    [
+     55.60006,
+     12.63108
+    ],
+    [
+     55.60501,
+     12.6401
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:29Z",
+   "review": "batch 1 draft 2, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "JAX",
+   "points": [
+    [
+     30.4974,
+     -81.70797
+    ],
+    [
+     30.50509,
+     -81.68188
+    ],
+    [
+     30.51234,
+     -81.66008
+    ],
+    [
+     30.50613,
+     -81.66008
+    ],
+    [
+     30.50494,
+     -81.66505
+    ],
+    [
+     30.50295,
+     -81.66883
+    ],
+    [
+     30.4994,
+     -81.67355
+    ],
+    [
+     30.49607,
+     -81.67115
+    ],
+    [
+     30.49126,
+     -81.67115
+    ],
+    [
+     30.48912,
+     -81.67647
+    ],
+    [
+     30.47802,
+     -81.67913
+    ],
+    [
+     30.47506,
+     -81.67338
+    ],
+    [
+     30.47255,
+     -81.67432
+    ],
+    [
+     30.47166,
+     -81.67707
+    ],
+    [
+     30.47181,
+     -81.68033
+    ],
+    [
+     30.47528,
+     -81.68067
+    ],
+    [
+     30.47536,
+     -81.68522
+    ],
+    [
+     30.48534,
+     -81.70222
+    ],
+    [
+     30.48387,
+     -81.70574
+    ],
+    [
+     30.48409,
+     -81.7096
+    ],
+    [
+     30.49274,
+     -81.70943
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "TIGER K2451, corrected by eye",
+   "seedCredit": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:31Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "KEF",
+   "points": [
+    [
+     64.00023,
+     -22.63852
+    ],
+    [
+     64.00038,
+     -22.61844
+    ],
+    [
+     63.99195,
+     -22.6162
+    ],
+    [
+     63.99203,
+     -22.61054
+    ],
+    [
+     63.99428,
+     -22.6102
+    ],
+    [
+     63.99428,
+     -22.60024
+    ],
+    [
+     63.99225,
+     -22.59955
+    ],
+    [
+     63.986,
+     -22.58874
+    ],
+    [
+     63.98292,
+     -22.57775
+    ],
+    [
+     63.97893,
+     -22.57741
+    ],
+    [
+     63.97704,
+     -22.5841
+    ],
+    [
+     63.97004,
+     -22.5908
+    ],
+    [
+     63.97026,
+     -22.59337
+    ],
+    [
+     63.9616,
+     -22.59767
+    ],
+    [
+     63.96085,
+     -22.60299
+    ],
+    [
+     63.96145,
+     -22.60985
+    ],
+    [
+     63.97267,
+     -22.61123
+    ],
+    [
+     63.97463,
+     -22.64882
+    ],
+    [
+     63.98103,
+     -22.66358
+    ],
+    [
+     63.98728,
+     -22.6629
+    ],
+    [
+     63.99105,
+     -22.63904
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:33Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "NAP",
+   "points": [
+    [
+     40.88318,
+     14.29543
+    ],
+    [
+     40.8848,
+     14.29491
+    ],
+    [
+     40.88954,
+     14.30659
+    ],
+    [
+     40.89084,
+     14.30873
+    ],
+    [
+     40.89356,
+     14.30856
+    ],
+    [
+     40.89408,
+     14.30487
+    ],
+    [
+     40.88908,
+     14.29225
+    ],
+    [
+     40.88921,
+     14.28899
+    ],
+    [
+     40.88772,
+     14.28693
+    ],
+    [
+     40.88915,
+     14.28401
+    ],
+    [
+     40.88889,
+     14.28135
+    ],
+    [
+     40.88603,
+     14.2762
+    ],
+    [
+     40.88149,
+     14.27311
+    ],
+    [
+     40.8798,
+     14.27371
+    ],
+    [
+     40.87721,
+     14.27543
+    ],
+    [
+     40.87604,
+     14.27826
+    ],
+    [
+     40.87682,
+     14.28367
+    ],
+    [
+     40.8737,
+     14.2865
+    ],
+    [
+     40.87435,
+     14.2877
+    ],
+    [
+     40.87708,
+     14.28925
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:34Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "OSL",
+   "points": [
+    [
+     60.2242,
+     11.0941
+    ],
+    [
+     60.22207,
+     11.09908
+    ],
+    [
+     60.2161,
+     11.09787
+    ],
+    [
+     60.21124,
+     11.10096
+    ],
+    [
+     60.20758,
+     11.10611
+    ],
+    [
+     60.20519,
+     11.12998
+    ],
+    [
+     60.16815,
+     11.1135
+    ],
+    [
+     60.16746,
+     11.10749
+    ],
+    [
+     60.17523,
+     11.0941
+    ],
+    [
+     60.18121,
+     11.06972
+    ],
+    [
+     60.19051,
+     11.06354
+    ],
+    [
+     60.19964,
+     11.06886
+    ],
+    [
+     60.20271,
+     11.07419
+    ],
+    [
+     60.20587,
+     11.07539
+    ],
+    [
+     60.21218,
+     11.0826
+    ]
+   ],
+   "imagery": "Imagery: Sentinel-2 cloudless 2016 by EOX IT Services GmbH (CC BY 4.0), contains modified Copernicus Sentinel data 2016",
+   "imageryDate": "2016",
+   "seed": "CORINE 124, corrected by eye",
+   "seedCredit": "Outline seed: CORINE Land Cover 2018, © European Union, Copernicus Land Monitoring Service, EEA",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:35Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "PIT",
+   "points": [
+    [
+     40.48529,
+     -80.25529
+    ],
+    [
+     40.4911,
+     -80.26765
+    ],
+    [
+     40.49528,
+     -80.2716
+    ],
+    [
+     40.49541,
+     -80.27873
+    ],
+    [
+     40.49985,
+     -80.2789
+    ],
+    [
+     40.50331,
+     -80.2734
+    ],
+    [
+     40.51016,
+     -80.27031
+    ],
+    [
+     40.51042,
+     -80.26216
+    ],
+    [
+     40.50637,
+     -80.2613
+    ],
+    [
+     40.50637,
+     -80.24328
+    ],
+    [
+     40.50559,
+     -80.23255
+    ],
+    [
+     40.50148,
+     -80.22268
+    ],
+    [
+     40.49965,
+     -80.21221
+    ],
+    [
+     40.49652,
+     -80.208
+    ],
+    [
+     40.49149,
+     -80.20534
+    ],
+    [
+     40.48888,
+     -80.20242
+    ],
+    [
+     40.4785,
+     -80.20208
+    ],
+    [
+     40.477,
+     -80.20551
+    ],
+    [
+     40.47713,
+     -80.21281
+    ],
+    [
+     40.4783,
+     -80.21924
+    ],
+    [
+     40.48418,
+     -80.21967
+    ],
+    [
+     40.48536,
+     -80.24216
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "TIGER K2451, corrected by eye",
+   "seedCredit": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:37Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "PNS",
+   "points": [
+    [
+     30.49089,
+     -87.19396
+    ],
+    [
+     30.49181,
+     -87.19057
+    ],
+    [
+     30.48782,
+     -87.18967
+    ],
+    [
+     30.48471,
+     -87.18666
+    ],
+    [
+     30.48301,
+     -87.18344
+    ],
+    [
+     30.47938,
+     -87.18567
+    ],
+    [
+     30.47735,
+     -87.18443
+    ],
+    [
+     30.47724,
+     -87.17413
+    ],
+    [
+     30.47654,
+     -87.17035
+    ],
+    [
+     30.47376,
+     -87.17198
+    ],
+    [
+     30.4714,
+     -87.17928
+    ],
+    [
+     30.46563,
+     -87.18052
+    ],
+    [
+     30.46433,
+     -87.18336
+    ],
+    [
+     30.4586,
+     -87.18194
+    ],
+    [
+     30.45727,
+     -87.18396
+    ],
+    [
+     30.4586,
+     -87.18713
+    ],
+    [
+     30.46477,
+     -87.18816
+    ],
+    [
+     30.46622,
+     -87.19546
+    ],
+    [
+     30.46969,
+     -87.19456
+    ],
+    [
+     30.46969,
+     -87.20009
+    ],
+    [
+     30.47521,
+     -87.19967
+    ],
+    [
+     30.47728,
+     -87.19696
+    ],
+    [
+     30.48098,
+     -87.19675
+    ],
+    [
+     30.48123,
+     -87.19267
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "TIGER K2451, corrected by eye",
+   "seedCredit": "Outline seed: US Census Bureau TIGER/Line 2015 (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:38Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  },
+  {
+   "id": "TUL",
+   "points": [
+    [
+     36.21526,
+     -95.88563
+    ],
+    [
+     36.21879,
+     -95.88073
+    ],
+    [
+     36.21983,
+     -95.87816
+    ],
+    [
+     36.21872,
+     -95.87773
+    ],
+    [
+     36.21872,
+     -95.87301
+    ],
+    [
+     36.21318,
+     -95.87215
+    ],
+    [
+     36.20972,
+     -95.86829
+    ],
+    [
+     36.20695,
+     -95.86314
+    ],
+    [
+     36.20279,
+     -95.86314
+    ],
+    [
+     36.2021,
+     -95.86829
+    ],
+    [
+     36.19725,
+     -95.86872
+    ],
+    [
+     36.19379,
+     -95.86743
+    ],
+    [
+     36.18548,
+     -95.86743
+    ],
+    [
+     36.18271,
+     -95.87215
+    ],
+    [
+     36.18271,
+     -95.88417
+    ],
+    [
+     36.18617,
+     -95.88588
+    ],
+    [
+     36.18548,
+     -95.90133
+    ],
+    [
+     36.18963,
+     -95.90562
+    ],
+    [
+     36.20591,
+     -95.90562
+    ],
+    [
+     36.2102,
+     -95.89129
+    ]
+   ],
+   "imagery": "Imagery: USGS The National Map (public domain)",
+   "imageryDate": "USGS current",
+   "seed": "OurAirports runways, traced by eye",
+   "seedCredit": "Outline seed: OurAirports runways (public domain)",
+   "reviewer": "owner",
+   "approved": "2026-10-31",
+   "approvedAt": "2026-10-31T02:25:40Z",
+   "review": "batch 1 draft 3, https://claude.ai/artifact/Cmfde6iM9jJFJ5BL3VbXWc"
+  }
+ ]
 }
