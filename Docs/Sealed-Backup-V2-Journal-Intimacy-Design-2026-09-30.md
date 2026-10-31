@@ -652,8 +652,13 @@ no bookkeeping.
   latch). `R` is `PassportBackupRecord`, FROZEN keys `id` (minted per snapshot, names the record only in
   its set), `kind` (the `AtlasDiscoveryKind` rawValue), `token`, `first` (seconds since 1970). The seam is
   `!duress`; a passport that can't be read right now fails the snapshot (never an empty set); a restore
-  merges by kind and token, the earliest date kept, never removing a local entry, and a kind, token or
-  count this build can't hold is `unreadableRecords` (`needsNewerFernlet`). No row is ever dead; there was
+  merges by kind and token, the earliest date kept, never removing a local entry, and a token or count
+  this build can't hold is `unreadableRecords` (`needsNewerFernlet`). Airports (round 7,
+  World-Airports-Spec §11) added kinds `airport` (a record per trip, like a country), `airportTransit`,
+  `flight` and `upcomingFlight` (token "FROM>TO", `first` the departure, `last` the arrival) and only
+  OPTIONAL keys (`src`, `flags`, `eh`); since then a record of a kind the build does not know is SKIPPED on
+  restore and KEPT (`PassportBook.keptBackupRecords`, at most 5,000) and carried again in every export, so a
+  newer Fernlet's records survive a round trip through an older build. No row is ever dead; there was
   never a v1 passport set. An earlier draft of this round carried the passport as an optional `"passport"`
   key on the JOURNAL head; it never shipped and is gone: a journal head that still has it restores
   cleanly (the key is ignored) and the journal's envelope is otherwise unchanged.
