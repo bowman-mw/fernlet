@@ -341,6 +341,16 @@ final class FernletStore {
         saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }
     )
     @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
+    /// Meeting someone new by tapping phones on Home (World Friends §1): the tap rendezvous, what Home
+    /// draws for it, and the hand-off to the hangout mesh (`FernletStore+TapToConnect.swift`).
+    @ObservationIgnored private(set) lazy var tapToConnect: TapToConnectController = makeTapToConnect()
+    /// Whether Home (the map, or the location-off Home) is the front page; Home reports it
+    /// (``setHomeFrontmost(_:)``) and the tap rendezvous listens only while it is true.
+    @ObservationIgnored var homeIsFrontmost = false
+    /// The tap hand-off's check loop (``runTapHandOff()``), cancelled when a new one starts.
+    @ObservationIgnored var tapHandOffTask: Task<Void, Never>?
+    /// The Low Power Mode observer, which re-runs the run policy when the mode changes.
+    @ObservationIgnored var lowPowerObserver: NSObjectProtocol?
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     ///
@@ -2335,7 +2345,11 @@ final class FernletStore {
                 ),
                 allowNearbyPresence: settings.allowNearbyPresence,
                 allowNearbyRecipeShares: settings.allowNearbyRecipeShares,
-                sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery
+                sessionPhotoReviewBlocksDiscovery: sessionPhotoReviewCoordinator.blocksDiscovery,
+                allowConnectByTapping: settings.allowConnectByTapping,
+                lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                homeIsFrontmost: homeIsFrontmost,
+                tapHangoutPending: tapToConnect.isHangoutPending
             )
         }
         let gate = ProximityRunPolicy.verdict(for: sampledInput()).routedAccessGate
@@ -2348,8 +2362,11 @@ final class FernletStore {
             isInSession: meshNetworkManager.isInSession,
             hasCommittedPeer: meshNetworkManager.hasCommittedPeer,
             presenceListening: presenceManager.isListening,
-            recipeShareListening: recipeShareManager.isListening
+            recipeShareListening: recipeShareManager.isListening,
+            tapRendezvousListening: tapToConnect.isListening
         )
+        // World Friends P1: the join doors admit kept friends and the people a tap matched, no one else.
+        meshNetworkManager.admissibleStrangerSigningKeys = tapToConnect.meshDoorKeys(friends: trustedProximityPeers)
         executeProximityRunActions(
             ProximityRunTransition.actions(from: previous, to: verdict, mesh: meshFacts)
         )

@@ -25,3 +25,20 @@ nonisolated extension ProximityPairProfile {
                              advertisementMode: "recipe")
     }
 }
+
+nonisolated extension ProximityTapRendezvousProfile {
+
+    /// Fernlet's tap to connect (World Friends, 2026-10-31): the pair radio's row under its own TXT mode
+    /// `tap`, so the recipe radio on the same row never dials it, with the audit area `tapConnect` and
+    /// Fernlet's two labels for the rendezvous: the card signature `fernlet.tap.card.v1` (length-prefixed)
+    /// and the seal salt `fernlet.tap.seal.v1`. All four spellings are frozen wire tokens: a changed byte
+    /// and two Fernlets no longer find, open or verify each other.
+    public static func tapToConnect(in namespace: ProximityNamespace) -> ProximityTapRendezvousProfile {
+        ProximityTapRendezvousProfile(
+            pair: ProximityPairProfile(auditArea: "tapConnect", radio: namespace.family.radios.pair,
+                                       advertisementMode: "tap"),
+            cardSignature: .featureSignature("fernlet.tap.card.v1", framing: .lengthPrefixed),
+            sealSalt: .featureKeyDerivationSalt("fernlet.tap.seal.v1")
+        )
+    }
+}

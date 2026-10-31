@@ -150,6 +150,9 @@ struct PrivacyPolicyParityTests {
     /// - `If you turn on Log my bike rides` — Motion & Fitness is read only behind that switch;
     /// - `never keeps the motion data itself` — bike rides log as exercise, and the motion data is never kept.
     private static let substanceMarkers = [
+        // World Friends (2026-10-31): what the tap sends before both say yes, and that the rings tell.
+        "only short-lived random codes",
+        "can tell you use Fernlet",
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
         "The no-collection guarantee does not expire",

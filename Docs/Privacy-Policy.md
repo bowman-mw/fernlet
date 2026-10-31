@@ -377,6 +377,15 @@ short-range, encrypted, peer-to-peer connection — no friend server, and no rem
 When a session is live, Fernlet may ask iOS for a short spell of background time so the connection
 survives you leaving the app; that continuation uses your local network and some battery,
 iOS may refuse or end it at any time, and nothing already saved is lost when it does.
+**Meeting someone new by tapping phones.** With **Connect by tapping phones** on (Privacy & data, on by
+default), Fernlet listens only while Home is on screen and the app is open. Before anyone says yes,
+your phone sends only short-lived random codes that change every time you open Home and at least
+every 15 minutes, so a phone nearby cannot follow yours or match it to a later connection. When
+another Fernlet on Home is within about 3 m, both phones show "Someone with Fernlet is close" — so a
+nearby person whose phone is also on Home can tell you use Fernlet. Only when you hold the phones
+together does each phone see the other's name and companion, and your public key is shared only after
+you both tap **Start hangout**. Turn the switch off and phones coming together do nothing.
+
 When you add a friend in person, your devices exchange your display names, public keys, avatar
 appearances, and a **fuzzy** wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends **never**
 see your numeric score, your goals, your cycle information, or any raw health data. You can send

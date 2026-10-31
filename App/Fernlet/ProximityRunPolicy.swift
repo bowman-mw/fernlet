@@ -235,7 +235,23 @@ nonisolated enum ProximityRunPolicy {
         /// policy lowers only a running verdict (``discoveryState(_:foreground:hardStop:)``).
         let sessionPhotoReviewBlocksDiscovery: Bool
 
-        /// Builds an input from the eleven facts.
+        /// `settings.allowConnectByTapping` (World Friends §1.6, "Connect by tapping phones", on by
+        /// default). Off, phones coming together do nothing and no rings show.
+        let allowConnectByTapping: Bool
+
+        /// `ProcessInfo.isLowPowerModeEnabled`: the tap rendezvous never runs in Low Power Mode (§1.4).
+        let lowPowerMode: Bool
+
+        /// Home (the map, or the location-off Home) is the front page, with no panel, sheet, passport or
+        /// other tab over it. The tap rendezvous listens only then (§1.4).
+        let homeIsFrontmost: Bool
+
+        /// Two people tapped and both said yes, and the hangout mesh has not linked them yet
+        /// (``TapToConnectController/isHangoutPending``): discovery runs on Home for the hand-off.
+        let tapHangoutPending: Bool
+
+        /// Builds an input from the eleven facts, and the four tap-to-connect facts (each defaulting to
+        /// the value that keeps the tap rendezvous down, so a caller that predates them decides as it did).
         ///
         /// - Parameters:
         ///   - scenePhase: The scene phase.
@@ -249,6 +265,10 @@ nonisolated enum ProximityRunPolicy {
         ///   - allowNearbyPresence: The presence opt-in.
         ///   - allowNearbyRecipeShares: The recipe-share opt-in.
         ///   - sessionPhotoReviewBlocksDiscovery: Whether the session-photo review blocks discovery.
+        ///   - allowConnectByTapping: The Connect by tapping phones switch.
+        ///   - lowPowerMode: Whether Low Power Mode is on.
+        ///   - homeIsFrontmost: Whether Home is the front page.
+        ///   - tapHangoutPending: Whether a tap hand-off is waiting for the mesh.
         init(
             scenePhase: ScenePhase,
             selectedTab: FernletTab,
@@ -260,7 +280,11 @@ nonisolated enum ProximityRunPolicy {
             session: ProximitySessionPresence,
             allowNearbyPresence: Bool,
             allowNearbyRecipeShares: Bool,
-            sessionPhotoReviewBlocksDiscovery: Bool
+            sessionPhotoReviewBlocksDiscovery: Bool,
+            allowConnectByTapping: Bool = false,
+            lowPowerMode: Bool = false,
+            homeIsFrontmost: Bool = false,
+            tapHangoutPending: Bool = false
         ) {
             self.scenePhase = scenePhase
             self.selectedTab = selectedTab
@@ -273,6 +297,10 @@ nonisolated enum ProximityRunPolicy {
             self.allowNearbyPresence = allowNearbyPresence
             self.allowNearbyRecipeShares = allowNearbyRecipeShares
             self.sessionPhotoReviewBlocksDiscovery = sessionPhotoReviewBlocksDiscovery
+            self.allowConnectByTapping = allowConnectByTapping
+            self.lowPowerMode = lowPowerMode
+            self.homeIsFrontmost = homeIsFrontmost
+            self.tapHangoutPending = tapHangoutPending
         }
     }
 
@@ -305,6 +333,10 @@ nonisolated enum ProximityRunPolicy {
         /// tab, age, wipe or continuation fact — the policy decides radios, never plaintext.
         let routedAccessGate: MeshRoutedAccessGate
 
+        /// The tap rendezvous (World Friends §1.4): `.foregroundOnly` while Home is in front and the
+        /// switch is on, `.stop` everywhere else. Never `.run` or `.hold`: it has nothing to keep.
+        let tapRendezvous: ProximityRunState
+
         /// Builds a verdict.
         ///
         /// - Parameters:
@@ -313,24 +345,28 @@ nonisolated enum ProximityRunPolicy {
         ///   - presence: The presence radio's state.
         ///   - recipeShare: The recipe-share radio's state.
         ///   - routedAccessGate: The routed access gate to push.
+        ///   - tapRendezvous: The tap rendezvous's state; `.stop` by default.
         init(
             mesh: ProximityRunState,
             discovery: ProximityRunState,
             presence: ProximityRunState,
             recipeShare: ProximityRunState,
-            routedAccessGate: MeshRoutedAccessGate
+            routedAccessGate: MeshRoutedAccessGate,
+            tapRendezvous: ProximityRunState = .stop
         ) {
             self.mesh = mesh
             self.discovery = discovery
             self.presence = presence
             self.recipeShare = recipeShare
             self.routedAccessGate = routedAccessGate
+            self.tapRendezvous = tapRendezvous
         }
 
         /// Whether any radio is up under this verdict. A convenience for tests and diagnostics; item
         /// 4's poller keys on the mesh's own liveness, never on this.
         var anyRadioRuns: Bool {
             mesh.isRunning || discovery.isRunning || presence.isRunning || recipeShare.isRunning
+                || tapRendezvous.isRunning
         }
     }
 
@@ -373,7 +409,8 @@ nonisolated enum ProximityRunPolicy {
                 protectedDataAvailable: input.protectedDataAvailable,
                 appIsForeground: foreground,
                 duressActive: input.duressSessionActive
-            )
+            ),
+            tapRendezvous: tapRendezvousState(input, foreground: foreground, hardStop: hardStop)
         )
     }
 
@@ -456,6 +493,8 @@ nonisolated enum ProximityRunPolicy {
         if foreground {
             switch input.selectedTab {
             case .social: return .foregroundOnly
+            // World Friends: a tap both people said yes to hands off to the hangout search, on Home.
+            case .home where input.tapHangoutPending && input.session != .peerCommitted: return .foregroundOnly
             case .home, .food, .move, .personal: return heldForACommittedPeer(input.session)
             }
         }
@@ -502,5 +541,15 @@ nonisolated enum ProximityRunPolicy {
         case .home, .food, .move: return .foregroundOnly
         case .social, .personal: return .stop
         }
+    }
+
+    /// The tap rendezvous (World Friends §1.4, screen 4): only with Home in front of a foreground app, the
+    /// switch on, no Low Power Mode, no hangout up or being handed off — and never in the background or a
+    /// decoy session (the hard stop). Stops within one policy run of any other tab, sheet or workout,
+    /// because each of those clears ``Input/homeIsFrontmost`` or moves ``Input/selectedTab``.
+    private static func tapRendezvousState(_ input: Input, foreground: Bool, hardStop: Bool) -> ProximityRunState {
+        guard !hardStop, foreground, input.allowConnectByTapping, !input.lowPowerMode, input.homeIsFrontmost,
+              input.selectedTab == .home, input.session == .absent, !input.tapHangoutPending else { return .stop }
+        return .foregroundOnly
     }
 }
