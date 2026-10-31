@@ -160,9 +160,16 @@ public nonisolated struct AtlasVisit: Hashable, Sendable {
 }
 
 /// What kind of place a discovery is (a frozen token). The cases' order is the fixed order a visit's first
-/// visits are reported in: country, continent, ocean, sea, city, landmark, terrain.
+/// visits are reported in: country, continent, ocean, sea, city, landmark, terrain; then `airport`, which a visit
+/// never names (World-Airports-Spec §3: the app decides when an airport is found, and calls
+/// ``PassportBook/recordAirport(token:at:by:)``).
 public nonisolated enum AtlasDiscoveryKind: String, CaseIterable, Codable, Sendable {
     case country, continent, ocean, sea, city, landmark, terrain
+    /// An airport, by its frozen ``WorldAirport/token``.
+    case airport
+
+    /// The kinds an ``AtlasVisit`` names, in the fixed order (every kind but `airport`).
+    public static let visitKinds: [AtlasDiscoveryKind] = [.country, .continent, .ocean, .sea, .city, .landmark, .terrain]
 }
 
 /// One first visit: the passport's record and the event Sprout's lines will hook into (idea B).
@@ -170,8 +177,8 @@ public nonisolated struct AtlasDiscovery: Hashable, Codable, Sendable {
     /// What kind of place.
     public let kind: AtlasDiscoveryKind
     /// The frozen token: an alpha-2 country code, an ``AtlasContinent``, ``AtlasOcean`` or ``AtlasTerrain``
-    /// rawValue, or a sea's ``AtlasSea/token``, a city's ``AtlasCity/token`` or a landmark's
-    /// ``AtlasLandmark/token``.
+    /// rawValue, or a sea's ``AtlasSea/token``, a city's ``AtlasCity/token``, a landmark's
+    /// ``AtlasLandmark/token`` or an airport's ``WorldAirport/token``.
     public let token: String
     /// When it was first visited.
     public let at: Date

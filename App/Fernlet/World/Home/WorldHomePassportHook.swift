@@ -44,8 +44,8 @@ struct WorldHomePassportHook: ViewModifier {
 
     /// Hands one new stamp to the passport (its landing and the banner); nothing in a decoy.
     static func forward(_ stamp: PassportStamp, to passport: WorldPassportPresenter?, isDecoy: Bool) {
-        guard !isDecoy else { return }
-        passport?.noteNewStamp(PassportStampEntry(stamp: stamp))
+        guard !isDecoy, let entry = PassportStampEntry(stamp: stamp) else { return }
+        passport?.noteNewStamp(entry)
     }
 
     /// Moves the camera to the world view's city `token` (following off).

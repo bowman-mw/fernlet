@@ -1,0 +1,1 @@
+SELECT ?item ?l WHERE { ?item wdt:P238 [] . ?item rdfs:label ?l . FILTER(lang(?l) = "es") }

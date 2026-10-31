@@ -209,9 +209,12 @@ struct PassportBookTests {
         let date = Self.day(8, 14)
         let mapped = [PassportStamp(kind: .country, token: "US", date: date, trip: 2),
                       PassportStamp(kind: .allContinents, token: "allContinents", date: date),
-                      PassportStamp(kind: .allOceans, token: "allOceans", date: date)].map(PassportStampEntry.init(stamp:))
+                      PassportStamp(kind: .allOceans, token: "allOceans", date: date)].compactMap(PassportStampEntry.init(stamp:))
+        #expect(mapped.count == 3)
         #expect(mapped[0] == PassportStampEntry(kind: .country, token: "US", date: date, trip: 2))
         #expect(mapped[1].kind == .special && mapped[1].token == PassportStampEntry.allContinentsToken)
         #expect(mapped[2].stampKind == .special(allOceans: true))
+        #expect(PassportStampEntry(stamp: PassportStamp(kind: .airport, token: "PDX", date: date)) == nil,
+                "an airport's stamp waits for its own ticket stamp")
     }
 }

@@ -1,0 +1,4 @@
+{
+  "about": "Our own airport outlines (World-Airports-Spec §2.1): each record is one large airport's grounds, traced from public-domain or open imagery (never OpenStreetMap, Apple, Google or Bing), simplified to 12-24 points, and approved by the owner on a review card. Fields: id (the airport's frozen token), points ([lat, lon] pairs, open ring), imagery (source and credit), imageryDate, seed (where the first draft came from), reviewer, approved (date). build_world_airports.py refuses any record without an approval.",
+  "outlines": []
+}

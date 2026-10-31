@@ -174,6 +174,9 @@ enum WorldLinePicker {
             guard let ocean = AtlasOcean(rawValue: token) else { return nil }
             let all = completes(discovery, of: AtlasOcean.allCases.count, in: book)
             return (all ? .allOceans : .ocean, String(localized: ocean.passportName))
+        case .airport:
+            // Sprout's new-airport lines are their own (World-Airports-Spec §3), drawn with the airports' screens.
+            return nil
         }
     }
 
@@ -197,7 +200,7 @@ enum WorldLinePicker {
 
     /// The stamps a first visit earns, for the passport's new-stamp moment: a country, continent, ocean or sea
     /// stamp, followed by the all-seven or all-five special when it completes them; none for a city, a landmark
-    /// or the ground.
+    /// or the ground, and none for an airport (its stamp has its own banners, World-Airports-Spec §3, §6.3).
     static func stamps(for discovery: AtlasDiscovery, in book: PassportBook) -> [PassportStamp] {
         let kind: PassportStamp.Kind
         switch discovery.kind {
@@ -205,7 +208,7 @@ enum WorldLinePicker {
         case .continent: kind = .continent
         case .ocean: kind = .ocean
         case .sea: kind = .sea
-        case .city, .landmark, .terrain: return []
+        case .city, .landmark, .terrain, .airport: return []
         }
         var stamps = [PassportStamp(kind: kind, token: discovery.token, date: discovery.at)]
         if kind == .continent, completes(discovery, of: AtlasContinent.allCases.count, in: book) {

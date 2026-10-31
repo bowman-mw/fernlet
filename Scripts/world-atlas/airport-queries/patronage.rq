@@ -1,0 +1,1 @@
+SELECT ?item ?pat ?time WHERE { ?item wdt:P238|wdt:P239 [] . ?item p:P3872 ?s . ?s ps:P3872 ?pat . OPTIONAL { ?s pq:P585 ?time } }
