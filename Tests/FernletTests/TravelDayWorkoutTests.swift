@@ -15,10 +15,10 @@ struct TravelDayWorkoutTests {
 
     // MARK: - Fixtures
 
-    static let portland = TimeZone(identifier: "America/Los_Angeles") ?? .current
-    static let boston = TimeZone(identifier: "America/New_York") ?? .current
-    static let london = TimeZone(identifier: "Europe/London") ?? .current
-    static let honolulu = TimeZone(identifier: "Pacific/Honolulu") ?? .current
+    nonisolated static let portland = TimeZone(identifier: "America/Los_Angeles") ?? .current
+    nonisolated static let boston = TimeZone(identifier: "America/New_York") ?? .current
+    nonisolated static let london = TimeZone(identifier: "Europe/London") ?? .current
+    nonisolated static let honolulu = TimeZone(identifier: "Pacific/Honolulu") ?? .current
 
     /// The instant of `y-m-d h:mm` in `zone`.
     func at(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ min: Int = 0, in zone: TimeZone) -> Date {
