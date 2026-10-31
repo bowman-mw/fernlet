@@ -5,7 +5,7 @@ unlockable, every IATA-coded airport as a point an imported flight can draw an a
 small airline table. It's its own file, never part of `WorldAtlas.pack`, so the atlas keeps its headroom under its
 7 MiB cap. Nothing is downloaded on the phone.
 
-- **File:** `App/Fernlet/World/Atlas/WorldAirports.pack`, 510,675 bytes (cap 1 MiB), SHA-256 pinned in
+- **File:** `App/Fernlet/World/Atlas/WorldAirports.pack`, 514,360 bytes (cap 1 MiB), SHA-256 pinned in
   `WorldAirports.expectedSHA256`.
 - **Generator:** `Scripts/world-atlas/build_world_airports.py`; its self-test is `airports_selftest.py`.
 - **Sources:** `Scripts/world-atlas/fetch-airport-sources.sh` (sizes and SHA-256 pinned).
@@ -60,7 +60,7 @@ and pin the new hashes in the same commit as the pack they build.
      - A runway end over 8 km from the airport is a data error and is skipped.
      - Airports above 80° latitude keep the circle.
   3. With no usable runway end, a 1.5 km circle: 812 airports.
-- **Our own outlines** (972 so far: batches 1–2, 107, reviewed by the owner on review pages; batches 3 on, 865, under
+- **Our own outlines** (1122 so far: batches 1–2, 107, reviewed by the owner on review pages; batches 3 on, 1015, under
   the owner's blanket approval of 2026-10-31, "I don't need to review it", each flagged `unsure` where its tracer was): each is seeded from the US
   Census TIGER/Line 2015 "Airport or Airfield" polygon, CORINE Land Cover 2018 class 124, or the runways, then traced by eye
   on open imagery (USGS The National Map; Sentinel-2 cloudless 2016 by EOX, CC BY 4.0; or Copernicus Sentinel-2 L2A and
