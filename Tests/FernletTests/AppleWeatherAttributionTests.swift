@@ -81,9 +81,11 @@ struct AppleWeatherAttributionTests {
         let aiCard = try Self.section(of: sheet, from: #"Toggle("Weather-aware recovery prompts""#, to: "private var webNutritionLookupBinding")
         #expect(aiCard.contains("AppleWeatherNotice()"), "the Apple Weather notice left its place under the weather switch")
         let acknowledgments = try RepoRoot.source("App/Fernlet/AcknowledgmentsView.swift")
-        // Round 7: the World atlas's "Map data" credit sits between the food data and the weather.
-        #expect(acknowledgments.contains("foodDataSection\n                mapDataSection\n                weatherSection"),
-                "the weather section left its place after the food data and the map data")
+        // Round 7: the World atlas's "Map data" credit, then the airports' credits, sit between the food data and
+        // the weather.
+        #expect(acknowledgments.contains(
+            "foodDataSection\n                mapDataSection\n                airportsSection\n                weatherSection"),
+                "the weather section left its place after the food data, the map data and the airports")
         let section = try Self.section(of: acknowledgments, from: "private var weatherSection: some View", to: "// MARK: - Pieces")
         #expect(section.contains("AppleWeatherAttribution.markText("), "the weather section lost the Apple Weather mark")
         #expect(section.contains(Self.acknowledgmentsParagraph), "the weather section's paragraph changed; update this suite and its Spanish draft")
