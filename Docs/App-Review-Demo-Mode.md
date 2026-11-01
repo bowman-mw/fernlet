@@ -51,7 +51,7 @@ URL `https://fernlet.com`, privacy policy URL `https://fernlet.com/privacy/`.
 
 **Beta App Description:**
 
-> Fernlet is a tamagotchi of yourself: a small pixel companion that lives on a map of your world and
+> Fernlet is a gentle self-care app: a small pixel companion that lives on a map of your world and
 > reflects the food, sleep, movement and rest you choose to log. No streaks, no ads, no tracking, no
 > account. Your data stays on your iPhone, or in your own iCloud if you turn on sync.
 >
