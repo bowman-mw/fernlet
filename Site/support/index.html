@@ -11,11 +11,11 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://fernlet.com/support/">
 <link rel="canonical" href="https://fernlet.com/support/">
-<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="../assets/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="icon" href="../assets/favicon-16.png" sizes="16x16" type="image/png">
-<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-<link rel="stylesheet" href="../style.css?v=dec34826">
+<link rel="icon" href="../assets/favicon.svg?v=6579d300" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png?v=a998c3ad" sizes="32x32" type="image/png">
+<link rel="icon" href="../assets/favicon-16.png?v=80e7556b" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png?v=6490a715">
+<link rel="stylesheet" href="../style.css?v=4fca24ee">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
       <source srcset="../assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
       <img class="brand-mark" src="../assets/fernlet-mark-header.svg" width="25" height="30" alt="">
     </picture>
-    <span class="wordmark">Fernlet<span aria-hidden="true">™</span></span>
+    <span class="wordmark">Fernlet</span>
   </a>
   <div class="navlinks">
     <a href="/privacy/">Privacy policy</a>
@@ -52,12 +52,26 @@
     <section>
       <h2>Common questions</h2>
       <ul>
-        <li><strong>I lost my phone.</strong> If you turned on iCloud sync, your core data restores from your own iCloud when you reinstall. The sealed categories — cycle data, journal text, intimate logs, your own photos — are keyed to the old phone's Secure Enclave, so a device backup cannot bring them back. The optional encrypted sealed backup is the only route, and its key lives in your iCloud Keychain; if you've lost access to that Keychain on every device, that data is unrecoverable. Your map, places and routes are never backed up, so a new phone starts a fresh map.</li>
-        <li><strong>Friend adding isn't working.</strong> Both phones need Bluetooth and local network access allowed, and need to be held about 15 cm apart for roughly a second. On phones without precise ranging you confirm on screen instead.</li>
-        <li><strong>I want my data out.</strong> Settings → Privacy &amp; Data → Export my data. It's your data, reached from behind a fresh biometric check, so the export includes your journal entries; it deliberately leaves out cycle and intimate data, sensitive memories, Worry Box notes, photo images, your map and places, and your private keys.</li>
-        <li><strong>I want it all gone.</strong> Same screen: delete your iCloud copy, delete your local data, or just delete the app. Your map history has its own delete too, in Settings → Home map. Nothing of yours sits on a server I run, because there isn't one.</li>
+        <li><span><strong>I lost my phone.</strong> If you turned on iCloud sync, your core data restores from your own iCloud when you reinstall. The sealed categories — cycle data, journal text, intimate logs, your own photos — are keyed to the old phone's Secure Enclave, so a device backup cannot bring them back. The optional encrypted sealed backup is the only route, and its key lives in your iCloud Keychain; if you've lost access to that Keychain on every device, that data is unrecoverable. Your map, places and routes are never backed up, so a new phone starts a fresh map; your passport is the one part that can come back, from its own sealed backup.</span></li>
+        <li><span><strong>Tapping phones isn't working.</strong> Both of you need Fernlet open on Home, with Connect by tapping phones on in Settings → Privacy &amp; data, Local Network and Nearby Interaction allowed, and Low Power Mode off. Hold the phones together, about 15 cm apart, for roughly a second. It needs Ultra Wideband, which every iOS 26 iPhone has it except iPhone SE.</span></li>
+        <li><span><strong>I want my data out.</strong> Settings → Privacy &amp; Data → Export my data. It's your data, reached from behind a fresh biometric check, so the export includes your journal entries; it deliberately leaves out cycle and intimate data, sensitive memories, Worry Box notes, photo images, your map and places, and your private keys.</span></li>
+        <li><span><strong>I want it all gone.</strong> Same screen: delete your iCloud copy, delete your local data, or just delete the app. Your map history has its own delete too, in Settings → Home map. Nothing of yours sits on a server I run, because there isn't one.</span></li>
       </ul>
-      <p>The <a href="/#faq">FAQ on the home page</a> covers the rest, and the <a href="/privacy/">privacy policy</a> is the long version of where everything lives.</p>
+      <p>The <a href="#faq">questions below</a> cover the rest, and the <a href="/privacy/">privacy policy</a> is the long version of where everything lives.</p>
+    </section>
+
+    <section>
+      <h2 id="faq">Questions people actually ask</h2>
+      <div class="faq">
+        <details open><summary>Can I try it before it's out?</summary><p>Yes. Fernlet is in a small closed beta on TestFlight. <a href="/beta/">Here's how to join</a>: it takes one email.</p></details>
+        <details><summary>Is it free?</summary><p>Yes, permanently &mdash; no price, no subscription, no in-app purchases, no ads. There is no business model that needs your data, because there is no business model that touches your data. Fernlet is also open source under Apache&nbsp;2.0: every line, including the cryptography, is published at <a href="https://github.com/bowman-mw/fernlet">github.com/bowman-mw/fernlet</a>, so you don&rsquo;t have to take any of this on trust. The code is yours to fork; the Fernlet name and logo stay with the official app.</p></details>
+        <details><summary>Do I need an account?</summary><p>No. There is no sign-up, no login, no email, no password. The app works the moment you open it.</p></details>
+        <details><summary>What happens if I miss a day?</summary><p>That day scores lower. That is all. There are no streaks to break, and every unlock you have earned is cumulative and can never be taken back.</p></details>
+        <details><summary>Can my friends see my numbers?</summary><p>No. Friends exchange display names, companion appearances and a fuzzy vibe — thriving, okay, struggling. Your score, goals, cycle data and raw health data never leave your phone, and friends never see your map, your places or your walks.</p></details>
+        <details><summary>Does Fernlet track where I go?</summary><p>Only if you let it, and only for you. Location is optional. With it, Fernlet places your companion on the map and uncovers the map as you go. What it keeps — the patches you've uncovered, the routes you choose to save, the everyday places you stopped at — is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. It uses location in the background only during a walk you started, or if you turn on background mapping, which notes the places you stop at and, while you're driving or riding, the road you take. The one exception is your passport: its stamps, trips and flights go in the passport's own sealed backup, if you turn it on. Apple Maps draws the map and receives only the area on your screen.</p></details>
+        <details><summary>What if I lose my phone?</summary><p>If you turned on iCloud sync, your core data restores from your own iCloud. Sealed categories — cycle data, journal text, intimate logs, your own photos — work differently: their key is locked to this phone's Secure Enclave, so no device backup can bring them back on a new phone. The only way to recover them is the optional encrypted sealed backup, which you turn on separately for each kind: period data, intimate logs, journal entries, your photos and your passport. It uses a key stored in your iCloud Keychain. If you lose access to that Keychain everywhere, that data is gone for good — the app tells you this before you turn the backup on. Your map, places and routes are never backed up at all, so a new phone starts a fresh map, though your passport can come back from its sealed backup.</p></details>
+        <details><summary>Which iPhones does it need?</summary><p>iOS 26 or later; iPhone 15 Pro or newer for the full on-device AI features. Meeting someone by tapping phones needs Ultra Wideband, which every iOS 26 iPhone has it except iPhone SE.</p></details>
+      </div>
     </section>
 
     <section>
@@ -86,7 +100,7 @@
       <span class="wordmark sm">Fernlet</span>
       <span class="tiny">© 2026 Michael Bowman Olay. Fernlet™ is a trademark of Michael Bowman Olay.</span>
     </div>
-    <nav class="foot-nav"><a href="/">Home</a><a href="/privacy/">Privacy policy</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
+    <nav class="foot-nav"><a href="/">Home</a><a href="/companion/">The companion</a><a href="/map/">Your map</a><a href="/workouts/">Workouts</a><a href="/friends/">Friends</a><a href="/cycle/">Cycle</a><a href="/your-data/">Your data</a><a href="/beta/">Beta</a><a href="/privacy/">Privacy policy</a><a href="/technical/">Technical details</a><a href="/support/">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
   </div>
 </footer>
 

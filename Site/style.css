@@ -83,6 +83,7 @@ section.wrap,section.band>.wrap{padding-top:clamp(44px,6vw,88px);padding-bottom:
 .navlinks{display:flex;align-items:center;gap:clamp(14px,2vw,28px);flex-wrap:wrap;justify-content:flex-end;
   font-family:var(--font-ui);font-size:14px;font-weight:500;letter-spacing:.02em}
 .navlinks a{text-decoration:none;color:var(--color-bark)}
+.navlinks a[aria-current=page]:not(.btn){color:var(--color-moss);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:6px}
 
 /* ── Buttons / bits ──────────────────────────────── */
 .btn{display:inline-flex;align-items:center;gap:9px;padding:13px 20px;border-radius:var(--radius-md);
@@ -114,6 +115,9 @@ section.wrap,section.band>.wrap{padding-top:clamp(44px,6vw,88px);padding-bottom:
 h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:400;line-height:1.12;margin:0 0 18px}
 .lede{font-family:var(--font-body);font-size:19px;line-height:1.6;color:var(--ink2);margin:0 0 16px}
 .intro{max-width:760px;margin-bottom:clamp(26px,4vw,48px)}
+/* A feature page's first heading: the section's own h2, promoted to the page's h1. */
+.page-title{font-family:var(--font-display);font-weight:600;font-size:clamp(36px,5vw,60px);line-height:1.05;
+  letter-spacing:-.02em;margin:0 0 20px}
 
 /* ── Hero ────────────────────────────────────────── */
 .hero{display:flex;flex-wrap:wrap;align-items:center;gap:clamp(32px,5vw,72px)}
@@ -221,8 +225,9 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 .tabs button.on{background:var(--color-moss);color:#FBF7EE}
 
 /* ── Your map / Small joys ───────────────────────── */
-.shot-pair{flex:1 1 380px;min-width:290px;display:flex;justify-content:center;gap:clamp(12px,2vw,24px);
-  position:sticky;top:96px}
+/* The pair scrolls with the page. It used to be sticky beside the long feature list, which read as
+   the screenshots sliding about as you scrolled. */
+.shot-pair{flex:1 1 380px;min-width:290px;display:flex;justify-content:center;gap:clamp(12px,2vw,24px)}
 .shot-pair .phone.sm{flex:0 1 220px}
 .shot-pair .phone.sm:last-child{margin-top:56px}
 .joy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
@@ -239,6 +244,44 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 .widget-shots .phone.sm{max-width:none;border-width:5px;border-radius:24px}
 .widgets-copy{flex:1 1 260px}
 .widgets-copy p+p{margin-top:12px}
+
+/* ── Home: one card per feature page ─────────────── */
+.area-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:16px}
+.area{display:flex;gap:20px;align-items:center;text-decoration:none;color:var(--color-bark);
+  transition:transform .2s cubic-bezier(.22,.61,.36,1),box-shadow .2s cubic-bezier(.22,.61,.36,1)}
+.area:hover{color:var(--color-bark);transform:translateY(-2px);box-shadow:var(--shadow-float)}
+.area .phone.sm{flex:0 0 96px;width:96px;border-width:4px;border-radius:18px}
+.area-icon{flex:0 0 96px;height:120px;display:grid;place-items:center;border-radius:18px;
+  background:var(--color-lichen);color:#33502C}
+.area .eyebrow{margin-bottom:6px}
+.area h3{font-family:var(--font-header);font-size:21px;font-weight:400;margin:0 0 6px}
+.area p{font-family:var(--font-body);font-size:16px;line-height:1.55;color:var(--ink2);margin:0}
+
+/* ── Beta call to action / next page ─────────────── */
+.beta-band{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px 40px}
+.beta-band>div{flex:1 1 420px;max-width:680px}
+.beta-band .lede{margin:0}
+.next-row{display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
+.next-link{flex:1 1 260px;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:22px 26px;
+  border:1.5px solid var(--hair-2);border-radius:var(--radius-xl);text-decoration:none;color:var(--color-bark)}
+.next-link:hover{color:var(--color-bark);border-color:var(--hair-3)}
+.next-title{font-family:var(--font-header);font-size:26px}
+.beta-cta{flex:2 1 420px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 24px}
+.beta-cta h3{font-family:var(--font-header);font-size:23px;font-weight:400;margin:0 0 4px}
+.beta-cta p{font-family:var(--font-body);font-size:17px;color:var(--ink2);margin:0}
+
+/* ── Beta page ───────────────────────────────────── */
+.beta-head{max-width:1280px}
+.beta-head .row{margin-top:26px}
+.beta-alt{font-family:var(--font-ui);font-size:14px}
+section.wrap.beta-wrap{padding-top:clamp(12px,2vw,24px)}
+.beta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px;
+  margin-bottom:clamp(36px,5vw,64px)}
+.beta-card h2{font-size:24px;margin:14px 0 8px}
+.beta-card p{font-family:var(--font-body);font-size:17px;line-height:1.6;color:var(--ink2);margin:0}
+.step-n{width:32px;height:32px;border-radius:10px;background:var(--color-lichen);color:#3A5C34;display:grid;place-items:center;
+  font-family:var(--font-ui);font-size:14px;font-weight:500}
+.beta-detail h2{font-size:clamp(24px,2.8vw,32px);margin:0 0 6px}
 
 /* ── Friend mesh demo ────────────────────────────── */
 .mesh-demo{display:flex;flex-direction:column;align-self:flex-start}
@@ -397,6 +440,8 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 
 /* ── FAQ ─────────────────────────────────────────── */
 .faq{display:flex;flex-direction:column;gap:10px}
+.policy .faq{margin-bottom:16px}
+.policy .faq details{background:var(--color-cream);box-shadow:var(--shadow-sm)}
 .faq details{background:var(--color-parchment);border-radius:var(--radius-md);overflow:hidden}
 .faq summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;cursor:pointer;
   font-family:var(--font-header);font-size:19px;list-style:none}
@@ -494,7 +539,6 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
   .hero-scene{flex-direction:column;align-items:center;padding-bottom:0}
   .hero-phone{width:min(270px,76vw)}
   .pet-plate{position:relative;align-self:flex-start;width:210px;margin-top:-110px}
-  .shot-pair{position:static}
   .shot-pair .phone.sm:last-child{margin-top:32px}
   .joy .phone.sm,.gold-hearts{flex-basis:96px;width:96px}
 }
@@ -540,7 +584,8 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
 
   /* Green tints that carried dark-green text in light mode. */
   .pill{background:rgba(127,176,105,.16);color:#A8C89C}
-  .step>span{background:rgba(127,176,105,.20);color:#C8DBC2}
+  .step>span,.step-n{background:rgba(127,176,105,.20);color:#C8DBC2}
+  .area-icon{background:rgba(127,176,105,.14);color:#A8C89C}
   .note-lichen{background:rgba(127,176,105,.12)}
   .note-lichen p{color:#C3D6BC}
   .swatch{background:rgba(241,237,227,.07)}
