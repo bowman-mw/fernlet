@@ -30,14 +30,44 @@ Owner's call (2026-10-29): normal builds neither show the demo button nor carry 
 
 > Fernlet has no accounts, sign-in or server; all data stays on the device. To see every feature
 > without setting anything up, tap **"Look around with sample data"** under Continue on the first
-> screen. It fills the app with two weeks of sample entries and a pretend friend. The Private tab's
-> demo passcode is **246810** (it is also shown on the passcode screen and in Settings). Settings →
-> Demo → "Leave demo and start fresh" erases the sample data and returns to the first screen.
+> screen. It fills the app with two weeks of sample entries and a pretend friend, Juniper. The Private
+> passcode is **246810** (it is also shown on the passcode screen and in Settings). Settings → Demo →
+> "Leave demo and start fresh" erases the sample data and returns to the first screen.
 >
-> Meeting friends in person (Connect, live sessions, sharing recipes and photos, giving golden hearts)
-> runs over Ultra Wideband and the local network between two iPhones running Fernlet; the demo shows
-> the result of a meeting with the pretend friend. Nearby chat additionally requires the device's
-> Apple Account to share an age range of 13 or older through Declared Age Range, by design.
+> Meeting friends in person needs two iPhones running Fernlet: with both on Home, holding them
+> together (about 15 cm, for under a second) starts a hangout over Ultra Wideband and the local
+> network, with no server. The demo shows the result of meeting the pretend friend. Nearby chat
+> additionally requires the device's Apple Account to share an age range of 13 or older through
+> Declared Age Range, by design.
+
+The friends paragraph follows the tap-to-connect flow (bowman-mw/fernlet#123): meeting someone new
+happens by holding phones together on Home, and a live session is a "hangout" in every user-facing
+string, so the notes no longer name the retired "Connect" button.
+
+### Test Information (shown to testers)
+
+App Store Connect → TestFlight → Test Information. Feedback email `fernletapp@gmail.com`, marketing
+URL `https://fernlet.com`, privacy policy URL `https://fernlet.com/privacy/`.
+
+**Beta App Description:**
+
+> Fernlet is a tamagotchi of yourself: a small pixel companion that lives on a map of your world and
+> reflects the food, sleep, movement and rest you choose to log. No streaks, no ads, no tracking, no
+> account. Your data stays on your iPhone, or in your own iCloud if you turn on sync.
+>
+> This beta is for trying Fernlet day to day and telling me what's confusing, what's broken and what
+> you love. Take a screenshot and tap Share Beta Feedback, or email fernletapp@gmail.com.
+
+**What to Test** (per build):
+
+> Use Fernlet the way you normally would for a few days: log meals, go for a walk and watch the map
+> uncover, try a workout, write in the journal. Most useful: anything confusing in your first five
+> minutes, anything that crashes or looks wrong, and anything you'd miss if it were gone. If a friend
+> is testing too, hold your phones together on Home to start a hangout.
+
+Before the first tester outside the US or Canada, finish the encryption self-classification
+([Export-Compliance-Encryption.md](Export-Compliance-Encryption.md) §6A.4): a public TestFlight link
+can reach anyone.
 
 ## What the demo does
 
