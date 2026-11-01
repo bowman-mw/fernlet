@@ -15,9 +15,11 @@ second small script of its own, `probe/probe.js`, under the same rules.
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | Landing page — the companion, the map, small joys, the workout planner, the friend mesh, period tracking, the privacy architecture, FAQ, roadmap. |
+| `index.html` | Home page — the hero with the poke-able companion, what Fernlet leaves out, one card per feature page, the beta call to action, and the open-source panel. Kept short; the detail lives on the feature pages. |
+| `companion/`, `map/`, `workouts/`, `friends/`, `cycle/`, `your-data/` | One feature page each. Every one ends with a link to the next page and the beta call to action, and they share the home page's nav. |
+| `beta/index.html` | The closed beta: how to join (a pre-filled `mailto:` to fernletapp@gmail.com — the site has no forms and posts nothing, `form-action 'none'`), what a tester needs, what TestFlight shows the developer, and the roadmap. |
 | `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `App/Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
-| `support/index.html` | Support/contact page — the ASC Support URL. |
+| `support/index.html` | Support/contact page — the ASC Support URL — and the FAQ (`/support/#faq`). |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
 | `probe/index.html` | **Temporary.** The Phase 0 link probe's page: where a `fernlet.com/probe/` test link lands on a device with no probe app (a Mac, a browser). `noindex`, the same CSP as every page. It goes away with the probe. |
 | `probe/probe.js` | **Temporary.** The probe page's own script. It reads the page's address, measures the part after the `#` and says whether the test payload in it arrived whole, written into the page as text. Like `app.js`: no cookies, no storage, no requests. The page reads fine without it. |
@@ -48,11 +50,12 @@ effective date in all three.
 1. **Add the font files** listed in [`fonts/README.md`](fonts/README.md). The site degrades to
    system serifs without them, so this is not blocking — but it is not on-brand until done.
 
-After editing `style.css`, `app.js` or `probe/probe.js`, run
+After editing `style.css`, `app.js`, `probe/probe.js` or the favicons, run
 [`Scripts/site-asset-versions.py`](../Scripts/site-asset-versions.py). GitHub Pages caches the pages for
 10 minutes but stylesheets and scripts for 4 hours, so every page links them as `style.css?v=<content
 hash>`. A changed file then gets a new URL, and the new page never renders with a stale stylesheet. The
-Pages workflow runs the script with `--check` and refuses to deploy a stale reference.
+tab and home-screen icon links carry the same version, because browsers keep a favicon for weeks under
+an unchanged URL. The Pages workflow runs the script with `--check` and refuses to deploy a stale reference.
 
 When editing `style.css`, remember the dark theme at the bottom of the file. Anything hard-coded
 as `rgba(61,46,30,…)` — a hairline, a sunken fill, a track — is invisible on the dark ground, so

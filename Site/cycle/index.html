@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<title>Cycle tracking — Fernlet</title>
+<meta name="description" content="Fernlet keeps cycle data in a sealed, encrypted store that the AI and networking code cannot import.">
+<meta property="og:title" content="Fernlet — cycle tracking">
+<meta property="og:description" content="Fernlet keeps cycle data in a sealed, encrypted store that the AI and networking code cannot import.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fernlet.com/cycle/">
+<link rel="canonical" href="https://fernlet.com/cycle/">
+<link rel="icon" href="../assets/favicon.svg?v=6579d300" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png?v=a998c3ad" sizes="32x32" type="image/png">
+<link rel="icon" href="../assets/favicon-16.png?v=80e7556b" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png?v=6490a715">
+<link rel="stylesheet" href="../style.css?v=4fca24ee">
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="/">
+    <picture>
+      <source srcset="../assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
+      <img class="brand-mark" src="../assets/fernlet-mark-header.svg" width="25" height="30" alt="">
+    </picture>
+    <span class="wordmark">Fernlet</span>
+  </a>
+  <div class="navlinks">
+    <a href="/companion/">The companion</a>
+    <a href="/map/">Your map</a>
+    <a href="/workouts/">Workouts</a>
+    <a href="/friends/">Friends</a>
+    <a href="/cycle/" aria-current="page">Cycle</a>
+    <a href="/your-data/">Your data</a>
+    <a href="/support/#faq">FAQ</a>
+    <a class="btn btn-moss" href="/beta/">Join the beta</a>
+  </div>
+</nav>
+
+<main>
+
+<section id="period" class="wrap">
+  <div class="intro">
+    <div class="eyebrow">Cycle tracking</div>
+    <h1 class="page-title">Your cycle data stays separate.</h1>
+    <p class="lede">Cycle tracking is kept apart from Fernlet's everyday features. It's not shared with friends, used for the companion, or included in ordinary iCloud sync — and you can choose whether to make a separate encrypted backup. That separation lives in the source code itself: wiring cycle tracking into the AI or networking code by accident breaks the build immediately.</p>
+  </div>
+  <div class="mesh-split">
+    <div class="card cycle-card">
+      <div class="cycle-head"><span class="h2ish">Your cycle</span><span class="sealed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>sealed store</span></div>
+      <div class="cycle-dial" id="cycledial"><i class="flow" style="left:50.00%;top:8.00%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:59.35%;top:9.05%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:68.22%;top:12.16%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:76.19%;top:17.16%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i class="flow" style="left:82.84%;top:23.81%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px"></i><i style="left:87.84%;top:31.78%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:90.95%;top:40.65%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:92.00%;top:50.00%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:90.95%;top:59.35%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:87.84%;top:68.22%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:82.84%;top:76.19%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:76.19%;top:82.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:68.22%;top:87.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="today" style="left:59.35%;top:90.95%;width:20px;height:20px;margin:-10px 0 0 -10px"></i><i style="left:50.00%;top:92.00%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:40.65%;top:90.95%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:31.78%;top:87.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:23.81%;top:82.84%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:17.16%;top:76.19%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:12.16%;top:68.22%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:9.05%;top:59.35%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:8.00%;top:50.00%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:9.05%;top:40.65%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i style="left:12.16%;top:31.78%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:17.16%;top:23.81%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:23.81%;top:17.16%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:31.78%;top:12.16%;width:12px;height:12px;margin:-6px 0 0 -6px"></i><i class="pred" style="left:40.65%;top:9.05%;width:12px;height:12px;margin:-6px 0 0 -6px"></i>
+        <div class="cycle-mid"><b>Day 14</b><i>mid-cycle</i><em>next window around the 24th</em></div>
+      </div>
+      <div class="cycle-legend"><span><i class="c-flow"></i>logged flow</span><span><i class="c-pred"></i>predicted</span><span><i class="c-today"></i>today</span></div>
+      <div class="cycle-note"><p class="ital">Your period might be starting soon.</p><p class="tiny">predicted on your phone — the prediction never leaves it either</p></div>
+      <div class="toggle-row">
+        <div><b>Include in encrypted backup</b><i id="backupstate">off by default</i></div>
+        <button type="button" class="switch" id="backupswitch" role="switch" aria-checked="false" aria-label="Include period data in encrypted backup"><span></span></button>
+      </div>
+      <p class="backup-note" id="backupnote">Cycle data never leaves the phone unless you deliberately turn this on — a separate, clearly-warned opt-in, not part of ordinary iCloud sync.</p>
+    </div>
+    <div class="stack">
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never touches the AI</h3><p>On-device models cannot import the sealed store. No summaries, no suggestions, no reflections built from your cycle.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Your notes never go to Apple Health</h3><p>Flow, temperature and the like reach Apple Health only while you share cycle tracking with Health. Your cycle notes, mood, journal, hydration and hygiene never do.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never in ordinary sync</h3><p>It is excluded from iCloud sync and from your data export, so a shared laptop or a file you send someone can't carry it out with everything else.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>Never visible to friends</h3><p>In-person friends see a fuzzy vibe and a companion. There is no field in the handshake that could carry cycle information.</p></div></div>
+      <div class="feature no"><span class="x"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0674A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span><div><h3>The wall breaks the build</h3><p>A pre-merge script fails the build the moment the AI or networking code imports the sealed store — a compiler check that runs before every merge.</p></div></div>
+      <div class="note-lichen"><p>Intimate-activity notes sit in the same sealed store. Intimacy tracking is only for people who confirm they're 16 or older; it's on for them by default, onboarding offers to turn it off, and hiding it never deletes anything.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="next-row">
+    <a class="next-link" href="/your-data/"><span class="label">Next</span><span class="next-title">Your data</span>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+    <div class="card beta-cta">
+      <div><h3>Want to try it before it ships?</h3><p>Fernlet is in a small closed beta on TestFlight.</p></div>
+      <a class="btn btn-moss" href="/beta/">Join the beta</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div class="foot-brand">
+      <picture>
+        <source srcset="../assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
+        <img class="brand-mark sm" src="../assets/fernlet-mark-header.svg" width="20" height="24" alt="">
+      </picture>
+      <span class="wordmark sm">Fernlet</span>
+      <span class="tiny">© 2026 Michael Bowman Olay. Fernlet™ is a trademark of Michael Bowman Olay.</span>
+    </div>
+    <nav class="foot-nav"><a href="/">Home</a><a href="/companion/">The companion</a><a href="/map/">Your map</a><a href="/workouts/">Workouts</a><a href="/friends/">Friends</a><a href="/cycle/">Cycle</a><a href="/your-data/">Your data</a><a href="/beta/">Beta</a><a href="/privacy/">Privacy policy</a><a href="/technical/">Technical details</a><a href="/support/">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
+    <p class="ital muted foot-note">No cookies, no analytics, no tracking on this site. Fernlet is a self-care companion, not a medical device — if you are in crisis, contact your local emergency services, or in the US call or text 988.</p>
+  </div>
+</footer>
+
+<script src="../app.js?v=73bf73ac" defer></script>
+</body>
+</html>

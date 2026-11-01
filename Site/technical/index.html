@@ -11,11 +11,11 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://fernlet.com/technical/">
 <link rel="canonical" href="https://fernlet.com/technical/">
-<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="../assets/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="icon" href="../assets/favicon-16.png" sizes="16x16" type="image/png">
-<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-<link rel="stylesheet" href="../style.css?v=dec34826">
+<link rel="icon" href="../assets/favicon.svg?v=6579d300" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png?v=a998c3ad" sizes="32x32" type="image/png">
+<link rel="icon" href="../assets/favicon-16.png?v=80e7556b" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png?v=6490a715">
+<link rel="stylesheet" href="../style.css?v=4fca24ee">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
       <source srcset="../assets/fernlet-mark-header-dark.svg" media="(prefers-color-scheme:dark)">
       <img class="brand-mark" src="../assets/fernlet-mark-header.svg" width="25" height="30" alt="">
     </picture>
-    <span class="wordmark">Fernlet<span aria-hidden="true">™</span></span>
+    <span class="wordmark">Fernlet</span>
   </a>
   <div class="navlinks">
     <a href="/">
@@ -88,7 +88,7 @@
         <p><strong>Sealed information</strong> — journal text, cycle data, intimate notes, and similar information are stored in a separate encrypted area on your device. Fernlet's networking code and its AI features are deliberately kept from reading that raw information — a build script blocks it: importing the sealed store from either one fails the build.</p>
       </div>
       <div class="callout">
-        <p><strong>Map information</strong> — the parts of the map you've uncovered, the routes you save, Where you've been, Places you return to, your homes and hotel, and where your photos sit. It is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us.</p>
+        <p><strong>Map information</strong> — the parts of the map you've uncovered, the routes you save, Where you've been, Places you return to, your homes and hotel, and where your photos sit. It is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. The one exception is your passport: its stamps, trips and flights go in the passport's own sealed backup if you use it.</p>
       </div>
     </section>
 
@@ -124,7 +124,7 @@
         <li><span><strong>Places.</strong> Where you've been, in Private, is a rolling 30-day timeline of the places you stopped at. Places you return to holds only a visit count, never dates. By itself, Fernlet keeps only everyday places: food and drink, gyms, parks, beaches and campgrounds. Any other place is kept only if you add it yourself, and places like doctors' offices, lawyers or therapists are never named for you. Homes (up to two) and a hotel you mark stay until you remove them.</span></li>
         <li><span><strong>Apple Maps.</strong> The map is drawn by Apple Maps, which receives the area on your screen in order to send its map images, under Apple's privacy terms. It never receives your map history or your walks. To name a place you stop at, Fernlet asks Apple Maps what is near you, only while Fernlet is open. For a place you return to, it keeps only Apple's reference to it and your own label, never Apple's name or category.</span></li>
         <li><span><strong>The map widget.</strong> If you add it, the widget gets a picture of the map around you, with your marked places and saved trails, on this iPhone only and never in a backup. Your visit counts and the history of where you've been stay in Private, and the widget's copy is deleted whenever you delete your map history.</span></li>
-        <li><span><strong>Deleting.</strong> You can delete a day, a photo, or all of it, at any time, in Settings → Home map.</span></li>
+        <li><span><strong>Deleting.</strong> You can delete a day, a stop or a place in Private → Where you've been, and all of your map history in Settings → Home map, at any time.</span></li>
       </ul>
     </section>
 
@@ -144,8 +144,8 @@
         <li><span><strong>Moving on.</strong> Finish every rep and the next session asks for one more. At the top of the rep range it adds weight, about 2.5% for upper-body lifts and 5% for squats, hinges and lunges, rounded to your equipment's steps, and starts the reps again at the bottom. Bodyweight and band work move on in reps, then sets.</span></li>
         <li><span><strong>Holding or easing off.</strong> A Tough set, or a small miss of two reps or fewer, repeats the same weight. A bigger miss, or a second in a row, goes about 5% lighter. A third in a row goes about 10% lighter with one set fewer for that session. After more than four weeks away, a lift restarts about 10% lighter.</span></li>
         <li><span><strong>When you choose differently.</strong> If you pick outside the range twice in five sessions, the next time it asks why, and not again on that lift for four weeks. “Too heavy” or “too light” re-centres the range on your own picks. “Pain” holds the lift steady and suggests trying a different exercise or checking with a professional.</span></li>
-        <li><span><strong>Plateaus.</strong> A lift counts as stalled only when you've trained it at least three times in four weeks with no gap over two weeks, and its last four sessions haven't beaten your earlier best by more than 1%. A strength check's build-up sets, easier sessions, sessions you marked Easy or answered “pain” on, and lifts done after two other compound lifts don't count as evidence. The response goes in order, and a new best ends it at any point: first, a note if your sleep averaged under seven hours or your protein under 80% of your target over the past two weeks, and an easier session (half the sets, about 10% lighter) or an extra rest day; then your usual weight with more rest and the lift moved first; then four sessions of support work for the muscles that help that lift; then a variation in its place for four weeks.</span></li>
-        <li><span><strong>The monthly strength check.</strong> Every four weeks, never on a light day and not while Manual plan exchange is on (a coach's plan brings its own testing), one lift is checked: a few lighter ramp sets, then one set at your five-rep weight, stopped with one or two reps left. Once Fernlet already trusts its estimate, the check is a single set at that day's weight. Intermediate and advanced lifters can opt in to testing a true one-rep max instead, behind a confirmation that asks for a spotter or safety arms. It builds up to three single attempts, and a miss ends the test.</span></li>
+        <li><span><strong>Plateaus.</strong> Each lift's trend is a smoothed slope against your own expected curve, and a stall is called only after weeks of steady training fall behind it. A dip, two clean sessions well under the line, is not a plateau: it gets a deload instead, half the sets at the usual weight. A stall goes up a ladder: a fair retest for two sessions (the lift first, at least three minutes' rest); then a loading change for six (a short heavier block with fewer reps, or one more weekly session of the lift); then a variant beside the main lift for eight, the main lift kept at one set fewer; then “holding steady”, with options that fit the goal. Sleep and protein over the past two weeks appear as context notes, protein read against 1.2 g per kg and only after two weeks of good logging. The ladder runs for the Strength, Sports prep and Bodybuilding goals; Weight Management gets only a quiet check that strength is holding.</span></li>
+        <li><span><strong>The monthly strength check.</strong> For the Strength, Sports prep and Bodybuilding goals, every four weeks, never on a light day and not while Manual plan exchange is on (a coach's plan brings its own testing), one lift is checked: a few lighter ramp sets, then one set at your five-rep weight, stopped with one or two reps left. Once Fernlet already trusts its estimate, the check is a single set at that day's weight. Intermediate and advanced lifters can opt in to testing a true one-rep max instead, behind a confirmation that asks for a spotter or safety arms. It builds up to three single attempts, and a miss ends the test.</span></li>
         <li><span><strong>Adjust with AI.</strong> The optional adjust runs on Apple's on-device model and reworks only the lifting part of a session. The model is shown a numbered list of exercises that already passed the equipment and avoid-list check, and it answers with numbers from that list, so it can't add anything else. If AI is off, or the model fails, the plan stays as it was built.</span></li>
       </ul>
     </section>
@@ -158,6 +158,7 @@
     <section>
       <h2 id="acknowledgments">Acknowledgments</h2>
       <p>Fernlet's passcode lock uses CryptoSwift's scrypt. This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/). CryptoSwift's full license and the notices for Fernlet's fonts are in the app, under Settings → Privacy &amp; data → Acknowledgments, and in the source repository's <a href="https://github.com/bowman-mw/fernlet/blob/main/NOTICE">NOTICE</a> file.</p>
+      <p>The same screen credits the data that travels inside the app: food from Open Food Facts (ODbL) and USDA FoodData Central; the World map's land, water, borders, cities and major roads from Natural Earth; the climate zones behind the map's terrain from the Köppen-Geiger classification (CC BY 4.0); airports from OurAirports, Wikidata and the tz database, with outlines traced from TIGER/Line, CORINE Land Cover and public imagery; and the weather from Apple Weather.</p>
     </section>
 
     <div class="disclaimer">
@@ -176,7 +177,7 @@
       <span class="wordmark sm">Fernlet</span>
       <span class="tiny">© 2026 Michael Bowman Olay. Fernlet™ is a trademark of Michael Bowman Olay.</span>
     </div>
-    <nav class="foot-nav"><a href="/">Home</a><a href="/privacy/">Privacy policy</a><a href="/support/">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
+    <nav class="foot-nav"><a href="/">Home</a><a href="/companion/">The companion</a><a href="/map/">Your map</a><a href="/workouts/">Workouts</a><a href="/friends/">Friends</a><a href="/cycle/">Cycle</a><a href="/your-data/">Your data</a><a href="/beta/">Beta</a><a href="/privacy/">Privacy policy</a><a href="/technical/">Technical details</a><a href="/support/">Support</a><a href="https://github.com/bowman-mw/fernlet">Source</a></nav>
   </div>
 </footer>
 
