@@ -94,7 +94,7 @@ extension FernletStore {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let entries: [(daysAgo: Int, hour: Int, note: String)] = [
-            (4, 22, Self.reviewDemoSample("reviewDemo.intimacy.note", "Slow evening together.")),
+            (4, 22, FernletStore.reviewDemoSample("reviewDemo.intimacy.note", "Slow evening together.")),
             (11, 21, ""),
         ]
         do {
@@ -173,25 +173,25 @@ extension FernletStore {
         let completedAt = min(calendar.date(byAdding: .hour, value: 18, to: dayStart) ?? dayStart, Date())
         switch plan {
         case .upper:
-            return Workout(name: Self.reviewDemoSample("reviewDemo.workout.upper", "Upper body strength"), type: .upper, mode: .strengthTraining,
-                           exercises: Self.reviewDemoSample("reviewDemo.workout.upper.exercises", "Bench press 3x8\nSeated row 3x10\nOverhead press 3x8"),
-                           rpe: 7, notes: Self.reviewDemoSample("reviewDemo.workout.upper.notes", "Felt strong on the last set."), duration: 45,
+            return Workout(name: FernletStore.reviewDemoSample("reviewDemo.workout.upper", "Upper body strength"), type: .upper, mode: .strengthTraining,
+                           exercises: FernletStore.reviewDemoSample("reviewDemo.workout.upper.exercises", "Bench press 3x8\nSeated row 3x10\nOverhead press 3x8"),
+                           rpe: 7, notes: FernletStore.reviewDemoSample("reviewDemo.workout.upper.notes", "Felt strong on the last set."), duration: 45,
                            intensity: .moderate, completedAt: completedAt)
         case .lower:
-            return Workout(name: Self.reviewDemoSample("reviewDemo.workout.lower", "Lower body strength"), type: .lower, mode: .strengthTraining,
-                           exercises: Self.reviewDemoSample("reviewDemo.workout.lower.exercises", "Goblet squat 3x10\nRomanian deadlift 3x8\nWalking lunge 2x12"),
+            return Workout(name: FernletStore.reviewDemoSample("reviewDemo.workout.lower", "Lower body strength"), type: .lower, mode: .strengthTraining,
+                           exercises: FernletStore.reviewDemoSample("reviewDemo.workout.lower.exercises", "Goblet squat 3x10\nRomanian deadlift 3x8\nWalking lunge 2x12"),
                            rpe: 7, notes: "", duration: 50, intensity: .moderate, completedAt: completedAt)
         case .run:
-            return Workout(name: Self.reviewDemoSample("reviewDemo.workout.run", "Easy run"), type: .cardio, mode: .activity, activityType: .running,
-                           exercises: "", rpe: 5, notes: Self.reviewDemoSample("reviewDemo.workout.run.notes", "Park loop."), duration: 30, distanceMiles: 3.1,
+            return Workout(name: FernletStore.reviewDemoSample("reviewDemo.workout.run", "Easy run"), type: .cardio, mode: .activity, activityType: .running,
+                           exercises: "", rpe: 5, notes: FernletStore.reviewDemoSample("reviewDemo.workout.run.notes", "Park loop."), duration: 30, distanceMiles: 3.1,
                            intensity: .moderate, completedAt: completedAt)
         case .walk:
-            return Workout(name: Self.reviewDemoSample("reviewDemo.workout.walk", "Evening walk"), type: .cardio, mode: .activity, activityType: .walking,
+            return Workout(name: FernletStore.reviewDemoSample("reviewDemo.workout.walk", "Evening walk"), type: .cardio, mode: .activity, activityType: .walking,
                            exercises: "", rpe: 3, notes: "", duration: 40, distanceMiles: 2.0,
                            intensity: .light, completedAt: completedAt)
         case .yoga:
-            return Workout(name: Self.reviewDemoSample("reviewDemo.workout.yoga", "Yoga flow"), type: .cardio, mode: .activity, activityType: .yoga,
-                           exercises: "", rpe: 4, notes: Self.reviewDemoSample("reviewDemo.workout.yoga.notes", "Gentle hips and shoulders."), duration: 35,
+            return Workout(name: FernletStore.reviewDemoSample("reviewDemo.workout.yoga", "Yoga flow"), type: .cardio, mode: .activity, activityType: .yoga,
+                           exercises: "", rpe: 4, notes: FernletStore.reviewDemoSample("reviewDemo.workout.yoga.notes", "Gentle hips and shoulders."), duration: 35,
                            intensity: .light, completedAt: completedAt)
         }
     }
@@ -201,10 +201,10 @@ extension FernletStore {
     /// Four journal entries across the fortnight, sealed by the journal path like any other entry.
     private func seedReviewDemoJournals(today: Date, calendar: Calendar) {
         let entries: [(daysAgo: Int, tag: FeelingTag, text: String)] = [
-            (9, .tired, Self.reviewDemoSample("reviewDemo.journal.tired", "Long day at work. Made soup anyway and went to bed early.")),
-            (5, .good, Self.reviewDemoSample("reviewDemo.journal.lifted", "Lifted for the first time in a while. Sore, but the good kind.")),
-            (2, .bright, Self.reviewDemoSample("reviewDemo.journal.market", "Walked to the farmers market with a friend. Peaches are back.")),
-            (0, .good, Self.reviewDemoSample("reviewDemo.journal.steady", "Slept well and had a slow breakfast. Feeling steady.")),
+            (9, .tired, FernletStore.reviewDemoSample("reviewDemo.journal.tired", "Long day at work. Made soup anyway and went to bed early.")),
+            (5, .good, FernletStore.reviewDemoSample("reviewDemo.journal.lifted", "Lifted for the first time in a while. Sore, but the good kind.")),
+            (2, .bright, FernletStore.reviewDemoSample("reviewDemo.journal.market", "Walked to the farmers market with a friend. Peaches are back.")),
+            (0, .good, FernletStore.reviewDemoSample("reviewDemo.journal.steady", "Slept well and had a slow breakfast. Feeling steady.")),
         ]
         for entry in entries {
             guard let dayStart = calendar.date(byAdding: .day, value: -entry.daysAgo, to: today) else { continue }
@@ -215,33 +215,33 @@ extension FernletStore {
     /// Three recipes; the oats carry structured steps (one timed), so the Steps card shows.
     private func seedReviewDemoRecipes() {
         addRecipe(
-            name: Self.reviewDemoSample("reviewDemo.meal.overnightOats", "Overnight oats"), servings: 2, notes: Self.reviewDemoSample("reviewDemo.recipe.oats.notes", "Mix, chill overnight, top with fruit."),
+            name: FernletStore.reviewDemoSample("reviewDemo.meal.overnightOats", "Overnight oats"), servings: 2, notes: FernletStore.reviewDemoSample("reviewDemo.recipe.oats.notes", "Mix, chill overnight, top with fruit."),
             ingredients: [
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.rolledOats", "Rolled oats"), quantity: 1, unit: "cup", protein: 10, carbs: 54, fat: 6),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.greekYogurt", "Greek yogurt"), quantity: 1, unit: "cup", protein: 20, carbs: 8, fat: 4),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.blueberries", "Blueberries"), quantity: 0.5, unit: "cup", protein: 1, carbs: 11, fat: 0),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.rolledOats", "Rolled oats"), quantity: 1, unit: "cup", protein: 10, carbs: 54, fat: 6),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.greekYogurt", "Greek yogurt"), quantity: 1, unit: "cup", protein: 20, carbs: 8, fat: 4),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.blueberries", "Blueberries"), quantity: 0.5, unit: "cup", protein: 1, carbs: 11, fat: 0),
             ],
             steps: [
-                RecipeStep(text: Self.reviewDemoSample("reviewDemo.recipe.oats.step1", "Stir the oats and yogurt together in a jar.")),
-                RecipeStep(text: Self.reviewDemoSample("reviewDemo.recipe.oats.step2", "Chill overnight."), durationSeconds: 8 * 60 * 60),
-                RecipeStep(text: Self.reviewDemoSample("reviewDemo.recipe.oats.step3", "Top with blueberries before eating.")),
+                RecipeStep(text: FernletStore.reviewDemoSample("reviewDemo.recipe.oats.step1", "Stir the oats and yogurt together in a jar.")),
+                RecipeStep(text: FernletStore.reviewDemoSample("reviewDemo.recipe.oats.step2", "Chill overnight."), durationSeconds: 8 * 60 * 60),
+                RecipeStep(text: FernletStore.reviewDemoSample("reviewDemo.recipe.oats.step3", "Top with blueberries before eating.")),
             ]
         )
         addRecipe(
-            name: Self.reviewDemoSample("reviewDemo.meal.sheetPanChicken", "Sheet pan chicken and vegetables"), servings: 4, notes: Self.reviewDemoSample("reviewDemo.recipe.sheetPan.notes", "Roast at 425 for 25 minutes."),
+            name: FernletStore.reviewDemoSample("reviewDemo.meal.sheetPanChicken", "Sheet pan chicken and vegetables"), servings: 4, notes: FernletStore.reviewDemoSample("reviewDemo.recipe.sheetPan.notes", "Roast at 425 for 25 minutes."),
             ingredients: [
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.chickenThigh", "Chicken thigh"), quantity: 4, unit: "piece", protein: 96, carbs: 0, fat: 40),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.broccoli", "Broccoli"), quantity: 2, unit: "cup", protein: 5, carbs: 12, fat: 1),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.sweetPotato", "Sweet potato"), quantity: 2, unit: "piece", protein: 4, carbs: 52, fat: 0),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.oliveOil", "Olive oil"), quantity: 2, unit: "tbsp", protein: 0, carbs: 0, fat: 28),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.chickenThigh", "Chicken thigh"), quantity: 4, unit: "piece", protein: 96, carbs: 0, fat: 40),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.broccoli", "Broccoli"), quantity: 2, unit: "cup", protein: 5, carbs: 12, fat: 1),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.sweetPotato", "Sweet potato"), quantity: 2, unit: "piece", protein: 4, carbs: 52, fat: 0),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.oliveOil", "Olive oil"), quantity: 2, unit: "tbsp", protein: 0, carbs: 0, fat: 28),
             ]
         )
         addRecipe(
-            name: Self.reviewDemoSample("reviewDemo.meal.lentilSoup", "Lentil soup"), servings: 6, notes: Self.reviewDemoSample("reviewDemo.recipe.lentilSoup.notes", "Freezes well."),
+            name: FernletStore.reviewDemoSample("reviewDemo.meal.lentilSoup", "Lentil soup"), servings: 6, notes: FernletStore.reviewDemoSample("reviewDemo.recipe.lentilSoup.notes", "Freezes well."),
             ingredients: [
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.redLentils", "Red lentils"), quantity: 2, unit: "cup", protein: 48, carbs: 120, fat: 4),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.carrot", "Carrot"), quantity: 2, unit: "piece", protein: 1, carbs: 12, fat: 0),
-                ManualRecipeIngredientInput(name: Self.reviewDemoSample("reviewDemo.ingredient.vegetableBroth", "Vegetable broth"), quantity: 6, unit: "cup", protein: 3, carbs: 12, fat: 0),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.redLentils", "Red lentils"), quantity: 2, unit: "cup", protein: 48, carbs: 120, fat: 4),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.carrot", "Carrot"), quantity: 2, unit: "piece", protein: 1, carbs: 12, fat: 0),
+                ManualRecipeIngredientInput(name: FernletStore.reviewDemoSample("reviewDemo.ingredient.vegetableBroth", "Vegetable broth"), quantity: 6, unit: "cup", protein: 3, carbs: 12, fat: 0),
             ]
         )
     }
@@ -249,9 +249,9 @@ extension FernletStore {
     /// Three progress photos a few weeks apart, through the sealed progress-photo store.
     private func seedReviewDemoProgressPhotos(today: Date, calendar: Calendar) {
         let entries: [(daysAgo: Int, hue: CGFloat, caption: String?)] = [
-            (42, 0.55, Self.reviewDemoSample("reviewDemo.progressPhoto.start", "Starting out")),
+            (42, 0.55, FernletStore.reviewDemoSample("reviewDemo.progressPhoto.start", "Starting out")),
             (21, 0.52, nil),
-            (2, 0.50, Self.reviewDemoSample("reviewDemo.progressPhoto.stronger", "Feeling stronger")),
+            (2, 0.50, FernletStore.reviewDemoSample("reviewDemo.progressPhoto.stronger", "Feeling stronger")),
         ]
         for entry in entries {
             guard let dayStart = calendar.date(byAdding: .day, value: -entry.daysAgo, to: today),
@@ -269,9 +269,9 @@ extension FernletStore {
 
     /// A few companion memories (plain synced notes).
     private func seedReviewDemoMemories() {
-        memories.append(MemoryNote(category: "bright", text: Self.reviewDemoSample("reviewDemo.memory.cooking", "Cooking at home felt rewarding this week.")))
-        memories.append(MemoryNote(category: "note", text: Self.reviewDemoSample("reviewDemo.memory.gentle", "Prefers gentle, consistent care over streaks.")))
-        memories.append(MemoryNote(category: "good", text: Self.reviewDemoSample("reviewDemo.memory.walks", "Enjoys morning walks and steady routines.")))
+        memories.append(MemoryNote(category: "bright", text: FernletStore.reviewDemoSample("reviewDemo.memory.cooking", "Cooking at home felt rewarding this week.")))
+        memories.append(MemoryNote(category: "note", text: FernletStore.reviewDemoSample("reviewDemo.memory.gentle", "Prefers gentle, consistent care over streaks.")))
+        memories.append(MemoryNote(category: "good", text: FernletStore.reviewDemoSample("reviewDemo.memory.walks", "Enjoys morning walks and steady routines.")))
         memories = Array(memories.suffix(300))
     }
 
@@ -332,28 +332,28 @@ extension FernletStore {
 
     /// A week of menus, rotated across the fortnight.
     private static let reviewDemoMenus: [[ReviewDemoMeal]] = [
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.greekYogurt", "Greek yogurt with berries"), type: .breakfast, hour: 8, protein: 28, carbs: 34, fat: 9),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.chickenRiceBowl", "Chicken rice bowl"), type: .lunch, hour: 12, protein: 42, carbs: 58, fat: 14),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.appleAlmonds", "Apple and almonds"), type: .snack, hour: 15, protein: 6, carbs: 22, fat: 12)],
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.overnightOats", "Overnight oats"), type: .breakfast, hour: 7, protein: 16, carbs: 52, fat: 8),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.turkeyWrap", "Turkey and avocado wrap"), type: .lunch, hour: 13, protein: 32, carbs: 40, fat: 18),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.salmon", "Salmon with roasted vegetables"), type: .dinner, hour: 19, protein: 38, carbs: 30, fat: 22)],
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.eggsToast", "Scrambled eggs on toast"), type: .breakfast, hour: 8, protein: 22, carbs: 28, fat: 16),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.lentilSoup", "Lentil soup"), type: .lunch, hour: 12, protein: 18, carbs: 44, fat: 4),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.sheetPanChicken", "Sheet pan chicken and vegetables"), type: .dinner, hour: 19, protein: 34, carbs: 26, fat: 18)],
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.bananaSmoothie", "Banana smoothie"), type: .breakfast, hour: 8, protein: 20, carbs: 48, fat: 6),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.tunaSalad", "Tuna salad"), type: .lunch, hour: 12, protein: 30, carbs: 12, fat: 14),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.hummusCarrots", "Hummus and carrots"), type: .snack, hour: 16, protein: 7, carbs: 20, fat: 9),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.tofuStirFry", "Veggie stir fry with tofu"), type: .dinner, hour: 19, protein: 24, carbs: 46, fat: 15)],
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.peanutButterToast", "Peanut butter toast"), type: .breakfast, hour: 8, protein: 14, carbs: 32, fat: 16),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.burritoBowl", "Burrito bowl"), type: .lunch, hour: 13, protein: 35, carbs: 62, fat: 17),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.pasta", "Pasta with tomato sauce"), type: .dinner, hour: 19, protein: 18, carbs: 72, fat: 10)],
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.cottageCheese", "Cottage cheese and peaches"), type: .breakfast, hour: 9, protein: 26, carbs: 24, fat: 5),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.grilledCheese", "Grilled cheese and tomato soup"), type: .lunch, hour: 13, protein: 20, carbs: 48, fat: 22),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.shrimpTacos", "Shrimp tacos"), type: .dinner, hour: 19, protein: 30, carbs: 40, fat: 14)],
-        [ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.pancakes", "Pancakes with fruit"), type: .breakfast, hour: 10, protein: 12, carbs: 66, fat: 12),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.caesarSalad", "Chicken caesar salad"), type: .lunch, hour: 14, protein: 36, carbs: 14, fat: 20),
-         ReviewDemoMeal(name: Self.reviewDemoSample("reviewDemo.meal.darkChocolate", "Dark chocolate"), type: .snack, hour: 20, protein: 2, carbs: 14, fat: 9)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.greekYogurt", "Greek yogurt with berries"), type: .breakfast, hour: 8, protein: 28, carbs: 34, fat: 9),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.chickenRiceBowl", "Chicken rice bowl"), type: .lunch, hour: 12, protein: 42, carbs: 58, fat: 14),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.appleAlmonds", "Apple and almonds"), type: .snack, hour: 15, protein: 6, carbs: 22, fat: 12)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.overnightOats", "Overnight oats"), type: .breakfast, hour: 7, protein: 16, carbs: 52, fat: 8),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.turkeyWrap", "Turkey and avocado wrap"), type: .lunch, hour: 13, protein: 32, carbs: 40, fat: 18),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.salmon", "Salmon with roasted vegetables"), type: .dinner, hour: 19, protein: 38, carbs: 30, fat: 22)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.eggsToast", "Scrambled eggs on toast"), type: .breakfast, hour: 8, protein: 22, carbs: 28, fat: 16),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.lentilSoup", "Lentil soup"), type: .lunch, hour: 12, protein: 18, carbs: 44, fat: 4),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.sheetPanChicken", "Sheet pan chicken and vegetables"), type: .dinner, hour: 19, protein: 34, carbs: 26, fat: 18)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.bananaSmoothie", "Banana smoothie"), type: .breakfast, hour: 8, protein: 20, carbs: 48, fat: 6),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.tunaSalad", "Tuna salad"), type: .lunch, hour: 12, protein: 30, carbs: 12, fat: 14),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.hummusCarrots", "Hummus and carrots"), type: .snack, hour: 16, protein: 7, carbs: 20, fat: 9),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.tofuStirFry", "Veggie stir fry with tofu"), type: .dinner, hour: 19, protein: 24, carbs: 46, fat: 15)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.peanutButterToast", "Peanut butter toast"), type: .breakfast, hour: 8, protein: 14, carbs: 32, fat: 16),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.burritoBowl", "Burrito bowl"), type: .lunch, hour: 13, protein: 35, carbs: 62, fat: 17),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.pasta", "Pasta with tomato sauce"), type: .dinner, hour: 19, protein: 18, carbs: 72, fat: 10)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.cottageCheese", "Cottage cheese and peaches"), type: .breakfast, hour: 9, protein: 26, carbs: 24, fat: 5),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.grilledCheese", "Grilled cheese and tomato soup"), type: .lunch, hour: 13, protein: 20, carbs: 48, fat: 22),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.shrimpTacos", "Shrimp tacos"), type: .dinner, hour: 19, protein: 30, carbs: 40, fat: 14)],
+        [ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.pancakes", "Pancakes with fruit"), type: .breakfast, hour: 10, protein: 12, carbs: 66, fat: 12),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.caesarSalad", "Chicken caesar salad"), type: .lunch, hour: 14, protein: 36, carbs: 14, fat: 20),
+         ReviewDemoMeal(name: FernletStore.reviewDemoSample("reviewDemo.meal.darkChocolate", "Dark chocolate"), type: .snack, hour: 20, protein: 2, carbs: 14, fat: 9)],
     ]
 
     /// A day's training, by how many days ago it was.
@@ -369,8 +369,8 @@ extension FernletStore {
 
     /// A week of nights, rotated.
     private static let reviewDemoSleep: [(hours: Double, quality: SleepQuality, note: String)] = [
-        (8.0, .great, Self.reviewDemoSample("reviewDemo.sleep.rested", "Rested.")), (7.5, .good, ""), (6.5, .ok, Self.reviewDemoSample("reviewDemo.sleep.wokeOnce", "Woke up once.")), (7.0, .good, ""),
-        (8.5, .great, Self.reviewDemoSample("reviewDemo.sleep.sleptIn", "Slept in.")), (6.0, .poor, Self.reviewDemoSample("reviewDemo.sleep.lateNight", "Late night.")), (7.5, .good, ""),
+        (8.0, .great, FernletStore.reviewDemoSample("reviewDemo.sleep.rested", "Rested.")), (7.5, .good, ""), (6.5, .ok, FernletStore.reviewDemoSample("reviewDemo.sleep.wokeOnce", "Woke up once.")), (7.0, .good, ""),
+        (8.5, .great, FernletStore.reviewDemoSample("reviewDemo.sleep.sleptIn", "Slept in.")), (6.0, .poor, FernletStore.reviewDemoSample("reviewDemo.sleep.lateNight", "Late night.")), (7.5, .good, ""),
     ]
 
     /// A few patterns of personal care, rotated.
@@ -383,7 +383,7 @@ extension FernletStore {
 
     /// One period, day by day: flow, the symptoms noticed and a note.
     private static let reviewDemoPeriodDays: [(flow: PeriodFlowLevel, symptoms: Set<PeriodSymptom>, note: String)] = [
-        (.medium, [.cramps, .fatigue], Self.reviewDemoSample("reviewDemo.period.note", "Heating pad and an early night.")),
+        (.medium, [.cramps, .fatigue], FernletStore.reviewDemoSample("reviewDemo.period.note", "Heating pad and an early night.")),
         (.heavy, [.cramps, .bloating], ""),
         (.medium, [.fatigue], ""),
         (.light, [], ""),
