@@ -6,10 +6,11 @@ import WorldMapStore
 
 extension UITestSupport {
     #if DEBUG
-    /// `FERNLET_UI_TEST_TRIP=<card|endcard|ticket|pass|today>`, paired with `FERNLET_UI_TEST_AIRPORT=at` (or `trip`)
+    /// `FERNLET_UI_TEST_TRIP=<card|endcard|ticket|calendarOffer|pass|today>`, paired with `FERNLET_UI_TEST_AIRPORT=at` (or `trip`)
     /// and the simulator's location at Portland International: `card` opens the blue button's card at PDX, Take a
     /// trip first (screen 16); `endcard` (with `AIRPORT=trip`) opens it on a trip to London, "End trip · London";
-    /// `ticket` opens Fernlet's ticket with "Lon" typed and its suggestions (screen 17); `pass` opens Sprout's
+    /// `ticket` opens Fernlet's ticket with "Lon" typed and its suggestions (screen 17); `calendarOffer` opens it empty,
+    /// as the person would, with "Fill this in from Calendar?" while that switch is off; `pass` opens Sprout's
     /// boarding pass for PDX (screen 6); `today` stands in a calendar flight to Honolulu leaving in three hours, so
     /// the blue button's "Trip to Honolulu" stays out and Sprout says its line (screen 29). Display only: no trip
     /// starts, and nothing is written. Consumed by `WorldTripHomeDriver`, `WorldFlightKeeper` and the store.

@@ -97995,6 +97995,30 @@
         }
       }
     },
+    "worldTrip.ticket.calendarOffer" : {
+      "comment" : "The companion's ticket: turns on Flights from Calendar, and iOS asks first (Spanish: ¿Completar con el Calendario?)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fill this in from Calendar?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Completar con el Calendario?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Completar con el Calendario?"
+          }
+        }
+      }
+    },
     "worldTrip.ticket.leaveBlank" : {
       "comment" : "The companion's ticket: under Start trip (Spanish: ¿Aún no lo sabes? Deja A en blanco; se completa al aterrizar.)",
       "extractionState" : "extracted_with_value",
