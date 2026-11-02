@@ -47880,7 +47880,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Carbohidratos"
+            "value" : "Hidratos"
           }
         }
       }
@@ -49551,13 +49551,13 @@
                   "one" : {
                     "stringUnit" : {
                       "state" : "translated",
-                      "value" : "%arg elemento"
+                      "value" : "%arg"
                     }
                   },
                   "other" : {
                     "stringUnit" : {
                       "state" : "translated",
-                      "value" : "%arg elementos"
+                      "value" : "%arg"
                     }
                   }
                 }
@@ -68192,6 +68192,24 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "−15 s"
+          }
+        }
+      }
+    },
+    "passport.sprout.studio" : {
+      "comment" : "Sprout's passport page: the half-width button that opens Creation Studio. Keep it short (Spanish: Estudio)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Creation Studio"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estudio"
           }
         }
       }

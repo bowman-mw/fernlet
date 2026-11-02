@@ -67,7 +67,8 @@ struct TodayCompanionCard: View {
         let chip = Button(action: onCustomize) {
             HStack(spacing: 6) {
                 WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
-                Text("Customize")
+                // Never broken mid-word ("Personaliza/r"): the line beside it wraps instead.
+                Text("Customize").fixedSize(horizontal: true, vertical: false)
             }
                 .font(.fernlet(.labelSmall).weight(.semibold))
                 .foregroundStyle(look?.text ?? Color.slate)
