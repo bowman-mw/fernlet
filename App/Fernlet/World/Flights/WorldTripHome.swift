@@ -111,11 +111,9 @@ struct WorldTripHomeDriver: ViewModifier {
         }
     }
 
-    /// What today's calendar flight depends on: the airport, the trip, the flight and the map in front.
+    /// What today's calendar flight depends on: the store's source, and the map in front.
     private var todaySource: [String] {
-        let flights = store.worldLocation.flights
-        return [flights.currentAirport ?? "", flights.isOnTrip ? "trip" : "", flights.isFlying ? "air" : "",
-                isFrontmost ? "front" : "", store.duressSessionActive ? "decoy" : ""]
+        store.worldTripTodaySource + [isFrontmost ? "front" : ""]
     }
 
     /// Home appeared: the quick action's install, and any request that launched the app.

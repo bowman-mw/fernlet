@@ -312,6 +312,23 @@ struct CalendarFlightsTests {
         #expect(store.worldFog.atlas.book.flights.count == 1)
     }
 
+    /// A look that finishes after the person reached the airport brings today's flight, and Home must read it again
+    /// (§10.7): nothing else changes then, so the airport alone would leave the blue button and the ticket empty.
+    @Test func aLookThatFindsTodaysFlightIsReadAgain() async throws {
+        let defaults = try Self.defaults(), store = makeTestStore()
+        store.worldFog.load()
+        WorldMapPreferences.setReadsCalendarFlights(true, in: defaults)
+        let before = store.worldTripTodaySource
+        let watcher = CalendarFlightWatcher(mayRead: { store.mayReadWorldCalendar(defaults: defaults) },
+                                            makeLooker: { Self.looker(store, FakeCalendar(events: Self.calendarEvents), defaults) },
+                                            defaults: defaults)
+        watcher.look(now: Self.now)
+        await watcher.settle()
+        #expect(store.worldTripTodaySource != before, "a look's new flight left today's source unchanged")
+        let morning = flightUTC("2026-11-14T15:00:00Z")
+        #expect(store.worldCalendarFlightToday(atAirport: "PDX", now: morning, defaults: defaults)?.destination == "HNL")
+    }
+
     // MARK: Walls
 
     /// EventKit is imported in one file only, the read-only source.

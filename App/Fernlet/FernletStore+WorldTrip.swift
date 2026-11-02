@@ -78,6 +78,16 @@ extension FernletStore {
                                           airports: flights.airportsShelf.pack(), spanish: WorldExploreCopy.showsSpanish, now: now)
     }
 
+    /// What today's calendar flight depends on, for Home to read it again when any of it changes (§10.7): the airport,
+    /// the trip, the flight, a decoy, and the upcoming flights, because a calendar look can finish after the person
+    /// reached the airport. In memory only. Bounded by ``PassportBook/maxUpcomingFlights``.
+    var worldTripTodaySource: [String] {
+        let flights = worldLocation.flights
+        return [flights.currentAirport ?? "", flights.isOnTrip ? "trip" : "", flights.isFlying ? "air" : "",
+                duressSessionActive ? "decoy" : ""]
+            + worldFog.atlas.book.upcomingFlights.map { "\($0.route)@\($0.departure.timeIntervalSince1970)" }
+    }
+
     /// Today's calendar flight from the airport the person is at (§10.7), while no trip is on: where it goes, its
     /// city and its departure. Nil elsewhere, in a decoy, with either switch off, or with none. DEBUG
     /// `FERNLET_UI_TEST_TRIP=today` stands a made-up one in.
