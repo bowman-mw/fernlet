@@ -6784,6 +6784,71 @@ struct LocalizationBoundaryTests {
         return found
     }
 
+    // MARK: - I3. Mexico's Spanish is complete, and stays Mexico's (2026-11-01)
+
+    /// iOS does not fall back from `es-MX` to `es` key by key: once a bundle has an `es-MX.lproj`, a key missing from
+    /// it draws its English default (measured 2026-11-01: 6,313 of 7,259 keys). So every `es` entry has an `es-MX`
+    /// one (`Scripts/fill-es-mx-catalogs.py` copies the missing ones), with the same variations and placeholders, and
+    /// `es-MX` never writes vosotros or Spain's "quedada" / "pulsado".
+    @Test func mexicanSpanishIsCompleteAndNeverSpains() throws {
+        var catalogs: [URL] = []
+        for root in ["App", Self.packageSourceRoot] {
+            let walker = try #require(FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil))
+            for case let url as URL in walker where url.pathExtension == "xcstrings" && !url.path.contains("/build/") {
+                catalogs.append(url)
+            }
+        }
+        #expect(catalogs.count >= 19, "found \(catalogs.count) string catalogs; the scan lost its root")
+        let spainOnly = try Regex(#"\b(os|vosotr\w+|vuestr\w+|\w+áis|\w+éis|\w+asteis|\w+isteis|quedadas?|pulsad[oa])\b"#)
+            .ignoresCase()
+        let placeholder = try Regex(#"%(\d+\$)?(lld|ld|d|@|#@\w+@|arg)"#)
+        let marks = { (text: String) in text.matches(of: placeholder).map { String(text[$0.range]) }.sorted() }
+        var mexicanEntries = 0
+        for catalog in catalogs {
+            let json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: catalog)) as? [String: Any])
+            for case let (key, entry as [String: Any]) in json["strings"] as? [String: Any] ?? [:] {
+                let localizations = entry["localizations"] as? [String: Any] ?? [:]
+                let place = "\(catalog.lastPathComponent) “\(key)”"
+                guard let spanish = localizations["es"] else {
+                    #expect(localizations["es-MX"] == nil, "\(place) has es-MX but no es")
+                    continue
+                }
+                guard let mexico = localizations["es-MX"] else {
+                    Issue.record("\(place) has es but no es-MX, so a phone in Mexico draws English. Run Scripts/fill-es-mx-catalogs.py")
+                    continue
+                }
+                mexicanEntries += 1
+                let spain = Self.stringUnits(in: spanish), mexican = Self.stringUnits(in: mexico)
+                #expect(Set(mexican.keys) == Set(spain.keys), "\(place): es-MX has other variations than es")
+                for (path, value) in mexican {
+                    #expect(marks(value) == marks(spain[path] ?? ""), "\(place) \(path): es-MX changed the placeholders")
+                    #expect(value.firstMatch(of: spainOnly) == nil, "\(place) \(path): “\(value)” is Spain's Spanish")
+                }
+            }
+        }
+        #expect(mexicanEntries > 7000, "only \(mexicanEntries) es-MX entries; Mexico's Spanish lost its strings")
+    }
+
+    /// Every `stringUnit` value under one localization, keyed by its path ("" for the plain unit,
+    /// "variations/plural/one" and so on).
+    private static func stringUnits(in localization: Any) -> [String: String] {
+        var found: [String: String] = [:]
+        var pending: [(path: String, node: Any)] = [("", localization)]
+        // Bounded: a catalog entry's variations nest a few levels deep; 256 nodes is far past any real entry.
+        for _ in 0..<256 {
+            guard let (path, node) = pending.popLast() else { break }
+            guard let dictionary = node as? [String: Any] else { continue }
+            for (name, child) in dictionary {
+                if name == "stringUnit" {
+                    found[path] = (child as? [String: Any])?["value"] as? String ?? ""
+                } else {
+                    pending.append((path.isEmpty ? name : path + "/" + name, child))
+                }
+            }
+        }
+        return found
+    }
+
     // MARK: - Discovery
 
     /// Scans every `.swift` file under ``packageSourceRoot`` for `String(localized:)` call sites.
