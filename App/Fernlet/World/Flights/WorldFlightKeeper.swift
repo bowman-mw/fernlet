@@ -51,6 +51,9 @@ final class WorldFlightKeeper {
     /// Where the trip under way is going, as the ticket's To field took it; nil without a ticket's destination
     /// (§7: "Leave To blank; it fills in when you land"). Sealed in ``tripFile`` only.
     private(set) var tripDestination: WorldTripDestination?
+    /// The minute of the newest reading: a calendar flight says "in the air" only with none since it left
+    /// (`PassportBook.calendarFlightInTheAir`). To the minute, so Home redraws for it at most once a minute.
+    private(set) var lastReadingMinute: Date?
 
     /// Called with what each reading changed (airports found, flights started and landed, layovers), after any
     /// it could not take before; answers whether it took them.
@@ -138,6 +141,9 @@ final class WorldFlightKeeper {
         return verdict.mayKeep
     }
 
+    /// The IATA code of the airport the person was last known to be at, when they have one.
+    var currentAirportCode: String? { currentAirport.flatMap(iataCode) }
+
     /// When the trip under way began and when the flight under way took off, for the travel-day rule (§13.1,
     /// `FernletStore+WorldTravelDay`); read when asked, never observed.
     var tripStartedAt: Date? { detector.tripStartedAt }
@@ -199,6 +205,7 @@ final class WorldFlightKeeper {
         if currentAirport != state.currentAirport { currentAirport = state.currentAirport }
         if isOnTrip != state.isOnTrip { isOnTrip = state.isOnTrip }
         if showsTravelLook != state.showsTravelLook { showsTravelLook = state.showsTravelLook }
+        if lastReadingMinute != state.lastReadingMinute { lastReadingMinute = state.lastReadingMinute }
         let destination = UITestSupport.tripSceneDestination ?? ticket?.destination
         if tripDestination != destination { tripDestination = destination }
     }
@@ -301,6 +308,8 @@ nonisolated struct WorldFlightGateState: Equatable, Sendable {
     var currentAirport: String?
     var isOnTrip = false
     var showsTravelLook = false
+    /// The minute of the newest reading (none in a DEBUG scene).
+    var lastReadingMinute: Date?
 
     /// A state with every field given (the DEBUG scenes').
     init(isFlying: Bool = false, layoverAirport: String? = nil, layoverStart: Date? = nil, currentAirport: String? = nil,
@@ -322,6 +331,9 @@ nonisolated struct WorldFlightGateState: Equatable, Sendable {
         currentAirport = detector.currentAirport
         isOnTrip = detector.isOnTrip
         showsTravelLook = detector.showsTravelLook
+        lastReadingMinute = detector.lastReadingAt.map { reading in
+            Date(timeIntervalSince1970: (reading.timeIntervalSince1970 / 60).rounded(.down) * 60)
+        }
     }
 }
 

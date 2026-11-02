@@ -311,6 +311,9 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
         return false
     }
 
+    /// When the newest reading weighed was taken, kept across relaunches.
+    public var lastReadingAt: Date? { lastAt }
+
     /// The airport the flight under way left, when known.
     public var flightOrigin: String? {
         if case .flying(let flight) = phase { return flight.from }
