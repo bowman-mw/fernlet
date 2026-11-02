@@ -214,6 +214,55 @@ struct FlightDetectorTests {
         #expect(ended.events == [.endedWithoutAirport(from: "PDX", departed: at(0), at: at(6 * 3_600 + 300))])
     }
 
+    // MARK: Opened mid-flight
+
+    /// A reading from the air as a window seat gets them: vaguer than a car's, no recent airport in sight.
+    private func cabin(_ point: GeoPoint, _ seconds: TimeInterval, kmh: Double? = nil, altitude: Double? = nil) -> FlightFix {
+        FlightFix(point: point, at: at(seconds), accuracy: 120, speed: kmh.map { $0 / 3.6 }, altitude: altitude,
+                  verticalAccuracy: altitude == nil ? nil : 100)
+    }
+
+    /// Fernlet closed at the gate and opened an hour later, 100 km on (too short a hop for the gap rule): the phone's
+    /// own 850 km/h is a flight even at a cabin's vague accuracy, and the reading stays out of the map.
+    @Test func openedInTheAirAVagueReadingAtCruisingSpeedIsAFlight() {
+        var detector = FlightDetector()
+        feed(&detector, Self.pdxPoint, 0, kmh: 0)
+        let verdict = detector.observe(cabin(Self.pdxPoint.offset(east: 100_000, north: 0), 3_600, kmh: 850), airports: Self.airports)
+        #expect(detector.isFlying && !verdict.mayKeep)
+        #expect(verdict.events.contains(.flightStarted(from: "PDX", departed: at(0))))
+    }
+
+    /// With no speed at all, a height no road reaches is a flight; a high mountain road isn't.
+    @Test func openedInTheAirAHeightNoRoadReachesIsAFlight() {
+        var high = FlightDetector()
+        feed(&high, Self.pdxPoint, 0, kmh: 0)
+        let verdict = high.observe(cabin(Self.pdxPoint.offset(east: 100_000, north: 0), 3_600, altitude: 11_000), airports: Self.airports)
+        #expect(high.isFlying && !verdict.mayKeep)
+
+        var pass = FlightDetector()
+        feed(&pass, Self.pdxPoint, 0, kmh: 0)
+        let road = pass.observe(cabin(Self.pdxPoint.offset(east: 100_000, north: 0), 3_600, altitude: 5_000), airports: Self.airports)
+        #expect(!pass.isFlying && road.mayKeep, "the world's high passes are under 6 km")
+    }
+
+    /// A vague reading at a car's speed stays on the ground.
+    @Test func aVagueReadingAtACarsSpeedIsNoFlight() {
+        var detector = FlightDetector()
+        feed(&detector, Self.pdxPoint, 0, kmh: 0)
+        let verdict = detector.observe(cabin(Self.pdxPoint.offset(east: 100_000, north: 0), 3_600, kmh: 110), airports: Self.airports)
+        #expect(!detector.isFlying && verdict.mayKeep)
+    }
+
+    /// Crossing over an airport at cruising height with no speed is no landing.
+    @Test func aVagueReadingHighOverAnAirportIsNoLanding() {
+        var detector = FlightDetector()
+        _ = takeOffFromPortland(&detector)
+        let over = detector.observe(cabin(Self.lhrPoint, 9 * 3_600, altitude: 11_000), airports: Self.airports)
+        #expect(detector.isFlying && !over.mayKeep && over.events.isEmpty)
+        let landed = detector.observe(fix(Self.lhrPoint, 9 * 3_600 + 1_800, kmh: 0), airports: Self.airports)
+        #expect(!detector.isFlying && landed.mayKeep)
+    }
+
     // MARK: Layovers
 
     /// Landed at HEL and still inside: a layover with a counter; a 250 km/h climb-out waits and is refused;
