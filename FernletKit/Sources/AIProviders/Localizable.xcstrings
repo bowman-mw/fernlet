@@ -13,7 +13,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "El ayudante silencioso descansa por hoy. Mañana vuelvo a intentarlo con esta receta."
           }
         }
@@ -31,7 +31,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "La página no devolvió HTML legible."
           }
         }
@@ -49,7 +49,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet no pudo cargar esa página de receta."
           }
         }
@@ -67,7 +67,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "A la receta extraída le faltaba el nombre o los ingredientes."
           }
         }
@@ -85,7 +85,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "El portapapeles no contiene una URL válida."
           }
         }
@@ -103,7 +103,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "La extracción de recetas en el dispositivo no está disponible aquí."
           }
         }
@@ -121,7 +121,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet no pudo extraer ninguna receta de esa página."
           }
         }

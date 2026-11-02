@@ -13,7 +13,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Confirma el borrado escribiendo BORRAR o usando de nuevo la verificación biométrica."
           }
         }
@@ -31,8 +31,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Inicia sesión en iCloud para revisar o borrar los datos de Fernlet en la nube."
+            "state" : "translated",
+            "value" : "Inicia sesión en iCloud para comprobar o borrar los datos de Fernlet en la nube."
           }
         }
       }
@@ -49,7 +49,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet no pudo terminar la operación de iCloud: %@"
           }
         }
@@ -67,7 +67,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "La sincronización con iCloud está activada, pero este iPhone no tiene una sesión de iCloud iniciada, así que todavía no se sincroniza nada. Tus registros están a salvo en este iPhone y empiezan a sincronizarse cuando inicies sesión en iCloud en la app Ajustes."
           }
         }
@@ -85,8 +85,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Fernlet no pudo abrir tus registros locales. Tus datos no se eliminaron. Desbloquea tu dispositivo si acabas de reiniciarlo, libera espacio si hace falta e inténtalo de nuevo."
+            "state" : "translated",
+            "value" : "Fernlet no ha podido abrir tus registros locales. Tus datos no se han eliminado. Desbloquea tu dispositivo si acabas de reiniciarlo, libera espacio si hace falta e inténtalo de nuevo."
           }
         }
       }

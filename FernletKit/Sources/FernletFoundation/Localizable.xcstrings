@@ -13,8 +13,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La autenticación biométrica falló."
+            "state" : "translated",
+            "value" : "La autenticación biométrica ha fallado."
           }
         }
       }
@@ -31,7 +31,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "La autenticación biométrica no está disponible."
           }
         }
@@ -49,7 +49,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet no pudo acceder al hardware de seguridad de este dispositivo. Asegúrate de que el iPhone esté desbloqueado e inténtalo de nuevo."
           }
         }
@@ -67,7 +67,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Los datos sellados ya no se pueden abrir en este dispositivo. Restablece el bloqueo de la app para continuar."
           }
         }
@@ -85,8 +85,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La clave guardada en este teléfono está en un formato antiguo que Fernlet ya no abre. Restablece el bloqueo de la app para continuar."
+            "state" : "translated",
+            "value" : "La clave guardada en este móvil está en un formato antiguo que Fernlet ya no abre. Restablece el bloqueo de la app para continuar."
           }
         }
       }
@@ -103,7 +103,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Demasiados intentos. Inténtalo de nuevo en %lld h."
           }
         }
@@ -121,7 +121,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Demasiados intentos. Inténtalo de nuevo en %lld min."
           }
         }
@@ -139,7 +139,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Demasiados intentos. Inténtalo de nuevo en %lld s."
           }
         }
@@ -157,7 +157,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet no puede abrir esto ahora. Inténtalo de nuevo en un momento."
           }
         }
@@ -175,7 +175,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Privado aún no está configurado en este iPhone."
           }
         }
@@ -193,7 +193,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Error interno: %@"
           }
         }
@@ -211,7 +211,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Código incorrecto."
           }
         }
@@ -229,7 +229,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Falló la operación %1$@ del llavero: %2$@ (%3$d)."
           }
         }
@@ -247,7 +247,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Falló la operación %1$@ del llavero con el estado %2$d."
           }
         }
@@ -265,7 +265,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "El llavero no está disponible. Configura un código en el dispositivo e inténtalo de nuevo."
           }
         }
@@ -283,8 +283,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "El bloqueo de la app está cerrado."
+            "state" : "translated",
+            "value" : "La app está bloqueada."
           }
         }
       }
@@ -301,7 +301,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "El bloqueo de la app no está configurado."
           }
         }
@@ -319,7 +319,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet no pudo confirmar que eres tú, así que no se configuró el código."
           }
         }
@@ -337,7 +337,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet tiene que revisar las entradas privadas de este iPhone antes de configurar un código."
           }
         }
@@ -355,7 +355,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Desactivar el código quitaría tu dispositivo de recuperación, y ese dispositivo guarda la única clave de tus entradas de antes de este bloqueo de la app. Para continuar, primero quita el dispositivo de recuperación."
           }
         }
@@ -373,7 +373,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Demasiados intentos fallidos. Restablece el bloqueo de la app."
           }
         }
@@ -391,7 +391,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Confirma que eres tú antes de configurar un código."
           }
         }

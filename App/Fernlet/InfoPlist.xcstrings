@@ -17,7 +17,7 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Receta de Fernlet"
           }
         }
@@ -27,7 +27,7 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Plan de entrenamiento de Fernlet"
           }
         }
@@ -61,8 +61,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Fernlet usa la cámara para escanear códigos de barras e información nutricional, fotografiar comidas, tomar fotos de progreso y tomar fotos en quedadas con amigos."
+            "state" : "translated",
+            "value" : "Fernlet usa la cámara para escanear códigos de barras e información nutricional, fotografiar comidas, hacer fotos de progreso y hacer fotos en quedadas con amigos."
           }
         }
       }
@@ -78,7 +78,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet usa Face ID para desbloquear tus datos privados de salud."
           }
         }
@@ -95,7 +95,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet lee los datos de Salud que elijas solo cuando lo activas (entrenamientos, medidas del cuerpo, sueño, recuperación, frecuencia cardiaca durante el cardio guiado y, si quieres, datos del ciclo) para darte una imagen completa de tu bienestar, sin salir de tu dispositivo."
           }
         }
@@ -112,7 +112,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet guarda en Salud los entrenamientos y los datos de salud que registras tú, para que aparezcan en Fitness y en todos tus dispositivos."
           }
         }
@@ -129,7 +129,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet se conecta directamente con amigos cerca para compartir recetas y, durante una quedada que empiezas tú, fotos, mensajes que duran poco y corazones. Una quedada puede seguir en segundo plano."
           }
         }
@@ -146,7 +146,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Con el mapeo en segundo plano activado, Fernlet descubre el mapa con los lugares que visitas y las carreteras por las que conduces o vas en bici. Todo se queda en este iPhone."
           }
         }
@@ -163,7 +163,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Tu compañero vive en un mapa de dónde estás. El mapa se descubre mientras vas, y el historial se queda en este iPhone."
           }
         }
@@ -180,8 +180,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Fernlet usa el movimiento para saber cuándo vas en bici o en coche, solo mientras \"Registrar mis salidas en bici\" está activado. Todo se queda en este iPhone."
+            "state" : "translated",
+            "value" : "Fernlet usa el movimiento para saber cuándo vas en bici o en coche, solo mientras “Registrar mis salidas en bici” está activado. Todo se queda en este iPhone."
           }
         }
       }
@@ -197,8 +197,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Fernlet usa la banda ultraancha para medir la distancia a un amigo cercano mientras se conectan."
+            "state" : "translated",
+            "value" : "Fernlet usa la banda ultraancha para medir la distancia a un amigo cercano mientras os conectáis."
           }
         }
       }
@@ -214,7 +214,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "Fernlet guarda las fotos compartidas que elijas después de una sesión con amigos."
           }
         }
@@ -231,8 +231,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "La ubicación precisa dibuja la línea de esta caminata o carrera. La línea se queda en este iPhone."
+            "state" : "translated",
+            "value" : "La ubicación precisa dibuja la línea de este paseo o esta carrera. La línea se queda en este iPhone."
           }
         }
       }
