@@ -11,8 +11,11 @@ import WorldMapStore
 ///   (``WorldLandmarkPlateRule``).
 /// - **The dotted fence** round a found airport with our own approved outline, only while the outline spans more
 ///   than a third of the screen (``WorldAirportSelection/fenceShows(bounds:screen:)``).
-/// - **The planes** at a found airport at street zooms (``WorldAirportPlanes``): jets parked at the gates and, about
-///   every two minutes, one taking off along the runway; parked only with Reduce Motion.
+/// - **The planes** at a found airport (``WorldAirportPlanes``): at street zooms jets parked at the gates and, there or
+///   while its fence shows, about
+///   every two minutes, one taking off or landing on a runway; parked only with Reduce Motion.
+/// - **A plane flying over** now and then while the person is within two miles of an airport, found or not
+///   (``WorldAirportFlyOver``).
 ///
 /// The fence and the planes are decoration, hidden from VoiceOver. The tower is one element: "Airport, not found
 /// yet", or "Portland International, PDX, airport, found", a button that opens Sprout's boarding pass (``onOpenPass``,
@@ -27,6 +30,7 @@ struct WorldAirportLayer: View {
     /// towers as images.
     var onOpenPass: ((WorldAirport) -> Void)? = nil
     @State private var memo = WorldAirportMemo()
+    @State private var flyOverMemo = WorldAirportFlyOverMemo()
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -37,13 +41,16 @@ struct WorldAirportLayer: View {
                 ForEach(placed) { airport in
                     if let fence = airport.fence { WorldAirportFence(points: fence, dark: colorScheme == .dark, size: size) }
                 }
-                if street {
-                    ForEach(placed.filter(\.found)) { airport in
-                        WorldAirportPlanes(token: airport.id, tower: airport.point, runway: airport.runway,
-                                           dark: colorScheme == .dark)
-                    }
+                // The runways can be a kilometre from the tower: the moving planes also show while the fence does.
+                ForEach(placed.filter { $0.found && (street || $0.fence != nil) }) { airport in
+                    WorldAirportPlanes(token: airport.id, tower: airport.point, runways: airport.runways,
+                                       dark: colorScheme == .dark, showsParked: street)
                 }
                 ForEach(placed.filter(\.isOnScreen)) { airport in tower(airport) }
+                if let person = store.worldLocation.latest?.point,
+                   let near = flyOverMemo.airport(near: person, in: pack), let runway = memo.runways(of: near).first {
+                    WorldAirportFlyOver(token: near.token, runway: runway, size: size)
+                }
             }
         }
     }
@@ -73,12 +80,12 @@ struct WorldAirportLayer: View {
         return memo.airports(in: pack, near: viewport, size: size).map { airport in
             let point = viewport.screenPoint(for: airport.point, in: size)
             let isFound = found.contains(airport.token)
-            let ends = memo.runway(of: airport)
+            let ends = isFound ? memo.runways(of: airport) : []
             return WorldPlacedAirport(
                 airport: airport, point: point, found: isFound,
                 isOnScreen: WorldExploreSelection.isOnScreen(point, size: size),
                 fence: isFound ? fence(of: airport) : nil,
-                runway: (viewport.screenPoint(for: ends.0, in: size), viewport.screenPoint(for: ends.1, in: size)),
+                runways: ends.map { (viewport.screenPoint(for: $0.0, in: size), viewport.screenPoint(for: $0.1, in: size)) },
                 plate: WorldAirportCopy.plate(airport))
         }
         .sorted { ($0.point.y, $0.id) < ($1.point.y, $1.id) }
@@ -108,6 +115,24 @@ enum WorldAirportFound {
     }
 }
 
+/// The found airports' veils (``NatureFogVeils``), built again only when the found airports change: Home asks on
+/// every draw of its ground. Nothing in a decoy, whose found airports are none.
+@MainActor
+final class WorldAirportVeilMemo {
+    private var tokens = Set<String>()
+    private var veils = NatureFogVeils.none
+
+    /// The veils over the airports `store` holds as found.
+    func veils(for store: FernletStore) -> NatureFogVeils {
+        let found = WorldAirportFound.tokens(store)
+        guard found != tokens else { return veils }
+        guard let pack = store.worldLocation.flights.airportsShelf.pack() else { return veils }
+        tokens = found
+        veils = NatureFogVeils(airports: found.compactMap { pack.airport(token: $0) })
+        return veils
+    }
+}
+
 /// One airport placed on the screen.
 struct WorldPlacedAirport: Identifiable {
     let airport: WorldAirport
@@ -118,8 +143,8 @@ struct WorldPlacedAirport: Identifiable {
     let isOnScreen: Bool
     /// Its fence's points on the screen, when the fence shows.
     let fence: [CGPoint]?
-    /// Its runway's two ends on the screen.
-    let runway: (CGPoint, CGPoint)
+    /// A found airport's runways' two ends on the screen, longest first; none before it's found.
+    let runways: [(CGPoint, CGPoint)]
     /// "PDX · Portland".
     let plate: String
     var id: String { airport.token }

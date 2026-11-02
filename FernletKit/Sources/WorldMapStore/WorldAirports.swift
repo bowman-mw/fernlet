@@ -21,6 +21,20 @@ public nonisolated enum WorldAirportGrounds: Equatable, Sendable {
     }
 }
 
+/// One open land runway: its two ends and how wide it is (OurAirports `runways.csv`).
+public nonisolated struct WorldRunway: Equatable, Sendable {
+    public let start: GeoPoint
+    public let end: GeoPoint
+    public let widthMetres: Double
+
+    /// A runway from its ends and width: the pack's reader, and made-up runways in tests.
+    public init(start: GeoPoint, end: GeoPoint, widthMetres: Double) {
+        self.start = start
+        self.end = end
+        self.widthMetres = widthMetres
+    }
+}
+
 /// One unlockable airport (every large and medium airport in OurAirports, spec §1.1).
 public nonisolated struct WorldAirport: Equatable, Identifiable, Sendable {
     /// The frozen passport token (`AtlasDiscoveryKind` "airport"): its IATA code when it was first frozen,
@@ -46,11 +60,14 @@ public nonisolated struct WorldAirport: Equatable, Identifiable, Sendable {
     /// The city in Spanish, or nil where it's the English one.
     public let spanishCity: String?
     public let grounds: WorldAirportGrounds
+    /// Its open land runways, longest first; empty where the list has none.
+    public internal(set) var runways: [WorldRunway]
 
     /// An airport from its fields: the pack's reader, and the made-up airports of the flight detector's tests.
     public init(token: String, iata: String?, ident: String, point: GeoPoint, countryCode: String,
                 size: WorldAirportSize, timeZoneIdentifier: String, englishName: String, spanishName: String?,
-                englishCity: String, spanishCity: String?, grounds: WorldAirportGrounds) {
+                englishCity: String, spanishCity: String?, grounds: WorldAirportGrounds, runways: [WorldRunway] = []) {
+        self.runways = runways
         self.token = token
         self.iata = iata
         self.ident = ident
@@ -135,11 +152,13 @@ public nonisolated struct WorldAirports: Sendable {
     public static let maxAirports = 20_000
     /// The most points one ring of grounds may have.
     public static let maxRingPoints = 64
+    /// The most runways one airport may list.
+    public static let maxRunways = 16
     /// The sections every pack must carry (`META`, the generator's provenance, is optional).
     public static let requiredTags = ["TZNS", "APTS", "PNTS", "AIRL"]
-    /// The shipped `WorldAirports.pack`'s SHA-256 (generated 2026-10-31 by
+    /// The shipped `WorldAirports.pack`'s SHA-256 (generated 2026-11-02 by
     /// `Scripts/world-atlas/build_world_airports.py`). Regenerating the pack changes it on purpose.
-    public static let expectedSHA256 = "39920850301c0707bc2da6dea7197421c95dd4f5ac2bc13e2e34f85f4d8b7019"
+    public static let expectedSHA256 = "9cbc39fa0b69f46938e97c97e8ef6f026b8a5ad71a82adf03ede86e8bffd9860"
     /// Degrees per grid cell of the grounds index.
     static let indexCellDegrees = 1.0
 
@@ -160,7 +179,9 @@ public nonisolated struct WorldAirports: Sendable {
         guard data.count <= Self.maxPackBytes else { throw WorldAtlasPackError.tooLarge }
         let sections = try Self.sections(of: [UInt8](data))
         let zones = try Self.zones(sections["TZNS"] ?? [])
-        airports = try Self.airports(sections["APTS"] ?? [], zones: zones)
+        var read = try Self.airports(sections["APTS"] ?? [], zones: zones)
+        try Self.addRunways(sections["RWYS"], to: &read)
+        airports = read
         points = try Self.points(sections["PNTS"] ?? [], zones: zones, unlockables: airports.count)
         airlines = try Self.airlines(sections["AIRL"] ?? [])
         var byToken: [String: Int] = [:], byCode: [String: Int] = [:], byIATA: [String: Int] = [:]
@@ -372,6 +393,31 @@ public nonisolated struct WorldAirports: Sendable {
         }
         try reader.expectEnd()
         return out
+    }
+
+    /// Hands each airport its runways from the optional `RWYS` section (Docs/World-Airports-Pack.md).
+    private static func addRunways(_ body: [UInt8]?, to airports: inout [WorldAirport]) throws {
+        guard let body else { return }
+        var reader = AtlasByteReader(body, tag: "RWYS")
+        let count = Int(try reader.u16())
+        guard count <= airports.count else { throw WorldAtlasPackError.malformed("RWYS", "count") }
+        // Bounded: count <= airports.count.
+        for _ in 0..<count {
+            let index = Int(try reader.u16()), listed = Int(try reader.u8())
+            guard index < airports.count, (1...maxRunways).contains(listed) else {
+                throw WorldAtlasPackError.malformed("RWYS", "airport")
+            }
+            var runways: [WorldRunway] = []
+            // Bounded: listed <= maxRunways.
+            for _ in 0..<listed {
+                let start = GeoPoint(Double(try reader.i32()) / 100_000, Double(try reader.i32()) / 100_000)
+                let end = GeoPoint(Double(try reader.i32()) / 100_000, Double(try reader.i32()) / 100_000)
+                guard start.isValid, end.isValid else { throw WorldAtlasPackError.malformed("RWYS", "end") }
+                runways.append(WorldRunway(start: start, end: end, widthMetres: Double(try reader.u16())))
+            }
+            airports[index].runways = runways
+        }
+        try reader.expectEnd()
     }
 
     /// `u32 pointCount · i32 lon · i32 lat · zigzag deltas`, the atlas's ring.
