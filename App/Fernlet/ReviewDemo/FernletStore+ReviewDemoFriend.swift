@@ -158,10 +158,10 @@ extension FernletStore {
         }
         let designer = ItemDesigner(id: UUID())
         let items = [
-            CustomizationItem(name: "Striped beanie", slot: .hat,
+            CustomizationItem(name: Self.reviewDemoSample("reviewDemo.friend.beanie", "Striped beanie"), slot: .hat,
                               texture: Self.reviewDemoStripes(slot: .hat, rows: 8..<22, cols: 6..<26, colors: [8, 3]),
                               designer: designer, isShareable: true, price: 10),
-            CustomizationItem(name: "Cozy scarf", slot: .body,
+            CustomizationItem(name: Self.reviewDemoSample("reviewDemo.friend.scarf", "Cozy scarf"), slot: .body,
                               texture: Self.reviewDemoStripes(slot: .body, rows: 10..<16, cols: 8..<40, colors: [12, 4]),
                               designer: designer, isShareable: true, price: 15),
         ]

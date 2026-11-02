@@ -51414,8 +51414,8 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Snack"
+            "state" : "translated",
+            "value" : "Tentempié"
           }
         }
       }
@@ -56827,6 +56827,12 @@
             "state" : "new",
             "value" : "%1$@ - %2$lld min, easy"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ - %2$lld min, suave"
+          }
         }
       }
     },
@@ -56838,6 +56844,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ - 8 × 1 min hard / 1 min easy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ - 8 × 1 min intenso / 1 min suave"
           }
         }
       }

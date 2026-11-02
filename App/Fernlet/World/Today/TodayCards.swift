@@ -110,8 +110,8 @@ struct TodayGoldHeartsCard: View {
                     }
                 }
                 Text(verbatim: String(localized: "worldToday.gold.line",
-                            defaultValue: "Time with friends lifts your care score to \(status.livePercent)% until \(until.formatted(date: .omitted, time: .shortened)).",
-                            comment: "World Today panel, gold hearts card: the care score a friend's in-person heart lifts it to, and the time the lift ends"))
+                            defaultValue: "Until \(until.formatted(date: .omitted, time: .shortened)), time with friends lifts your care score to \(status.livePercent)%.",
+                            comment: "World Today panel, gold hearts card: the time the lift ends, then the care score a friend's in-person heart lifts it to. The time leads the sentence because some locales' short times end in a period (\"6:45 a.m.\"), which would double the full stop"))
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()

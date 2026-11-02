@@ -520,6 +520,12 @@
             "state" : "new",
             "value" : "%1$@ · %2$@ · P %3$lldg · C %4$lldg · F %5$lldg"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ · P %3$lld g · C %4$lld g · G %5$lld g"
+          }
         }
       }
     },
@@ -527,14 +533,58 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld items"
+            "state" : "translated",
+            "value" : "%1$@ · %#@items@"
+          },
+          "substitutions" : {
+            "items" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg item"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg items"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%1$@ · Equipo: %2$lld"
+            "state" : "translated",
+            "value" : "%1$@ · %#@items@"
+          },
+          "substitutions" : {
+            "items" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elemento"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elementos"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -594,6 +644,12 @@
             "state" : "new",
             "value" : "%1$@ · P %2$lldg"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · P %2$lld g"
+          }
         }
       }
     },
@@ -603,6 +659,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · P %2$lldg · C %3$lldg · F %4$lldg"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · P %2$lld g · C %3$lld g · G %4$lld g"
           }
         }
       }
@@ -1195,7 +1257,14 @@
       }
     },
     "%@h" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ h"
+          }
+        }
+      }
     },
     "%@’s shop" : {
       "localizations" : {
@@ -1921,14 +1990,14 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
-                  "value" : "%lld artículo"
+                  "state" : "translated",
+                  "value" : "%lld elemento"
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
-                  "value" : "%lld artículos"
+                  "state" : "translated",
+                  "value" : "%lld elementos"
                 }
               }
             }
@@ -1940,14 +2009,58 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld items · %2$@"
+            "state" : "translated",
+            "value" : "%#@items@ · %2$@"
+          },
+          "substitutions" : {
+            "items" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg item"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg items"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Equipo: %1$lld · %2$@"
+            "state" : "translated",
+            "value" : "%#@items@ · %2$@"
+          },
+          "substitutions" : {
+            "items" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elemento"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elementos"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -3174,10 +3287,24 @@
 
     },
     "%lldg" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld g"
+          }
+        }
+      }
     },
     "%lldh" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld h"
+          }
+        }
+      }
     },
     "%lldh %lldm" : {
       "localizations" : {
@@ -3185,6 +3312,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lldh %2$lldm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld h %2$lld min"
           }
         }
       }
@@ -18494,7 +18627,14 @@
       }
     },
     "Minutes" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minutos"
+          }
+        }
+      }
     },
     "Mirror" : {
       "localizations" : {
@@ -21443,6 +21583,12 @@
             "state" : "new",
             "value" : "P %1$@g · C %2$@g · F %3$@g"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P %1$@ g · C %2$@ g · G %3$@ g"
+          }
         }
       }
     },
@@ -21463,6 +21609,12 @@
             "state" : "new",
             "value" : "P %1$lldg · C %2$lldg · F %3$lldg"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P %1$lld g · C %2$lld g · G %3$lld g"
+          }
         }
       }
     },
@@ -21472,6 +21624,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "P %1$lldg → %2$lldg · C %3$lldg → %4$lldg · F %5$lldg → %6$lldg"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P %1$lld g → %2$lld g · C %3$lld g → %4$lld g · G %5$lld g → %6$lld g"
           }
         }
       }
@@ -41958,7 +42116,14 @@
       }
     },
     "distance, level, notes" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "distancia, nivel, notas"
+          }
+        }
+      }
     },
     "duress.ceremony.done.destroyed" : {
       "comment" : "Recovery-device ceremony, last screen when the recovery device refused and asked for the data to be let go. 'Settings → App lock' names the screen.",
@@ -47555,6 +47720,12 @@
             "state" : "new",
             "value" : "C"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "C"
+          }
         }
       }
     },
@@ -47584,6 +47755,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "F"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "G"
           }
         }
       }
@@ -47649,6 +47826,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "P"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "P"
           }
         }
@@ -65026,19 +65209,19 @@
       }
     },
     "worldToday.gold.line" : {
-      "comment" : "World Today panel, gold hearts card: the care score a friend's in-person heart lifts it to, and the time the lift ends",
+      "comment" : "World Today panel, gold hearts card: the time the lift ends, then the care score a friend's in-person heart lifts it to. The time leads the sentence because some locales' short times end in a period (\"6:45 a.m.\"), which would double the full stop",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Time with friends lifts your care score to %1$lld%% until %2$@."
+            "value" : "Until %1$@, time with friends lifts your care score to %2$lld%%."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "El tiempo con amigos sube tu puntuación de cuidado al %1$lld %% hasta las %2$@."
+            "state" : "translated",
+            "value" : "Hasta las %1$@, el tiempo con amigos sube tu puntuación de cuidado al %2$lld %%."
           }
         }
       }
@@ -66586,6 +66769,1238 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "−15 s"
+          }
+        }
+      }
+    },
+    "move.space.value" : {
+      "comment" : "Move header's space segment: the training location's name and how many pieces of equipment it has. Plural on the number",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %#@items@"
+          },
+          "substitutions" : {
+            "items" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg item"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg items"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %#@items@"
+          },
+          "substitutions" : {
+            "items" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elemento"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elementos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.greekYogurt" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Greek yogurt with berries"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yogur griego con frutos rojos"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.chickenRiceBowl" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chicken rice bowl"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bol de arroz con pollo"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.appleAlmonds" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple and almonds"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manzana con almendras"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.overnightOats" : {
+      "comment" : "App Review demo sample data (meal and recipe name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overnight oats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avena remojada"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.turkeyWrap" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turkey and avocado wrap"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrap de pavo y aguacate"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.salmon" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salmon with roasted vegetables"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salmón con verduras asadas"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.eggsToast" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrambled eggs on toast"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Huevos revueltos con tostada"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.lentilSoup" : {
+      "comment" : "App Review demo sample data (meal and recipe name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lentil soup"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sopa de lentejas"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.sheetPanChicken" : {
+      "comment" : "App Review demo sample data (meal and recipe name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sheet pan chicken and vegetables"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pollo con verduras al horno"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.bananaSmoothie" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banana smoothie"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batido de plátano"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.tunaSalad" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tuna salad"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ensalada de atún"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.hummusCarrots" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hummus and carrots"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hummus con zanahoria"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.tofuStirFry" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veggie stir fry with tofu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salteado de verduras con tofu"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.peanutButterToast" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peanut butter toast"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tostada con crema de cacahuete"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.burritoBowl" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Burrito bowl"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bol de burrito"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.pasta" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasta with tomato sauce"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasta con tomate"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.cottageCheese" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cottage cheese and peaches"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requesón con melocotón"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.grilledCheese" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grilled cheese and tomato soup"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sándwich de queso y crema de tomate"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.shrimpTacos" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shrimp tacos"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tacos de gambas"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.pancakes" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pancakes with fruit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tortitas con fruta"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.caesarSalad" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chicken caesar salad"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ensalada César con pollo"
+          }
+        }
+      }
+    },
+    "reviewDemo.meal.darkChocolate" : {
+      "comment" : "App Review demo sample data (meal). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark chocolate"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chocolate negro"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.upper" : {
+      "comment" : "App Review demo sample data (workout name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upper body strength"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuerza de tren superior"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.upper.exercises" : {
+      "comment" : "App Review demo sample data (workout's exercise lines, one per line: the exercise's name as the exercise library names it, then sets x reps). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bench press 3x8\nSeated row 3x10\nOverhead press 3x8"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press de banca 3x8\nRemo sentado en máquina 3x10\nPress militar 3x8"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.upper.notes" : {
+      "comment" : "App Review demo sample data (workout note, first person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Felt strong on the last set."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me sentí con fuerza en la última serie."
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.lower" : {
+      "comment" : "App Review demo sample data (workout name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lower body strength"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuerza de tren inferior"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.lower.exercises" : {
+      "comment" : "App Review demo sample data (workout's exercise lines, one per line: the exercise's name as the exercise library names it, then sets x reps). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goblet squat 3x10\nRomanian deadlift 3x8\nWalking lunge 2x12"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentadilla goblet 3x10\nPeso muerto rumano 3x8\nZancada caminando 2x12"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.run" : {
+      "comment" : "App Review demo sample data (workout name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Easy run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carrera suave"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.run.notes" : {
+      "comment" : "App Review demo sample data (workout note). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Park loop."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelta al parque."
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.walk" : {
+      "comment" : "App Review demo sample data (workout name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evening walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paseo de tarde"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.yoga" : {
+      "comment" : "App Review demo sample data (workout name). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yoga flow"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secuencia de yoga"
+          }
+        }
+      }
+    },
+    "reviewDemo.workout.yoga.notes" : {
+      "comment" : "App Review demo sample data (workout note). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gentle hips and shoulders."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caderas y hombros, con suavidad."
+          }
+        }
+      }
+    },
+    "reviewDemo.journal.tired" : {
+      "comment" : "App Review demo sample data (journal entry, first person; keep it free of words that take the writer's gender). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Long day at work. Made soup anyway and went to bed early."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Día largo en el trabajo. Aun así hice sopa y me acosté pronto."
+          }
+        }
+      }
+    },
+    "reviewDemo.journal.lifted" : {
+      "comment" : "App Review demo sample data (journal entry, first person; keep it free of words that take the writer's gender). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lifted for the first time in a while. Sore, but the good kind."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoy he vuelto a levantar pesas después de un tiempo. Tengo agujetas, pero de las buenas."
+          }
+        }
+      }
+    },
+    "reviewDemo.journal.market" : {
+      "comment" : "App Review demo sample data (journal entry, first person; keep it free of words that take the writer's gender). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Walked to the farmers market with a friend. Peaches are back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fui andando al mercado con una amiga. Ya hay melocotones."
+          }
+        }
+      }
+    },
+    "reviewDemo.journal.steady" : {
+      "comment" : "App Review demo sample data (journal entry, first person; keep it free of words that take the writer's gender). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slept well and had a slow breakfast. Feeling steady."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "He dormido bien y he desayunado con calma. Me noto en equilibrio."
+          }
+        }
+      }
+    },
+    "reviewDemo.recipe.oats.notes" : {
+      "comment" : "App Review demo sample data (recipe note). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mix, chill overnight, top with fruit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mezcla, deja en la nevera toda la noche y pon fruta por encima."
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.rolledOats" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rolled oats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copos de avena"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.greekYogurt" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Greek yogurt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yogur griego"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.blueberries" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blueberries"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arándanos"
+          }
+        }
+      }
+    },
+    "reviewDemo.recipe.oats.step1" : {
+      "comment" : "App Review demo sample data (recipe step, an instruction). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stir the oats and yogurt together in a jar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mezcla la avena y el yogur en un tarro."
+          }
+        }
+      }
+    },
+    "reviewDemo.recipe.oats.step2" : {
+      "comment" : "App Review demo sample data (recipe step, an instruction). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chill overnight."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjalo en la nevera toda la noche."
+          }
+        }
+      }
+    },
+    "reviewDemo.recipe.oats.step3" : {
+      "comment" : "App Review demo sample data (recipe step, an instruction). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top with blueberries before eating."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antes de comer, pon los arándanos por encima."
+          }
+        }
+      }
+    },
+    "reviewDemo.recipe.sheetPan.notes" : {
+      "comment" : "App Review demo sample data (recipe note: 425 °F is about 220 °C; give the oven temperature in the scale the language's cooks use). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Roast at 425 for 25 minutes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asa a 220 °C durante 25 minutos."
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.chickenThigh" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chicken thigh"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contramuslo de pollo"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.broccoli" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Broccoli"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brócoli"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.sweetPotato" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sweet potato"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boniato"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.oliveOil" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olive oil"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aceite de oliva"
+          }
+        }
+      }
+    },
+    "reviewDemo.recipe.lentilSoup.notes" : {
+      "comment" : "App Review demo sample data (recipe note). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freezes well."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se congela bien."
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.redLentils" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Red lentils"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lentejas rojas"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.carrot" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carrot"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zanahoria"
+          }
+        }
+      }
+    },
+    "reviewDemo.ingredient.vegetableBroth" : {
+      "comment" : "App Review demo sample data (recipe ingredient). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vegetable broth"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caldo de verduras"
+          }
+        }
+      }
+    },
+    "reviewDemo.progressPhoto.start" : {
+      "comment" : "App Review demo sample data (progress photo caption). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting out"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El comienzo"
+          }
+        }
+      }
+    },
+    "reviewDemo.progressPhoto.stronger" : {
+      "comment" : "App Review demo sample data (progress photo caption; keep it free of words that take the person's gender). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feeling stronger"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cada vez con más fuerza"
+          }
+        }
+      }
+    },
+    "reviewDemo.memory.cooking" : {
+      "comment" : "App Review demo sample data (a note the companion keeps about the person, in the third person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cooking at home felt rewarding this week."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta semana cocinar en casa le ha sentado bien."
+          }
+        }
+      }
+    },
+    "reviewDemo.memory.gentle" : {
+      "comment" : "App Review demo sample data (a note the companion keeps about the person, in the third person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prefers gentle, consistent care over streaks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prefiere cuidarse con constancia y calma, sin rachas."
+          }
+        }
+      }
+    },
+    "reviewDemo.memory.walks" : {
+      "comment" : "App Review demo sample data (a note the companion keeps about the person, in the third person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enjoys morning walks and steady routines."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disfruta de los paseos por la mañana y de las rutinas tranquilas."
+          }
+        }
+      }
+    },
+    "reviewDemo.sleep.rested" : {
+      "comment" : "App Review demo sample data (sleep note; keep it free of words that take the person's gender). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rested."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buen descanso."
+          }
+        }
+      }
+    },
+    "reviewDemo.sleep.wokeOnce" : {
+      "comment" : "App Review demo sample data (sleep note, first person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Woke up once."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me desperté una vez."
+          }
+        }
+      }
+    },
+    "reviewDemo.sleep.sleptIn" : {
+      "comment" : "App Review demo sample data (sleep note, first person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slept in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dormí hasta tarde."
+          }
+        }
+      }
+    },
+    "reviewDemo.sleep.lateNight" : {
+      "comment" : "App Review demo sample data (sleep note, first person). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Late night."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me acosté tarde."
+          }
+        }
+      }
+    },
+    "reviewDemo.period.note" : {
+      "comment" : "App Review demo sample data (period day note). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heating pad and an early night."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bolsa de agua caliente y a la cama pronto."
+          }
+        }
+      }
+    },
+    "reviewDemo.intimacy.note" : {
+      "comment" : "App Review demo sample data (intimacy entry note). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slow evening together."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una noche tranquila en pareja."
+          }
+        }
+      }
+    },
+    "reviewDemo.friend.beanie" : {
+      "comment" : "App Review demo sample data (a clothing item in the pretend friend's shop). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Striped beanie"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gorro de rayas"
+          }
+        }
+      }
+    },
+    "reviewDemo.friend.scarf" : {
+      "comment" : "App Review demo sample data (a clothing item in the pretend friend's shop). Seeded once in the device language and then kept as the pretend person's own entry. Demo build only.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cozy scarf"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bufanda calentita"
           }
         }
       }

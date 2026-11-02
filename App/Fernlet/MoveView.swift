@@ -3605,12 +3605,14 @@ struct MoveContextStrip: View {
     private var location: WorkoutLocation { store.settings.activeWorkoutLocation }
 
     /// "Full gym · 22 items", shortened to "Full gym · 22" at accessibility sizes where the word
-    /// "items" is what pushes the line into an ellipsis.
+    /// "items" is what pushes the line into an ellipsis. Localized: a bare `String` interpolation
+    /// left "items" English in every language (seen in Spanish, 2026-11-01).
     private var spaceValue: String {
         let count = location.ownedEquipment.count
         return dynamicTypeSize.isAccessibilitySize
             ? "\(location.displayedName) · \(count)"
-            : "\(location.displayedName) · \(count) items"
+            : String(localized: "move.space.value", defaultValue: "\(location.displayedName) · \(count) items",
+                     comment: "Move header's space segment: the training location's name and how many pieces of equipment it has. Plural on the number")
     }
 
     /// Spoken when no movement goal is set. A shared constant rather than an inline `??` literal:
