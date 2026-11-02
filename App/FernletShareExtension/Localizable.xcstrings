@@ -16,6 +16,12 @@
             "state" : "translated",
             "value" : "Fernlet no ha encontrado la URL de una receta en lo que has compartido."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet no encontró la URL de una receta en lo que compartiste."
+          }
         }
       }
     },
@@ -34,6 +40,12 @@
             "state" : "translated",
             "value" : "Fernlet solo puede importar URL de recetas web."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet solo puede importar URL de recetas web."
+          }
         }
       }
     },
@@ -48,6 +60,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ese enlace es demasiado largo para que Fernlet lo importe."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ese enlace es demasiado largo para que Fernlet lo importe."

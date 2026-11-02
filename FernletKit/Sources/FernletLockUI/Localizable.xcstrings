@@ -16,6 +16,12 @@
             "state" : "translated",
             "value" : "Cancelar"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
         }
       }
     },
@@ -30,6 +36,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Continuar"
@@ -52,6 +64,12 @@
             "state" : "translated",
             "value" : "OK"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
         }
       }
     },
@@ -66,6 +84,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restablecer bloqueo de la app"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Restablecer bloqueo de la app"
@@ -88,6 +112,12 @@
             "state" : "translated",
             "value" : "Desbloquear"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquear"
+          }
         }
       }
     },
@@ -102,6 +132,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloqueo biométrico (opcional)"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desbloqueo biométrico (opcional)"
@@ -124,6 +160,12 @@
             "state" : "translated",
             "value" : "Biometría"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biometría"
+          }
         }
       }
     },
@@ -138,6 +180,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un tipo de bloqueo"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Elige un tipo de bloqueo"
@@ -160,6 +208,12 @@
             "state" : "translated",
             "value" : "Confirmar PIN"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar PIN"
+          }
         }
       }
     },
@@ -174,6 +228,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar contraseña"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmar contraseña"
@@ -196,6 +256,12 @@
             "state" : "translated",
             "value" : "Inténtalo de nuevo en %1$lld h %2$lld min"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inténtalo de nuevo en %1$lld h %2$lld min"
+          }
         }
       }
     },
@@ -210,6 +276,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inténtalo de nuevo en %1$lld min %2$lld s"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inténtalo de nuevo en %1$lld min %2$lld s"
@@ -232,6 +304,12 @@
             "state" : "translated",
             "value" : "Inténtalo de nuevo en %lld s"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inténtalo de nuevo en %lld s"
+          }
         }
       }
     },
@@ -246,6 +324,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear PIN"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Crear PIN"
@@ -268,6 +352,12 @@
             "state" : "translated",
             "value" : "Crear contraseña"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear contraseña"
+          }
         }
       }
     },
@@ -282,6 +372,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "código"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "código"
@@ -304,6 +400,12 @@
             "state" : "translated",
             "value" : "contraseña"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "contraseña"
+          }
         }
       }
     },
@@ -318,6 +420,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN de 4 dígitos"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "PIN de 4 dígitos"
@@ -340,6 +448,12 @@
             "state" : "translated",
             "value" : "PIN de 6 dígitos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN de 6 dígitos"
+          }
         }
       }
     },
@@ -354,6 +468,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entiendo, configurar el bloqueo"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Entiendo, configurar el bloqueo"
@@ -376,6 +496,12 @@
             "state" : "translated",
             "value" : "Lo mismo ocurre si este iPhone se borra, si se restablece su Secure Enclave o si se restaura en un hardware de reemplazo. La clave vive dentro del Secure Enclave de este dispositivo y nunca sale de él."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo mismo ocurre si este iPhone se borra, si se restablece su Secure Enclave o si se restaura en un hardware de reemplazo. La clave vive dentro del Secure Enclave de este dispositivo y nunca sale de él."
+          }
         }
       }
     },
@@ -394,6 +520,12 @@
             "state" : "translated",
             "value" : "Si olvidas tu código, tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet no se podrán volver a abrir. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada en Privacidad y datos, guarda una copia cifrada que puedes restaurar después de un restablecimiento, antes de añadir registros nuevos."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si olvidas tu código, tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet no se podrán volver a abrir. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada en Privacidad y datos, guarda una copia cifrada que puedes restaurar después de un restablecimiento, antes de agregar registros nuevos."
+          }
         }
       }
     },
@@ -408,6 +540,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antes de configurar un código"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Antes de configurar un código"
@@ -430,6 +568,12 @@
             "state" : "translated",
             "value" : "Configura un código solo si estás ^[seguro](inflect: true) de que lo recordarás."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura un código solo si estás ^[seguro](inflect: true) de que lo recordarás."
+          }
         }
       }
     },
@@ -444,6 +588,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa la Copia de seguridad sellada del diario, el ciclo y los registros íntimos en Privacidad y datos para conservar una copia cifrada que sobreviva. Las notas de la Caja de preocupaciones nunca tienen copia de seguridad y siempre se pierden."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activa la Copia de seguridad sellada del diario, el ciclo y los registros íntimos en Privacidad y datos para conservar una copia cifrada que sobreviva. Las notas de la Caja de preocupaciones nunca tienen copia de seguridad y siempre se pierden."
@@ -466,6 +616,12 @@
             "state" : "translated",
             "value" : "No hay ninguna vía de recuperación"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ninguna vía de recuperación"
+          }
         }
       }
     },
@@ -480,6 +636,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ todavía puede abrir tus notas en este dispositivo y reparar su clave. Pruébalo primero: restablecer destruye esa copia que aún sobrevive."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ todavía puede abrir tus notas en este dispositivo y reparar su clave. Pruébalo primero: restablecer destruye esa copia que aún sobrevive."
@@ -502,6 +664,12 @@
             "state" : "translated",
             "value" : "Tu código era correcto. La clave del Secure Enclave de este dispositivo, lo único que puede abrir tus notas selladas del diario, del ciclo y de intimidad, ya no existe. Restablecer el bloqueo de la app no recupera esas notas; solo quita el bloqueo para que puedas volver a usar Fernlet."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu código era correcto. La clave del Secure Enclave de este dispositivo, lo único que puede abrir tus notas selladas del diario, del ciclo y de intimidad, ya no existe. Restablecer el bloqueo de la app no recupera esas notas; solo quita el bloqueo para que puedas volver a usar Fernlet."
+          }
         }
       }
     },
@@ -516,6 +684,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos sellados no se pueden abrir en este dispositivo"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Los datos sellados no se pueden abrir en este dispositivo"
@@ -538,6 +712,12 @@
             "state" : "translated",
             "value" : "Desbloquear con %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquear con %@"
+          }
         }
       }
     },
@@ -552,6 +732,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar contraseña"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirmar contraseña"
@@ -574,6 +760,12 @@
             "state" : "translated",
             "value" : "Contraseña"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraseña"
+          }
         }
       }
     },
@@ -588,6 +780,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurar bloqueo de la app"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Configurar bloqueo de la app"
@@ -610,6 +808,12 @@
             "state" : "translated",
             "value" : "Fernlet ha movido la clave de tu diario, tu historial del ciclo y tus registros de intimidad sellados al Secure Enclave de este iPhone, donde no se puede copiar fuera del dispositivo. Ahora esos registros se pierden si este iPhone se borra, si se restablece su Secure Enclave o si se restaura en un dispositivo de reemplazo, incluso con el código correcto. Activa la Copia de seguridad sellada en Privacidad y datos para conservar una copia cifrada que sobreviva."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet movió la clave de tu diario, tu historial del ciclo y tus registros de intimidad sellados al Secure Enclave de este iPhone, donde no se puede copiar fuera del dispositivo. Ahora esos registros se pierden si este iPhone se borra, si se restablece su Secure Enclave o si se restaura en un dispositivo de reemplazo, incluso con el código correcto. Activa la Copia de seguridad sellada en Privacidad y datos para conservar una copia cifrada que sobreviva."
+          }
         }
       }
     },
@@ -624,6 +828,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu código ahora está vinculado a este iPhone"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu código ahora está vinculado a este iPhone"
@@ -646,6 +856,12 @@
             "state" : "translated",
             "value" : "Demasiados intentos fallidos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demasiados intentos fallidos"
+          }
         }
       }
     },
@@ -660,6 +876,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay autenticación biométrica disponible en este dispositivo."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay autenticación biométrica disponible en este dispositivo."
@@ -682,6 +904,12 @@
             "state" : "translated",
             "value" : "Borrar"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar"
+          }
         }
       }
     },
@@ -700,6 +928,12 @@
             "state" : "translated",
             "value" : "%1$lld de %2$lld dígitos introducidos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld dígitos ingresados"
+          }
         }
       }
     },
@@ -714,6 +948,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protege tu diario, tu ciclo, tus notas de intimidad y tu caja de preocupaciones."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Protege tu diario, tu ciclo, tus notas de intimidad y tu caja de preocupaciones."
@@ -736,6 +976,12 @@
             "state" : "translated",
             "value" : "Tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet se eliminarán de forma permanente. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada, restáurala desde Privacidad y datos después, antes de añadir registros nuevos."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet se eliminarán de forma permanente. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada, restáurala desde Privacidad y datos después, antes de agregar registros nuevos."
+          }
         }
       }
     },
@@ -750,6 +996,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Restablecer el bloqueo de la app?"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Restablecer el bloqueo de la app?"
@@ -772,6 +1024,12 @@
             "state" : "translated",
             "value" : "Esto también elimina los lugares donde has estado."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto también elimina los lugares donde has estado."
+          }
         }
       }
     },
@@ -790,6 +1048,12 @@
             "state" : "translated",
             "value" : "Tu bloqueo de la app y sus notas se han destruido, pero Fernlet no ha podido reconstruir el almacén sellado. Cierra Fernlet y vuelve a abrirlo."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu bloqueo de la app y sus notas se destruyeron, pero Fernlet no pudo reconstruir el almacén sellado. Cierra Fernlet y vuelve a abrirlo."
+          }
         }
       }
     },
@@ -804,6 +1068,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloqueo de la app restablecido"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bloqueo de la app restablecido"
@@ -826,6 +1096,12 @@
             "state" : "translated",
             "value" : "Para continuar, tienes que restablecer el bloqueo de la app. Se eliminarán tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para continuar, tienes que restablecer el bloqueo de la app. Se eliminarán tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet."
+          }
         }
       }
     },
@@ -840,6 +1116,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar %@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activar %@"
@@ -862,6 +1144,12 @@
             "state" : "translated",
             "value" : "%@ te permite desbloquear rápidamente sin introducir tu código. Tu código seguirá siendo necesario para cambiar la configuración del bloqueo."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ te permite desbloquear rápidamente sin ingresar tu código. Tu código seguirá siendo necesario para cambiar la configuración del bloqueo."
+          }
         }
       }
     },
@@ -880,6 +1168,12 @@
             "state" : "translated",
             "value" : "Vuelve a introducirlo para confirmar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a ingresarlo para confirmar."
+          }
         }
       }
     },
@@ -894,6 +1188,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todo listo"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Todo listo"
@@ -916,6 +1216,12 @@
             "state" : "translated",
             "value" : "Elige una contraseña (de 8 a 64 caracteres)."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una contraseña (de 8 a 64 caracteres)."
+          }
         }
       }
     },
@@ -934,6 +1240,12 @@
             "state" : "translated",
             "value" : "Introduce tu PIN de %lld dígitos."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingresa tu PIN de %lld dígitos."
+          }
         }
       }
     },
@@ -948,6 +1260,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunas entradas de este iPhone no se pueden abrir. Abre la pestaña Privado para revisarlas y luego configura un código."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Algunas entradas de este iPhone no se pueden abrir. Abre la pestaña Privado para revisarlas y luego configura un código."
@@ -970,6 +1288,12 @@
             "state" : "translated",
             "value" : "Abre la pestaña Privado una vez y luego configura un código. Ahí Fernlet revisa las entradas que ya hay en este iPhone."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la pestaña Privado una vez y luego configura un código. Ahí Fernlet revisa las entradas que ya hay en este iPhone."
+          }
         }
       }
     },
@@ -984,6 +1308,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los códigos no coinciden. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Los códigos no coinciden. Inténtalo de nuevo."
@@ -1006,6 +1336,12 @@
             "state" : "translated",
             "value" : "Fernlet no puede revisar las entradas de este iPhone en este momento, así que no se configuró el código. Inténtalo de nuevo en un momento."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet no puede revisar las entradas de este iPhone en este momento, así que no se configuró el código. Inténtalo de nuevo en un momento."
+          }
         }
       }
     },
@@ -1020,6 +1356,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "8 caracteres o más, máxima seguridad"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "8 caracteres o más, máxima seguridad"
@@ -1042,6 +1384,12 @@
             "state" : "translated",
             "value" : "Contraseña"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contraseña"
+          }
         }
       }
     },
@@ -1056,6 +1404,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rápido, menos seguro"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rápido, menos seguro"
@@ -1078,6 +1432,12 @@
             "state" : "translated",
             "value" : "PIN de 4 dígitos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN de 4 dígitos"
+          }
         }
       }
     },
@@ -1092,6 +1452,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buen equilibrio entre rapidez y seguridad"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Buen equilibrio entre rapidez y seguridad"
@@ -1114,6 +1480,12 @@
             "state" : "translated",
             "value" : "PIN de 6 dígitos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PIN de 6 dígitos"
+          }
         }
       }
     },
@@ -1128,6 +1500,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RECOMENDADO"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "RECOMENDADO"
@@ -1150,6 +1528,12 @@
             "state" : "translated",
             "value" : "Configurar bloqueo de la app"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurar bloqueo de la app"
+          }
         }
       }
     },
@@ -1168,6 +1552,12 @@
             "state" : "translated",
             "value" : "El bloqueo de la app está configurado. No se ha podido activar %@; puedes activarlo en Ajustes → Bloqueo de la app."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El bloqueo de la app está configurado. No se pudo activar %@; puedes activarlo en Configuración → Bloqueo de la app."
+          }
         }
       }
     },
@@ -1182,6 +1572,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El bloqueo de la app está configurado."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "El bloqueo de la app está configurado."
@@ -1204,6 +1600,12 @@
             "state" : "translated",
             "value" : "Aquí están tu diario, tu ciclo y tus preocupaciones."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aquí están tu diario, tu ciclo y tus preocupaciones."
+          }
         }
       }
     },
@@ -1218,6 +1620,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aquí están tus entradas del diario y de la caja de preocupaciones."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aquí están tus entradas del diario y de la caja de preocupaciones."
@@ -1240,6 +1648,12 @@
             "state" : "translated",
             "value" : "No hay un código configurado, así que cualquier persona que use tu iPhone desbloqueado puede abrir esta página. Tus entradas siguen cifradas en este iPhone. Puedes añadir un código en Ajustes."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay un código configurado, así que cualquier persona que use tu iPhone desbloqueado puede abrir esta página. Tus entradas siguen cifradas en este iPhone. Puedes agregar un código en Configuración."
+          }
         }
       }
     },
@@ -1254,6 +1668,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privado"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Privado"
@@ -1276,6 +1696,12 @@
             "state" : "translated",
             "value" : "Fernlet no puede abrir esto ahora. Inténtalo de nuevo en un momento."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet no puede abrir esto ahora. Inténtalo de nuevo en un momento."
+          }
         }
       }
     },
@@ -1290,6 +1716,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquear"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Desbloquear"
@@ -1312,6 +1744,12 @@
             "state" : "translated",
             "value" : "Abre tus entradas privadas. No se necesita código."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre tus entradas privadas. No se necesita código."
+          }
         }
       }
     },
@@ -1329,6 +1767,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La clave de este iPhone para tus entradas privadas ya no está, así que no se pueden abrir aquí. Al restablecer, Privado se vacía para que puedas volver a usarlo. Eso no recupera esas entradas, pero si la copia de seguridad sellada está activada, después puedes restaurarla desde Privacidad y datos, antes de añadir entradas nuevas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La clave de este iPhone para tus entradas privadas ya no está, así que no se pueden abrir aquí. Al restablecer, Privado se vacía para que puedas volver a usarlo. Eso no recupera esas entradas, pero si la copia de seguridad sellada está activada, después puedes restaurarla desde Privacidad y datos, antes de agregar entradas nuevas."
           }
         }
       }
@@ -1372,6 +1816,12 @@
             "state" : "translated",
             "value" : "Te queda un intento antes del bloqueo temporal"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te queda un intento antes del bloqueo temporal"
+          }
         }
       }
     },
@@ -1386,6 +1836,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te quedan %lld intentos antes del bloqueo temporal"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Te quedan %lld intentos antes del bloqueo temporal"
@@ -1408,6 +1864,12 @@
             "state" : "translated",
             "value" : "Comprobando tu código"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comprobando tu código"
+          }
         }
       }
     },
@@ -1422,6 +1884,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ está en pausa por demasiados intentos. Usa tu código."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ está en pausa por demasiados intentos. Usa tu código."
@@ -1444,6 +1912,12 @@
             "state" : "translated",
             "value" : "%@ no te ha reconocido. Prueba con tu código."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ no te reconoció. Prueba con tu código."
+          }
         }
       }
     },
@@ -1462,6 +1936,12 @@
             "state" : "translated",
             "value" : "Tu código era correcto, pero los datos sellados ya no se pueden abrir en este dispositivo. Introdúcelo una vez más para confirmar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu código era correcto, pero los datos sellados ya no se pueden abrir en este dispositivo. Ingrésalo una vez más para confirmar."
+          }
         }
       }
     },
@@ -1476,6 +1956,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu código era correcto, pero la clave de este dispositivo para los datos sellados ya no está. Prueba con %@: todavía puede abrirlos y reparar la clave."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu código era correcto, pero la clave de este dispositivo para los datos sellados ya no está. Prueba con %@: todavía puede abrirlos y reparar la clave."
@@ -1498,6 +1984,12 @@
             "state" : "translated",
             "value" : "Hay que restablecer el bloqueo."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay que restablecer el bloqueo."
+          }
         }
       }
     },
@@ -1512,6 +2004,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demasiados intentos. Hay que restablecer el bloqueo."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Demasiados intentos. Hay que restablecer el bloqueo."
@@ -1534,6 +2032,12 @@
             "state" : "translated",
             "value" : "Introduce tu %@ para continuar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingresa tu %@ para continuar."
+          }
         }
       }
     },
@@ -1548,6 +2052,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloqueo de Fernlet"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bloqueo de Fernlet"
@@ -1570,6 +2080,12 @@
             "state" : "translated",
             "value" : "Tu copia de seguridad sellada se restaurará cuando continúes."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu copia de seguridad sellada se restaurará cuando continúes."
+          }
         }
       }
     },
@@ -1584,6 +2100,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este iPhone tiene entradas que se cifraron en otro iPhone, o antes de que este iPhone se borrara. La clave que las abría nunca sale del iPhone en el que se creó, así que ya nadie puede abrirlas."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Este iPhone tiene entradas que se cifraron en otro iPhone, o antes de que este iPhone se borrara. La clave que las abría nunca sale del iPhone en el que se creó, así que ya nadie puede abrirlas."
@@ -1606,6 +2128,12 @@
             "state" : "translated",
             "value" : "Registros del ciclo: %lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registros del ciclo: %lld"
+          }
         }
       }
     },
@@ -1620,6 +2148,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registros de intimidad: %lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registros de intimidad: %lld"
@@ -1642,6 +2176,12 @@
             "state" : "translated",
             "value" : "Entradas del diario: %lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entradas del diario: %lld"
+          }
         }
       }
     },
@@ -1656,6 +2196,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otras entradas privadas: %lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Otras entradas privadas: %lld"
@@ -1678,6 +2224,12 @@
             "state" : "translated",
             "value" : "Entradas de la caja de preocupaciones: %lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entradas de la caja de preocupaciones: %lld"
+          }
         }
       }
     },
@@ -1696,6 +2248,12 @@
             "state" : "translated",
             "value" : "Fernlet ha pasado tus notas anteriores del ciclo a tu historial del ciclo. Estas no se pueden abrir en este iPhone, así que se han quedado fuera. Nadie puede abrirlas ahora."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet movió tus notas anteriores del ciclo a tu historial del ciclo. Estas no se pueden abrir en este iPhone, así que se quedaron fuera. Nadie puede abrirlas ahora."
+          }
         }
       }
     },
@@ -1710,6 +2268,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notas anteriores del ciclo: %lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Notas anteriores del ciclo: %lld"
@@ -1732,6 +2296,12 @@
             "state" : "translated",
             "value" : "Eliminarlas"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminarlas"
+          }
         }
       }
     },
@@ -1746,6 +2316,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunas notas anteriores del ciclo no se pueden abrir aquí"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Algunas notas anteriores del ciclo no se pueden abrir aquí"
@@ -1768,6 +2344,12 @@
             "state" : "translated",
             "value" : "Entradas guardadas mientras Privado estaba cerrado"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entradas guardadas mientras Privado estaba cerrado"
+          }
         }
       }
     },
@@ -1782,6 +2364,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ahora no"
@@ -1804,6 +2392,12 @@
             "state" : "translated",
             "value" : "Eliminarlas y abrir Privado"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminarlas y abrir Privado"
+          }
         }
       }
     },
@@ -1818,6 +2412,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunas entradas no se pueden abrir aquí"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Algunas entradas no se pueden abrir aquí"

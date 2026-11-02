@@ -16,6 +16,12 @@
             "state" : "translated",
             "value" : "El ayudante silencioso descansa por hoy. Hasta mañana, Fernlet usará sus alternativas locales."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El ayudante silencioso descansa por hoy. Hasta mañana, Fernlet usará sus alternativas locales."
+          }
         }
       }
     },
@@ -30,6 +36,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El ayudante silencioso está desactivado por ahora, así que Fernlet usará alternativas locales."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "El ayudante silencioso está desactivado por ahora, así que Fernlet usará alternativas locales."
@@ -52,6 +64,12 @@
             "state" : "translated",
             "value" : "Tu diario está guardado. Buscaré patrones cuando el ayudante vuelva a despertar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu diario está guardado. Buscaré patrones cuando el ayudante vuelva a despertar."
+          }
         }
       }
     },
@@ -70,6 +88,12 @@
             "state" : "translated",
             "value" : "Lo he guardado con una estimación local. Podemos volver a revisarlo más tarde."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo guardé con una estimación local. Podemos volver a revisarlo más tarde."
+          }
         }
       }
     },
@@ -84,6 +108,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puedes volver a revisar algunas notas guardadas cuando estés ^[listo](inflect: true)."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Puedes volver a revisar algunas notas guardadas cuando estés ^[listo](inflect: true)."
@@ -106,6 +136,12 @@
             "state" : "translated",
             "value" : "He preparado una opción local sencilla para hoy. Tómala con calma y que te sirva."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparé una opción local sencilla para hoy. Tómala con calma y que te sirva."
+          }
         }
       }
     },
@@ -120,6 +156,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "10 semanas constantes"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "10 semanas constantes"
@@ -142,6 +184,12 @@
             "state" : "translated",
             "value" : "4 semanas"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "4 semanas"
+          }
         }
       }
     },
@@ -156,6 +204,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 semana"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 semana"
@@ -178,6 +232,12 @@
             "state" : "translated",
             "value" : "Crear un ritmo de %@ que puedas mantener"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear un ritmo de %@ que puedas mantener"
+          }
         }
       }
     },
@@ -192,6 +252,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear un ritmo de fuerza general que puedas mantener"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Crear un ritmo de fuerza general que puedas mantener"
@@ -214,6 +280,12 @@
             "state" : "translated",
             "value" : "RPE casi siempre entre 6 y 8"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPE casi siempre entre 6 y 8"
+          }
         }
       }
     },
@@ -228,6 +300,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completar 3 sesiones de %@ en una semana"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Completar 3 sesiones de %@ en una semana"
@@ -250,6 +328,12 @@
             "state" : "translated",
             "value" : "sesiones completadas"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesiones completadas"
+          }
         }
       }
     },
@@ -264,6 +348,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completar 3 sesiones de fuerza general en una semana"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Completar 3 sesiones de fuerza general en una semana"
@@ -286,6 +376,12 @@
             "state" : "translated",
             "value" : "Mantener la mayoría de las sesiones a un esfuerzo sostenible"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener la mayoría de las sesiones a un esfuerzo sostenible"
+          }
         }
       }
     },
@@ -300,6 +396,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 meses"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "3 meses"
@@ -322,6 +424,12 @@
             "state" : "translated",
             "value" : "ajuste en la semana 8"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ajuste en la semana 8"
+          }
         }
       }
     },
@@ -336,6 +444,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "revisión en la semana 4"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "revisión en la semana 4"
@@ -358,6 +472,12 @@
             "state" : "translated",
             "value" : "Tres sesiones flexibles, con un día más suave entre los esfuerzos más intensos."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tres sesiones flexibles, con un día más suave entre los esfuerzos más intensos."
+          }
         }
       }
     },
@@ -372,6 +492,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tres sesiones flexibles adaptadas a: %@."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tres sesiones flexibles adaptadas a: %@."
@@ -394,6 +520,12 @@
             "state" : "translated",
             "value" : "Lo justo de movimiento para sentirte ^[centrado](inflect: true)."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo justo de movimiento para sentirte ^[centrado](inflect: true)."
+          }
         }
       }
     },
@@ -408,6 +540,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensado en torno a tu objetivo: %@."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pensado en torno a tu objetivo: %@."
@@ -430,6 +568,12 @@
             "state" : "translated",
             "value" : "Pensado en torno a tu objetivo (%1$@), teniendo en cuenta: %2$@."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensado en torno a tu objetivo (%1$@), teniendo en cuenta: %2$@."
+          }
         }
       }
     },
@@ -444,6 +588,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un experimento acotado para un día con mucha energía."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un experimento acotado para un día con mucha energía."
@@ -466,6 +616,12 @@
             "state" : "translated",
             "value" : "Úsalo solo si de verdad tienes energía."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Úsalo solo si de verdad tienes energía."
+          }
         }
       }
     },
@@ -480,6 +636,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento constante, sin presión por optimizar."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Movimiento constante, sin presión por optimizar."
@@ -502,6 +664,12 @@
             "state" : "translated",
             "value" : "Empieza suave; todo cuenta."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empieza suave; todo cuenta."
+          }
         }
       }
     },
@@ -516,6 +684,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una sesión mixta y práctica."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Una sesión mixta y práctica."
@@ -538,6 +712,12 @@
             "state" : "translated",
             "value" : "Recuperarte también es cuidarte."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recuperarte también es cuidarte."
+          }
         }
       }
     },
@@ -552,6 +732,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoy, mantén la intensidad baja."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hoy, mantén la intensidad baja."
@@ -574,6 +760,12 @@
             "state" : "translated",
             "value" : "Una alternativa local sencilla para un día equilibrado."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una alternativa local sencilla para un día equilibrado."
+          }
         }
       }
     },
@@ -588,6 +780,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento predecible, pocas decisiones."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Movimiento predecible, pocas decisiones."
@@ -610,6 +808,12 @@
             "state" : "translated",
             "value" : "Una plantilla de fuerza fácil de repetir."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una plantilla de fuerza fácil de repetir."
+          }
         }
       }
     },
@@ -628,6 +832,12 @@
             "state" : "translated",
             "value" : "Hoy hay muchas horas de asiento: un paseo tranquilo y unos estiramientos para piernas, caderas y espalda."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoy hay muchas horas de asiento: una caminata tranquila y unos estiramientos para piernas, caderas y espalda."
+          }
         }
       }
     },
@@ -642,6 +852,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busca información, no perfección."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Busca información, no perfección."

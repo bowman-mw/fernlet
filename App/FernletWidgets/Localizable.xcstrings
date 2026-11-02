@@ -15,6 +15,12 @@
             "state" : "translated",
             "value" : "%1$lld lpm · ideal %2$lld–%3$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld lpm · ideal %2$lld–%3$lld"
+          }
         }
       }
     },
@@ -32,6 +38,12 @@
             "state" : "translated",
             "value" : "%1$lld lpm · ideal %2$lld–%3$lld · %4$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld lpm · ideal %2$lld–%3$lld · %4$@"
+          }
         }
       }
     },
@@ -39,6 +51,12 @@
       "extractionState" : "stale",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld por ciento"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld por ciento"
@@ -97,6 +115,12 @@
             "state" : "translated",
             "value" : "Una imagen del mapa a tu alrededor, con tus lugares marcados y tus rutas guardadas."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una imagen del mapa a tu alrededor, con tus lugares marcados y tus rutas guardadas."
+          }
         }
       }
     },
@@ -106,6 +130,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un sello de tu álbum, y el que has ganado hoy."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un sello de tu álbum, y el que ganaste hoy."
           }
         }
       }
@@ -124,6 +154,12 @@
             "state" : "translated",
             "value" : "Añadir 15 segundos de descanso"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agregar 15 segundos de descanso"
+          }
         }
       }
     },
@@ -140,6 +176,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "He añadido 15 segundos a tu descanso."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agregué 15 segundos a tu descanso."
           }
         }
       }
@@ -158,6 +200,12 @@
             "state" : "translated",
             "value" : "Añade 15 segundos a tu descanso actual, hasta 10 minutos en total."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrega 15 segundos a tu descanso actual, hasta 10 minutos en total."
+          }
         }
       }
     },
@@ -167,6 +215,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Añade una botella de agua al registro de hoy en Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrega una botella de agua al registro de hoy en Fernlet."
           }
         }
       }
@@ -181,6 +235,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideal: pocas palabras a la vez"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ideal: pocas palabras a la vez"
@@ -202,6 +262,12 @@
             "state" : "translated",
             "value" : "Ideal: hablar en frases cortas"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ideal: hablar en frases cortas"
+          }
         }
       }
     },
@@ -209,6 +275,12 @@
       "comment" : "Silly stats stamp name, earned when Coffee Tower first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contador de granos"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Contador de granos"
@@ -224,12 +296,24 @@
             "state" : "needs_review",
             "value" : "Puntuación de cuidado"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puntuación de cuidado"
+          }
         }
       }
     },
     "Cooking" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cocinando"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cocinando"
@@ -244,6 +328,12 @@
             "state" : "translated",
             "value" : "Fernlet no ha podido actualizar tu entrenamiento ahora mismo. Inténtalo de nuevo en un momento."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet no pudo actualizar tu entrenamiento justo ahora. Inténtalo de nuevo en un momento."
+          }
         }
       }
     },
@@ -255,12 +345,24 @@
             "state" : "translated",
             "value" : "Duende de las migas"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duende de las migas"
+          }
         }
       }
     },
     "Done set" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar serie"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Terminar serie"
@@ -282,6 +384,12 @@
             "state" : "translated",
             "value" : "Ritmo suave"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritmo suave"
+          }
         }
       }
     },
@@ -299,6 +407,12 @@
             "state" : "translated",
             "value" : "Suave · ronda %1$lld de %2$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suave · ronda %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -306,6 +420,12 @@
       "comment" : "Silly stats stamp name, earned when Shower Concerts first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Otra, otra!"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "¡Otra, otra!"
@@ -320,6 +440,12 @@
             "state" : "translated",
             "value" : "Termina antes el descanso actual y pasa a tu próxima serie."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina antes el descanso actual y pasa a tu próxima serie."
+          }
         }
       }
     },
@@ -327,6 +453,12 @@
       "comment" : "Silly stats stamp name, earned when Koala Days (sleep) first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sueños de eucalipto"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sueños de eucalipto"
@@ -347,6 +479,12 @@
             "state" : "translated",
             "value" : "Ejercicio %1$lld de %2$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ejercicio %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -358,12 +496,24 @@
             "state" : "translated",
             "value" : "Bien lejos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bien lejos"
+          }
         }
       }
     },
     "Fernlet" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet"
@@ -379,6 +529,12 @@
             "state" : "needs_review",
             "value" : "Compañero de Fernlet"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compañero de Fernlet"
+          }
         }
       }
     },
@@ -389,12 +545,24 @@
             "state" : "translated",
             "value" : "Terminar"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar"
+          }
         }
       }
     },
     "Finish workout" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar entrenamiento"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Terminar entrenamiento"
@@ -410,12 +578,24 @@
             "state" : "translated",
             "value" : "Hilo de oro"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hilo de oro"
+          }
         }
       }
     },
     "From your stamp book" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De tu álbum de sellos"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "De tu álbum de sellos"
@@ -427,6 +607,12 @@
       "comment" : "Silly stats stamp name, earned the first time the companion is petted; 'good bean' is an affectionate nickname",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puro cariño"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Puro cariño"
@@ -448,6 +634,12 @@
             "state" : "translated",
             "value" : "Ritmo intenso"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritmo intenso"
+          }
         }
       }
     },
@@ -461,6 +653,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intenso · ronda %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Intenso · ronda %1$lld de %2$lld"
@@ -482,6 +680,12 @@
             "state" : "translated",
             "value" : "Frecuencia cardiaca %1$lld, ideal entre %2$lld y %3$lld, %4$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frecuencia cardiaca %1$lld, ideal entre %2$lld y %3$lld, %4$@"
+          }
         }
       }
     },
@@ -492,12 +696,24 @@
             "state" : "translated",
             "value" : "Mantén"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén"
+          }
         }
       }
     },
     "Hold %@" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantén %@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mantén %@"
@@ -513,12 +729,24 @@
             "state" : "translated",
             "value" : "Especialidad de la casa"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Especialidad de la casa"
+          }
         }
       }
     },
     "In progress" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En curso"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "En curso"
@@ -540,6 +768,12 @@
             "state" : "translated",
             "value" : "Última vez: %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Última vez: %@"
+          }
         }
       }
     },
@@ -550,12 +784,24 @@
             "state" : "translated",
             "value" : "Lado izquierdo · mantén %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lado izquierdo · mantén %@"
+          }
         }
       }
     },
     "Log a bottle of water" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrar una botella de agua"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrar una botella de agua"
@@ -577,12 +823,24 @@
             "state" : "translated",
             "value" : "Descanso más largo"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descanso más largo"
+          }
         }
       }
     },
     "Marks the current set done and starts your rest timer." : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marca la serie actual como hecha e inicia tu temporizador de descanso."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Marca la serie actual como hecha e inicia tu temporizador de descanso."
@@ -604,6 +862,12 @@
             "state" : "translated",
             "value" : "Menos 15"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menos 15"
+          }
         }
       }
     },
@@ -621,12 +885,24 @@
             "state" : "translated",
             "value" : "Menos 15 segundos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menos 15 segundos"
+          }
         }
       }
     },
     "Moves to the next step of the recipe you're cooking." : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasa al siguiente paso de la receta que estás cocinando."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pasa al siguiente paso de la receta que estás cocinando."
@@ -641,12 +917,24 @@
             "state" : "translated",
             "value" : "Nuevo hoy"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuevo hoy"
+          }
         }
       }
     },
     "Next" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siguiente"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Siguiente"
@@ -661,12 +949,24 @@
             "state" : "translated",
             "value" : "Siguiente paso de la receta"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siguiente paso de la receta"
+          }
         }
       }
     },
     "Next up · %@" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Después · %@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Después · %@"
@@ -687,12 +987,24 @@
             "state" : "translated",
             "value" : "Después · %1$@ · Serie %2$lld de %3$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Después · %1$@ · Serie %2$lld de %3$lld"
+          }
         }
       }
     },
     "No mood yet today" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún sin estado de ánimo hoy"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aún sin estado de ánimo hoy"
@@ -714,12 +1026,24 @@
             "state" : "translated",
             "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que cambiar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que cambiar."
+          }
         }
       }
     },
     "No workout is running, so there's no rest to skip." : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que omitir."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que omitir."
@@ -734,6 +1058,12 @@
             "state" : "translated",
             "value" : "No hay ningún entrenamiento en curso, así que no hay serie que terminar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay serie que terminar."
+          }
         }
       }
     },
@@ -744,12 +1074,24 @@
             "state" : "translated",
             "value" : "Abre Fernlet"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Fernlet"
+          }
         }
       }
     },
     "Open Fernlet to pick it back up" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre Fernlet para retomarlo"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abre Fernlet para retomarlo"
@@ -765,6 +1107,12 @@
             "state" : "translated",
             "value" : "Noche de estreno"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noche de estreno"
+          }
         }
       }
     },
@@ -772,6 +1120,12 @@
       "comment" : "Silly stats stamp name, earned after three days together; a gastrotrich is a tiny creature that lives about three days",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le ganamos a un gastrotrico"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le ganamos a un gastrotrico"
@@ -786,6 +1140,12 @@
             "state" : "translated",
             "value" : "En pausa"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En pausa"
+          }
         }
       }
     },
@@ -793,6 +1153,12 @@
       "comment" : "Silly stats stamp name, earned when Total Tonnage (weight lifted) first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargador de pianos"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cargador de pianos"
@@ -814,6 +1180,12 @@
             "state" : "translated",
             "value" : "Más 15"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más 15"
+          }
         }
       }
     },
@@ -831,12 +1203,24 @@
             "state" : "translated",
             "value" : "Más 15 segundos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más 15 segundos"
+          }
         }
       }
     },
     "Repeat cooking step" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repetir paso de la receta"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Repetir paso de la receta"
@@ -851,6 +1235,12 @@
             "state" : "translated",
             "value" : "Descanso"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descanso"
+          }
         }
       }
     },
@@ -861,12 +1251,24 @@
             "state" : "translated",
             "value" : "Descanso omitido: tu entrenamiento ha terminado."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descanso omitido: tu entrenamiento terminó."
+          }
         }
       }
     },
     "Rest skipped. Your next set is up." : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descanso omitido. Te toca la siguiente serie."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descanso omitido. Te toca la siguiente serie."
@@ -881,12 +1283,24 @@
             "state" : "translated",
             "value" : "Reinicia el temporizador del paso actual de la receta."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reinicia el temporizador del paso actual de la receta."
+          }
         }
       }
     },
     "Right side · hold %@" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lado derecho · mantén %@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lado derecho · mantén %@"
@@ -908,6 +1322,12 @@
             "state" : "translated",
             "value" : "Ronda %1$lld de %2$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ronda %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -915,6 +1335,12 @@
       "comment" : "Silly stats stamp name, earned when Bathtub Index (water drunk) first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Patito de goma"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Patito de goma"
@@ -935,6 +1361,12 @@
             "state" : "translated",
             "value" : "Serie %1$lld de %2$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -947,6 +1379,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie %1$lld de %2$lld · %3$@ reps"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serie %1$lld de %2$lld · %3$@ reps"
@@ -967,6 +1405,12 @@
             "state" : "translated",
             "value" : "Serie %1$lld de %2$lld · mantén %3$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie %1$lld de %2$lld · mantén %3$@"
+          }
         }
       }
     },
@@ -977,12 +1421,24 @@
             "state" : "translated",
             "value" : "Serie terminada. Ahora toca descansar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie terminada. Ahora toca descansar."
+          }
         }
       }
     },
     "Set done. Your next exercise is up." : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie terminada. Te toca el siguiente ejercicio."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serie terminada. Te toca el siguiente ejercicio."
@@ -1004,12 +1460,24 @@
             "state" : "translated",
             "value" : "Descanso más corto"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descanso más corto"
+          }
         }
       }
     },
     "Skip rest" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omitir descanso"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Omitir descanso"
@@ -1025,6 +1493,12 @@
             "state" : "translated",
             "value" : "Rebanada de vida"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rebanada de vida"
+          }
         }
       }
     },
@@ -1032,6 +1506,12 @@
       "comment" : "Silly stats stamp name, earned when the walk to the Moon first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un pequeño paso"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un pequeño paso"
@@ -1046,6 +1526,12 @@
             "state" : "translated",
             "value" : "Sellos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sellos"
+          }
         }
       }
     },
@@ -1053,6 +1539,12 @@
       "comment" : "Silly stats stamp name, earned when Brush Marathon first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Línea de salida"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Línea de salida"
@@ -1074,6 +1566,12 @@
             "state" : "translated",
             "value" : "Ritmo constante"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritmo constante"
+          }
         }
       }
     },
@@ -1086,6 +1584,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paso %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Paso %1$lld de %2$lld"
@@ -1107,6 +1611,12 @@
             "state" : "translated",
             "value" : "Peso sugerido %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peso sugerido %@"
+          }
         }
       }
     },
@@ -1117,6 +1627,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Huevo frito"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Huevo estrellado"
           }
         }
       }
@@ -1135,12 +1651,24 @@
             "state" : "translated",
             "value" : "Quitar 15 segundos al descanso"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar 15 segundos al descanso"
+          }
         }
       }
     },
     "Take it at your own pace" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hazlo a tu ritmo"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hazlo a tu ritmo"
@@ -1162,6 +1690,12 @@
             "state" : "translated",
             "value" : "Quita 15 segundos a tu descanso actual y siempre deja al menos 5 segundos."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quita 15 segundos a tu descanso actual y siempre deja al menos 5 segundos."
+          }
         }
       }
     },
@@ -1172,6 +1706,12 @@
             "state" : "translated",
             "value" : "Esa era la última serie: tu entrenamiento ha terminado."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esa fue la última serie: tu entrenamiento terminó."
+          }
         }
       }
     },
@@ -1179,6 +1719,12 @@
       "comment" : "Silly stats stamp name, earned when steps reach one Hamlet; a play on Hamlet's famous line",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caminar o no caminar"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Caminar o no caminar"
@@ -1192,6 +1738,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El agua de hoy, con un botón para añadir una botella."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El agua de hoy, con un botón para agregar una botella."
           }
         }
       }
@@ -1210,6 +1762,12 @@
             "state" : "translated",
             "value" : "He quitado 15 segundos a tu descanso."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quité 15 segundos a tu descanso."
+          }
         }
       }
     },
@@ -1221,6 +1779,12 @@
             "state" : "translated",
             "value" : "Plátano jefe"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plátano jefe"
+          }
         }
       }
     },
@@ -1228,6 +1792,12 @@
       "comment" : "Silly stats stamp name, earned when Stairway to Somewhere first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cada vez más alto"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cada vez más alto"
@@ -1249,6 +1819,12 @@
             "state" : "translated",
             "value" : "Calentamiento %1$lld de %2$lld"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calentamiento %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -1266,12 +1842,24 @@
             "state" : "translated",
             "value" : "Calentamiento %1$lld de %2$lld · %3$@ reps"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calentamiento %1$lld de %2$lld · %3$@ reps"
+          }
         }
       }
     },
     "Water" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agua"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agua"
@@ -1293,6 +1881,12 @@
             "state" : "translated",
             "value" : "Peso %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peso %@"
+          }
         }
       }
     },
@@ -1304,12 +1898,24 @@
             "state" : "translated",
             "value" : "Ruedas y olas"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruedas y olas"
+          }
         }
       }
     },
     "Workout" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrenamiento"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Entrenamiento"
@@ -1331,12 +1937,24 @@
             "state" : "translated",
             "value" : "Ahora no estás descansando, así que no hay descanso que cambiar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no estás descansando, así que no hay descanso que cambiar."
+          }
         }
       }
     },
     "You're not resting right now, so there's nothing to skip." : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no estás descansando, así que no hay nada que omitir."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ahora no estás descansando, así que no hay nada que omitir."
@@ -1351,6 +1969,12 @@
             "state" : "translated",
             "value" : "Ahora estás descansando, así que todavía no hay serie que terminar."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora estás descansando, así que todavía no hay serie que terminar."
+          }
         }
       }
     },
@@ -1360,6 +1984,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu compañero, con la ropa que le has puesto, y cómo va su día."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu compañero, con la ropa que le pusiste, y cómo va su día."
           }
         }
       }
@@ -1371,6 +2001,12 @@
             "state" : "translated",
             "value" : "Tu primer sello te espera"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu primer sello te espera"
+          }
         }
       }
     },
@@ -1378,6 +2014,12 @@
       "comment" : "The large map widget's name in the widget gallery",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu mapa"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu mapa"
@@ -1399,6 +2041,12 @@
             "state" : "translated",
             "value" : "Tu descanso ya está en su límite de 10 minutos."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu descanso ya está en su límite de 10 minutos."
+          }
         }
       }
     },
@@ -1412,6 +2060,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu descanso está a punto de terminar, así que no hay nada que quitar."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu descanso está a punto de terminar, así que no hay nada que quitar."
@@ -1433,6 +2087,12 @@
             "state" : "translated",
             "value" : "un poco alta"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un poco alta"
+          }
         }
       }
     },
@@ -1446,6 +2106,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un poco baja"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "un poco baja"
@@ -1468,6 +2134,12 @@
             "state" : "translated",
             "value" : "Dormido"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dormido"
+          }
         }
       }
     },
@@ -1482,6 +2154,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "está profundamente dormido"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "está profundamente dormido"
@@ -1504,6 +2182,12 @@
             "state" : "translated",
             "value" : "se siente feliz"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se siente feliz"
+          }
         }
       }
     },
@@ -1518,6 +2202,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiene hambre"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "tiene hambre"
@@ -1540,6 +2230,12 @@
             "state" : "translated",
             "value" : "se siente triste"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se siente triste"
+          }
         }
       }
     },
@@ -1554,6 +2250,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiene sueño"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "tiene sueño"
@@ -1576,6 +2278,12 @@
             "state" : "translated",
             "value" : "tiene sed"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiene sed"
+          }
         }
       }
     },
@@ -1590,6 +2298,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se siente cansado"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "se siente cansado"
@@ -1612,6 +2326,12 @@
             "state" : "translated",
             "value" : "Feliz"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feliz"
+          }
         }
       }
     },
@@ -1626,6 +2346,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con hambre"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Con hambre"
@@ -1648,6 +2374,12 @@
             "state" : "translated",
             "value" : "Triste"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Triste"
+          }
         }
       }
     },
@@ -1662,6 +2394,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con sueño"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Con sueño"
@@ -1696,6 +2434,12 @@
             "state" : "translated",
             "value" : "Con sed"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con sed"
+          }
         }
       }
     },
@@ -1710,6 +2454,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cansado"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cansado"
@@ -1732,6 +2482,12 @@
             "state" : "translated",
             "value" : "Bien"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bien"
+          }
         }
       }
     },
@@ -1746,6 +2502,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descansando"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descansando"
@@ -1768,6 +2530,12 @@
             "state" : "translated",
             "value" : "Enfermo"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enfermo"
+          }
         }
       }
     },
@@ -1782,6 +2550,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radiante"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Radiante"
@@ -1804,6 +2578,12 @@
             "state" : "translated",
             "value" : "Cansado"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cansado"
+          }
         }
       }
     },
@@ -1817,6 +2597,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en rango"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "en rango"
@@ -1838,6 +2624,12 @@
             "state" : "translated",
             "value" : "la última vez %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la última vez %@"
+          }
         }
       }
     },
@@ -1851,6 +2643,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la última vez %1$lld por %2$@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "la última vez %1$lld por %2$@"
@@ -1872,6 +2670,12 @@
             "state" : "translated",
             "value" : "la última vez %1$lld por %2$@ con %3$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la última vez %1$lld por %2$@ con %3$@"
+          }
         }
       }
     },
@@ -1889,12 +2693,24 @@
             "state" : "translated",
             "value" : "rango de %1$@ a %2$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rango de %1$@ a %2$@"
+          }
         }
       }
     },
     "to meet your companion" : {
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "para conocer a tu compañero"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "para conocer a tu compañero"
@@ -1917,6 +2733,12 @@
             "state" : "translated",
             "value" : "%1$@ · %2$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
+          }
         }
       }
     },
@@ -1931,6 +2753,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuidado"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cuidado"
@@ -1953,6 +2781,12 @@
             "state" : "translated",
             "value" : "un corazón dorado de un amigo"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un corazón dorado de un amigo"
+          }
         }
       }
     },
@@ -1967,6 +2801,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld por ciento"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld por ciento"
@@ -1989,6 +2829,12 @@
             "state" : "translated",
             "value" : "%1$@, %2$@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
         }
       }
     },
@@ -2003,6 +2849,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dos corazones dorados de amigos"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "dos corazones dorados de amigos"
@@ -2025,6 +2877,12 @@
             "state" : "translated",
             "value" : "C"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "C"
+          }
         }
       }
     },
@@ -2039,6 +2897,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "G"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "G"
@@ -2061,6 +2925,12 @@
             "state" : "translated",
             "value" : "P"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P"
+          }
         }
       }
     },
@@ -2075,6 +2945,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
@@ -2097,6 +2973,12 @@
             "state" : "translated",
             "value" : "Mapa de %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa de %@"
+          }
         }
       }
     },
@@ -2111,6 +2993,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld de %2$lld"
@@ -2133,6 +3021,12 @@
             "state" : "translated",
             "value" : "%1$lld de %2$lld sellos"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld sellos"
+          }
         }
       }
     },
@@ -2147,6 +3041,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganado a las %@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ganado a las %@"
@@ -2169,6 +3069,12 @@
             "state" : "translated",
             "value" : "Ganado el %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganado el %@"
+          }
         }
       }
     },
@@ -2183,6 +3089,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ganado el %@"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "ganado el %@"
@@ -2205,6 +3117,12 @@
             "state" : "translated",
             "value" : "ganado hoy a las %@"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ganado hoy a las %@"
+          }
         }
       }
     },
@@ -2219,6 +3137,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durmiendo profundamente."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Durmiendo profundamente."
@@ -2241,6 +3165,12 @@
             "state" : "translated",
             "value" : "Un día recién estrenado."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un día recién estrenado."
+          }
         }
       }
     },
@@ -2255,6 +3185,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dando vueltas sin prisa."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dando vueltas sin prisa."
@@ -2277,6 +3213,12 @@
             "state" : "translated",
             "value" : "Ya me voy relajando."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya me voy relajando."
+          }
         }
       }
     },
@@ -2291,6 +3233,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomándome la mañana con calma."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tomándome la mañana con calma."
@@ -2313,6 +3261,12 @@
             "state" : "translated",
             "value" : "Echándome una siesta tranquila."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tomando una siesta tranquila."
+          }
         }
       }
     },
@@ -2327,6 +3281,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acurrucándome para la noche."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Acurrucándome para la noche."
@@ -2349,6 +3309,12 @@
             "state" : "translated",
             "value" : "Acurrucado un ratito más."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acurrucado un ratito más."
+          }
         }
       }
     },
@@ -2363,6 +3329,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arropado con una mantita."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arropado con una mantita."
@@ -2385,6 +3357,12 @@
             "state" : "translated",
             "value" : "Descansando para mañana."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descansando para mañana."
+          }
         }
       }
     },
@@ -2399,6 +3377,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoy voy con calma."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hoy voy con calma."
@@ -2421,6 +3405,12 @@
             "state" : "translated",
             "value" : "El sol me ha encontrado esta tarde."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El sol me encontró esta tarde."
+          }
         }
       }
     },
@@ -2435,6 +3425,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poniéndome cómodo para la noche."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Poniéndome cómodo para la noche."
@@ -2457,6 +3453,12 @@
             "state" : "translated",
             "value" : "Hoy me he despertado ligero."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoy desperté ligero."
+          }
         }
       }
     },
@@ -2471,6 +3473,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un día más bien lento."
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un día más bien lento."
@@ -2493,6 +3501,12 @@
             "state" : "translated",
             "value" : "Listo para un largo descanso."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo para un largo descanso."
+          }
         }
       }
     },
@@ -2511,6 +3525,12 @@
             "state" : "translated",
             "value" : "Todavía con un poco de sueño. Está bien."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía con un poco de sueño. Está bien."
+          }
         }
       }
     },
@@ -2525,6 +3545,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld / %2$lld"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld / %2$lld"
@@ -2554,6 +3580,24 @@
           }
         },
         "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "de %lld botella"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "de %lld botellas"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
           "variations" : {
             "plural" : {
               "one" : {
@@ -2605,6 +3649,34 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %#@target@"
+          },
+          "substitutions" : {
+            "target" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg botella"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg botellas"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld de %#@target@"

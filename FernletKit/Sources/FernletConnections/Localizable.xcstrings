@@ -16,6 +16,12 @@
             "state" : "translated",
             "value" : "Alguien cerca"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguien cerca"
+          }
         }
       }
     },
@@ -30,6 +36,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguien que conociste"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alguien que conociste"
