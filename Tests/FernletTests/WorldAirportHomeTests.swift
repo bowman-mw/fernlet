@@ -148,6 +148,28 @@ struct WorldAirportHomeTests {
         #expect(WorldAirportFlyOverSchedule.path(along: eastWest, beat: 0, size: .zero) == nil)
     }
 
+    /// The plane flies between places on the map: panning a quarter of the screen moves it a quarter of the screen, and
+    /// zooming in spreads its line (owner 2026-11-02: it stayed put while the map moved).
+    @Test func aFlyOverMovesWithTheMap() throws {
+        let size = CGSize(width: 402, height: 874)
+        let unit = WebMercator.unit(Self.cedarPoint)
+        let view = MapViewport(minX: unit.x - 0.0005, minY: unit.y - 0.001, width: 0.001, height: 0.002)
+        let eastWest = (Self.cedarPoint, Self.cedarPoint.offset(east: 2_000, north: 0))
+        let onScreen = try #require(WorldAirportFlyOverSchedule.path(along: eastWest, beat: 0, size: size))
+        let onMap = try #require(WorldAirportFlyOverSchedule.mapPath(along: eastWest, beat: 0, viewport: view, size: size))
+        let start = view.screenPoint(for: onMap.start, in: size)
+        #expect(abs(start.x - onScreen.start.x) < 0.5 && abs(start.y - onScreen.start.y) < 0.5, "it starts where the screen's line does")
+
+        let panned = MapViewport(minX: view.minX + view.width / 4, minY: view.minY, width: view.width, height: view.height)
+        let moved = panned.screenPoint(for: onMap.start, in: size)
+        #expect(abs(moved.x - (start.x - size.width / 4)) < 0.5 && abs(moved.y - start.y) < 0.5)
+
+        let closer = MapViewport(minX: view.minX + view.width / 4, minY: view.minY + view.height / 4, width: view.width / 2, height: view.height / 2)
+        let end = view.screenPoint(for: onMap.end, in: size)
+        let spread = closer.screenPoint(for: onMap.end, in: size).x - closer.screenPoint(for: onMap.start, in: size).x
+        #expect(abs(spread - (end.x - start.x) * 2) < 1)
+    }
+
     // MARK: The layover counter
 
     @Test func theLayoverCountsUpByTheMinute() {

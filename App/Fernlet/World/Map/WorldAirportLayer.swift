@@ -49,7 +49,7 @@ struct WorldAirportLayer: View {
                 ForEach(placed.filter(\.isOnScreen)) { airport in tower(airport) }
                 if let person = store.worldLocation.latest?.point,
                    let near = flyOverMemo.airport(near: person, in: pack), let runway = memo.runways(of: near).first {
-                    WorldAirportFlyOver(token: near.token, runway: runway, size: size)
+                    WorldAirportFlyOver(token: near.token, runway: runway, viewport: viewport, size: size)
                 }
             }
         }
