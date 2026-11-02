@@ -148,7 +148,7 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         tapOnboardingChoice("onboarding.storage.local", in: app)
         continueOnboarding(in: app, waitingFor: "Choose where logs live")
         continueOnboarding(in: app, waitingFor: "Plan your goals")
-        continueOnboarding(in: app, waitingFor: "Make Fernlet yours")
+        continueOnboarding(in: app, waitingFor: "Make Sprout yours")
         XCTAssertTrue(app.staticTexts["Add personal details"].waitForExistence(timeout: 6),
                       "onboarding did not reach its personal details")
         // By label as well as id: the screen's container id can stand in for its children's.

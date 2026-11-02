@@ -88,11 +88,12 @@ nonisolated enum HomeCopy {
                comment: "Home companion thought bubble on an ordinary day that already has a few logs, when no other line applies.")
     }
 
-    /// The four lines a tap on the companion rotates through, in their fixed order.
-    static var tapThoughts: [String] {
+    /// The four lines a tap on the companion rotates through, in their fixed order. `name` is the
+    /// companion's name (``FernletStore/worldCompanionName``: the person's choice, or Sprout).
+    static func tapThoughts(name: String) -> [String] {
         [
-            String(localized: "home.thought.tap.notices", defaultValue: "Fernlet notices you.",
-                   comment: "Home companion thought bubble after a tap on the companion. 'Fernlet' is the app's name; keep it as is."),
+            String(localized: "home.thought.tap.notices", defaultValue: "\(name) notices you.",
+                   comment: "Home companion thought bubble after a tap on the companion. The placeholder is the companion's name (Sprout unless the person renamed it)."),
             String(localized: "home.thought.tap.checkIn", defaultValue: "A little check-in counts.",
                    comment: "Home companion thought bubble after a tap on the companion."),
             String(localized: "home.thought.tap.stillHere", defaultValue: "Still here with you.",
@@ -102,19 +103,19 @@ nonisolated enum HomeCopy {
         ]
     }
 
-    /// The fifth pet in a window: Fern is content and settles in for a while.
-    static var settledThought: String {
+    /// The fifth pet in a window: the companion (`name`) is content and settles in for a while.
+    static func settledThought(name: String) -> String {
         String(localized: "home.thought.settled",
-               defaultValue: "Fern is soaking up all this love — feeling completely content.",
-               comment: "Home companion thought bubble when petting settles the companion. Fern is the companion's name; keep it as is.")
+               defaultValue: "\(name) is soaking up all this love — feeling completely content.",
+               comment: "Home companion thought bubble when petting settles the companion. The placeholder is the companion's name (Sprout unless the person renamed it).")
     }
 
     /// Said at most once while the companion is settled and the petting continues. Warm, never a
-    /// refusal: Fern is settled, not locked.
-    static var settledAgainLine: String {
+    /// refusal: the companion (`name`) is settled, not locked.
+    static func settledAgainLine(name: String) -> String {
         String(localized: "home.thought.settledAgain",
-               defaultValue: "Fern is feeling nice and settled — check back in a little while.",
-               comment: "Home companion thought bubble when the user keeps petting a settled companion. Warm, never a refusal. Fern is the companion's name.")
+               defaultValue: "\(name) is feeling nice and settled — check back in a little while.",
+               comment: "Home companion thought bubble when the user keeps petting a settled companion. Warm, never a refusal. The placeholder is the companion's name (Sprout unless the person renamed it).")
     }
 
     // MARK: - Milestones card

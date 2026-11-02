@@ -210,7 +210,7 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
 
         let steps: [(String, String, String)] = [
             ("Plan your goals", "Onboarding · Goals", "Continue"),
-            ("Make Fernlet yours", "Onboarding · Starter", "Continue"),
+            ("Make Sprout yours", "Onboarding · Starter", "Continue"),
             ("Add personal details", "Onboarding · Personal details", "Continue"),
             ("Pick an eating pattern", "Onboarding · Eating pattern", "Continue"),
             ("Permissions when needed", "Onboarding · Permissions", "Start Fernlet"),
