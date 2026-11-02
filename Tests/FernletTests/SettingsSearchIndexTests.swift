@@ -64,6 +64,21 @@ struct SettingsSearchIndexTests {
         }
     }
 
+    /// Owner's trip 2026-11-02: "Flights from Calendar" is off until it's turned on, and nothing in search led to
+    /// it, so the person looking for it never found the switch that fills in today's ticket.
+    @Test func airportAndCalendarFlightWordsFindTheirSwitches() {
+        let cases: [(query: String, title: String)] = [
+            ("calendar", "Flights from Calendar"), ("flights from calendar", "Flights from Calendar"),
+            ("flight", "Flights from Calendar"), ("ticket", "Flights from Calendar"),
+            ("airport", "Airports and flights"), ("flighty", "Add past flights"),
+        ]
+        for testCase in cases {
+            let results = SettingsSearchIndex.results(for: testCase.query)
+            #expect(results.contains { $0.title == testCase.title && $0.route == .privacyData },
+                    "query '\(testCase.query)' does not find \(testCase.title)")
+        }
+    }
+
     /// Bug confirmation 2026-10-15, safety §2b: "crisis" used to open Safety & reporting, a page whose
     /// only contact was the developer's email, and "988", "suicide", "hotline" and "first aid" found
     /// nothing. Every one of these words now lands on that page, and the page opens on the same

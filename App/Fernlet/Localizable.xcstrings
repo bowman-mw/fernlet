@@ -82236,6 +82236,30 @@
         }
       }
     },
+    "settings.search.breadcrumb.privacyDataAirportsAndFlights" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Airports and flights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privacidad y datos › Aeropuertos y vuelos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privacidad y datos › Aeropuertos y vuelos"
+          }
+        }
+      }
+    },
     "settings.search.breadcrumb.privacyDataAppLockData" : {
       "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
       "extractionState" : "extracted_with_value",
@@ -82679,6 +82703,30 @@
         }
       }
     },
+    "settings.search.title.addPastFlights" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add past flights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir vuelos anteriores"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agregar vuelos anteriores"
+          }
+        }
+      }
+    },
     "settings.search.title.advancedPeriodTracking" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -82723,6 +82771,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registro de actividad de IA"
+          }
+        }
+      }
+    },
+    "settings.search.title.airportsAndFlights" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Airports and flights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aeropuertos y vuelos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aeropuertos y vuelos"
           }
         }
       }
@@ -83467,6 +83539,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Face ID / Touch ID"
+          }
+        }
+      }
+    },
+    "settings.search.title.flightsFromCalendar" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flights from Calendar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelos del Calendario"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelos del Calendario"
           }
         }
       }
@@ -97895,6 +97991,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La tarjeta de embarque de %@: di adónde vas"
+          }
+        }
+      }
+    },
+    "worldTrip.ticket.calendarOffer" : {
+      "comment" : "The companion's ticket: turns on Flights from Calendar, and iOS asks first (Spanish: ¿Completar con el Calendario?)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fill this in from Calendar?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Completar con el Calendario?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Completar con el Calendario?"
           }
         }
       }

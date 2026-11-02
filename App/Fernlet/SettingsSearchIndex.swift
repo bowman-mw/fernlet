@@ -798,6 +798,33 @@ nonisolated enum SettingsSearchIndex {
             route: .privacyData
         ),
         SettingsSearchEntry(
+            title: "Airports and flights",
+            display: LocalizedStringResource(
+                "settings.search.title.airportsAndFlights", defaultValue: "Airports and flights",
+                comment: "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to."),
+            keywords: ["airport", "airports", "flight", "flights", "passport", "layover", "stamps"],
+            breadcrumb: .privacyDataAirportsAndFlights,
+            route: .privacyData
+        ),
+        SettingsSearchEntry(
+            title: "Flights from Calendar",
+            display: LocalizedStringResource(
+                "settings.search.title.flightsFromCalendar", defaultValue: "Flights from Calendar",
+                comment: "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to."),
+            keywords: ["calendar", "calendar flights", "flight", "flights", "ticket", "trip", "upcoming flights"],
+            breadcrumb: .privacyDataAirportsAndFlights,
+            route: .privacyData
+        ),
+        SettingsSearchEntry(
+            title: "Add past flights",
+            display: LocalizedStringResource(
+                "settings.search.title.addPastFlights", defaultValue: "Add past flights",
+                comment: "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to."),
+            keywords: ["flighty", "past flights", "import flights", "flight history", "flight", "flights"],
+            breadcrumb: .privacyDataAirportsAndFlights,
+            route: .privacyData
+        ),
+        SettingsSearchEntry(
             title: "Multiple devices",
             display: LocalizedStringResource(
                 "settings.search.title.multipleDevices", defaultValue: "Multiple devices",
@@ -1255,6 +1282,11 @@ nonisolated extension SettingsSearchBreadcrumb {
         token: "Privacy & Data › iCloud",
         display: LocalizedStringResource(
             "settings.search.breadcrumb.privacyDataICloud", defaultValue: "Privacy & Data › iCloud",
+            comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
+    static let privacyDataAirportsAndFlights = SettingsSearchBreadcrumb(
+        token: "Privacy & Data › Airports and flights",
+        display: LocalizedStringResource(
+            "settings.search.breadcrumb.privacyDataAirportsAndFlights", defaultValue: "Privacy & Data › Airports and flights",
             comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
     static let privacyDataMultipleDevices = SettingsSearchBreadcrumb(
         token: "Privacy & Data › Multiple devices",

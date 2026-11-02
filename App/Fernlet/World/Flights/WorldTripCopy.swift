@@ -77,6 +77,9 @@ nonisolated enum WorldTripCopy {
     static let leaveBlank = LocalizedStringResource("worldTrip.ticket.leaveBlank",
                                                     defaultValue: "Not sure yet? Leave To blank; it fills in when you land.",
                                                     comment: "The companion's ticket: under Start trip (Spanish: ¿Aún no lo sabes? Deja A en blanco; se completa al aterrizar.)")
+    /// The ticket's offer at an airport while Flights from Calendar is off (owner's pick, 2026-11-02).
+    static let calendarOffer = LocalizedStringResource("worldTrip.ticket.calendarOffer", defaultValue: "Fill this in from Calendar?",
+                                                       comment: "The companion's ticket: turns on Flights from Calendar, and iOS asks first (Spanish: ¿Completar con el Calendario?)")
     /// The suggestions list's name for VoiceOver.
     static let suggestions = LocalizedStringResource("worldTrip.ticket.suggestions", defaultValue: "Suggestions",
                                                      comment: "VoiceOver: the airport suggestions under the companion's ticket (Spanish: Sugerencias)")

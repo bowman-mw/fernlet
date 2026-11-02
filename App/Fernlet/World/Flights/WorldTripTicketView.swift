@@ -16,6 +16,8 @@ nonisolated struct WorldTripTicketRequest: Equatable, Identifiable, Sendable {
     var departure: Date?
     /// Today.
     let date: Date
+    /// Whether this ticket offers to turn on Flights from Calendar (``FernletStore/worldTicketOffersCalendar(atAirport:filledIn:access:defaults:)``).
+    var offersCalendar = false
 }
 
 /// Fernlet's ticket (§7, screen 17): the approved boarding pass, top-anchored 62 pt down over a dim, with To as a
@@ -27,6 +29,9 @@ struct WorldTripTicketOverlay: View {
     let companion: String
     /// The suggestions for a text, at most so many.
     let search: (String, Int) -> [WorldTripSuggestion]
+    /// Flights from Calendar, where this ticket offers it.
+    let calendar: CalendarFlightsFlow?
+    let onAskCalendar: () -> Void
     let onStart: (WorldTripDestination?) -> Void
     let onCancel: () -> Void
     @State private var text = ""
@@ -45,6 +50,9 @@ struct WorldTripTicketOverlay: View {
             ScrollView {
                 VStack(spacing: 8) {
                     card
+                    if request.offersCalendar || calendar?.added != nil, let calendar {
+                        WorldTripCalendarRow(flow: calendar, typing: !text.isEmpty, onAsk: onAskCalendar)
+                    }
                     if !suggestions.isEmpty {
                         WorldTripSuggestionList(suggestions: suggestions, selected: selected, onChoose: choose)
                     }
@@ -165,6 +173,54 @@ struct WorldTripToField: View {
                 .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+/// The line under the ticket for Flights from Calendar (owner's pick, 2026-11-02): "Fill this in from Calendar?" until
+/// something is typed, then what the first look is doing, then what it added, with Undo. Nothing once the switch is on
+/// and the look is done, or after Don't Allow (Privacy & data says where to allow it).
+struct WorldTripCalendarRow: View {
+    let flow: CalendarFlightsFlow
+    /// Whether To has text: the offer steps aside for the suggestions.
+    let typing: Bool
+    let onAsk: () -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        Group {
+            if flow.isLooking {
+                Text(CalendarFlightsCopy.looking)
+                    .worldPassFont(WorldPassType.place(false)).foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .accessibilityIdentifier("world.trip.calendarLooking")
+            } else if let added = flow.added {
+                PrivacyFlightsAddedRow(line: CalendarFlightsCopy.added(added.count)) { flow.undo() }
+                    .padding(.horizontal, 12)
+            } else if !flow.isOn, !flow.isRefused, !typing {
+                offer
+            }
+        }
+        .background(WorldPalette.paper, in: shape)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 2))
+    }
+
+    private var offer: some View {
+        Button(action: onAsk) {
+            Text(WorldTripCopy.calendarOffer)
+                .worldPassFont(.custom(FernletFontName.dmSansBold, size: 15.5, relativeTo: .subheadline))
+                .foregroundStyle(WorldPalette.mossInk)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .padding(.horizontal, 12)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityInputLabels([Text(WorldTripCopy.calendarOffer)])
+        .accessibilityIdentifier("world.trip.calendarOffer")
     }
 }
 
