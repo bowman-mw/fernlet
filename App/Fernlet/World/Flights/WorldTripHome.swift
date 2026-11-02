@@ -14,6 +14,11 @@ final class WorldTripHomeState {
     var pass: WorldBoardingPass?
     /// Today's calendar flight from this airport, while the person is at it and no trip is on.
     private(set) var today: WorldTripToday?
+    /// Flights from Calendar as the ticket offers it, made when a ticket first offers it (it hosts the first look's
+    /// summary over Home).
+    var calendar: CalendarFlightsFlow?
+    /// Whether the person asked the ticket to fill in from the calendar and it hasn't yet.
+    @ObservationIgnored private var fillsFromCalendar = false
     /// The calendar flights Sprout has spoken of this run ("Honolulu today? Your ticket's ready!" once).
     @ObservationIgnored private var spoken: Set<String> = []
 
@@ -27,6 +32,25 @@ final class WorldTripHomeState {
     func openTicket(_ store: FernletStore) {
         guard store.worldMayTakeTrip else { return }
         pass = nil
+        fillsFromCalendar = false
+        let request = store.worldTicketRequest(today: today)
+        if request.offersCalendar, calendar == nil { calendar = CalendarFlightsFlow(store: store) }
+        calendar?.refresh()
+        ticket = request
+    }
+
+    /// "Fill this in from Calendar?": iOS asks, Fernlet looks back once (the summary opens over Home), and the ticket
+    /// fills in if that finds today's flight (``fillTicket(_:from:)``).
+    func askCalendar() {
+        fillsFromCalendar = true
+        calendar?.setOn(true)
+    }
+
+    /// Fills the open ticket from `today`, only when the person asked the ticket to: a flight found any other way
+    /// never replaces what they typed.
+    func fillTicket(_ store: FernletStore, from today: WorldTripToday?) {
+        guard fillsFromCalendar, let today, ticket != nil else { return }
+        fillsFromCalendar = false
         ticket = store.worldTicketRequest(today: today)
     }
 
@@ -55,6 +79,7 @@ final class WorldTripHomeState {
     func readToday(_ store: FernletStore) -> String? {
         let next = store.worldTripToday()
         if today != next { today = next }
+        fillTicket(store, from: next)
         guard let next else { return nil }
         let key = "\(next.destination)@\(next.departure.timeIntervalSince1970)"
         guard !spoken.contains(key) else { return nil }
@@ -98,9 +123,14 @@ struct WorldTripHomeDriver: ViewModifier {
     @ViewBuilder
     private var overlays: some View {
         if !store.duressSessionActive {
+            // Outside the ticket: it gets a new identity when it fills in, and the summary sheet must outlive that.
+            if let calendar = trip.calendar {
+                Color.clear.allowsHitTesting(false).accessibilityHidden(true).calendarFlightsImport(calendar)
+            }
             if let ticket = trip.ticket {
                 WorldTripTicketOverlay(request: ticket, companion: WorldRecenterCopy.companionName(store),
-                                       search: { store.worldTripSuggestions($0, limit: $1) },
+                                       search: { store.worldTripSuggestions($0, limit: $1) }, calendar: trip.calendar,
+                                       onAskCalendar: { trip.askCalendar() },
                                        onStart: { trip.start(store, to: $0) }, onCancel: { trip.ticket = nil })
                     .id(ticket.id)
                     .transition(.opacity)
@@ -111,11 +141,9 @@ struct WorldTripHomeDriver: ViewModifier {
         }
     }
 
-    /// What today's calendar flight depends on: the airport, the trip, the flight and the map in front.
+    /// What today's calendar flight depends on: the store's source, and the map in front.
     private var todaySource: [String] {
-        let flights = store.worldLocation.flights
-        return [flights.currentAirport ?? "", flights.isOnTrip ? "trip" : "", flights.isFlying ? "air" : "",
-                isFrontmost ? "front" : "", store.duressSessionActive ? "decoy" : ""]
+        store.worldTripTodaySource + [isFrontmost ? "front" : ""]
     }
 
     /// Home appeared: the quick action's install, and any request that launched the app.
@@ -148,6 +176,8 @@ struct WorldTripHomeDriver: ViewModifier {
         switch scene {
         case "card", "endcard":
             openCard()
+        case "calendarOffer":
+            trip.openTicket(store)
         case "ticket":
             var request = store.worldTicketRequest(today: nil)
             request.text = WorldTripDemo.typed

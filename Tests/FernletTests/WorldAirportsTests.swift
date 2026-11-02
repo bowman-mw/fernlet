@@ -46,6 +46,8 @@ struct WorldAirportsTests {
         #expect(airports.timeZone(iata: "pdx")?.identifier == "America/Los_Angeles")
         #expect(pdx.grounds.isOurOutline, "Portland has its own outline since batch 3")
         #expect(pdx.contains(pdx.point))
+        #expect(pdx.runways.count == 3, "its two long parallels and the crosswind")
+        #expect(pdx.runways.allSatisfy { pdx.contains($0.start) && pdx.contains($0.end) && $0.widthMetres >= 10 })
         #expect(airports.airports(containing: pdx.point).map(\.token) == ["PDX"])
         #expect(airports.airports(containing: pdx.point.offset(east: 0, north: -6_000)).isEmpty,
                 "a neighbourhood 6 km south is outside the grounds")

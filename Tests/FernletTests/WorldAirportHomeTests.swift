@@ -95,6 +95,59 @@ struct WorldAirportHomeTests {
         #expect(WorldAirportPlaneSchedule.liftOpacity(0.5) == 1 && WorldAirportPlaneSchedule.liftOpacity(1) == 0)
     }
 
+    @Test func beatsTakeTurnsTakingOffAndLandingOnEachRunway() {
+        let first = WorldAirportPlaneSchedule.nextTakeOff(after: Self.day, token: "CED")
+        let beats = (0..<16).map { first.addingTimeInterval(Double($0) * WorldAirportPlaneSchedule.period) }
+        let moves = beats.map { WorldAirportPlaneSchedule.movement(onBeatAt: $0, token: "CED", runways: 2) }
+        for (one, next) in zip(moves, moves.dropFirst()) { #expect(one.isLanding != next.isLanding, "they take turns") }
+        #expect(Set(moves.map(\.runway)) == [0, 1], "every runway gets its planes")
+        #expect(Set(moves.map(\.turnedRound)) == [false, true], "the traffic turns round")
+        let pairStart = moves.firstIndex { !$0.isLanding } ?? 0
+        #expect(moves[pairStart].runway == moves[pairStart + 1].runway)
+        #expect(moves[pairStart].turnedRound == moves[pairStart + 1].turnedRound, "a pair travels the same way")
+        let none = WorldAirportPlaneSchedule.movement(onBeatAt: first, token: "CED", runways: 0)
+        #expect(none.runway == 0, "no runways counts as one")
+    }
+
+    @Test func aLandingFadesInFromTheAirAndOutAtTheEndOfItsRoll() {
+        #expect(WorldAirportPlaneSchedule.landingOpacity(1) == 0, "out of the sky")
+        #expect(WorldAirportPlaneSchedule.landingOpacity(0.5) == 1)
+        #expect(WorldAirportPlaneSchedule.landingOpacity(0) == 0, "turned off the runway")
+    }
+
+    // MARK: Planes flying over
+
+    @Test func aPlaneFliesOverWithinTwoMilesOfTheAirportOrItsRunways() {
+        let runway = WorldRunway(start: Self.cedarPoint.offset(east: 6_000, north: 0), end: Self.cedarPoint.offset(east: 7_000, north: 0),
+                                 widthMetres: 45)
+        let plain = Self.airport("CIR", Self.cedarPoint)
+        #expect(WorldAirportFlyOverSchedule.isNear(plain, to: Self.cedarPoint.offset(east: 3_000, north: 0)))
+        #expect(!WorldAirportFlyOverSchedule.isNear(plain, to: Self.cedarPoint.offset(east: 9_000, north: 0)), "too far away")
+        let long = WorldAirport(token: "LNG", iata: "LNG", ident: "LNG", point: Self.cedarPoint, countryCode: "US", size: .large,
+                                timeZoneIdentifier: "America/Los_Angeles", englishName: "LNG", spanishName: nil, englishCity: "LNG",
+                                spanishCity: nil, grounds: .circle(radiusMetres: 1_500), runways: [runway])
+        #expect(WorldAirportFlyOverSchedule.isNear(long, to: Self.cedarPoint.offset(east: 9_000, north: 0)), "near a far runway's end")
+    }
+
+    @Test func aFlyOverKeepsItsBeatAndCrossesTheWholeScreenInLineWithTheRunway() throws {
+        let next = WorldAirportFlyOverSchedule.next(after: Self.day, token: "CED")
+        #expect(next >= Self.day && next.timeIntervalSince(Self.day) <= WorldAirportFlyOverSchedule.period)
+        #expect(WorldAirportFlyOverSchedule.next(after: next, token: "CED") == next)
+        let beat = WorldAirportFlyOverSchedule.beat(at: next, token: "CED")
+        #expect(WorldAirportFlyOverSchedule.beat(at: next.addingTimeInterval(WorldAirportFlyOverSchedule.period), token: "CED") == beat + 1)
+
+        let size = CGSize(width: 402, height: 874), screen = CGRect(origin: .zero, size: size)
+        let eastWest = (Self.cedarPoint, Self.cedarPoint.offset(east: 2_000, north: 0))
+        let even = try #require(WorldAirportFlyOverSchedule.path(along: eastWest, beat: 0, size: size))
+        #expect(!screen.contains(even.start) && !screen.contains(even.end), "it starts and ends off the screen")
+        #expect(abs(even.start.y - even.end.y) < 1 && even.end.x > even.start.x, "due east with the runway")
+        #expect(screen.contains(CGPoint(x: (even.start.x + even.end.x) / 2, y: (even.start.y + even.end.y) / 2)))
+        let odd = try #require(WorldAirportFlyOverSchedule.path(along: eastWest, beat: 1, size: size))
+        #expect(odd.end.x < odd.start.x, "the next one flies the other way")
+        #expect(WorldAirportFlyOverSchedule.path(along: (Self.cedarPoint, Self.cedarPoint), beat: 0, size: size) == nil)
+        #expect(WorldAirportFlyOverSchedule.path(along: eastWest, beat: 0, size: .zero) == nil)
+    }
+
     // MARK: The layover counter
 
     @Test func theLayoverCountsUpByTheMinute() {

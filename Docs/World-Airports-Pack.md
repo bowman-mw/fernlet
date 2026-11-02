@@ -5,7 +5,7 @@ unlockable, every IATA-coded airport as a point an imported flight can draw an a
 small airline table. It's its own file, never part of `WorldAtlas.pack`, so the atlas keeps its headroom under its
 7 MiB cap. Nothing is downloaded on the phone.
 
-- **File:** `App/Fernlet/World/Atlas/WorldAirports.pack`, 514,360 bytes (cap 1 MiB), SHA-256 pinned in
+- **File:** `App/Fernlet/World/Atlas/WorldAirports.pack`, 620,054 bytes (cap 1 MiB), SHA-256 pinned in
   `WorldAirports.expectedSHA256`.
 - **Generator:** `Scripts/world-atlas/build_world_airports.py`; its self-test is `airports_selftest.py`.
 - **Sources:** `Scripts/world-atlas/fetch-airport-sources.sh` (sizes and SHA-256 pinned).
@@ -80,9 +80,11 @@ The atlas container (`magic · u16 version · u16 sectionCount · 16-byte table 
 | `APTS` | `u16 count`, then per unlockable, sorted by token: token, IATA (empty if none), ident (short texts) · `i32 lat`, `i32 lon` (1e-5°) · 2 ASCII country · `u8 size` (1 large, 2 medium) · `u16 zone` · English name, Spanish name, English city, Spanish city (short texts, the Spanish ones empty when they'd repeat the English) · `u8 grounds` (0 circle: `u16 radius m`; 1 runways or 2 our outline: the atlas ring, `u32 pointCount · i32 lon · i32 lat · zigzag-LEB128 deltas`) |
 | `PNTS` | `u16 count`, then per IATA point, sorted by code: 3 ASCII code · `i32 lat`, `i32 lon` · 2 ASCII country · `u16 zone` · `u16` unlockable index (0xFFFF: points only) |
 | `AIRL` | `u16 count`, then 3 ASCII ICAO · 2 ASCII IATA · short text names joined by "\|" |
+| `RWYS` | `u16 count`, then per airport with open land runways: `u16` unlockable index · `u8` runway count (1–16, longest first) · per runway `i32 lat`, `i32 lon`, `i32 lat`, `i32 lon` (its two ends, 1e-5°) · `u16` width in metres (45 where the list has none). Optional: an airport without one uses its ring's longest line for its planes. |
 | `META` | JSON: generator, version, date, tzdata version, every source's file, URL, SHA-256 and licence (optional) |
 
-Sizes as shipped (raw → stored): TZNS 6 KB → 2.5 KB, APTS 595 KB → 375 KB, PNTS 154 KB → 107 KB, AIRL 2 KB → 1 KB.
+Sizes as shipped (raw → stored): TZNS 6 KB → 2.5 KB, APTS 607 KB → 402 KB, PNTS 154 KB → 107 KB, AIRL 2 KB → 1 KB,
+RWYS 128 KB → 106 KB (6,380 runways at 4,463 airports).
 
 ## Rebuilding
 

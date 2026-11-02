@@ -7,8 +7,8 @@ import WorldMapStore
 // passport (the mockup's sample traveller, Portland since August), never written anywhere. Scenes: `turn` (page 3
 // with the contents open), `sprout` and `sproutHome` (page 1; the place from `FERNLET_UI_TEST_PASSPORT_PLACE`), `world`, `stamps`, `stamps2`, `new` (the Sea of Japan landing on page 5), `index`,
 // `continent` (North America A to Z), `fresh`, `full` (every stamp found), `decoy`, `flights` (the made-up flights'
-// last Flights page, `UITestSupport+AirportFlights`), `flightsImport` (the import summary over it), `flightsWorld` (Your
-// world with their arcs), and the airports' `airportStamps`, `airportArt`, `airportIndex`, `airportNew` and
+// Flights page, `UITestSupport+AirportFlights`), `flightsImport` (the import summary over it), `flightsWorld` (Your
+// world with their arcs), `flightsMany` (178 made-up flights' Flights page), `flightsManyYear` (their 2024 log), `flightsFew` (a short history's stubs), and the airports' `airportStamps`, `airportArt`, `airportIndex`, `airportNew` and
 // `airportWorld` (``PassportAirportDemoScenes``). Absent in Release.
 
 extension UITestSupport {
@@ -70,8 +70,14 @@ enum PassportBookDemoScenes {
                                               flights: flights,
                                               importFound: scene == "flightsImport" ? AirportFlightsDemo.found : nil,
                                               opensWorld: scene == "flightsWorld")
-            let pages = PassportFlightsModel(flights: flights, point: { _ in nil }).pages.count
-            presenter.open(page: PassportBookModel(entries: sample, flightPageCount: pages).indexPage - 1)
+            presenter.open(page: PassportBookModel(entries: sample, showsFlights: true).indexPage - 1)
+        case "flightsFew":
+            presenter.demo = PassportBookDemo(entries: sample, world: world, flights: Array(AirportFlightsDemo.flights.prefix(6)))
+            presenter.open(page: PassportBookModel(entries: sample, showsFlights: true).indexPage - 1)
+        case "flightsMany", "flightsManyYear":
+            presenter.demo = PassportBookDemo(entries: sample, world: world, flights: AirportFlightsDemo.many,
+                                              flightsYear: scene == "flightsManyYear" ? 2024 : nil)
+            presenter.open(page: PassportBookModel(entries: sample, showsFlights: true).indexPage - 1)
         case "new":
             presenter.demo = PassportBookDemo(entries: sample, world: world)
             if let last = PassportStampEntry.ordered(sample).last { presenter.noteNewStamp(last) }
@@ -155,9 +161,8 @@ enum PassportAirportDemoScenes {
             presenter.open(page: PassportBookModel.firstStampPage)
         case "airportIndex":
             let flights = AirportFlightsDemo.flights
-            let pages = PassportFlightsModel(flights: flights, point: { _ in nil }).pages.count
             presenter.demo = PassportBookDemo(entries: entries, world: world, flights: flights)
-            presenter.open(page: PassportBookModel(entries: entries, flightPageCount: pages).indexPage)
+            presenter.open(page: PassportBookModel(entries: entries, showsFlights: true).indexPage)
         case "airportNew":
             presenter.demo = PassportBookDemo(entries: entries, world: world)
             if let home = airports.last { presenter.noteNewStamp(home) }

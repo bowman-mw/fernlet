@@ -132,6 +132,22 @@ nonisolated enum WorldAirportPlaneSchedule {
         return intoBeat < rollDuration ? intoBeat / rollDuration : nil
     }
 
+    /// What one beat at an airport does (owner 2026-11-02: landings too): odd beats land and even beats take off, each
+    /// pair on the next runway, and the traffic turns round once every runway has had a pair. Take-off and landing in
+    /// one pair travel the same way, as they do on a real runway. `runways` under 1 counts as one.
+    static func movement(onBeatAt date: Date, token: String, runways: Int) -> WorldAirportMovement {
+        let shifted = date.timeIntervalSince1970 - offset(for: token)
+        let beat = Int(max(0, (shifted / period).rounded()))
+        let count = max(1, runways), pair = beat / 2
+        return WorldAirportMovement(runway: pair % count, isLanding: beat % 2 == 1, turnedRound: (pair / count) % 2 == 1)
+    }
+
+    /// The plane's opacity at `progress` on a landing: the climb's fade played backwards, then a short fade as it
+    /// slows to the end of its roll and turns off the runway.
+    static func landingOpacity(_ progress: Double) -> Double {
+        min(liftOpacity(progress), max(0, min(1, progress / 0.08)))
+    }
+
     /// How far along the roll the plane is at `progress` (it speeds up: the square), from the start of
     /// ``rollSpan`` to its end.
     static func runwayShare(_ progress: Double) -> Double {
@@ -149,6 +165,13 @@ nonisolated enum WorldAirportPlaneSchedule {
     static func liftOpacity(_ progress: Double) -> Double {
         max(0, min(1, (1 - progress) / 0.15))
     }
+}
+
+/// One beat's plane at an airport: which of its runways, whether it lands, and which way the traffic runs.
+nonisolated struct WorldAirportMovement: Equatable {
+    let runway: Int
+    let isLanding: Bool
+    let turnedRound: Bool
 }
 
 /// Home's airports for the viewport, kept while the map stays near (``WorldAirportSelection``'s answers): the
@@ -175,8 +198,13 @@ final class WorldAirportMemo {
         return nearby
     }
 
-    /// `airport`'s runway ends (worked out once).
-    func runway(of airport: WorldAirport) -> (GeoPoint, GeoPoint) {
+    /// `airport`'s runways' ends, longest first: its real ones, or the one line its grounds suggest.
+    func runways(of airport: WorldAirport) -> [(GeoPoint, GeoPoint)] {
+        airport.runways.isEmpty ? [axis(of: airport)] : airport.runways.map { ($0.start, $0.end) }
+    }
+
+    /// The longest line across `airport`'s grounds (worked out once).
+    private func axis(of airport: WorldAirport) -> (GeoPoint, GeoPoint) {
         if let kept = axes[airport.token] { return kept }
         let axis = WorldAirportSelection.runwayAxis(of: airport)
         if axes.count >= Self.maxAxes { axes.removeAll() }

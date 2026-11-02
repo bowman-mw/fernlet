@@ -48,10 +48,18 @@ nonisolated struct NatureFogClearing: Equatable {
     var lifted: Set<HexCell> = []
     /// Cells drawn clear round homes, a hotel and kept places.
     var uncovered: Set<HexCell> = []
+    /// Found airports' grounds, drawn as translucent fog.
+    var veils = NatureFogVeils.none
 
-    /// Whether `cell` shows the map.
+    /// Whether `cell` shows the map, through a veil or not: nothing grows on it and no tree stands over it.
     func isClear(_ cell: HexCell) -> Bool {
-        lifted.contains(cell) || uncovered.contains(cell)
+        lifted.contains(cell) || uncovered.contains(cell) || veils.covers(cell)
+    }
+
+    /// Whether `cell` draws translucent fog: inside a found airport's grounds, off its runways, and not walked or
+    /// kept clear.
+    func isVeiled(_ cell: HexCell) -> Bool {
+        !veils.isEmpty && !lifted.contains(cell) && !uncovered.contains(cell) && veils.thins(cell)
     }
 }
 
@@ -105,6 +113,8 @@ nonisolated struct NatureStandingTree: Hashable {
 /// look; with no atlas every look is the approved one and the layout is today's nature fog exactly.
 nonisolated struct NatureFogLayout {
     var hexes: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)] = []
+    /// The hexes drawn translucent over a found airport's grounds, under everything else (``NatureFogVeils``).
+    var veils: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)] = []
     /// Water-set hexes (World-Exploration-Spec §1: no seams), in the water look.
     var seas: [(centre: CGPoint, paint: NaturePaint)] = []
     var specks: [NatureFogBlock] = []

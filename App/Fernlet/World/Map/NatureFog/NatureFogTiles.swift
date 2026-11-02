@@ -248,10 +248,12 @@ final class NatureFogTileBook {
     func change(to next: NatureFogClearing) -> NatureFogChange {
         guard next != clearing else { return NatureFogChange() }
         let changed = Array(clearing.lifted.symmetricDifference(next.lifted).union(clearing.uncovered.symmetricDifference(next.uncovered)))
-        let covers = changed.contains { !next.isClear($0) }
+        let veilsMoved = clearing.veils != next.veils
+        let covers = changed.contains { !next.isClear($0) } || !next.veils.holds(everyAirportIn: clearing.veils)
         clearing = next
         generation &+= 1
-        guard changed.count <= Self.resetThreshold else {
+        // An airport's grounds are far more cells than a reset's worth, and they change only when one is found.
+        guard !veilsMoved, changed.count <= Self.resetThreshold else {
             tiles.removeAll()
             outdated = Set(drawing.keys)
             pump()

@@ -141,11 +141,24 @@ struct WorldLayoverPlate: View {
         }
     }
 
-    /// The airport landed at, its city and the time since landing; nil when not on a layover or in a decoy.
+    /// How long after landing the plate waits when the calendar shows no next flight (owner 2026-11-02): most landings
+    /// are arrivals on the way out of the airport, not layovers.
+    static let quietTime: TimeInterval = 30 * 60
+
+    /// Whether the plate shows `since` landing: after ``quietTime``, or at once with another flight on the calendar.
+    static func shows(since: TimeInterval, hasNextFlight: Bool) -> Bool {
+        hasNextFlight || since >= quietTime
+    }
+
+    /// The airport landed at, its city and the time since landing; nil when not on a layover (or not yet one), or in a
+    /// decoy.
     private var layover: (token: String, city: String, since: TimeInterval)? {
         guard !store.duressSessionActive else { return nil }
         let flights = store.worldLocation.flights
         guard let token = flights.layoverAirport, let since = flights.layoverDuration(at: date) else { return nil }
+        let code = flights.airportsShelf.iata(of: token)
+        let hasNextFlight = code.map { store.worldFog.atlas.book.calendarFlightLeaves($0, now: date) } ?? false
+        guard Self.shows(since: since, hasNextFlight: hasNextFlight) else { return nil }
         let city = flights.airportsShelf.pack()?.airport(token: token).map { WorldAirportCopy.city($0) } ?? token
         return (token, city, since)
     }

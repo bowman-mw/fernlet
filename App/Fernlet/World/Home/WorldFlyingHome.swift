@@ -2,9 +2,11 @@ import FernletDomainModel
 import FernletScoring
 import FernletUI
 import SwiftUI
+import WorldMapStore
 
 /// Home in the air (World-Airports-Spec §6.2, screen 8, approved at draft 6): while the flight gate says the person is
-/// flying (``WorldFlightKeeper/isFlying``), Home is the approved location-off Home (``WorldOffMapHome``, `b1-home-denied`
+/// flying (``WorldFlightKeeper/isFlying``), or the times of a calendar flight from the airport they were last at do with
+/// no reading since it left, Home is the approved location-off Home (``WorldOffMapHome``, `b1-home-denied`
 /// draft 4) in place of the map: the date, the name and the photos on top, the open scene, the status plate below; no map,
 /// no fog and no blue button. The scene is sky all the way down, with no grass, and holds ``WorldFlyingScene``.
 ///
@@ -23,9 +25,15 @@ struct WorldFlyingHome: View {
     /// The map's night: Sprout winds down at the window too.
     var isNight: Bool
 
-    /// Whether Home shows the plane: the gate says flying, outside a decoy.
-    static func shows(_ store: FernletStore) -> Bool {
-        store.worldLocation.flights.isFlying && !store.duressSessionActive
+    /// Whether Home shows the plane at `now`, outside a decoy: the gate says flying, or a calendar flight does, leaving
+    /// the airport the person was last known to be at with no reading heard since (no GPS in the cabin; display only,
+    /// as the gate still decides what's kept).
+    static func shows(_ store: FernletStore, at now: Date) -> Bool {
+        guard !store.duressSessionActive else { return false }
+        let flights = store.worldLocation.flights
+        if flights.isFlying { return true }
+        return store.worldFog.atlas.book.calendarFlightInTheAir(now: now, lastReading: flights.lastReadingMinute,
+                                                                lastAirport: flights.currentAirportCode) != nil
     }
 
     var body: some View {

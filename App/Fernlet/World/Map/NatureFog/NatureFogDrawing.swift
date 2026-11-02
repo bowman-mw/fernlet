@@ -49,6 +49,23 @@ nonisolated enum NatureFogDrawer {
         drawWater(layout, scale: scale, palettes: &palettes, in: context, origin: origin)
     }
 
+    /// How much of the fog a found airport's grounds keep (owner 2026-11-02: translucent, the map showing through).
+    static let veilOpacity: CGFloat = 0.5
+
+    /// The veiled hexes as one translucent layer, so a seam over a hex doesn't darken where they meet.
+    static func drawVeils(_ layout: NatureFogLayout, scale: NatureFogScale, palette: NatureFogPalette,
+                          in context: CGContext, origin: CGPoint) {
+        guard !layout.veils.isEmpty else { return }
+        var veils = NatureFogLayout()
+        veils.hexes = layout.veils
+        context.saveGState()
+        context.setAlpha(veilOpacity)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        drawGround(veils, scale: scale, palette: palette, in: context, origin: origin)
+        context.endTransparencyLayer()
+        context.restoreGState()
+    }
+
     /// `looks` without repeats, the approved look first, the rest in the order they first appear.
     private static func order(_ looks: [TerrainLook]) -> [TerrainLook] {
         var seen = Set<TerrainLook>(), ordered: [TerrainLook] = []

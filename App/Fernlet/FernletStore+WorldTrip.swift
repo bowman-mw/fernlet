@@ -54,7 +54,18 @@ extension FernletStore {
             request.text = today.city
             request.departure = today.departure
         }
+        request.offersCalendar = worldTicketOffersCalendar(atAirport: from != nil, filledIn: today != nil,
+                                                           access: EventKitCalendarSource.currentAccess())
         return request
+    }
+
+    /// Whether a ticket offers to turn on Flights from Calendar (owner's pick, 2026-11-02): at an airport, with To not
+    /// filled in, the switch off and iOS not having refused (it wouldn't ask again). Never in a decoy, nor with
+    /// "Airports and flights" off.
+    func worldTicketOffersCalendar(atAirport: Bool, filledIn: Bool, access: CalendarAccess,
+                                   defaults: UserDefaults = .standard) -> Bool {
+        atAirport && !filledIn && access != .refused && !duressSessionActive && !worldFog.atlas.isDecoy
+            && keepsWorldAirportsAndFlights(defaults: defaults) && !WorldMapPreferences.readsCalendarFlights(in: defaults)
     }
 
     /// "Start trip": starts the trip, sealing its destination. False in a decoy, with the switch off, or on a trip.
@@ -76,6 +87,16 @@ extension FernletStore {
         return WorldBoardingPassRule.pass(at: airport, isOnTrip: flights.isOnTrip, destination: flights.tripDestination,
                                           tripStartedAt: flights.tripStartedAt, flights: WorldExploreState.book(self).flights,
                                           airports: flights.airportsShelf.pack(), spanish: WorldExploreCopy.showsSpanish, now: now)
+    }
+
+    /// What today's calendar flight depends on, for Home to read it again when any of it changes (§10.7): the airport,
+    /// the trip, the flight, a decoy, and the upcoming flights, because a calendar look can finish after the person
+    /// reached the airport. In memory only. Bounded by ``PassportBook/maxUpcomingFlights``.
+    var worldTripTodaySource: [String] {
+        let flights = worldLocation.flights
+        return [flights.currentAirport ?? "", flights.isOnTrip ? "trip" : "", flights.isFlying ? "air" : "",
+                duressSessionActive ? "decoy" : ""]
+            + worldFog.atlas.book.upcomingFlights.map { "\($0.route)@\($0.departure.timeIntervalSince1970)" }
     }
 
     /// Today's calendar flight from the airport the person is at (§10.7), while no trip is on: where it goes, its

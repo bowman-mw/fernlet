@@ -122,6 +122,8 @@ public nonisolated struct FlightVerdict: Equatable, Sendable {
 ///   station): an altitude at least ``climbMetres`` above the median of the last ``groundAltitudes`` known
 ///   altitudes on the ground at the airport (one jumpy reading never hands a train on an embankment its climb).
 ///   With either altitude unknown, the speed alone decides, as before.
+/// - **Opened in the air:** with no take-off seen, the phone's own speed over ``anywhereSpeed`` at any placed accuracy,
+///   or a height over ``cruiseAltitude``, starts a flight (and is no landing over an airport).
 /// - **The gap rule** (§6.1, common in flight mode): the last placed reading within ``nearAirportMetres`` of
 ///   an airport whose grounds held the person within ``departureWindow`` before it, and then a reading more
 ///   than ``gapMinMetres`` away, is a flight from that airport: one that has landed, when the reading is inside
@@ -166,6 +168,8 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
     public static let groundAltitudes = 5
     /// Faster than this anywhere is a flight (450 km/h), in m/s.
     public static let anywhereSpeed = 450.0 / 3.6
+    /// Higher than this is a flight anywhere, in metres above sea level (the world's highest roads are under 6 km).
+    public static let cruiseAltitude = 6_000.0
     /// Slower than this is on the ground (150 km/h), in m/s.
     public static let groundSpeed = 150.0 / 3.6
     /// How long readings under ``groundSpeed`` must span to end a flight away from any airport.
@@ -306,6 +310,9 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
         if case .flying = phase { return true }
         return false
     }
+
+    /// When the newest reading weighed was taken, kept across relaunches.
+    public var lastReadingAt: Date? { lastAt }
 
     /// The airport the flight under way left, when known.
     public var flightOrigin: String? {
@@ -454,6 +461,7 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
     /// with no speed, the pace from a placed reading within ``pairTime`` before it under ``groundSpeed``, or no
     /// such reading (the first reading after flight mode).
     private func isOnTheGround(_ reading: Reading) -> Bool {
+        if isSurelyInTheAir(reading) { return false }
         if let speed = reading.speed { return speed < Self.groundSpeed }
         guard let implied = reading.implied, implied.seconds <= Self.pairTime else { return true }
         return implied.speed < Self.groundSpeed
@@ -536,16 +544,26 @@ public nonisolated struct FlightDetector: Codable, Equatable, Sendable {
                 return Start(from: departure, departed: last.at, landing: nil)
             }
         }
-        guard let speed = reading.speed else { return nil }
-        if speed > Self.anywhereSpeed {
+        if isSurelyInTheAir(reading) || (reading.speed ?? 0) > Self.anywhereSpeed {
             let from = departure.flatMap { at.timeIntervalSince($0.lastInside) <= Self.departureLookBack ? $0 : nil }
             return Start(from: from, departed: from?.lastInside ?? at, landing: nil)
         }
+        guard let speed = reading.speed else { return nil }
         if speed > Self.takeOffSpeed, reading.here.isEmpty, let departure,
            at.timeIntervalSince(departure.lastInside) <= Self.departureWindow, Self.hasClimbed(reading.fix, from: departure) {
             return Start(from: departure, departed: departure.lastInside, landing: nil)
         }
         return nil
+    }
+
+    /// Whether a reading can only be in the air, whatever came before it (Fernlet closed for the take-off, 2026-11-02):
+    /// the phone's own speed over ``anywhereSpeed`` at any placed accuracy, since a cabin's GPS is often vaguer than
+    /// ``goodAccuracy``, or a height no road reaches even at the low end of its altitude's accuracy.
+    private func isSurelyInTheAir(_ reading: Reading) -> Bool {
+        let fix = reading.fix
+        if reading.placed, let own = fix.speed, own.isFinite, own > Self.anywhereSpeed { return true }
+        guard let altitude = fix.altitude, altitude.isFinite, let margin = fix.verticalAccuracy, margin >= 0 else { return false }
+        return altitude - margin >= Self.cruiseAltitude
     }
 
     /// Whether `fix` is at least ``climbMetres`` above `departure`'s ground; true when either altitude is unknown

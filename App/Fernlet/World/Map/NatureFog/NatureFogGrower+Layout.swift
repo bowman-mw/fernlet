@@ -34,7 +34,10 @@ nonisolated extension NatureFogGrower {
 
     /// One hex's ground and what grows on it, with the hex's own mulberry32 stream (`hash ^ 0x9e3779b9`).
     private func grow(_ cell: HexCell, area: CGRect, ground: Bool, covered: Set<HexCell>, into layout: inout NatureFogLayout) {
-        guard case .wild(let kind) = state(cell) else { return }
+        guard case .wild(let kind) = state(cell) else {
+            if ground, clearing.isVeiled(cell) { layout.veils.append(veil(cell)) }
+            return
+        }
         let land = self.land(cell)
         let at = NatureFogRules.offset(of: cell), centre = scale.centre(of: cell)
         let hash = NatureFogNoise.hash(at.col + 1_000, at.row + 1_000)
@@ -61,6 +64,14 @@ nonisolated extension NatureFogGrower {
         } else {
             terrain(kind, land: land, spot: spot, ground: ground, random: &random, into: &layout)
         }
+    }
+
+    /// A veiled hex in the shade its own land's fog would be, so the veil reads as that fog gone thin.
+    private func veil(_ cell: HexCell) -> (centre: CGPoint, paint: NaturePaint, look: TerrainLook) {
+        let land = self.land(cell), at = NatureFogRules.offset(of: cell)
+        let hash = NatureFogNoise.hash(at.col + 1_000, at.row + 1_000)
+        let kind = TerrainRules.ground(land, col: at.col, row: at.row)
+        return (scale.centre(of: cell), groundPaint(kind, land: land, col: at.col, row: at.row, hash: hash), land.look)
     }
 
     /// What grows on a meadow or forest hex: the approved nature fog's specks, grass, flowers and boulder.

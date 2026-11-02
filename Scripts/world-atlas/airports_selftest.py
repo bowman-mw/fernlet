@@ -320,6 +320,18 @@ def main():
         check(points["SML"]["country"] == "US" and points["LHR"]["country"] == "GB", "and countries")
         check(meta["tzdata"] == "2026test", "META records the tzdata version")
 
+        # Runways.
+        r = Bytes(read_pack(data)["RWYS"])
+        (count,) = r.take("<H")
+        runways = {}
+        for _ in range(count):
+            index, listed = r.take("<HB")
+            runways[sorted(airports)[index]] = [r.take("<iiiiH") for _ in range(listed)]
+        check(sorted(runways) == ["FKV", "LHR", "VPS", "ZED"], "airports with no runway ends list none: %s" % sorted(runways))
+        check(len(runways["FKV"]) == 2, "a closed runway and one missing an end are left out")
+        check(runways["FKV"][0][:4] == (2800000, -8102000, 2800000, -8098000), "runways run longest first")
+        check(runways["FKV"][0][4] == 45, "a runway with no width is 45 m")
+
         # Grounds.
         kind, ring = airports["FKV"]["ground"]
         check(kind == "runways", "runway ends give a runway outline")

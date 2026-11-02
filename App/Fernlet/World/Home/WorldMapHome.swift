@@ -119,6 +119,8 @@ struct WorldMapHome: View {
     @State private var discoveries = WorldDiscoveryRouter()
     /// The airport banners (World-Airports-Spec §3, §6.3).
     @State private var airportHome = WorldAirportHomeState()
+    /// The found airports' grounds, drawn as translucent fog.
+    @State private var airportVeils = WorldAirportVeilMemo()
     /// Take a trip: the ticket, the boarding pass and today's calendar flight (World-Airports-Spec §5, §7, §10.7).
     @State private var trip = WorldTripHomeState()
     /// Sprout's mention of the week's new corner (§5), said once; nil once Home goes behind a panel.
@@ -138,7 +140,7 @@ struct WorldMapHome: View {
 
     var body: some View {
         TimelineView(.everyMinute) { timeline in
-            if WorldFlyingHome.shows(store) {
+            if WorldFlyingHome.shows(store, at: timeline.date) {
                 // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
                 WorldFlyingHome(store: store, date: timeline.date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
                                 isActive: isCompanionActive, isNight: phase(at: timeline.date) == .night)
@@ -447,7 +449,7 @@ struct WorldMapHome: View {
         let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
         let demo = WorldRoadTestScenes.isOn(decoy: store.duressSessionActive)
         return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged).union(demo ? WorldRoadTestScenes.cells : []),
-                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
+                           veils: airportVeils.veils(for: store), trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
                                + (demo ? [WorldRoadTestScenes.walk] : []),
                            traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog)
     }

@@ -312,6 +312,65 @@ struct CalendarFlightsTests {
         #expect(store.worldFog.atlas.book.flights.count == 1)
     }
 
+    /// A look that finishes after the person reached the airport brings today's flight, and Home must read it again
+    /// (§10.7): nothing else changes then, so the airport alone would leave the blue button and the ticket empty.
+    @Test func aLookThatFindsTodaysFlightIsReadAgain() async throws {
+        let defaults = try Self.defaults(), store = makeTestStore()
+        store.worldFog.load()
+        WorldMapPreferences.setReadsCalendarFlights(true, in: defaults)
+        let before = store.worldTripTodaySource
+        let watcher = CalendarFlightWatcher(mayRead: { store.mayReadWorldCalendar(defaults: defaults) },
+                                            makeLooker: { Self.looker(store, FakeCalendar(events: Self.calendarEvents), defaults) },
+                                            defaults: defaults)
+        watcher.look(now: Self.now)
+        await watcher.settle()
+        #expect(store.worldTripTodaySource != before, "a look's new flight left today's source unchanged")
+        let morning = flightUTC("2026-11-14T15:00:00Z")
+        #expect(store.worldCalendarFlightToday(atAirport: "PDX", now: morning, defaults: defaults)?.destination == "HNL")
+    }
+
+    /// The ticket offers Calendar only where it can help (owner's pick, 2026-11-02): at an airport, To empty, the switch
+    /// off, and iOS still willing to ask.
+    @Test func ticketOffersCalendarOnlyWhereItCanHelp() throws {
+        let defaults = try Self.defaults(), store = makeTestStore()
+        store.worldFog.load()
+        let offers = { (atAirport: Bool, filledIn: Bool, access: CalendarAccess) in
+            store.worldTicketOffersCalendar(atAirport: atAirport, filledIn: filledIn, access: access, defaults: defaults)
+        }
+        #expect(offers(true, false, .notAsked) && offers(true, false, .allowed))
+        #expect(!offers(false, false, .notAsked), "away from an airport")
+        #expect(!offers(true, true, .notAsked), "To is already filled in")
+        #expect(!offers(true, false, .refused), "iOS wouldn't ask again")
+        WorldMapPreferences.setReadsCalendarFlights(true, in: defaults)
+        #expect(!offers(true, false, .allowed), "the switch is already on")
+        WorldMapPreferences.setReadsCalendarFlights(false, in: defaults)
+        store.setWorldAirportsAndFlights(false, defaults: defaults)
+        #expect(!offers(true, false, .notAsked), "Airports and flights is off")
+        store.setWorldAirportsAndFlights(true, defaults: defaults)
+        store.duressSessionActive = true
+        #expect(!offers(true, false, .notAsked), "a decoy never offers")
+    }
+
+    /// The ticket fills in from today's flight only when the person asked it to, so a flight found by the watch never
+    /// replaces what they typed, and it fills in once.
+    @Test func ticketFillsInOnlyWhenAsked() {
+        let store = makeTestStore(), trip = WorldTripHomeState()
+        let today = WorldTripToday(destination: "HNL", departure: Self.now, city: "Honolulu")
+        trip.openTicket(store)
+        trip.ticket?.text = "Lon"
+        let typed = trip.ticket
+        trip.fillTicket(store, from: today)
+        #expect(trip.ticket == typed, "filled in without being asked")
+        trip.askCalendar()
+        trip.fillTicket(store, from: nil)
+        #expect(trip.ticket == typed, "no flight found: what's typed stays")
+        trip.fillTicket(store, from: today)
+        #expect(trip.ticket?.destination == .airport("HNL") && trip.ticket?.text == "Honolulu")
+        let filled = trip.ticket
+        trip.fillTicket(store, from: today)
+        #expect(trip.ticket == filled, "fills in once")
+    }
+
     // MARK: Walls
 
     /// EventKit is imported in one file only, the read-only source.

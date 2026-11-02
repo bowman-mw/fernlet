@@ -170,8 +170,8 @@ struct PassportIndexAirportRows<Links: View>: View {
         }
         if let flights = index.flights {
             PassportIndexRow(stamp: WorldSpriteView(sprite: PassportFlightSprites.jet, scale: 2),
-                             name: Text(PassportFlightsCopy.title), count: Text(countWords(flights)),
-                             open: turn(to: flights.pages.lowerBound),
+                             name: Text(PassportFlightsCopy.title), count: Text(PassportPageCopy.flightsCount(flights.count, page: flights.page)),
+                             open: turn(to: flights.page),
                              hint: PassportPageCopy.turnsToFlights) {
                 if flights.count == 0 {
                     PassportIndexSmall(text: Text(PassportPageCopy.noneYet))
@@ -186,12 +186,6 @@ struct PassportIndexAirportRows<Links: View>: View {
     private func turn(to page: Int) -> (() -> Void)? {
         guard let onGo else { return nil }
         return { onGo(page) }
-    }
-
-    /// "5 · page 7", or "53 · pages 7 to 9" over several pages.
-    private func countWords(_ flights: PassportIndexModel.FlightsRow) -> LocalizedStringResource {
-        flights.pages.count == 1 ? PassportPageCopy.flightsCount(flights.count, page: flights.pages.lowerBound)
-            : PassportPageCopy.flightsCount(flights.count, pages: flights.pages.lowerBound, to: flights.pages.upperBound)
     }
 }
 

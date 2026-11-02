@@ -53,6 +53,9 @@ CIRCLE_STEPS = 16
 MAX_GROUND_POINTS = 64
 MAX_AIRPORTS = 20_000
 MAX_POINTS = 40_000
+MAX_RUNWAYS = 16
+RUNWAY_WIDTH_METRES = 45
+METRES_PER_FOOT = 0.3048
 NO_ZONE = 0xFFFF
 NO_AIRPORT = 0xFFFF
 UNLOCKABLE_TYPES = {"large_airport": 1, "medium_airport": 2}
@@ -478,6 +481,31 @@ def runway_ends(runways, airport, report):
     return ends
 
 
+def runway_lines(runways, airport):
+    """The airport's open land runways as (lat, lon, lat, lon, width m), longest first, at most MAX_RUNWAYS."""
+    lines = []
+    for row in runways:
+        if row["closed"] == "1" or "WATER" in row["surface"].upper():
+            continue
+        try:
+            line = (float(row["le_latitude_deg"]), float(row["le_longitude_deg"]),
+                    float(row["he_latitude_deg"]), float(row["he_longitude_deg"]))
+        except ValueError:
+            continue
+        reach = max(great_circle_metres(airport["lat"], airport["lon"], line[0], line[1]),
+                    great_circle_metres(airport["lat"], airport["lon"], line[2], line[3]))
+        length = great_circle_metres(line[0], line[1], line[2], line[3])
+        if reach > RUNWAY_REACH_METRES or length < 1:
+            continue
+        try:
+            width = round(float(row["width_ft"]) * METRES_PER_FOOT)
+        except ValueError:
+            width = RUNWAY_WIDTH_METRES
+        lines.append((length, line, width if 10 <= width <= 150 else RUNWAY_WIDTH_METRES))
+    lines.sort(key=lambda found: (-found[0], found[1]))
+    return [line + (width,) for _, line, width in lines[:MAX_RUNWAYS]]
+
+
 def ground_ring(lat0, lon0, points_latlon, margin):
     """The hull of `points_latlon` widened by `margin` metres, simplified at 50 m, as a closed 1e-5° int
     array (lon, lat) for atlas.encode_ring; None when it degenerates."""
@@ -605,6 +633,24 @@ def build_apts(unlockables, zone_index, report):
     report.counts["grounds: runway outlines + 500 m"] = kinds[GROUND_RUNWAYS]
     report.counts["grounds: 1.5 km circles (no runway ends)"] = kinds[GROUND_CIRCLE]
     return b"".join(out)
+
+
+def build_rwys(unlockables, report):
+    """u16 count · per airport with runways: u16 unlockable index · u8 count · runways (Docs/World-Airports-Pack.md)."""
+    records = []
+    total = 0
+    for index, a in enumerate(unlockables):
+        if not a["runways"]:
+            continue
+        total += len(a["runways"])
+        record = [struct.pack("<HB", index, len(a["runways"]))]
+        for lat1, lon1, lat2, lon2, width in a["runways"]:
+            record.append(struct.pack("<iiiiH", round(lat1 * SCALE), round(lon1 * SCALE), round(lat2 * SCALE),
+                                      round(lon2 * SCALE), width))
+        records.append(b"".join(record))
+    report.counts["airports with runways"] = len(records)
+    report.counts["runways"] = total
+    return struct.pack("<H", len(records)) + b"".join(records)
 
 
 def build_pnts(points, zone_index, apt_index):
@@ -737,6 +783,7 @@ def main(argv):
         a["city_es"] = "" if es == a["city_en"] else es
         named_es += bool(a["name_es"])
         cities_es += bool(a["city_es"])
+        a["runways"] = runway_lines(runways_by_airport.get(str(a["id"]), []), a)
         if a["token"] in outlines:
             a["ground"] = (GROUND_OUTLINE, outline_ring(outlines[a["token"]]))
             continue
@@ -767,6 +814,7 @@ def main(argv):
     sections = [("TZNS", build_tzns(zone_names)), ("APTS", build_apts(unlockables, zone_index, report)),
                 ("PNTS", build_pnts(points, zone_index, apt_index)),
                 ("AIRL", build_airl(os.path.join(hand, "airlines.json"), report)),
+                ("RWYS", build_rwys(unlockables, report)),
                 ("META", meta_json(args, sources, tz_version, outlines))]
     pack = assemble(sections, report)
     print("World airports pack: %s (%d bytes, cap %d)" % (args.out, len(pack), SIZE_CAP))
