@@ -199,7 +199,7 @@ struct PassportSproutPage: View {
         playfulUntil = Date().addingTimeInterval(3 * 60)
         let response = WorldCompanionPet.register(governor: governor, store: store)
         if let cue = HomeView.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }
-        let next = WorldCloseUpReaction.make(for: response)
+        let next = WorldCloseUpReaction.make(for: response, name: store.worldCompanionName)
         petCount += 1
         let id = petCount
         withAnimation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.5)) { reaction = next }

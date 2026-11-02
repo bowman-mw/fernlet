@@ -678,7 +678,7 @@ struct HomeView: View {
         // changes while the element is focused, so the mood is heard when it moves rather than
         // only on first landing. Built from the two localized display forks ("Okay, feeling
         // sleepy") — never a `rawValue`, which is a frozen cross-process token.
-        .accessibilityLabel("Fernlet companion")
+        .accessibilityLabel(Text(verbatim: store.worldCompanionName))
         .accessibilityValue(CompanionEmotion.accessibilityValue(state: store.companionState, emotion: emotion))
         // T2-2: the companion's line is only ever *drawn* inside the photowall strip, which the
         // body drops entirely at accessibility text sizes — and which fades to `opacity(0)` after
@@ -1052,13 +1052,13 @@ struct HomeView: View {
 
     /// The rotating tap thoughts, in their fixed order. Computed, because each line is a catalog
     /// lookup; it is read on every third pet, never per render.
-    private static var companionTapThoughts: [String] { HomeCopy.tapThoughts }
+    private var companionTapThoughts: [String] { HomeCopy.tapThoughts(name: store.worldCompanionName) }
 
-    /// The 5th-pet moment: Fern is visibly content and settles in for a while.
-    private static var companionSettledThought: String { HomeCopy.settledThought }
+    /// The 5th-pet moment: the companion is visibly content and settles in for a while.
+    private var companionSettledThought: String { HomeCopy.settledThought(name: store.worldCompanionName) }
     /// Shown at most once per settled period when petting continues. Warm, never a
-    /// refusal — Fern is settled, not "locked".
-    private static var companionSettledLine: String { HomeCopy.settledAgainLine }
+    /// refusal — the companion is settled, not "locked".
+    private var companionSettledLine: String { HomeCopy.settledAgainLine(name: store.worldCompanionName) }
 
     private func interactWithCompanion() {
         guard !isCompanionJumping else { return }
@@ -1162,9 +1162,9 @@ struct HomeView: View {
         }
 
         let thought: String? = if settling {
-            Self.companionSettledThought
+            companionSettledThought
         } else if companionTapCount.isMultiple(of: 3) {
-            Self.companionTapThoughts[companionTapCount % Self.companionTapThoughts.count]
+            companionTapThoughts[companionTapCount % companionTapThoughts.count]
         } else {
             nil
         }
@@ -1197,7 +1197,7 @@ struct HomeView: View {
             }
         }
 
-        showCompanionTapThought(showsSettledLine ? Self.companionSettledLine : nil, tapID: tapID)
+        showCompanionTapThought(showsSettledLine ? companionSettledLine : nil, tapID: tapID)
     }
 
     /// Shows (or hides) the tap thought in the shared ThoughtBubble, auto-hiding after 4s.

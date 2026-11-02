@@ -200,9 +200,10 @@ struct FernletCompanionEntry: TimelineEntry {
                                 slot: WidgetThoughtSlot.at(date, emotion: currentCompanionEmotion))
     }
 
-    /// What VoiceOver calls the companion: its name, or "Fernlet companion".
+    /// What VoiceOver calls the companion: its name, or "Sprout" (the app's `CompanionName.standard`; a
+    /// proper name, never translated) when the person never gave it one.
     var companionLabel: Text {
-        companionName.map { Text(verbatim: $0) } ?? Text("Fernlet companion")
+        Text(verbatim: companionName ?? "Sprout")
     }
 }
 

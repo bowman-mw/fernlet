@@ -303,7 +303,7 @@ struct CreationStudioView: View {
         }
     }
 
-    /// The companion's own name, or Fernlet, for the Studio's words.
+    /// The companion's name (``FernletStore/worldCompanionName``), for the Studio's words.
     private var companionName: String {
         CustomizeNightCopy.companionName(store)
     }

@@ -56,10 +56,9 @@ struct TodayCompanionCard: View {
             .fernletWrappingText()
     }
 
-    /// The companion's own name, or Fernlet.
+    /// The companion's name (``FernletStore/worldCompanionName``).
     private var name: String {
-        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return chosen.isEmpty ? "Fernlet" : chosen
+        store.worldCompanionName
     }
 
     /// The framed Customize chip.

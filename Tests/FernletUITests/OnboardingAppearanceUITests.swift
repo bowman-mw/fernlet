@@ -40,7 +40,7 @@ final class OnboardingAppearanceUITests: XCTestCase {
         advance(app)
 
         // 5 · Starter customization
-        try probe("Onboarding · Starter", title: "Make Fernlet yours", action: app.buttons["Continue"], app: app)
+        try probe("Onboarding · Starter", title: "Make Sprout yours", action: app.buttons["Continue"], app: app)
         advance(app)
 
         // 6 · Personal details

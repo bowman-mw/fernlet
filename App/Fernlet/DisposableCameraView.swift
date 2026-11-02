@@ -899,10 +899,9 @@ struct DisposableCameraView: View {
             .accessibilityIdentifier("camera.soloFooter")
     }
 
-    /// The companion's own name, or Fernlet (as the Today card says it).
+    /// The companion's name (``FernletStore/worldCompanionName``), as the Today card says it.
     private var companionName: String {
-        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return chosen.isEmpty ? "Fernlet" : chosen
+        store.worldCompanionName
     }
 
     private var landscapeControls: some View {

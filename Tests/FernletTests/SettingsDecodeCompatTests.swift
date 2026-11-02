@@ -341,6 +341,16 @@ struct SettingsDecodeCompatTests {
         #expect(settings.parkedUnknownKeys["trulyUnknownKey"] == .string("parked"))
     }
 
+    /// The companion is Sprout until the person names it; their name is shown trimmed.
+    @Test func theCompanionIsSproutUntilNamed() {
+        var settings = FernletSettings()
+        #expect(settings.companionDisplayName == "Sprout")
+        settings.companionName = "   "
+        #expect(settings.companionDisplayName == "Sprout")
+        settings.companionName = "  Pip "
+        #expect(settings.companionDisplayName == "Pip")
+    }
+
     /// Migration-marker non-regression: the privacy-critical `didMigratePeriodVisibility` /
     /// `periodTrackingVisible` / `intimacyTrackingVisible` are KNOWN keys — decoded, never parked — so
     /// generic parking can never let a stale copy shadow the live gate. Pure decode still leaves a

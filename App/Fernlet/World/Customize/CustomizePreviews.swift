@@ -180,11 +180,10 @@ private struct CustomizePeekButtonStyle: ButtonStyle {
 /// Customize's night words (`comp-cust-night`, `comp-slot-night`), resolved here so the views and the
 /// tests read one copy.
 enum CustomizeNightCopy {
-    /// The companion's own name, or Fernlet, as the close-up names it.
+    /// The companion's name (``FernletStore/worldCompanionName``), as the close-up names it.
     @MainActor
     static func companionName(_ store: FernletStore) -> String {
-        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return chosen.isEmpty ? "Fernlet" : chosen
+        store.worldCompanionName
     }
 
     /// The bedtime as the clock shows it ("10:30 PM", "22:30").

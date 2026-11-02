@@ -80,9 +80,8 @@ enum WorldRecenterCopy {
                comment: "World Home, VoiceOver: the map follows the companion again by itself; the companion's name")
     }
 
-    /// The companion's name as Home says it (the person's choice, else "Fernlet").
+    /// The companion's name as Home says it (``FernletStore/worldCompanionName``).
     static func companionName(_ store: FernletStore) -> String {
-        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return chosen.isEmpty ? "Fernlet" : chosen
+        store.worldCompanionName
     }
 }

@@ -53,15 +53,17 @@ struct WorldRefinementTests {
     /// A playful pet squishes, blushes, sends up three hearts and says "That tickles!"; a settled one
     /// only blushes, saying the soft line once.
     @Test func eachAnswerHasItsReaction() {
-        let playful = WorldCloseUpReaction.make(for: .bounce)
+        let playful = WorldCloseUpReaction.make(for: .bounce, name: "Sprout")
         #expect(playful.squishes && playful.blushes && playful.hearts == 3)
         #expect(playful.line == WorldCloseUpCopy.tickles)
         #expect(WorldCloseUpCopy.tickles == "That tickles!")
-        let settling = WorldCloseUpReaction.make(for: .settling)
-        #expect(settling.squishes && settling.hearts == 3 && settling.line == HomeCopy.settledThought)
-        let calm = WorldCloseUpReaction.make(for: .calmIdle(showsSettledLine: false))
+        let settling = WorldCloseUpReaction.make(for: .settling, name: "Sprout")
+        #expect(settling.squishes && settling.hearts == 3 && settling.line == HomeCopy.settledThought(name: "Sprout"))
+        #expect(HomeCopy.settledThought(name: "Pip").hasPrefix("Pip "), "the settled line names the companion")
+        let calm = WorldCloseUpReaction.make(for: .calmIdle(showsSettledLine: false), name: "Sprout")
         #expect(!calm.squishes && calm.blushes && calm.hearts == 0 && calm.line == nil)
-        #expect(WorldCloseUpReaction.make(for: .calmIdle(showsSettledLine: true)).line == HomeCopy.settledAgainLine)
+        #expect(WorldCloseUpReaction.make(for: .calmIdle(showsSettledLine: true), name: "Sprout").line
+                == HomeCopy.settledAgainLine(name: "Sprout"))
     }
 
     /// The idle bob is one pixel (ten points up close) for one second in every two; Reduce Motion
