@@ -8,7 +8,7 @@ import WorldMapStore
 /// The index names only what was found: one row per continent with its count and the countries found, A to Z, each
 /// with every page it is on ("United States 3, 5", a stamp each trip); Antarctica's row; the oceans and the seas;
 /// then (World-Airports-Spec §4.2) the airports found A to Z with every page they're on (the home airport a page
-/// per trip), and the Flights row's count, pages and layovers.
+/// per trip), and the Flights row's count, page and layovers.
 /// The A to Z view lists every country of a continent in the current language's order, the earned ones named and
 /// the rest as unnamed spaces. Names come from the caller (`name`), so the order follows the language the screen
 /// shows. Bounded by the book's stamps and the atlas's country table.
@@ -44,15 +44,15 @@ nonisolated struct PassportIndexModel: Equatable, Sendable {
     /// How many passport countries are found (each once).
     let countryCount: Int
 
-    /// The Flights row (`ap-index`): every flight counted once, the Flights pages' numbers, the layovers.
+    /// The Flights row (`ap-index`): every flight counted once, the Flights page's number, the layovers.
     struct FlightsRow: Hashable, Sendable {
         let count: Int
-        let pages: ClosedRange<Int>
+        let page: Int
         let layovers: Int
     }
 
     /// The index of `book`, with `table` for each country's continent and sovereign, `name` for each place's
-    /// name in `language` (which also orders them), and `flights` (the Flights pages' model, nil with none) for the
+    /// name in `language` (which also orders them), and `flights` (the Flights page's model, nil with none) for the
     /// Flights row.
     init(book: PassportBookModel, table: PassportCountryTable, language: FernletLanguage = .app,
          flights: PassportFlightsModel? = nil, name: (PassportStampKind) -> String) {
@@ -97,10 +97,10 @@ nonisolated struct PassportIndexModel: Equatable, Sendable {
         countryCount = places.count
     }
 
-    /// The Flights row for `book`'s Flights pages, or nil where it shows none.
+    /// The Flights row for `book`'s Flights page, or nil where it shows none.
     static func flightsRow(book: PassportBookModel, flights: PassportFlightsModel?) -> FlightsRow? {
-        guard let flights, let pages = book.flightPageNumbers else { return nil }
-        return FlightsRow(count: flights.flightCount, pages: pages, layovers: flights.layoverCount)
+        guard let flights, let page = book.flightsPage else { return nil }
+        return FlightsRow(count: flights.flightCount, page: page, layovers: flights.layoverCount)
     }
 
     /// `places` A to Z by name in `language` (accents and case ignored), then by token.

@@ -25,23 +25,38 @@ nonisolated struct PassportFlightTrip: Equatable, Identifiable, Sendable {
     }
 }
 
-/// One line on a Flights page: a year's heading or a trip.
-nonisolated enum PassportFlightsRow: Equatable, Hashable, Sendable {
-    case year(Int)
-    /// A trip, by its place in ``PassportFlightsModel/trips``.
-    case trip(Int)
+/// One year's flights on the Flights page (World-Airports-Spec §8): the trips that left in it, earliest first, and
+/// their totals. Its row opens its log inside the book. A trip over New Year belongs to the year it left in.
+nonisolated struct PassportFlightYearLog: Equatable, Identifiable, Sendable {
+    let year: Int
+    let trips: [PassportFlightTrip]
+    /// Every flight in it, each leg counted.
+    let flightCount: Int
+    let metres: Double
+
+    var id: Int { year }
+
+    /// The log of `trips`, all of `year`.
+    init(year: Int, trips: [PassportFlightTrip]) {
+        self.year = year
+        self.trips = trips
+        flightCount = trips.reduce(0) { $0 + $1.legs.count }
+        metres = trips.reduce(0) { $0 + $1.metres }
+    }
 }
 
-/// The Flights pages (World-Airports-Spec §8, screens 11 and 23): every flight the passport keeps, Fernlet's own and
-/// imported, joined into trips, earliest first under year headings, ``tripsPerPage`` a page, so a long history
-/// runs over several pages. The header's totals count every flight; layovers are totalled under the stubs.
+/// The Flights page (World-Airports-Spec §8, screens 11 and 23; owner 2026-11-02, option A): every flight the passport
+/// keeps, Fernlet's own and imported, joined into trips and grouped by the year they left, newest year first. The book
+/// gains one page however many flights it holds: a history that fits one page (``tripsOnOnePage``) shows its stubs
+/// under year headings, and a longer one lists its years, each opening its own log. The header's totals count every
+/// flight; layovers are totalled under the list.
 ///
 /// A value built from the passport's flights (`book.flights`, empty in a decoy) and the airport list's points.
 /// Bounded by ``PassportBook/maxFlights``.
 nonisolated struct PassportFlightsModel: Equatable, Sendable {
     let trips: [PassportFlightTrip]
-    /// The pages' rows; at least one page (an empty one says "No flights yet").
-    let pages: [[PassportFlightsRow]]
+    /// The years with flights, newest first.
+    let years: [PassportFlightYearLog]
     /// Every flight, counted once.
     let flightCount: Int
     let totalMetres: Double
@@ -49,21 +64,21 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
     let layoverCount: Int
     let layoverSeconds: TimeInterval
 
-    /// Trips on one page.
-    static let tripsPerPage = 6
+    /// The most trips the page shows as stubs itself; past this it lists the years.
+    static let tripsOnOnePage = 6
     /// The most flights joined into one trip.
     static let maxLegs = 4
     /// The longest stop a trip joins through (spec §9.2: a stop over 20 hours isn't shown).
     static let maxStop: TimeInterval = 20 * 3_600
 
-    /// The pages for `flights`, placing airports by `point` and dating by `calendar`.
+    /// The page for `flights`, placing airports by `point` and dating by `calendar`.
     init(flights: [PassportFlight], point: (String) -> GeoPoint?, calendar: Calendar = .current) {
         let sorted = flights.prefix(PassportBook.maxFlights).sorted { $0.departure < $1.departure }
         let trips = Self.trips(sorted, calendar: calendar).map { legs in
             PassportFlightTrip(legs: legs, metres: legs.reduce(0) { $0 + Self.metres($1, point: point) })
         }
         self.trips = trips
-        pages = Self.pages(trips, calendar: calendar)
+        years = Self.years(trips, calendar: calendar)
         flightCount = sorted.count
         totalMetres = trips.reduce(0) { $0 + $1.metres }
         let stops = trips.flatMap { $0.stops.compactMap(\.seconds) }
@@ -74,9 +89,17 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
     /// No flights at all.
     var isEmpty: Bool { trips.isEmpty }
 
-    /// The trips on page `index` (from 0), with their year headings.
-    func rows(onPage index: Int) -> [PassportFlightsRow] {
-        pages.indices.contains(index) ? pages[index] : []
+    /// Whether the page lists the years rather than showing the stubs itself.
+    var listsYears: Bool { trips.count > Self.tripsOnOnePage }
+
+    /// The log of `year`, or nil when no flight left in it.
+    func log(ofYear year: Int) -> PassportFlightYearLog? {
+        years.first { $0.year == year }
+    }
+
+    /// `year`'s place in ``years``, from 0, or nil when no flight left in it.
+    func position(ofYear year: Int) -> Int? {
+        years.firstIndex { $0.year == year }
     }
 
     /// The point halfway along the great circle from `a` to `b` (where Your world opens on a tapped stub).
@@ -91,9 +114,6 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
         guard abs(x) + abs(y) + abs(z) > 1e-9 else { return a }
         return GeoPoint(atan2(z, (x * x + y * y).squareRoot()) / radians, atan2(y, x) / radians)
     }
-
-    /// The page (from 0) a trip is on.
-    func page(ofTrip index: Int) -> Int { index / Self.tripsPerPage }
 
     // MARK: Building
 
@@ -138,23 +158,14 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
         return WorldFlightArcs.kilometres(from, to) * 1_000
     }
 
-    /// The trips, ``tripsPerPage`` a page, each page and each new year opening with its year's heading.
-    static func pages(_ trips: [PassportFlightTrip], calendar: Calendar) -> [[PassportFlightsRow]] {
-        guard !trips.isEmpty else { return [[]] }
-        var pages: [[PassportFlightsRow]] = []
+    /// `trips` grouped by the year each left, newest year first, each year's trips keeping their order.
+    static func years(_ trips: [PassportFlightTrip], calendar: Calendar) -> [PassportFlightYearLog] {
+        var byYear: [Int: [PassportFlightTrip]] = [:]
         // Bounded: at most maxFlights trips.
-        for start in stride(from: 0, to: trips.count, by: tripsPerPage) {
-            var rows: [PassportFlightsRow] = []
-            var year: Int?
-            for index in start ..< min(start + tripsPerPage, trips.count) {
-                let tripYear = calendar.component(.year, from: trips[index].departure)
-                if tripYear != year { rows.append(.year(tripYear)) }
-                year = tripYear
-                rows.append(.trip(index))
-            }
-            pages.append(rows)
+        for trip in trips {
+            byYear[calendar.component(.year, from: trip.departure), default: []].append(trip)
         }
-        return pages
+        return byYear.keys.sorted(by: >).map { PassportFlightYearLog(year: $0, trips: byYear[$0] ?? []) }
     }
 }
 
@@ -184,6 +195,26 @@ nonisolated enum PassportFlightsText {
         let minutes = Int((max(seconds, 0) / 60).rounded())
         let hours = minutes / 60, rest = minutes % 60
         return hours > 0 ? "\(hours) h \(rest) min" : "\(rest) min"
+    }
+
+    /// The trip's days in its year's log, whose header gives the year: "20 AUG", "2–3 SEP", "31 AUG – 1 SEP"; a trip
+    /// that lands in the next year keeps its years ("31 DEC 2025 – 1 JAN 2026").
+    static func daysInYear(of trip: PassportFlightTrip, calendar: Calendar = .current, language: FernletLanguage = .app) -> String {
+        let first = trip.departure
+        guard let last = trip.arrival, !calendar.isDate(first, inSameDayAs: last) else {
+            return PassportBookDates.shortDay(first, calendar: calendar, language: language)
+        }
+        let start = calendar.dateComponents([.day, .month, .year], from: first)
+        let end = calendar.dateComponents([.month, .year], from: last)
+        guard start.year == end.year else {
+            return PassportDates.short(first, calendar: calendar, language: language) + " – "
+                + PassportDates.short(last, calendar: calendar, language: language)
+        }
+        let lastDay = PassportBookDates.shortDay(last, calendar: calendar, language: language)
+        guard start.month == end.month else {
+            return PassportBookDates.shortDay(first, calendar: calendar, language: language) + " – " + lastDay
+        }
+        return "\(start.day ?? 1)–" + lastDay
     }
 
     /// The trip's days: "20 AUG 2026", or "2–3 SEP 2026" when it lands on a later day, or "31 AUG – 1 SEP 2026".

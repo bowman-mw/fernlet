@@ -2452,6 +2452,65 @@
         }
       }
     },
+    "%lld flights" : {
+      "comment" : "Sprout's passport Flights page: how many flights left in a year",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flight"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld flights"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld vuelo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld vuelos"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld vuelo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld vuelos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld flights Fernlet saw, kept once" : {
       "comment" : "Airports: import flights the passport already holds because Fernlet saw them",
       "localizations" : {
@@ -2622,6 +2681,65 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%1$lld vuelos · %2$@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld flights, %@" : {
+      "comment" : "VoiceOver: flights in the passport: how many, then the distance flown (the page's heading, a year's row)",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld flight, %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld flights, %2$@"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld vuelo, %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld vuelos, %2$@"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld vuelo, %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld vuelos, %2$@"
                 }
               }
             }
@@ -3078,6 +3196,65 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%1$lld escalas · %2$@. Toca un vuelo para ver su arco en Tu mundo."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld layovers · %@. Tap a year to see its flights." : {
+      "comment" : "Sprout's passport Flights page: the layovers' count and total length, then the hint under the years",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld layover · %2$@. Tap a year to see its flights."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld layovers · %2$@. Tap a year to see its flights."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld escala · %2$@. Toca un año para ver sus vuelos."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld escalas · %2$@. Toca un año para ver sus vuelos."
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld escala · %2$@. Toca un año para ver sus vuelos."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld escalas · %2$@. Toca un año para ver sus vuelos."
                 }
               }
             }
@@ -4653,6 +4830,7 @@
     },
     "%lld · pages %lld to %lld" : {
       "comment" : "Sprout's passport index: the Flights row, how many flights then the Flights pages' first and last numbers",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9487,6 +9665,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Volver a Primeros auxilios"
+          }
+        }
+      }
+    },
+    "Back to Flights" : {
+      "comment" : "VoiceOver: the back button in a year's flights in the passport",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a Vuelos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a Vuelos"
           }
         }
       }
@@ -29894,6 +30089,23 @@
         }
       }
     },
+    "Newer year" : {
+      "comment" : "Sprout's passport: steps to the next more recent year's flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Año más reciente"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Año más reciente"
+          }
+        }
+      }
+    },
     "Newest stamp" : {
       "comment" : "Voice Control: the passport's ribbon",
       "localizations" : {
@@ -32374,6 +32586,23 @@
         }
       }
     },
+    "Older year" : {
+      "comment" : "Sprout's passport: steps to the next older year's flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Año más antiguo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Año más antiguo"
+          }
+        }
+      }
+    },
     "Omega-3" : {
       "localizations" : {
         "es" : {
@@ -33299,6 +33528,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Se abre en"
+          }
+        }
+      }
+    },
+    "Opens this year's flights." : {
+      "comment" : "VoiceOver hint: a year's row on the passport's Flights page",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre los vuelos de este año."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre los vuelos de este año."
           }
         }
       }
@@ -46205,6 +46451,23 @@
         }
       }
     },
+    "Tap a year to see its flights." : {
+      "comment" : "Sprout's passport Flights page: the hint under the years",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca un año para ver sus vuelos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca un año para ver sus vuelos."
+          }
+        }
+      }
+    },
     "Tap anywhere when you're ready for the next one — take all the time you like." : {
       "localizations" : {
         "es" : {
@@ -53451,6 +53714,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escríbelo: la caja puede guardarlo un rato para que tú no tengas que cargarlo."
+          }
+        }
+      }
+    },
+    "Years" : {
+      "comment" : "VoiceOver: the passport's bar of years under a year's flights",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Años"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Años"
           }
         }
       }
@@ -76205,6 +76485,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tienda"
+          }
+        }
+      }
+    },
+    "passport.sprout.studio" : {
+      "comment" : "Sprout's passport page: the half-width button that opens Creation Studio. Keep it short (Spanish: Estudio)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Creation Studio"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estudio"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estudio"
           }
         }
       }
@@ -99352,7 +99656,7 @@
       }
     },
     "· %lld of %lld" : {
-      "comment" : "Sprout's passport: which continent of the seven, in the continent bar",
+      "comment" : "Sprout's passport: which continent of the seven, in the continent bar\nSprout's passport: which year of the flown years, in the year bar",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -99484,30 +99788,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "−15 s"
-          }
-        }
-      }
-    },
-    "passport.sprout.studio" : {
-      "comment" : "Sprout's passport page: the half-width button that opens Creation Studio. Keep it short (Spanish: Estudio)",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Creation Studio"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Estudio"
-          }
-        },
-        "es-MX" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Estudio"
           }
         }
       }
