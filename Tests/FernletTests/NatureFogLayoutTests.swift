@@ -178,6 +178,31 @@ struct NatureFogLayoutTests {
         #expect(swaying > 0, "the map didn't move: the grass keeps swaying")
     }
 
+    /// Follow smoothing: the map following the person slides a little every frame, for as long as they walk or
+    /// drive. That slide never pauses the grass, while a pan does.
+    @Test func theGrassKeepsSwayingWhileTheMapFollows() async throws {
+        let view = NatureFogMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        let window = try #require(hosted(view))
+        defer { window.isHidden = true }
+        let (start, _) = clearings()
+        view.show(scene(start, reduceMotion: false))
+        await view.finishDrawing()
+        view.settle(now: CACurrentMediaTime() + 60)
+        #expect(view.isSwaying)
+        let still = scene(start, reduceMotion: false)
+        let viewport = still.viewport, unitsPerPoint = viewport.width / 402
+        for frame in 1...10 {
+            let slid = MapViewport(minX: viewport.minX + unitsPerPoint * 0.5 * Double(frame), minY: viewport.minY,
+                                   width: viewport.width, height: viewport.height)
+            view.show(NatureFogScene(viewport: slid, clearing: still.clearing, palette: still.palette, motion: still.motion))
+        }
+        #expect(view.isSwaying, "following: still swaying")
+        let panned = MapViewport(minX: viewport.minX + unitsPerPoint * 60, minY: viewport.minY,
+                                 width: viewport.width, height: viewport.height)
+        view.show(NatureFogScene(viewport: panned, clearing: still.clearing, palette: still.palette, motion: still.motion))
+        #expect(!view.isSwaying, "a pan pauses it")
+    }
+
     @Test func reduceMotionOnlyFades() async {
         let view = NatureFogMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
         let (start, next) = clearings()

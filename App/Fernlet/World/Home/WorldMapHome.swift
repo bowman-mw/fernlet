@@ -107,6 +107,8 @@ struct WorldMapHome: View {
     @State private var menuSearch: WorldMenuSearch?
     /// The map's last viewport, read back to tell when Sprout walks off the visible map (`ref-recenter-auto`).
     @State private var geometry = WorldMapGeometry()
+    /// Where Sprout stands between readings, which the following camera tracks frame by frame (follow smoothing).
+    @State private var glide = WorldFollowGlide()
     /// The land under the fog (round 7, World-Exploration-Spec §1), once the bundled atlas is open; nil: nature fog.
     @State private var terrain: NatureFogTerrain?
     /// Cities and landmarks (round 7, World-Exploration-Spec §2): the open cards, the viewport's memo, the art.
@@ -129,6 +131,8 @@ struct WorldMapHome: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
+    /// Reduce Motion: each reading is a jump for Sprout and the camera, not a glide.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Sprout's passport: while it is open only the map shows behind it (World-Passport-Spec §2).
     @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
 
@@ -231,7 +235,7 @@ struct WorldMapHome: View {
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
                           veiled: isOffline, terrain: terrain, isFrontmost: isMapFrontPage, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size, line: line, pastBedtime: pastBedtime)
-            }, geometry: geometry)
+            }, geometry: geometry, followGlide: glide)
             if let sky, sky == .rain || sky == .snow {
                 WorldWeatherLayer(sky: sky, isActive: isFrontmost).ignoresSafeArea()
             }
@@ -720,12 +724,13 @@ struct WorldMapHome: View {
 extension WorldMapHome {
     // MARK: Location, weather and loading
 
-    /// Where the companion stands: the latest reading, or the middle of the map without one.
+    /// Where the companion stands: on its glide between readings (where the following camera looks, so it
+    /// keeps its spot on screen as the map slides under it), or the middle of the map without a reading.
     private func companionPoint(viewport: MapViewport, size: CGSize) -> CGPoint {
         guard hasPlace, let fix = store.worldLocation.latest else {
             return CGPoint(x: size.width / 2, y: size.height * 0.6)
         }
-        return viewport.screenPoint(for: fix.point, in: size)
+        return viewport.screenPoint(for: glide.shown ?? fix.point, in: size)
     }
 
     /// Location while Fernlet is open (W-09 (i), owner 2026-10-26): it starts once the launch screen lifts
@@ -821,11 +826,14 @@ extension WorldMapHome {
         Task { await store.worldPlaces.resolveEatingNames() }
     }
 
-    /// Moves the camera to a new reading while it follows the person. With approximate location the
-    /// camera stands back to show the area, never a street.
+    /// Moves Sprout and, while it follows the person, the camera to a new reading: a glide on the map in front
+    /// (``WorldFollowGlide``), a jump for the first reading, behind a panel, off following and with Reduce
+    /// Motion. With approximate location the camera stands back to show the area, never a street.
     private func follow(_ fix: WorldFix?) {
         if homeGreeting == nil, isFrontmost, let greeting = store.takeWorldHomeGreeting() { homeGreeting = greeting }
-        guard let fix, camera.follows else { return }
+        guard let fix else { return }
+        glide.track(fix, smooth: hasPlace && camera.follows && isMapFrontPage && !reduceMotion)
+        guard camera.follows else { return }
         let distance = presence == .approximate ? max(camera.distance, Self.areaDistance) : camera.distance
         if !hasPlace || distance != camera.distance {
             if !hasPlace { readSavedLine() }
