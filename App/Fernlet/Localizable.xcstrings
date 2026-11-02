@@ -62480,7 +62480,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¡Sello nuevo! ^[Bienvenido](inflect: true) a %@."
+            "value" : "¡Sello nuevo! Bienvenidos a %@."
           }
         }
       }

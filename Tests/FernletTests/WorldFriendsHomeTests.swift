@@ -49,10 +49,10 @@ struct WorldFriendsHomeTests {
 
     /// The switch's words carry the Spanish the spec gives.
     @Test func theSwitchSpeaksSpanish() throws {
-        #expect(try Self.spanish("Connect by tapping phones", in: Self.appCatalog) == "Conectar juntando teléfonos")
+        #expect(try Self.spanish("Connect by tapping phones", in: Self.appCatalog) == "Conectar juntando los móviles")
         #expect(try Self.spanish("Listens only while Home is on screen, and only for a phone a few centimetres away. Sends no name and nothing that follows you.",
                                  in: Self.appCatalog)
-                == "Solo escucha con el Inicio en pantalla, y solo un teléfono a pocos centímetros. No envía tu nombre ni nada que te siga.")
+                == "Solo escucha con el Inicio en pantalla, y solo un móvil a pocos centímetros. No envía tu nombre ni nada que te siga.")
     }
 
     // MARK: A closed hangout (fr-home-closed draft 2: "never broadcast")
@@ -187,7 +187,7 @@ struct WorldFriendsHomeTests {
         #expect(host.contains("var metByTapping = false") && host.contains("metByTapping: metByTapping || metAnyoneByTapping,"),
                 "the host passes its own flag, or the tap controller's memory of who was met by tapping")
         #expect(try Self.english("proximity.keepFriends.metByTapping", in: Self.proximityUICatalog) == "met by tapping phones")
-        #expect(try Self.spanish("proximity.keepFriends.metByTapping", in: Self.proximityUICatalog) == "os conocisteis juntando teléfonos")
+        #expect(try Self.spanish("proximity.keepFriends.metByTapping", in: Self.proximityUICatalog) == "os conocisteis juntando los móviles")
     }
 
     // MARK: Helpers
