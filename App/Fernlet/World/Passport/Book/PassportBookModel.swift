@@ -3,19 +3,18 @@ import Foundation
 import WorldMapStore
 
 /// One page of Sprout's passport (World-Passport-Spec §2): Sprout's own page, Your world, a stamp page (by its
-/// place among the stamp pages, from 0), a Flights page (World-Airports-Spec §8, by its place among the Flights
-/// pages, from 0) or the index at the back.
+/// place among the stamp pages, from 0), the Flights page (World-Airports-Spec §8) or the index at the back.
 nonisolated enum PassportBookPage: Hashable, Sendable {
     case sprout
     case world
     case stamps(Int)
-    case flights(Int)
+    case flights
     case index
 }
 
 /// The book's pages, worked out from the stamps it holds (World-Passport-Spec §2, §6): page 1 Sprout, page 2 Your
 /// world, then the stamp pages, six stamps each in visit order (at least one: a fresh passport's page 3 says "No
-/// stamps yet"), then the Flights pages when the book shows them (World-Airports-Spec §8: between the last stamp
+/// stamps yet"), then the one Flights page when the book shows it (World-Airports-Spec §8: between the last stamp
 /// page and the index; none in a decoy), then the index. A fresh passport has 4 pages and no ribbon, 5 with its
 /// Flights page.
 ///
@@ -29,15 +28,16 @@ nonisolated struct PassportBookModel: Equatable, Sendable {
     let stampPages: [[PassportStampEntry]]
     /// Each stamp's page number, by its identity (kind, token, trip).
     private let pageOfStamp: [PassportStampKey: Int]
-    /// How many Flights pages the book shows (0 where it shows none).
-    let flightPageCount: Int
+    /// Whether the book shows the Flights page.
+    let showsFlights: Bool
 
     /// The first stamp page's number.
     static let firstStampPage = 3
 
-    /// The book for `entries`, ordered by `calendar`'s days, with `flightPageCount` Flights pages before the index.
-    init(entries: [PassportStampEntry], flightPageCount: Int = 0, calendar: Calendar = .current) {
-        self.flightPageCount = max(flightPageCount, 0)
+    /// The book for `entries`, ordered by `calendar`'s days, with the Flights page before the index when
+    /// `showsFlights`.
+    init(entries: [PassportStampEntry], showsFlights: Bool = false, calendar: Calendar = .current) {
+        self.showsFlights = showsFlights
         let ordered = PassportStampEntry.ordered(entries, calendar: calendar)
         self.ordered = ordered
         stampPages = stride(from: 0, to: ordered.count, by: PassportStampEntry.perPage).map {
@@ -55,18 +55,14 @@ nonisolated struct PassportBookModel: Equatable, Sendable {
     var isFresh: Bool { ordered.isEmpty }
     /// How many stamp pages the book shows (a fresh one shows one, empty).
     var stampPageCount: Int { max(stampPages.count, 1) }
-    /// How many pages in all: Sprout, Your world, the stamp pages, the Flights pages, the index.
-    var pageCount: Int { 2 + stampPageCount + flightPageCount + 1 }
+    /// How many pages in all: Sprout, Your world, the stamp pages, the Flights page, the index.
+    var pageCount: Int { 2 + stampPageCount + (showsFlights ? 1 : 0) + 1 }
     /// The index's page number (the last).
     var indexPage: Int { pageCount }
     /// The stamp pages' numbers.
     var stampPageNumbers: ClosedRange<Int> { Self.firstStampPage ... Self.firstStampPage + stampPageCount - 1 }
-    /// The Flights pages' numbers, or nil where the book shows none.
-    var flightPageNumbers: ClosedRange<Int>? {
-        guard flightPageCount > 0 else { return nil }
-        let first = stampPageNumbers.upperBound + 1
-        return first ... first + flightPageCount - 1
-    }
+    /// The Flights page's number, or nil where the book shows none.
+    var flightsPage: Int? { showsFlights ? stampPageNumbers.upperBound + 1 : nil }
 
     /// Page `number`, clamped into the book.
     func page(at number: Int) -> PassportBookPage {
@@ -75,9 +71,8 @@ nonisolated struct PassportBookModel: Equatable, Sendable {
         case 1: return .sprout
         case 2: return .world
         case indexPage: return .index
-        default:
-            if let flights = flightPageNumbers, flights.contains(number) { return .flights(number - flights.lowerBound) }
-            return .stamps(number - Self.firstStampPage)
+        case flightsPage: return .flights
+        default: return .stamps(number - Self.firstStampPage)
         }
     }
 

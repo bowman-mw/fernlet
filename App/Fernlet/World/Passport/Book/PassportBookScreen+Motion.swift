@@ -50,6 +50,7 @@ extension PassportBookScreen {
         landing = presenter.landing
         page = presenter.startPage(in: book)
         detail = presenter.demo?.detail
+        flightsYear = presenter.demo?.flightsYear
         showsContents = presenter.demo?.opensContents ?? false
         if let found = presenter.demo?.importFound { importFlow.found = found }
         if presenter.demo?.opensWorld == true { showsWorld = true }
@@ -95,8 +96,13 @@ extension PassportBookScreen {
 
     // MARK: Turning
 
-    /// One page on (`by` 1) or back (-1); in an A to Z view, the next or previous continent.
+    /// One page on (`by` 1) or back (-1); in an A to Z view, the next or previous continent; in a year's log, the
+    /// next (older) or previous (newer) year.
     func step(_ by: Int, in book: PassportBookModel) {
+        if flightsYear != nil {
+            stepYear(by)
+            return
+        }
         if let detail {
             guard case .continent(let continent) = detail,
                   let position = AtlasContinentOrder.position(of: continent) else { return }
@@ -115,6 +121,8 @@ extension PassportBookScreen {
         let target = book.clamped(number)
         guard target != page else { return }
         detail = nil
+        flightsYear = nil
+        yearToRefocus = nil
         pageOnTop = true
         FernletFeedback.system.play(.tick)
         if reduceMotion {
@@ -163,7 +171,43 @@ extension PassportBookScreen {
         }
     }
 
-    /// Sideways turns the page (or steps the continent); down, from the top of the page, closes the book.
+    // MARK: A year's log
+
+    /// Opens `year`'s log on the Flights page; VoiceOver goes to its header.
+    func openYear(_ year: Int) {
+        yearTakesFocus = true
+        yearToRefocus = nil
+        showYear(year)
+    }
+
+    /// Closes the open log, back to the Flights page; VoiceOver goes back to the year's row.
+    func closeYear() {
+        yearToRefocus = flightsYear
+        showYear(nil)
+    }
+
+    /// Steps to the year `by` places along the list (1 older, -1 newer) and reads it out, VoiceOver staying where it is.
+    func stepYear(_ by: Int) {
+        guard let flightsYear, let flights = flightsModel, let position = flights.position(ofYear: flightsYear),
+              flights.years.indices.contains(position + by) else { return }
+        let log = flights.years[position + by]
+        yearTakesFocus = false
+        showYear(log.year)
+        FernletAnnouncer.system.announce(.status, resolved: PassportFlightsCopy.yearSpoken(log))
+    }
+
+    /// Shows `year`'s log, or the Flights page itself for nil.
+    private func showYear(_ year: Int?) {
+        FernletFeedback.system.play(.tick)
+        pageOnTop = true
+        if reduceMotion {
+            withAnimation(.easeInOut(duration: 0.15)) { flightsYear = year }
+        } else {
+            flightsYear = year
+        }
+    }
+
+    /// Sideways turns the page (or steps the continent or the year); down, from the top of the page, closes the book.
     func swipe(_ book: PassportBookModel) -> some Gesture {
         DragGesture(minimumDistance: 24).onEnded { value in
             let across = value.translation.width, down = value.translation.height

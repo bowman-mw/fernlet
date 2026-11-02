@@ -97,6 +97,39 @@ struct PassportContinentBar: View {
     }
 }
 
+/// The year bar (World-Airports-Spec §8), under a year's log: ‹ steps to a newer year and › to an older one, in the
+/// order the Flights page lists them ("2024 · 3 of 13"). Voice Control: "Newer year", "Older year".
+struct PassportFlightsYearBar: View {
+    let year: Int
+    /// The year's place among the years, from 0, newest first.
+    let position: Int
+    let count: Int
+    /// Steps by -1 (newer) or 1 (older).
+    let onStep: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            PassportBarArrow(sprite: WorldSprites.chevL, label: PassportFlightsCopy.newerYear, enabled: position > 0) { onStep(-1) }
+            HStack(spacing: 6) {
+                Text(verbatim: String(year)).font(PassportBookType.bar).foregroundStyle(WorldPalette.bark)
+                Text(PassportFlightsCopy.yearStep(position + 1, of: count))
+                    .font(PassportBookType.barQuiet).foregroundStyle(WorldPalette.dim)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 10)
+            .frame(minWidth: 150, minHeight: 40)
+            .accessibilityElement(children: .combine)
+            PassportBarArrow(sprite: WorldSprites.chevR, label: PassportFlightsCopy.olderYear, enabled: position < count - 1) { onStep(1) }
+        }
+        .padding(2)
+        .background(PassportCreamPlate(radius: 12))
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(PassportFlightsCopy.years))
+    }
+}
+
 /// One of the bars' arrows: 44 × 40, dimmed and off at the end.
 struct PassportBarArrow: View {
     let sprite: WorldSprite
@@ -119,7 +152,7 @@ struct PassportBarArrow: View {
 }
 
 /// The contents (World-Passport-Spec §2): Sprout 1, Your world 2, Stamps 3 to n with their date range, the Flights
-/// pages when the book shows them (World-Airports-Spec §8), Index last;
+/// page when the book shows it (World-Airports-Spec §8), Index last;
 /// the current page's row marked. Tapping a row turns there.
 struct PassportContents: View {
     let book: PassportBookModel
@@ -132,9 +165,8 @@ struct PassportContents: View {
             row(Text(PassportBookCopy.yourWorld), detail: Text(verbatim: "2"), page: 2, on: current == 2)
             row(Text(PassportBookCopy.stamps), detail: stampsDetail, page: PassportBookModel.firstStampPage,
                 on: book.stampPageNumbers.contains(current))
-            if let flights = book.flightPageNumbers {
-                row(Text(PassportFlightsCopy.title), detail: Text(verbatim: Self.span(flights)), page: flights.lowerBound,
-                    on: flights.contains(current))
+            if let flights = book.flightsPage {
+                row(Text(PassportFlightsCopy.title), detail: Text(verbatim: "\(flights)"), page: flights, on: current == flights)
             }
             row(Text(PassportBookCopy.index), detail: Text(verbatim: "\(book.indexPage)"), page: book.indexPage,
                 on: current == book.indexPage)
@@ -144,11 +176,6 @@ struct PassportContents: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: 2))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(PassportBookCopy.contents))
-    }
-
-    /// "7" or "7–9" (the Flights pages' numbers).
-    static func span(_ pages: ClosedRange<Int>) -> String {
-        pages.count > 1 ? "\(pages.lowerBound)–\(pages.upperBound)" : "\(pages.lowerBound)"
     }
 
     /// "3 to 5 · 14 AUG to 24 OCT", or the one page number.

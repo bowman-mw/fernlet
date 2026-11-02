@@ -171,14 +171,15 @@ struct PassportSwing<Back: View>: ViewModifier, Animatable {
 }
 
 /// One page's content inside the book (World-Passport-Spec §2, §4): the page padded on its paper, scrolling inside
-/// the book when it is taller (the largest text), with a fade at the foot when it can scroll and the page number
-/// centred at the foot in Fraunces italic.
+/// the book when it is taller (the largest text, a long year of flights), with a fade at the foot when it can scroll
+/// and the page number centred at the foot in Fraunces italic.
 struct PassportPageScroll<Content: View>: View {
     let number: Int
     @ViewBuilder let content: Content
     /// Whether the page is scrolled to its top (a swipe down closes the book only then).
     var onTop: (Bool) -> Void = { _ in }
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Whether the page is taller than the book (the fade keeps its lines from running under the page number).
+    @State private var canScroll = false
 
     var body: some View {
         ScrollView(.vertical) {
@@ -193,9 +194,12 @@ struct PassportPageScroll<Content: View>: View {
         .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y <= $0.contentInsets.top * -1 + 2 } action: { _, top in
             onTop(top)
         }
+        .onScrollGeometryChange(for: Bool.self) { $0.contentSize.height > $0.containerSize.height + 1 } action: { _, tall in
+            canScroll = tall
+        }
         .overlay(alignment: .bottom) {
             ZStack(alignment: .bottom) {
-                if dynamicTypeSize.isAccessibilitySize {
+                if canScroll {
                     LinearGradient(colors: [PassportBookPalette.paper.opacity(0), PassportBookPalette.paper],
                                    startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.7))
                         .frame(height: 46)

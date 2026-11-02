@@ -29,6 +29,34 @@ enum AirportFlightsDemo {
         }
     }()
 
+    /// A long made-up history: 178 imported flights over 13 years (a Flighty import's size), round trips from
+    /// Portland with a connection through Helsinki now and then.
+    static let many: [PassportFlight] = {
+        let years = [(2014, 6), (2015, 8), (2016, 10), (2017, 12), (2018, 16), (2019, 21), (2020, 4), (2021, 6), (2022, 14),
+                     (2023, 19), (2024, 23), (2025, 22), (2026, 17)]
+        // Bounded: 13 years, at most 23 flights each.
+        return years.flatMap { year, count in (0 ..< count).compactMap { many(year: year, index: $0, of: count) } }
+    }()
+
+    /// Flight `index` of `year`'s `count`: the way out, then the way back three days later, on one of the made-up
+    /// routes; every fifth pair is out through Helsinki instead, 2 h 40 min on the ground.
+    private static func many(year: Int, index: Int, of count: Int) -> PassportFlight? {
+        let routes = [("PDX", "SFO", 2.0), ("PDX", "SEA", 1.0), ("PDX", "DEN", 3.0), ("PDX", "JFK", 5.5), ("PDX", "LAX", 2.5),
+                      ("SFO", "LHR", 10.5), ("PDX", "HNL", 6.0), ("DEN", "ORD", 2.5), ("PDX", "MEX", 6.5), ("SEA", "JFK", 5.0)]
+        let pair = index / 2, isOut = index.isMultiple(of: 2), hour: TimeInterval = 3_600
+        guard let out = DateComponents(calendar: .current, year: year, month: 1 + pair * 2 * 12 / count,
+                                       day: 2 + pair % 20, hour: 9).date else { return nil }
+        if pair % 5 == 2 {
+            let landed = out.addingTimeInterval(10 * hour), onward = landed.addingTimeInterval(160 * 60)
+            return isOut ? PassportFlight(from: "PDX", to: "HEL", departure: out, arrival: landed, sources: .flighty)
+                : PassportFlight(from: "HEL", to: "NRT", departure: onward, arrival: onward.addingTimeInterval(9 * hour), sources: .flighty)
+        }
+        let route = routes[(year + pair) % routes.count]
+        let departure = isOut ? out : out.addingTimeInterval(72 * hour)
+        return PassportFlight(from: isOut ? route.0 : route.1, to: isOut ? route.1 : route.0, departure: departure,
+                              arrival: departure.addingTimeInterval(route.2 * hour), sources: .flighty)
+    }
+
     /// `world` with the made-up flights' arcs drawn over it, from the bundled airport list.
     @MainActor
     static func world(_ world: WorldViewContent, atlas: WorldAtlas?) -> WorldViewContent {

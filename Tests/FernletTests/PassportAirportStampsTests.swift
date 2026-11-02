@@ -144,7 +144,7 @@ struct PassportAirportStampsTests {
         let flights = [Self.flight("PDX", "LHR", Self.day(10, 2)), Self.flight("CDG", "HEL", Self.day(10, 21, hour: 9)),
                        Self.flight("HEL", "NRT", Self.day(10, 21, hour: 14))].compactMap { $0 }
         let flightsModel = PassportFlightsModel(flights: flights, point: { _ in nil }, calendar: Self.utc)
-        let book = PassportBookModel(entries: entries, flightPageCount: flightsModel.pages.count, calendar: Self.utc)
+        let book = PassportBookModel(entries: entries, showsFlights: true, calendar: Self.utc)
         let names = ["PDX": "Portland", "HEL": "Helsinki", "LHR": "Heathrow"]
         let index = PassportIndexModel(book: book, table: .empty, language: .english, flights: flightsModel) { kind in
             if case .airport(let token, _) = kind { return names[token] ?? token }
@@ -153,7 +153,7 @@ struct PassportAirportStampsTests {
         #expect(index.airports.map(\.name) == ["Heathrow", "Helsinki", "Portland"])
         #expect(index.airports.last?.pages == [3, 4], "Portland: a page per trip")
         let row = try #require(index.flights)
-        #expect(row.count == 3 && row.pages == 5 ... 5 && row.layovers == 1)
+        #expect(row.count == 3 && row.page == 5 && row.layovers == 1)
         #expect(index.continents.allSatisfy { $0.places.isEmpty }, "airports never count as countries")
         let none = PassportIndexModel(book: PassportBookModel(entries: entries, calendar: Self.utc), table: .empty,
                                       language: .english, flights: nil) { _ in "" }

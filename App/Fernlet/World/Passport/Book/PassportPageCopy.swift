@@ -50,11 +50,6 @@ nonisolated enum PassportPageCopy {
         LocalizedStringResource("\(count) · page \(page)",
                                 comment: "Sprout's passport index: the Flights row, how many flights then the Flights page's number (Spanish: 5 · página 7)")
     }
-    /// "53 · pages 7 to 9" (the Flights row over several pages).
-    static func flightsCount(_ count: Int, pages first: Int, to last: Int) -> LocalizedStringResource {
-        LocalizedStringResource("\(count) · pages \(first) to \(last)",
-                                comment: "Sprout's passport index: the Flights row, how many flights then the Flights pages' first and last numbers")
-    }
     /// "1 layover" / "3 layovers" (the Flights row's line).
     static func layovers(_ count: Int) -> LocalizedStringResource {
         count == 1 ? LocalizedStringResource("1 layover", comment: "Sprout's passport index: the Flights row, one layover")

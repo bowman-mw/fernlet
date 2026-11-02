@@ -2,61 +2,201 @@ import FernletUI
 import SwiftUI
 import WorldMapStore
 
-/// A Flights page of Sprout's passport (World-Airports-Spec §8, screens 11, 19 and 23, approved): "FLIGHTS" with
-/// the totals ("5 flights · 24,850 km"), then the trips as boarding-pass stubs under year headings, each imported
-/// one tagged "Imported". The last Flights page ends with the layovers' total ("1 layover · 2 h 40 min. Tap a flight
-/// to see its arc on Your world.") and the "Add past flights" button (from a Flighty file, read on this iPhone).
-/// Tapping a stub opens Your world on its arc.
+/// The Flights page of Sprout's passport (World-Airports-Spec §8, screens 11, 19 and 23; owner 2026-11-02, option A):
+/// "FLIGHTS" with the totals ("178 flights · 494,810 km"), then the years, newest first, each a stub that opens its
+/// log (``PassportFlightsYearPage``). A history that fits one page shows its boarding-pass stubs here instead, under
+/// year headings. The page ends with the layovers' total and the "Add past flights" button (from a Flighty file, read
+/// on this iPhone). The book gains this one page however many flights there are.
 struct PassportFlightsPage: View {
     let flights: PassportFlightsModel
-    /// Which Flights page, from 0.
-    let index: Int
+    /// The year whose row VoiceOver goes back to, its log just closed, or nil.
+    let refocusYear: Int?
     /// A trip's airports' cities, by IATA code (the list's English or Spanish city; nil for a points-only code).
     let city: (String) -> String?
     let onOpenTrip: (PassportFlightTrip) -> Void
+    let onOpenYear: (Int) -> Void
     /// "Add past flights", or nil where none may be added ("Airports and flights" is off).
     let onAddPastFlights: (() -> Void)?
+    @AccessibilityFocusState private var focusedYear: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            PassportPageHeader(title: Text(PassportFlightsCopy.title), detail: totals)
+            header
             if flights.isEmpty {
                 PassportFlightsEmpty()
+            } else if flights.listsYears {
+                ForEach(flights.years) { log in
+                    PassportFlightsYearRow(log: log) { onOpenYear(log.year) }
+                        .accessibilityFocused($focusedYear, equals: log.year)
+                }
             } else {
-                ForEach(flights.rows(onPage: index), id: \.self) { row in
-                    switch row {
-                    case .year(let year): PassportFlightsYear(year: year)
-                    case .trip(let number): stub(flights.trips[number])
+                ForEach(flights.years) { log in
+                    PassportFlightsYear(year: log.year)
+                    ForEach(log.trips) { trip in
+                        PassportFlightStub(trip: trip, days: PassportFlightsText.days(of: trip), city: city) { onOpenTrip(trip) }
                     }
                 }
             }
-            if index == flights.pages.count - 1 {
-                if !flights.isEmpty {
-                    Text(note)
-                        .font(Font.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption))
-                        .foregroundStyle(PassportBookPalette.dim)
-                        .fernletWrappingText()
-                        .padding(.top, 4)
-                }
-                if let onAddPastFlights { PassportAddFlightsButton(action: onAddPastFlights) }
+            if !flights.isEmpty {
+                Text(note)
+                    .font(Font.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption))
+                    .foregroundStyle(PassportBookPalette.dim)
+                    .fernletWrappingText()
+                    .padding(.top, 4)
             }
+            if let onAddPastFlights { PassportAddFlightsButton(action: onAddPastFlights) }
+        }
+        .task {
+            guard let refocusYear, await PassportFlightsFocus.settled() else { return }
+            focusedYear = refocusYear
         }
     }
 
-    /// "5 flights · 24,850 km", or nothing before the first flight.
-    private var totals: Text? {
-        guard !flights.isEmpty else { return nil }
-        return Text(PassportFlightsCopy.totals(flights.flightCount, PassportFlightsText.kilometres(flights.totalMetres)))
+    /// "FLIGHTS" and the totals, which VoiceOver reads as the page's heading.
+    @ViewBuilder
+    private var header: some View {
+        if flights.isEmpty {
+            PassportPageHeader(title: Text(PassportFlightsCopy.title))
+        } else {
+            let distance = PassportFlightsText.kilometres(flights.totalMetres)
+            PassportPageHeader(title: Text(PassportFlightsCopy.title),
+                               detail: Text(PassportFlightsCopy.totals(flights.flightCount, distance)))
+                .modifier(PassportFlightsSpokenHeader(label: String(localized: PassportFlightsCopy.totalsSpoken(flights.flightCount, distance))))
+        }
     }
 
-    /// The layovers' total and the hint.
+    /// The layovers' total and the hint: tap a year, or tap a flight where the page shows the stubs itself.
     private var note: LocalizedStringResource {
-        guard flights.layoverCount > 0 else { return PassportFlightsCopy.tapHint }
-        return PassportFlightsCopy.layovers(flights.layoverCount, PassportFlightsText.duration(flights.layoverSeconds))
+        let length = PassportFlightsText.duration(flights.layoverSeconds)
+        if flights.listsYears {
+            return flights.layoverCount > 0 ? PassportFlightsCopy.layoversYearHint(flights.layoverCount, length)
+                : PassportFlightsCopy.tapYearHint
+        }
+        return flights.layoverCount > 0 ? PassportFlightsCopy.layovers(flights.layoverCount, length) : PassportFlightsCopy.tapHint
+    }
+}
+
+/// One year's log, opened inside the book from the Flights page: the year and its totals ("2024", "23 flights ·
+/// 61,300 km"), then its trips' stubs in date order, which scroll within the page. ‹ Flights goes back and the year bar
+/// steps between years. Tapping a stub opens Your world on its arc.
+struct PassportFlightsYearPage: View {
+    let log: PassportFlightYearLog
+    /// Whether VoiceOver goes to the header (the log was opened, not stepped to from its bar).
+    let takesFocus: Bool
+    let city: (String) -> String?
+    let onOpenTrip: (PassportFlightTrip) -> Void
+    @AccessibilityFocusState private var headerFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PassportPageHeader(title: Text(verbatim: String(log.year)),
+                               detail: Text(PassportFlightsCopy.totals(log.flightCount, PassportFlightsText.kilometres(log.metres))))
+                .modifier(PassportFlightsSpokenHeader(label: PassportFlightsCopy.yearSpoken(log)))
+                .accessibilityFocused($headerFocused)
+            ForEach(log.trips) { trip in
+                PassportFlightStub(trip: trip, days: PassportFlightsText.daysInYear(of: trip), city: city) { onOpenTrip(trip) }
+            }
+            Text(PassportFlightsCopy.tapHint)
+                .font(Font.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption))
+                .foregroundStyle(PassportBookPalette.dim)
+                .fernletWrappingText()
+                .padding(.top, 4)
+        }
+        .task {
+            guard takesFocus, await PassportFlightsFocus.settled() else { return }
+            headerFocused = true
+        }
+    }
+}
+
+/// When VoiceOver's focus can move on a page that has just replaced another: the button it was on has gone, and a move
+/// made in the same moment is lost.
+nonisolated enum PassportFlightsFocus {
+    /// Waits for the new page to settle; false when the page went first.
+    static func settled() async -> Bool {
+        do {
+            try await Task.sleep(for: .milliseconds(300))
+            return true
+        } catch {
+            return false
+        }
+    }
+}
+
+/// Makes a page's header one heading for VoiceOver, spoken as `label` (the drawn header is hidden from it).
+struct PassportFlightsSpokenHeader: ViewModifier {
+    let label: String
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: label))
+            .accessibilityHidden(false)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A year's row on the Flights page, drawn as a stub: the year, its flights and its distance, and a › into its log.
+/// A button; VoiceOver reads "2024, 23 flights, 61,300 km" and Voice Control takes "2024".
+struct PassportFlightsYearRow: View {
+    let log: PassportFlightYearLog
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text(verbatim: String(log.year))
+                    .font(Font.custom(FernletFontName.dmSansBold, size: 17, relativeTo: .headline))
+                    .tracking(0.85)
+                    .monospacedDigit()
+                    .foregroundStyle(PassportBookPalette.text)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        count
+                        Spacer(minLength: 0)
+                        distance
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        count
+                        distance
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                WorldSpriteView(sprite: WorldSprites.chevR, scale: 2, tint: PassportBookPalette.text)
+            }
+            .modifier(PassportStubFrame())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: PassportFlightsCopy.yearSpoken(log)))
+        .accessibilityHint(Text(PassportFlightsCopy.yearHint))
+        .accessibilityInputLabels([Text(verbatim: String(log.year))])
+        .accessibilityIdentifier("passport.flights.year.\(log.year)")
     }
 
-    private func stub(_ trip: PassportFlightTrip) -> some View {
-        PassportFlightStub(trip: trip, city: city) { onOpenTrip(trip) }
+    private var count: some View {
+        Text(PassportFlightsCopy.count(log.flightCount))
+            .font(Font.custom(FernletFontName.dmSansBold, size: 12.5, relativeTo: .caption))
+            .foregroundStyle(PassportBookPalette.text)
+    }
+
+    private var distance: some View {
+        Text(verbatim: PassportFlightsText.kilometres(log.metres))
+            .font(Font.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption))
+            .foregroundStyle(PassportBookPalette.dim)
+    }
+}
+
+/// The boarding-pass frame of a stub or a year's row: its padding, tint and hairline, and the dotted tear line.
+struct PassportStubFrame: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .fernletWrappingText()
+            .padding(EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 10))
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(PassportBookPalette.paper2.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PassportBookPalette.rule, lineWidth: 1.5))
+            .overlay(alignment: .leading) { PassportStubPerforation() }
+            .contentShape(Rectangle())
     }
 }
 
@@ -65,6 +205,8 @@ struct PassportFlightsPage: View {
 /// Francisco, 12 March 2014, 880 km, imported".
 struct PassportFlightStub: View {
     let trip: PassportFlightTrip
+    /// The trip's days, as this list writes them ("12 MAR 2014", or "12 MAR" under its year).
+    let days: String
     let city: (String) -> String?
     let action: () -> Void
 
@@ -72,37 +214,43 @@ struct PassportFlightStub: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
                 route
-                Text(verbatim: PassportFlightsText.days(of: trip) + " · " + PassportFlightsText.kilometres(trip.metres))
+                Text(verbatim: days + " · " + PassportFlightsText.kilometres(trip.metres))
                     .font(Font.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption))
                     .foregroundStyle(PassportBookPalette.dim)
                 if let via { Text(via).font(Font.custom(FernletFontName.dmSansBold, size: 12.5, relativeTo: .caption))
                     .foregroundStyle(PassportBookPalette.moss) }
             }
-            .fernletWrappingText()
-            .padding(EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 10))
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(PassportBookPalette.paper2.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PassportBookPalette.rule, lineWidth: 1.5))
-            .overlay(alignment: .leading) { PassportStubPerforation() }
-            .contentShape(Rectangle())
+            .modifier(PassportStubFrame())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: spoken))
     }
 
-    /// "PDX ✈ HEL ✈ NRT" and the tag.
+    /// "PDX ✈ HEL ✈ NRT" and the tag, which drops under the codes where they leave it too little room.
     private var route: some View {
-        HStack(spacing: 5) {
-            ForEach(Array(trip.codes.enumerated()), id: \.offset) { position, code in
-                if position > 0 {
-                    WorldSpriteView(sprite: PassportFlightSprites.jet, scale: 1.6, tint: PassportBookPalette.text)
-                }
-                Text(verbatim: code)
-                    .font(Font.custom(FernletFontName.dmSansBold, size: 17, relativeTo: .headline))
-                    .tracking(0.85)
-                    .foregroundStyle(PassportBookPalette.text)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 5) {
+                codes
+                if trip.isImported { PassportImportedTag() }
             }
-            if trip.isImported { PassportImportedTag() }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) { codes }
+                if trip.isImported { PassportImportedTag().padding(.leading, -4) }
+            }
+        }
+    }
+
+    /// The route's codes with a small jet between.
+    @ViewBuilder
+    private var codes: some View {
+        ForEach(Array(trip.codes.enumerated()), id: \.offset) { position, code in
+            if position > 0 {
+                WorldSpriteView(sprite: PassportFlightSprites.jet, scale: 1.6, tint: PassportBookPalette.text)
+            }
+            Text(verbatim: code)
+                .font(Font.custom(FernletFontName.dmSansBold, size: 17, relativeTo: .headline))
+                .tracking(0.85)
+                .foregroundStyle(PassportBookPalette.text)
         }
     }
 
@@ -155,6 +303,7 @@ struct PassportImportedTag: View {
             .tracking(0.6)
             .textCase(.uppercase)
             .foregroundStyle(PassportBookPalette.dim)
+            .fixedSize()
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
             .overlay(RoundedRectangle(cornerRadius: 4)
@@ -253,13 +402,41 @@ nonisolated enum PassportFlightSprites {
                                  palette: ["k": WorldSprite.ink])
 }
 
-/// The words of the Flights pages (World-Airports-Spec §8; Spanish drafts in `r7-airports-ui-es.json`).
+/// The words of the Flights page and its years' logs (World-Airports-Spec §8; Spanish drafts in `r7-airports-ui-es.json`).
 nonisolated enum PassportFlightsCopy {
     static let title = LocalizedStringResource("Flights", comment: "Sprout's passport: the Flights page's name and header")
     /// "5 flights · 24,850 km".
     static func totals(_ count: Int, _ distance: String) -> LocalizedStringResource {
         LocalizedStringResource("\(count) flights · \(distance)",
                                 comment: "Sprout's passport Flights page header: how many flights, then the distance flown")
+    }
+    /// "178 flights, 494,810 km" (VoiceOver, the Flights page's heading).
+    static func totalsSpoken(_ count: Int, _ distance: String) -> LocalizedStringResource {
+        LocalizedStringResource("\(count) flights, \(distance)",
+                                comment: "VoiceOver: flights in the passport: how many, then the distance flown (the page's heading, a year's row)")
+    }
+    /// "23 flights" (a year's row).
+    static func count(_ count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("\(count) flights", comment: "Sprout's passport Flights page: how many flights left in a year")
+    }
+    /// "2024, 23 flights, 61,300 km" (VoiceOver: a year's row, its log's heading, and read on stepping to it).
+    static func yearSpoken(_ log: PassportFlightYearLog) -> String {
+        String(log.year) + ", " + String(localized: totalsSpoken(log.flightCount, PassportFlightsText.kilometres(log.metres)))
+    }
+    static let yearHint = LocalizedStringResource("Opens this year's flights.", comment: "VoiceOver hint: a year's row on the passport's Flights page")
+    static let backToFlights = LocalizedStringResource("Back to Flights", comment: "VoiceOver: the back button in a year's flights in the passport")
+    static let newerYear = LocalizedStringResource("Newer year", comment: "Sprout's passport: steps to the next more recent year's flights")
+    static let olderYear = LocalizedStringResource("Older year", comment: "Sprout's passport: steps to the next older year's flights")
+    static let years = LocalizedStringResource("Years", comment: "VoiceOver: the passport's bar of years under a year's flights")
+    /// "· 3 of 13" (the year bar's quiet part).
+    static func yearStep(_ number: Int, of count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("· \(number) of \(count)", comment: "Sprout's passport: which year of the flown years, in the year bar")
+    }
+    static let tapYearHint = LocalizedStringResource("Tap a year to see its flights.", comment: "Sprout's passport Flights page: the hint under the years")
+    /// "38 layovers · 62 h 10 min. Tap a year to see its flights."
+    static func layoversYearHint(_ count: Int, _ length: String) -> LocalizedStringResource {
+        LocalizedStringResource("\(count) layovers · \(length). Tap a year to see its flights.",
+                                comment: "Sprout's passport Flights page: the layovers' count and total length, then the hint under the years")
     }
     /// "1 layover · 2 h 40 min. Tap a flight to see its arc on Your world."
     static func layovers(_ count: Int, _ length: String) -> LocalizedStringResource {
