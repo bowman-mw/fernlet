@@ -156,7 +156,7 @@ struct WorldFlightCard: View {
         .worldAtlasChip(cornerRadius: 10, lineWidth: 3)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("worldAtlas.flights.card")
-        .onAppear { AccessibilityNotification.Announcement(WorldFlightCopy.card(arc)).post() }
+        .onAppear { FernletAnnouncer.system.announce(.status, resolved: WorldFlightCopy.card(arc)) }
     }
 
     /// ✕, top right.
