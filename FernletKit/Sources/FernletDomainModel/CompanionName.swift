@@ -20,6 +20,16 @@ public enum CompanionName {
     /// The companion's own name, when the person has not chosen one.
     public static let standard = "Sprout"
 
+    /// The name onboarding offered before the rename. A blob saved before it carries this as the person's
+    /// "choice" without anyone having chosen it, so ``FernletSettings`` decodes it once as ``standard``.
+    public static let oldDefault = "Fernlet"
+
+    /// `saved`, or ``standard`` when it is the old default ``oldDefault`` (trimmed). Run once per settings
+    /// blob, gated by ``FernletSettings/didMigrateCompanionNameToSprout``.
+    public static func renamedOldDefault(_ saved: String) -> String {
+        saved.trimmingCharacters(in: .whitespacesAndNewlines) == oldDefault ? standard : saved
+    }
+
     /// The name to show for `chosen` (the saved setting): trimmed, or ``standard`` when it is empty.
     public static func displayed(_ chosen: String) -> String {
         let trimmed = chosen.trimmingCharacters(in: .whitespacesAndNewlines)

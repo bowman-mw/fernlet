@@ -351,6 +351,24 @@ struct SettingsDecodeCompatTests {
         #expect(settings.companionDisplayName == "Pip")
     }
 
+    /// The Sprout rename (2026-11-01): a blob saved before it, still holding onboarding's old default
+    /// "Fernlet", decodes as "Sprout" once; any other name is kept; and once the marker is saved, a
+    /// "Fernlet" typed afterwards stays "Fernlet".
+    @Test func theOldDefaultNameBecomesSproutOnceAndOnlyOnce() throws {
+        let old = try decode(#"{ "companionName": "Fernlet" }"#)
+        #expect(old.companionName == "Sprout")
+        #expect(old.didMigrateCompanionNameToSprout)
+        #expect(old.parkedUnknownKeys["didMigrateCompanionNameToSprout"] == nil)
+        #expect(try decode(#"{ "companionName": "Pip" }"#).companionName == "Pip")
+        #expect(try decode(#"{ "companionName": "" }"#).companionName == "")
+
+        var typedLater = old
+        typedLater.companionName = "Fernlet"
+        let reloaded = try decode(JSONEncoder().encode(typedLater))
+        #expect(reloaded.companionName == "Fernlet", "a name chosen after the rename is never migrated")
+        #expect(FernletSettings().didMigrateCompanionNameToSprout, "a fresh install has nothing to migrate")
+    }
+
     /// Migration-marker non-regression: the privacy-critical `didMigratePeriodVisibility` /
     /// `periodTrackingVisible` / `intimacyTrackingVisible` are KNOWN keys — decoded, never parked — so
     /// generic parking can never let a stale copy shadow the live gate. Pure decode still leaves a
