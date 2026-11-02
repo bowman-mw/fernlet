@@ -41,6 +41,8 @@ private struct AppleMutedMapView: UIViewRepresentable {
     let bottomInset: CGFloat
     let onViewport: (MapViewport) -> Void
     @Environment(\.worldTileStatus) private var tileStatus
+    /// Sprout's glide (the World Home's), which the camera follows frame by frame while it follows the person.
+    @Environment(\.worldFollowGlide) private var followGlide
     /// Reduce Motion: Fernlet's own camera moves (following, Back to Sprout) jump instead of gliding.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -65,6 +67,8 @@ private struct AppleMutedMapView: UIViewRepresentable {
         coordinator.view = self
         coordinator.tileStatus = tileStatus
         coordinator.revision = camera.revision
+        coordinator.follow.camera = { [weak coordinator] in coordinator?.view?.camera }
+        coordinator.follow.isPersonMoving = { [weak coordinator] in coordinator?.isPersonMoving ?? false }
         // W-15: MapKit reports this jump before `setCamera` returns; the gate holds it past SwiftUI's update.
         coordinator.gate.updating {
             map.delegate = coordinator
@@ -83,16 +87,27 @@ private struct AppleMutedMapView: UIViewRepresentable {
     }
 
     /// The style, the credit's margins and Fernlet's latest camera request. A request MapKit already shows
-    /// (a panel closing while the map follows) moves nothing.
+    /// (a panel closing while the map follows) moves nothing. Following a gliding Sprout, the frame driver
+    /// moves the camera (``AppleMapFollowDriver``, easing in from where the map stands: Back to Sprout, a zoom);
+    /// following a jump (the first reading, a map behind a panel, Reduce Motion) the camera jumps; off following
+    /// (a corner, a city) MapKit glides there, or jumps with Reduce Motion.
     private func apply(to map: MKMapView, coordinator: AppleMutedMapCoordinator) {
         let style: UIUserInterfaceStyle = darkStyle ? .dark : .light
         if map.overrideUserInterfaceStyle != style { map.overrideUserInterfaceStyle = style }
         let margins = AppleMapGeometry.margins(bottomInset: bottomInset)
         if map.layoutMargins != margins { map.layoutMargins = margins }
+        let requested = camera.revision != coordinator.revision
         let move = AppleMapGeometry.cameraMove(for: camera, applied: coordinator.revision, showing: map.camera)
         coordinator.revision = camera.revision
+        coordinator.follow.glide = followGlide
+        if camera.follows, !reduceMotion, let glide = followGlide, glide.shown != nil, glide.isSmooth {
+            if requested { coordinator.follow.start(on: map) }
+            return
+        }
+        coordinator.follow.stop()
         guard let move else { return }
-        map.setCamera(move, animated: !reduceMotion)
+        // Only Home's map follows a glide; a map with none (a place sheet's) glides to its own requests as ever.
+        map.setCamera(move, animated: !reduceMotion && !(camera.follows && followGlide != nil))
     }
 
     /// The person moved the map (W-10): a pan that moves the centre takes the new place and stops
@@ -151,8 +166,13 @@ enum AppleMapGeometry {
 
     /// MapKit's camera for Fernlet's camera: north-up, flat.
     static func mapCamera(for camera: WorldCamera) -> MKMapCamera {
-        let centre = CLLocationCoordinate2D(latitude: camera.center.latitude, longitude: camera.center.longitude)
-        return MKMapCamera(lookingAtCenter: centre, fromDistance: camera.distance, pitch: 0, heading: 0)
+        mapCamera(centre: camera.center, distance: camera.distance)
+    }
+
+    /// MapKit's north-up, flat camera over `centre` from `distance` metres up.
+    static func mapCamera(centre: GeoPoint, distance: Double) -> MKMapCamera {
+        let coordinate = CLLocationCoordinate2D(latitude: centre.latitude, longitude: centre.longitude)
+        return MKMapCamera(lookingAtCenter: coordinate, fromDistance: distance, pitch: 0, heading: 0)
     }
 
     /// The camera to hand MapKit for `camera`, or nil when there is nothing to move (W-15): no request
@@ -330,6 +350,30 @@ final class ApplePlaceLookup: WorldPlaceLooking {
     ]
 }
 
+/// Whose move the map's region change is (W-10, follow smoothing 2026-11-01). The follow driver sets the camera on
+/// every frame and MapKit calls the region delegates inside each set, so its own frames must neither count as the
+/// person's move nor end one: a frame landing in a pan's glide after the finger lifted used to clear the mark, and
+/// the pan was lost, the map snapping back to Sprout.
+nonisolated struct AppleMapPersonMove: Equatable, Sendable {
+    /// Whether a move of the person's is under way, from its first region change to its last.
+    private(set) var isMoving = false
+
+    /// A region change is starting; `touched` when a finger is on the map, `ownFrame` when the follow driver is the
+    /// one setting the camera. True when it starts a new move, whose start the caller records.
+    mutating func willChange(touched: Bool, ownFrame: Bool) -> Bool {
+        guard !ownFrame else { return false }
+        isMoving = touched
+        return true
+    }
+
+    /// A region change ended. True when it ends a move of the person's, for the caller to adopt.
+    mutating func didChange(ownFrame: Bool) -> Bool {
+        guard isMoving, !ownFrame else { return false }
+        isMoving = false
+        return true
+    }
+}
+
 /// The map's delegate: the viewport on every move, the person's pans written back, and the tiles'
 /// progress. Main actor, as MapKit calls it there. Every report goes through ``gate`` (W-15), so one raised
 /// while SwiftUI makes or updates the map view waits for the next main-queue turn.
@@ -343,16 +387,21 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
     var tileStatus: WorldTileStatus?
     /// Holds the reports raised inside `makeUIView` and `updateUIView` until SwiftUI's update is over.
     let gate = WorldMapReportGate()
+    /// Moves the camera with Sprout's glide while the map follows.
+    let follow = AppleMapFollowDriver()
     /// Writes the audit line when a reported viewport is refused (W-20).
     private let rejections = WorldLayerRejections()
-    /// Whether the move under way began with the person's finger.
-    private var movedByPerson = false
+    /// Whether the move under way is the person's (through its glide after the finger lifts).
+    private var personMove = AppleMapPersonMove()
     /// Where the map's centre was, and how far up its camera, when that move began.
     private var startCentre = CLLocationCoordinate2D()
     private var startDistance = 0.0
 
+    /// Whether the person is moving the map: a finger on it, or the glide a pan or a pinch leaves behind.
+    var isPersonMoving: Bool { personMove.isMoving }
+
     func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
-        movedByPerson = Self.isTouched(mapView)
+        guard personMove.willChange(touched: Self.isTouched(mapView), ownFrame: follow.isSettingCamera) else { return }
         startCentre = mapView.centerCoordinate
         startDistance = mapView.camera.centerCoordinateDistance
     }
@@ -363,8 +412,7 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
 
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
         report(mapView)
-        guard movedByPerson else { return }
-        movedByPerson = false
+        guard personMove.didChange(ownFrame: follow.isSettingCamera) else { return }
         let then = mapView.convert(startCentre, toPointTo: mapView)
         let now = mapView.convert(mapView.centerCoordinate, toPointTo: mapView)
         let move = AppleMapGeometry.personMove(from: startDistance, to: mapView.camera.centerCoordinateDistance,
@@ -397,8 +445,142 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
     }
 
     /// Whether a finger is on the map now (one of its gesture recognisers has begun or is moving).
-    private static func isTouched(_ mapView: MKMapView) -> Bool {
+    static func isTouched(_ mapView: MKMapView) -> Bool {
         let recognisers = (mapView.subviews.first?.gestureRecognizers ?? []) + (mapView.gestureRecognizers ?? [])
         return recognisers.contains { $0.state == .began || $0.state == .changed || $0.state == .ended }
+    }
+}
+
+/// Moves MapKit's camera with Sprout's glide (``WorldFollowGlide``), one display frame at a time, while the map
+/// follows the person (follow smoothing, 2026-11-01): the camera and Sprout move as one, and the map slides under
+/// a Sprout that keeps its spot. One display link, and only while there is something to move: it stops once Sprout
+/// has come to rest, when following stops (a pan) and when the map leaves the window, and the next reading starts
+/// it again. A move, never a transition: each frame is a camera set without animation, as a pan's frames are, so
+/// the fog and the lines move their layers with it and repaint nothing, and nothing flashes.
+///
+/// - **Easing in.** Starting (Back to Sprout, the automatic re-follow, the first glide after a jump) or after a
+///   zoom, the camera eases from where the map stands to Sprout over ``easeSeconds`` while Sprout moves on.
+/// - **Never fighting the person.** While a finger is on the map, and through the glide a pan or a pinch leaves
+///   after it lifts, the camera holds still (a pan then stops following, a pinch keeps it); a resting finger that
+///   moved nothing lets it ease back. Its own camera sets never count as the person's move, nor end one.
+/// - **Cheap.** A frame whose move is under ``stepPoints`` of a point is skipped (a walker's Sprout moves about a
+///   point a second at Home's zoom), and the link asks for no more than 60 frames a second.
+@MainActor
+private final class AppleMapFollowDriver {
+    /// The glide the camera follows, as the view last had it.
+    var glide: WorldFollowGlide?
+    /// Fernlet's camera as the view now has it: whether it still follows, and how far up it stands.
+    var camera: () -> WorldCamera? = { nil }
+    /// Whether the person is moving the map (a finger on it, or a pan's or a pinch's glide after it lifts).
+    var isPersonMoving: () -> Bool = { false }
+    /// Whether this driver is setting the camera now: the region changes MapKit reports inside are its own.
+    private(set) var isSettingCamera = false
+    private weak var map: MKMapView?
+    private var link: CADisplayLink?
+    /// The camera's start when easing in: its centre, its height and when the ease began.
+    private var ease: (centre: GeoPoint, distance: Double, began: CFTimeInterval)?
+    /// Whether a finger held the camera last frame (it eases back once the finger lifts).
+    private var heldByTouch = false
+    /// The height the camera followed at last frame, to tell a zoom from the next reading.
+    private var followedDistance: Double?
+
+    /// How long the camera takes to ease onto Sprout, in seconds.
+    static let easeSeconds = 0.5
+    /// The smallest move a frame makes, in points.
+    static let stepPoints = 0.3
+
+    /// Starts following the glide on `map`, easing in; already following, the new reading just carries on.
+    func start(on map: MKMapView, now: CFTimeInterval = CACurrentMediaTime()) {
+        self.map = map
+        guard link == nil else { return }
+        beginEase(from: map, now: now)
+        let link = CADisplayLink(target: AppleMapFrameTarget(driver: self), selector: #selector(AppleMapFrameTarget.frame(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    /// Stops the display link (nothing left to move, or the map no longer follows).
+    func stop() {
+        link?.invalidate()
+        link = nil
+        ease = nil
+        heldByTouch = false
+        followedDistance = nil
+    }
+
+    /// One display frame at `now`: Sprout's place, and the camera on it.
+    func frame(at now: CFTimeInterval) {
+        guard let map, let glide, let camera = camera(), camera.follows, map.window != nil else {
+            stop()
+            return
+        }
+        guard !AppleMutedMapCoordinator.isTouched(map), !isPersonMoving() else {
+            heldByTouch = true
+            return
+        }
+        let zoomed = followedDistance.map { abs($0 - camera.distance) >= WorldCamera.stillMetres } ?? false
+        if heldByTouch || zoomed {
+            heldByTouch = false
+            beginEase(from: map, now: now)
+        }
+        glide.advance(to: now)
+        guard let goal = glide.cameraCentre(distance: camera.distance) else {
+            stop()
+            return
+        }
+        let shot = eased(toward: goal, distance: camera.distance, now: now)
+        place(map, centre: shot.centre, distance: shot.distance)
+        followedDistance = camera.distance
+        if ease == nil, glide.isSettled(at: now) { stop() }
+    }
+
+    private func beginEase(from map: MKMapView, now: CFTimeInterval) {
+        let centre = map.camera.centerCoordinate, distance = map.camera.centerCoordinateDistance
+        guard CLLocationCoordinate2DIsValid(centre), distance.isFinite, distance > 0 else { return }
+        ease = (GeoPoint(centre.latitude, centre.longitude), distance, now)
+    }
+
+    /// The camera at `now`: on `goal` at `distance`, or on its way there from the ease's start (smoothstep).
+    private func eased(toward goal: GeoPoint, distance: Double, now: CFTimeInterval) -> (centre: GeoPoint, distance: Double) {
+        guard let start = ease else { return (goal, distance) }
+        let t = min(max((now - start.began) / Self.easeSeconds, 0), 1)
+        guard t < 1 else {
+            ease = nil
+            return (goal, distance)
+        }
+        let s = t * t * (3 - 2 * t)
+        return (start.centre.lerp(to: goal, s), start.distance + (distance - start.distance) * s)
+    }
+
+    /// Sets the camera without animation, unless it would move less than ``stepPoints``.
+    private func place(_ map: MKMapView, centre: GeoPoint, distance: Double) {
+        guard centre.isValid, distance.isFinite, distance > 0, map.bounds.height > 0 else { return }
+        let shown = map.camera.centerCoordinate, shownDistance = map.camera.centerCoordinateDistance
+        let metresPerPoint = distance * PlainBaseMap.heightPerDistance / Double(map.bounds.height)
+        let moved = GeoPoint(shown.latitude, shown.longitude).distance(to: centre)
+        guard moved >= metresPerPoint * Self.stepPoints || abs(shownDistance - distance) >= WorldCamera.stillMetres else { return }
+        isSettingCamera = true
+        map.setCamera(AppleMapGeometry.mapCamera(centre: centre, distance: distance), animated: false)
+        isSettingCamera = false
+    }
+}
+
+/// The display link's target, holding the driver weakly so the link never keeps a gone map's driver alive; with
+/// the driver gone it stops its link.
+@MainActor
+private final class AppleMapFrameTarget: NSObject {
+    private weak var driver: AppleMapFollowDriver?
+
+    init(driver: AppleMapFollowDriver) {
+        self.driver = driver
+    }
+
+    @objc func frame(_ link: CADisplayLink) {
+        guard let driver else {
+            link.invalidate()
+            return
+        }
+        driver.frame(at: link.targetTimestamp)
     }
 }

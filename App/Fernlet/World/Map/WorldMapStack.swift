@@ -32,6 +32,9 @@ struct WorldMapStack<Overlay: View>: View {
     /// Where the caller reads the last viewport back without redrawing (Home: whether Sprout left the
     /// visible map); nil for none.
     var geometry: WorldMapGeometry? = nil
+    /// Sprout's glide, which the base map's camera follows frame by frame (Home's only): handed to the base map
+    /// alone, so a sheet's map over Home never follows it.
+    var followGlide: WorldFollowGlide? = nil
     @State private var viewport: MapViewport?
 
     var body: some View {
@@ -43,6 +46,7 @@ struct WorldMapStack<Overlay: View>: View {
                     geometry?.viewport = reported
                     geometry?.size = proxy.size
                 }
+                .environment(\.worldFollowGlide, followGlide)
                 .accessibilityHidden(true)
                 if veiled {
                     (isDark ? WorldPalette.nightPlainGround : WorldPalette.plainGround)
