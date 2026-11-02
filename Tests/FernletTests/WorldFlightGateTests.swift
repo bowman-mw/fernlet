@@ -1,7 +1,13 @@
+import CryptoKit
 import Foundation
 import Testing
 import WorldMapStore
 @testable import Fernlet
+
+/// Whether the made-up phone is locked: the vault's when-unlocked key can't be read while it is.
+private nonisolated final class PhoneLock: @unchecked Sendable {
+    var isLocked = false
+}
 
 /// Made-up airports for the flight gate: well-known codes on simple 3 km circles and one square outline, not the
 /// shipped pack's. None comes from the owner's own flights.
@@ -213,6 +219,78 @@ struct WorldFlightGateTests {
         #expect(taken.contains(.airportFound(token: "CDG", how: .landing, at: Self.start.addingTimeInterval(9 * 3_600 + 60))))
         #expect(taken.contains { if case .landed(let token, let from, _, _) = $0 { token == "CDG" && from == "PDX" } else { false } })
         #expect(taken.contains(.airportFound(token: "PDX", how: .takeOff, at: Self.start.addingTimeInterval(370))))
+    }
+
+    /// The owner's landing at PNS (2026-11-02): the passport was already read, then the phone locked, so its key can't
+    /// save. The find must wait, not be taken and lost, and reach the passport once the phone unlocks.
+    @Test func aPassportThatCantSaveWhileLockedLeavesTheFindsWaiting() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let key = SymmetricKey(size: .bits256), lock = PhoneLock()
+        let keys = WorldMapKeys(key: { role in
+            guard role != .store || !lock.isLocked else { throw WorldMapVault.VaultError.keyUnavailable }
+            return key
+        }, removeAll: { true })
+        let atlas = WorldAtlasKeeper(vault: WorldMapVault(directory: directory, keys: keys), openAtlas: { nil })
+        let flights = WorldFlightKeeper(grounds: { Self.airports }, iataCode: { $0 })
+        #expect(atlas.opensForFlights(), "read while unlocked")
+
+        lock.isLocked = true
+        let landing: [FlightEvent] = [.airportFound(token: "CDG", how: .landing, at: Self.start),
+                                      .landed(token: "CDG", from: "PDX", departed: Self.start.addingTimeInterval(-3_600), at: Self.start)]
+        #expect(atlas.opensForFlights(), "still in memory, which is what let the find through")
+        #expect(!FernletStore.record(landing, in: atlas, flights: flights), "it couldn't be saved, so it isn't taken")
+        #expect(atlas.book.visits(of: .airport)["CDG"] == nil)
+
+        lock.isLocked = false
+        #expect(FernletStore.record(landing, in: atlas, flights: flights))
+        #expect(atlas.book.visits(of: .airport)["CDG"] != nil)
+        #expect(atlas.book.flights.count == 1, "the flight waited too")
+        #expect(FernletStore.record(landing, in: atlas, flights: flights), "handing it again changes nothing")
+        #expect(atlas.book.flights.count == 1)
+    }
+
+    /// A find the passport never got (an earlier build dropped it, or iOS closed Fernlet while it waited) comes back
+    /// with the next reading while the person is still there, and stops once the passport has it.
+    @Test func aLandingThePassportMissedIsHandedAgainWhileStillThere() {
+        let source = WorldLocationSource()
+        source.flights.useAirports({ Self.airports }, iataCode: { $0 })
+        var holds = false, taken: [FlightEvent] = []
+        source.flights.passportHolds = { _ in holds }
+        source.flights.onEvents = { _ in true }
+        Self.flyPortlandToParis(source)
+        source.flights.onEvents = { events in
+            taken += events
+            return true
+        }
+        source.deliver(Self.reading(Self.cdgPoint.offset(east: 200, north: 0), 9 * 3_600 + 300, kmh: 5))
+        #expect(source.flights.layoverAirport == "CDG")
+        let landedAt = Self.start.addingTimeInterval(9 * 3_600 + 60)
+        #expect(taken.contains { event in
+            if case .airportFound("CDG", .landing, let at) = event { abs(at.timeIntervalSince(landedAt)) < 1 } else { false }
+        }, "stamped at the landing, not at this reading")
+        #expect(source.flights.latestFind?.token == "CDG")
+
+        taken = []
+        holds = true
+        source.deliver(Self.reading(Self.cdgPoint.offset(east: 210, north: 0), 9 * 3_600 + 360, kmh: 5))
+        #expect(taken.isEmpty, "the passport has it now")
+    }
+
+    /// Standing at an airport with no landing and no trip finds nothing from this rule.
+    @Test func standingAtAnAirportIsNotHandedAsAMissedFind() {
+        let source = WorldLocationSource()
+        source.flights.useAirports({ Self.airports }, iataCode: { $0 })
+        var taken: [FlightEvent] = []
+        source.flights.passportHolds = { _ in false }
+        source.flights.onEvents = { events in
+            taken += events
+            return true
+        }
+        source.deliver(Self.reading(Self.cdgPoint, 0, kmh: 0))
+        source.deliver(Self.reading(Self.cdgPoint.offset(east: 10, north: 0), 30, kmh: 0))
+        #expect(source.flights.currentAirport == "CDG")
+        #expect(taken.isEmpty)
     }
 
     /// A late reading (a visit's arrival, delivered after newer ones) inside a flight is refused; one from before
