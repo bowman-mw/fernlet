@@ -21,8 +21,9 @@ enum WorldExploreCopy {
     }
 
     /// A country's name in the app's language, from its alpha-2 code (the code itself when the system has no name).
+    /// Spanish follows the app's own variant: Spain's names for `es`, Mexico's ("Arabia Saudita") for `es-MX`.
     static func country(code: String, locale: Locale = .current) -> String {
-        let language = showsSpanish ? Locale(identifier: "es") : locale
+        let language = showsSpanish ? Locale(identifier: Bundle.main.preferredLocalizations.first ?? "es") : locale
         return language.localizedString(forRegionCode: code) ?? code
     }
 

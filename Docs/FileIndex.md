@@ -1395,6 +1395,7 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | `Docs/AI-Feature-Expansion-2026-07-23.md` | Seven features riding the ladder, and the canonical build order for both AI docs. F3/F4/F5 shipped; F6/F7 deferred by decision D-C. |
 | `Docs/Meal-Estimation-Overhaul-Plan.md` | Meal-estimation overhaul. Partially shipped; the chain-restaurant importer and dynamic product-image discovery were not re-audited item-by-item. |
 | `Docs/Multi-Device-Without-iCloud-Design-2026-06-29.md` | Multi-device without iCloud. Phase 1 shipped; Phases 2–3 (owned-device pairing, mesh backup transfer, offline escrow, live merge) unstarted. |
+| `Docs/Localization-es-MX.md` | Fernlet's Mexican Spanish: why `es-MX` has to be complete (no key-by-key fallback to `es`), `Scripts/fill-es-mx-catalogs.py`, and the Spain/Mexico word table. |
 | `Docs/Localization-Plan-2026-07-19.md` | es/fr/de localization. **Phase 0 (locale-correctness fixes) and Phase 1 (string-catalog plumbing + the token/display forks) shipped 2026-08-19**; the Phase 1 bulk string conversion and Phases 2–5 remain planned only. See the Localization section above for the token/display rule the forks established. |
 | `Docs/Sealed-Backup-Escrow-Recovery-FollowUp-2026-06-28.md` | Sealed-backup escrow recovery (including BIP39 recovery codes) and the "nothing destructive happens silently" settings contract. **SHIPPED** — all five workstreams landed; the doc's own header once read "not started" long after the work was done. |
 

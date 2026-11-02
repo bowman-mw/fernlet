@@ -123,13 +123,14 @@ struct WorldFlightArcsTests {
 
     // MARK: Words
 
-    /// Distances round to 10 km and group by thousands, "," in English and "." in Spanish (even at four digits).
+    /// Distances round to 10 km and group by thousands, "," in English and Mexico's Spanish, "." in Spain's (even at
+    /// four digits).
     @Test func distancesRoundAndGroup() {
-        #expect(WorldFlightArcs.groupedKilometres(3_617.4, spanish: false) == "3,620")
-        #expect(WorldFlightArcs.groupedKilometres(3_617.4, spanish: true) == "3.620")
-        #expect(WorldFlightArcs.groupedKilometres(162_398, spanish: false) == "162,400")
-        #expect(WorldFlightArcs.groupedKilometres(1_234_567, spanish: true) == "1.234.570")
-        #expect(WorldFlightArcs.groupedKilometres(878, spanish: false) == "880")
-        #expect(WorldFlightArcs.groupedKilometres(-5, spanish: false) == "0")
+        #expect(WorldFlightArcs.groupedKilometres(3_617.4, separator: ",") == "3,620")
+        #expect(WorldFlightArcs.groupedKilometres(3_617.4, separator: ".") == "3.620")
+        #expect(WorldFlightArcs.groupedKilometres(162_398, separator: ",") == "162,400")
+        #expect(WorldFlightArcs.groupedKilometres(1_234_567, separator: ".") == "1.234.570")
+        #expect(WorldFlightArcs.groupedKilometres(878, separator: ",") == "880")
+        #expect(WorldFlightArcs.groupedKilometres(-5, separator: ",") == "0")
     }
 }

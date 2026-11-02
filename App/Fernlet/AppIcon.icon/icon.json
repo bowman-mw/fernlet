@@ -1,0 +1,96 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "srgb:0.96078,0.93725,0.87451,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "srgb:0.10980,0.11765,0.10588,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "face.png",
+          "name": "face"
+        },
+        {
+          "glass": true,
+          "image-name": "leaves.png",
+          "name": "leaves"
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "body.png",
+          "name": "body"
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "glass": false,
+          "hidden-specializations": [
+            {
+              "value": false
+            },
+            {
+              "appearance": "tinted",
+              "value": true
+            }
+          ],
+          "image-name-specializations": [
+            {
+              "value": "ground.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "ground-dark.png"
+            }
+          ],
+          "name": "ground"
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0
+      },
+      "specular": false,
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

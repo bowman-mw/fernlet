@@ -13,7 +13,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Atrás"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Atrás"
           }
         }
@@ -31,7 +37,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Volver a %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Volver a %@"
           }
         }
@@ -49,7 +61,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cancelar"
           }
         }
@@ -67,7 +85,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cerrar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cerrar"
           }
         }
@@ -85,7 +109,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "OK"
           }
         }
@@ -103,7 +133,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Guardar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Guardar"
           }
         }
@@ -121,7 +157,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Oculto mientras se graba tu pantalla"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Oculto mientras se graba tu pantalla"
           }
         }
@@ -139,7 +181,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Oculto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Oculto"
           }
         }
@@ -157,7 +205,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Una captura de pantalla queda fuera de la protección de Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Una captura de pantalla queda fuera de la protección de Fernlet."
           }
         }
@@ -175,7 +229,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Estos son tus datos privados — donde están más seguros es en tu dispositivo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Estos son tus datos privados — donde están más seguros es en tu dispositivo."
           }
         }
@@ -207,13 +267,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "%lld moneda"
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "%lld monedas"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld moneda"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "%lld monedas"
                 }
               }
@@ -234,7 +312,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descartar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descartar"
           }
         }
@@ -252,7 +336,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Seguir editando"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Seguir editando"
           }
         }
@@ -270,7 +360,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lo que hayas escrito aquí no se guardará."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lo que escribiste aquí no se guardará."
           }
         }
@@ -288,7 +384,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "¿Descartar los cambios?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "¿Descartar los cambios?"
           }
         }

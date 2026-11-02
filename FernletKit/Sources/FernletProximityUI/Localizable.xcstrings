@@ -13,7 +13,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo guardar ninguna de las fotos seleccionadas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo guardar ninguna de las fotos seleccionadas."
           }
         }
@@ -31,7 +37,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "OK"
           }
         }
@@ -49,8 +61,14 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tus amigos se quedan en tu lista para la buena vibra y los próximos encuentros. Es solo para ti: no se les avisará, elijas lo que elijas."
+            "state" : "translated",
+            "value" : "Tus amigos se quedan en tu lista para el buen rollo y las próximas quedadas. Es solo para ti: no se les avisará, elijas lo que elijas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus amigos se quedan en tu lista para la buena vibra y los próximos convivios. Es solo para ti: no se les avisará, elijas lo que elijas."
           }
         }
       }
@@ -67,7 +85,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Conservar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Conservar"
           }
         }
@@ -85,7 +109,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se queda"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se queda"
           }
         }
@@ -103,8 +133,14 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "os conocisteis juntando teléfonos"
+            "state" : "translated",
+            "value" : "os conocisteis juntando los móviles"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se conocieron juntando teléfonos"
           }
         }
       }
@@ -121,7 +157,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "¿Conservar como amigos?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "¿Conservar como amigos?"
           }
         }
@@ -139,7 +181,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "¡Qué buena quedada!"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "¡Qué buen rato!"
           }
         }
@@ -157,7 +205,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Guardar también las conservadas en Fotos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Guardar también las conservadas en Fotos"
           }
         }
@@ -175,7 +229,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no ha podido guardar tu elección. No se ha perdido nada. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo guardar tu elección. No se perdió nada. Inténtalo de nuevo."
           }
         }
@@ -207,13 +267,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "Eliminar %lld foto"
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "Eliminar las %lld"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Eliminar %lld foto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "Eliminar las %lld"
                 }
               }
@@ -234,7 +312,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se eliminarán de este móvil. Tus amigos conservan sus propias copias."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se eliminarán de este teléfono. Tus amigos conservan sus propias copias."
           }
         }
@@ -252,7 +336,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "¿Eliminar esta foto compartida?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "¿Eliminar esta foto compartida?"
           }
         }
@@ -284,13 +374,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "¿Eliminar %lld foto compartida?"
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld fotos compartidas?"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "¿Eliminar %lld foto compartida?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "¿Eliminar %lld fotos compartidas?"
                 }
               }
@@ -311,7 +419,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Eliminarla"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Eliminarla"
           }
         }
@@ -329,7 +443,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Terminando la sesión..."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Terminando la sesión..."
           }
         }
@@ -347,7 +467,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "No se guarda nada de esta sesión hasta que elijas. Las fotos que no conserves se eliminan de este móvil."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "No se guarda nada de esta sesión hasta que elijas. Las fotos que no conserves se eliminan de este teléfono."
           }
         }
@@ -365,7 +491,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Conservar seleccionadas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Conservar seleccionadas"
           }
         }
@@ -383,7 +515,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ahora no se pueden conservar porque Fernlet no puede leer tus fotos guardadas. Puedes eliminar estas o decidir más tarde."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ahora no se pueden conservar porque Fernlet no puede leer tus fotos guardadas. Puedes eliminar estas o decidir más tarde."
           }
         }
@@ -401,7 +539,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ahora no"
           }
         }
@@ -419,7 +563,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Denunciar…"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Reportar…"
           }
         }
@@ -437,7 +587,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Guardando en Fotos..."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Guardando en Fotos..."
           }
         }
@@ -455,7 +611,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fotos ocultas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fotos ocultas"
           }
         }
@@ -473,7 +635,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Toca dos veces para elegir si la conservas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Toca dos veces para elegir si la conservas."
           }
         }
@@ -491,7 +659,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Foto de %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Foto de %@"
           }
         }
@@ -509,7 +683,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Revisar fotos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Revisar fotos"
           }
         }
@@ -541,13 +721,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "No se ha podido abrir %lld foto y se ha eliminado."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No se han podido abrir %lld fotos y se han eliminado."
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "%lld foto no se pudo abrir y se eliminó."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "%lld fotos no se pudieron abrir y se eliminaron."
                 }
               }
@@ -568,7 +766,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo guardar ninguna de las fotos seleccionadas. Puede que estén dañadas: intenta elegir otras."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo guardar ninguna de las fotos seleccionadas. Puede que estén dañadas: intenta elegir otras."
           }
         }
@@ -586,7 +790,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo guardar esta foto. Puede que esté dañada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo guardar esta foto. Puede que esté dañada."
           }
         }
@@ -604,7 +814,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo guardar en tu fototeca. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo guardar en tu fototeca. Inténtalo de nuevo."
           }
         }
@@ -622,7 +838,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "OK"
           }
         }
@@ -640,7 +862,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abrir Ajustes"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abrir Configuración"
           }
         }
@@ -658,7 +886,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet necesita acceso a tu fototeca para guardar fotos. Abre Ajustes para darle acceso."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet necesita acceso a tu fototeca para guardar fotos. Abre Configuración para darle acceso."
           }
         }

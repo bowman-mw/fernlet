@@ -88,11 +88,14 @@ struct FlightImportPlanTests {
         #expect(abs(model.totalMetres - 7_890_000) < 30_000)
     }
 
-    /// Distances round to 10 km and group by threes, with "." in Spanish.
+    /// Distances round to 10 km and group by threes, with "." in Spain's Spanish and "," in English and Mexico's.
     @Test func kilometresGroupByLanguage() {
-        #expect(PassportFlightsText.kilometres(24_848_000, language: .english) == "24,850 km")
-        #expect(PassportFlightsText.kilometres(162_400_000, language: .spanish) == "162.400 km")
-        #expect(PassportFlightsText.kilometres(880_400, language: .english) == "880 km")
+        #expect(PassportFlightsText.kilometres(24_848_000, separator: ",") == "24,850 km")
+        #expect(PassportFlightsText.kilometres(162_400_000, separator: ".") == "162.400 km")
+        #expect(PassportFlightsText.kilometres(880_400, separator: ",") == "880 km")
+        #expect(FernletLanguage.thousandsSeparator(localization: "en") == ",")
+        #expect(FernletLanguage.thousandsSeparator(localization: "es") == ".")
+        #expect(FernletLanguage.thousandsSeparator(localization: "es-MX") == ",")
         #expect(PassportFlightsText.duration(9_600) == "2 h 40 min")
     }
 

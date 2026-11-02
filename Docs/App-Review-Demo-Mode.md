@@ -111,3 +111,14 @@ can reach anyone.
   (harmless), and the shop's saved designer name goes with the delete-everything funnel.
 - The demo screens' own words (the Welcome link, the Settings section, the passcode hint) are
   English only: `Scripts/sync-string-catalogs.sh` builds Debug, where they are compiled out.
+
+## Languages
+
+The demo's sample data is seeded once, in the device's language, through
+`FernletStore.reviewDemoSample(_:_:)`. It is the pretend person's own typing, so it is stored as written;
+no token changes. The sample keys (`reviewDemo.*`) and the demo screens' copy are **manual** entries in
+`App/Fernlet/Localizable.xcstrings`: the demo's files compile only into the Demo configuration, so
+`Scripts/sync-string-catalogs.sh` never extracts them and leaves manual entries alone. A new demo string
+needs its catalog entry written by hand, in every language. Spanish workout names and exercise lines
+show the Move row's category as "Cuerpo completo", as any Spanish-typed workout does: the category is
+inferred from English words.

@@ -31,9 +31,9 @@ nonisolated enum WorldFlightCopy {
                                                          comment: "Your world plate: the airports found, then every flight flown, e.g. 6 airports · 53 flights"))
     }
 
-    /// A distance on an arc's card: "3,620 km" ("3.620 km" in Spanish), to the nearest 10 km.
+    /// A distance on an arc's card: "3,620 km" ("3.620 km" in Spain's Spanish), to the nearest 10 km.
     static func distance(_ kilometres: Double) -> String {
-        let number = WorldFlightArcs.groupedKilometres(kilometres, spanish: WorldViewNames.language == .spanish)
+        let number = WorldFlightArcs.groupedKilometres(kilometres, separator: FernletLanguage.appThousandsSeparator)
         return String(localized: LocalizedStringResource("worldView.flights.km", defaultValue: "\(number) km",
                                                          comment: "Your world: a flight route's great-circle distance in kilometres, e.g. 3,620 km"))
     }

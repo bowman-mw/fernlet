@@ -12,7 +12,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$lld lpm · ideal %2$lld–%3$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld lpm · ideal %2$lld–%3$lld"
           }
         }
@@ -29,7 +35,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$lld lpm · ideal %2$lld–%3$lld · %4$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld lpm · ideal %2$lld–%3$lld · %4$@"
           }
         }
@@ -39,6 +51,12 @@
       "extractionState" : "stale",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld por ciento"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld por ciento"
@@ -94,7 +112,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Una imagen del mapa a tu alrededor, con tus lugares marcados y tus rutas guardadas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Una imagen del mapa a tu alrededor, con tus lugares marcados y tus rutas guardadas."
           }
         }
@@ -104,7 +128,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Un sello de tu álbum, y el que has ganado hoy."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Un sello de tu álbum, y el que ganaste hoy."
           }
         }
@@ -121,7 +151,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Añadir 15 segundos de descanso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Agregar 15 segundos de descanso"
           }
         }
@@ -138,7 +174,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "He añadido 15 segundos a tu descanso."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Agregué 15 segundos a tu descanso."
           }
         }
@@ -155,7 +197,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Añade 15 segundos a tu descanso actual, hasta 10 minutos en total."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Agrega 15 segundos a tu descanso actual, hasta 10 minutos en total."
           }
         }
@@ -165,7 +213,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Añade una botella de agua al registro de hoy en Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Agrega una botella de agua al registro de hoy en Fernlet."
           }
         }
@@ -182,7 +236,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ideal: pocas palabras a la vez"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ideal: pocas palabras a la vez"
           }
         }
@@ -199,7 +259,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ideal: hablar en frases cortas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ideal: hablar en frases cortas"
           }
         }
@@ -209,6 +275,12 @@
       "comment" : "Silly stats stamp name, earned when Coffee Tower first appears",
       "localizations" : {
         "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contador de granos"
+          }
+        },
+        "es-MX" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Contador de granos"
@@ -224,6 +296,12 @@
             "state" : "needs_review",
             "value" : "Puntuación de cuidado"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puntuación de cuidado"
+          }
         }
       }
     },
@@ -231,7 +309,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cocinando"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cocinando"
           }
         }
@@ -241,7 +325,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no ha podido actualizar tu entrenamiento ahora mismo. Inténtalo de nuevo en un momento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo actualizar tu entrenamiento justo ahora. Inténtalo de nuevo en un momento."
           }
         }
@@ -252,7 +342,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Duende de las migas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Duende de las migas"
           }
         }
@@ -262,7 +358,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Terminar serie"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Terminar serie"
           }
         }
@@ -279,7 +381,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ritmo suave"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ritmo suave"
           }
         }
@@ -296,7 +404,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Suave · ronda %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Suave · ronda %1$lld de %2$lld"
           }
         }
@@ -307,7 +421,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "¡Otra, otra!"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "¡Otra, otra!"
           }
         }
@@ -317,7 +437,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Termina antes el descanso actual y pasa a tu próxima serie."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Termina antes el descanso actual y pasa a tu próxima serie."
           }
         }
@@ -328,7 +454,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Sueños de eucalipto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Sueños de eucalipto"
           }
         }
@@ -344,7 +476,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ejercicio %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ejercicio %1$lld de %2$lld"
           }
         }
@@ -355,7 +493,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Bien lejos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Bien lejos"
           }
         }
@@ -365,7 +509,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet"
           }
         }
@@ -379,6 +529,12 @@
             "state" : "needs_review",
             "value" : "Compañero de Fernlet"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compañero de Fernlet"
+          }
         }
       }
     },
@@ -386,7 +542,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Terminar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Terminar"
           }
         }
@@ -396,7 +558,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Terminar entrenamiento"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Terminar entrenamiento"
           }
         }
@@ -407,7 +575,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Hilo de oro"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Hilo de oro"
           }
         }
@@ -417,7 +591,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "De tu álbum de sellos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "De tu álbum de sellos"
           }
         }
@@ -428,7 +608,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Puro cariño"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Puro cariño"
           }
         }
@@ -445,7 +631,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ritmo intenso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ritmo intenso"
           }
         }
@@ -462,7 +654,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Intenso · ronda %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Intenso · ronda %1$lld de %2$lld"
           }
         }
@@ -479,7 +677,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Frecuencia cardiaca %1$lld, ideal entre %2$lld y %3$lld, %4$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Frecuencia cardiaca %1$lld, ideal entre %2$lld y %3$lld, %4$@"
           }
         }
@@ -489,7 +693,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Mantén"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Mantén"
           }
         }
@@ -499,7 +709,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Mantén %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Mantén %@"
           }
         }
@@ -510,7 +726,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Especialidad de la casa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Especialidad de la casa"
           }
         }
@@ -520,7 +742,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "En curso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "En curso"
           }
         }
@@ -537,7 +765,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Última vez: %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Última vez: %@"
           }
         }
@@ -547,7 +781,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lado izquierdo · mantén %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lado izquierdo · mantén %@"
           }
         }
@@ -557,7 +797,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registrar una botella de agua"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registrar una botella de agua"
           }
         }
@@ -574,7 +820,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descanso más largo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descanso más largo"
           }
         }
@@ -584,7 +836,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Marca la serie actual como hecha e inicia tu temporizador de descanso."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Marca la serie actual como hecha e inicia tu temporizador de descanso."
           }
         }
@@ -601,7 +859,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Menos 15"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Menos 15"
           }
         }
@@ -618,7 +882,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Menos 15 segundos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Menos 15 segundos"
           }
         }
@@ -628,7 +898,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Pasa al siguiente paso de la receta que estás cocinando."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Pasa al siguiente paso de la receta que estás cocinando."
           }
         }
@@ -638,7 +914,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Nuevo hoy"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Nuevo hoy"
           }
         }
@@ -648,7 +930,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Siguiente"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Siguiente"
           }
         }
@@ -658,7 +946,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Siguiente paso de la receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Siguiente paso de la receta"
           }
         }
@@ -668,7 +962,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Después · %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Después · %@"
           }
         }
@@ -684,7 +984,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Después · %1$@ · Serie %2$lld de %3$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Después · %1$@ · Serie %2$lld de %3$lld"
           }
         }
@@ -694,7 +1000,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Aún sin estado de ánimo hoy"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Aún sin estado de ánimo hoy"
           }
         }
@@ -711,7 +1023,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que cambiar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que cambiar."
           }
         }
@@ -721,7 +1039,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que omitir."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que omitir."
           }
         }
@@ -731,7 +1055,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay serie que terminar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "No hay ningún entrenamiento en curso, así que no hay serie que terminar."
           }
         }
@@ -741,7 +1071,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abre Fernlet"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abre Fernlet"
           }
         }
@@ -751,7 +1087,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abre Fernlet para retomarlo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abre Fernlet para retomarlo"
           }
         }
@@ -762,7 +1104,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Noche de estreno"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Noche de estreno"
           }
         }
@@ -773,7 +1121,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Le ganamos a un gastrotrico"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Le ganamos a un gastrotrico"
           }
         }
@@ -783,7 +1137,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "En pausa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "En pausa"
           }
         }
@@ -794,7 +1154,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cargador de pianos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cargador de pianos"
           }
         }
@@ -811,7 +1177,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Más 15"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Más 15"
           }
         }
@@ -828,7 +1200,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Más 15 segundos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Más 15 segundos"
           }
         }
@@ -838,7 +1216,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Repetir paso de la receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Repetir paso de la receta"
           }
         }
@@ -848,7 +1232,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descanso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descanso"
           }
         }
@@ -858,7 +1248,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descanso omitido: tu entrenamiento ha terminado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descanso omitido: tu entrenamiento terminó."
           }
         }
@@ -868,8 +1264,14 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Descanso omitido. Sigue tu próxima serie."
+            "state" : "translated",
+            "value" : "Descanso omitido. Te toca la siguiente serie."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descanso omitido. Te toca la siguiente serie."
           }
         }
       }
@@ -878,7 +1280,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Reinicia el temporizador del paso actual de la receta."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Reinicia el temporizador del paso actual de la receta."
           }
         }
@@ -888,7 +1296,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lado derecho · mantén %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lado derecho · mantén %@"
           }
         }
@@ -905,7 +1319,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ronda %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ronda %1$lld de %2$lld"
           }
         }
@@ -916,7 +1336,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Patito de goma"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Patito de goma"
           }
         }
@@ -932,7 +1358,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Serie %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Serie %1$lld de %2$lld"
           }
         }
@@ -948,7 +1380,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Serie %1$lld de %2$lld · %3$@ reps"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Serie %1$lld de %2$lld · %3$@ reps"
           }
         }
@@ -964,7 +1402,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Serie %1$lld de %2$lld · mantén %3$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Serie %1$lld de %2$lld · mantén %3$@"
           }
         }
@@ -974,7 +1418,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Serie terminada. Ahora toca descansar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Serie terminada. Ahora toca descansar."
           }
         }
@@ -984,8 +1434,14 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Serie terminada. Sigue tu próximo ejercicio."
+            "state" : "translated",
+            "value" : "Serie terminada. Te toca el siguiente ejercicio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie terminada. Te toca el siguiente ejercicio."
           }
         }
       }
@@ -1001,7 +1457,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descanso más corto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descanso más corto"
           }
         }
@@ -1011,7 +1473,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Omitir descanso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Omitir descanso"
           }
         }
@@ -1022,7 +1490,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Rebanada de vida"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Rebanada de vida"
           }
         }
@@ -1033,7 +1507,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Un pequeño paso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Un pequeño paso"
           }
         }
@@ -1043,7 +1523,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Sellos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Sellos"
           }
         }
@@ -1054,7 +1540,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Línea de salida"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Línea de salida"
           }
         }
@@ -1071,7 +1563,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ritmo constante"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ritmo constante"
           }
         }
@@ -1087,7 +1585,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Paso %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Paso %1$lld de %2$lld"
           }
         }
@@ -1104,7 +1608,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Peso sugerido %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Peso sugerido %@"
           }
         }
@@ -1115,7 +1625,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Huevo frito"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Huevo estrellado"
           }
         }
@@ -1132,7 +1648,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Quitar 15 segundos al descanso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Quitar 15 segundos al descanso"
           }
         }
@@ -1142,7 +1664,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Hazlo a tu ritmo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Hazlo a tu ritmo"
           }
         }
@@ -1159,7 +1687,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Quita 15 segundos a tu descanso actual y siempre deja al menos 5 segundos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Quita 15 segundos a tu descanso actual y siempre deja al menos 5 segundos."
           }
         }
@@ -1169,7 +1703,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Esa era la última serie: tu entrenamiento ha terminado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Esa fue la última serie: tu entrenamiento terminó."
           }
         }
@@ -1180,7 +1720,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Caminar o no caminar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Caminar o no caminar"
           }
         }
@@ -1190,7 +1736,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "El agua de hoy, con un botón para añadir una botella."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "El agua de hoy, con un botón para agregar una botella."
           }
         }
@@ -1207,7 +1759,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "He quitado 15 segundos a tu descanso."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Quité 15 segundos a tu descanso."
           }
         }
@@ -1218,7 +1776,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Plátano jefe"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Plátano jefe"
           }
         }
@@ -1229,7 +1793,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cada vez más alto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cada vez más alto"
           }
         }
@@ -1246,7 +1816,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Calentamiento %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Calentamiento %1$lld de %2$lld"
           }
         }
@@ -1263,7 +1839,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Calentamiento %1$lld de %2$lld · %3$@ reps"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Calentamiento %1$lld de %2$lld · %3$@ reps"
           }
         }
@@ -1273,7 +1855,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Agua"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Agua"
           }
         }
@@ -1290,7 +1878,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Peso %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Peso %@"
           }
         }
@@ -1301,7 +1895,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ruedas y olas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ruedas y olas"
           }
         }
@@ -1311,7 +1911,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Entrenamiento"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Entrenamiento"
           }
         }
@@ -1328,7 +1934,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ahora no estás descansando, así que no hay descanso que cambiar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ahora no estás descansando, así que no hay descanso que cambiar."
           }
         }
@@ -1338,7 +1950,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ahora no estás descansando, así que no hay nada que omitir."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ahora no estás descansando, así que no hay nada que omitir."
           }
         }
@@ -1348,7 +1966,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ahora estás descansando, así que todavía no hay serie que terminar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ahora estás descansando, así que todavía no hay serie que terminar."
           }
         }
@@ -1358,7 +1982,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Tu compañero, con la ropa que le has puesto, y cómo va su día."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Tu compañero, con la ropa que le pusiste, y cómo va su día."
           }
         }
@@ -1368,7 +1998,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Tu primer sello te espera"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Tu primer sello te espera"
           }
         }
@@ -1379,7 +2015,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Tu mapa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Tu mapa"
           }
         }
@@ -1396,7 +2038,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Tu descanso ya está en su límite de 10 minutos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Tu descanso ya está en su límite de 10 minutos."
           }
         }
@@ -1413,8 +2061,14 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tu descanso está por terminar, así que no hay nada que quitar."
+            "state" : "translated",
+            "value" : "Tu descanso está a punto de terminar, así que no hay nada que quitar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu descanso está a punto de terminar, así que no hay nada que quitar."
           }
         }
       }
@@ -1430,8 +2084,14 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "un poco arriba"
+            "state" : "translated",
+            "value" : "un poco alta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un poco alta"
           }
         }
       }
@@ -1447,8 +2107,14 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "un poco abajo"
+            "state" : "translated",
+            "value" : "un poco baja"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un poco baja"
           }
         }
       }
@@ -1465,7 +2131,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Dormido"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Dormido"
           }
         }
@@ -1483,7 +2155,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "está profundamente dormido"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "está profundamente dormido"
           }
         }
@@ -1501,7 +2179,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "se siente feliz"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "se siente feliz"
           }
         }
@@ -1519,7 +2203,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "tiene hambre"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "tiene hambre"
           }
         }
@@ -1537,7 +2227,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "se siente triste"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "se siente triste"
           }
         }
@@ -1558,6 +2254,12 @@
             "state" : "translated",
             "value" : "tiene sueño"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiene sueño"
+          }
         }
       }
     },
@@ -1573,7 +2275,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "tiene sed"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "tiene sed"
           }
         }
@@ -1591,7 +2299,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "se siente cansado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "se siente cansado"
           }
         }
@@ -1609,7 +2323,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Feliz"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Feliz"
           }
         }
@@ -1627,7 +2347,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Con hambre"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Con hambre"
           }
         }
@@ -1645,7 +2371,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Triste"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Triste"
           }
         }
@@ -1663,7 +2395,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Con sueño"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Con sueño"
           }
         }
@@ -1693,7 +2431,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Con sed"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Con sed"
           }
         }
@@ -1711,7 +2455,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cansado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cansado"
           }
         }
@@ -1729,7 +2479,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Bien"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Bien"
           }
         }
@@ -1747,7 +2503,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descansando"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descansando"
           }
         }
@@ -1765,7 +2527,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Enfermo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Enfermo"
           }
         }
@@ -1786,6 +2554,12 @@
             "state" : "translated",
             "value" : "Radiante"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radiante"
+          }
         }
       }
     },
@@ -1801,7 +2575,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cansado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cansado"
           }
         }
@@ -1818,7 +2598,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "en rango"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "en rango"
           }
         }
@@ -1835,7 +2621,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "la última vez %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "la última vez %@"
           }
         }
@@ -1852,7 +2644,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "la última vez %1$lld por %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "la última vez %1$lld por %2$@"
           }
         }
@@ -1869,7 +2667,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "la última vez %1$lld por %2$@ con %3$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "la última vez %1$lld por %2$@ con %3$@"
           }
         }
@@ -1886,7 +2690,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "rango de %1$@ a %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "rango de %1$@ a %2$@"
           }
         }
@@ -1896,7 +2706,13 @@
       "localizations" : {
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "para conocer a tu compañero"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "para conocer a tu compañero"
           }
         }
@@ -1914,7 +2730,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@ · %2$@"
           }
         }
@@ -1932,7 +2754,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cuidado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cuidado"
           }
         }
@@ -1950,7 +2778,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "un corazón dorado de un amigo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "un corazón dorado de un amigo"
           }
         }
@@ -1968,7 +2802,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%lld por ciento"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%lld por ciento"
           }
         }
@@ -1986,7 +2826,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@, %2$@"
           }
         }
@@ -2004,7 +2850,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "dos corazones dorados de amigos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "dos corazones dorados de amigos"
           }
         }
@@ -2022,7 +2874,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "C"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "C"
           }
         }
@@ -2040,7 +2898,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "G"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "G"
           }
         }
@@ -2058,7 +2922,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "P"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "P"
           }
         }
@@ -2076,7 +2946,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
           }
         }
@@ -2094,7 +2970,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Mapa de %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Mapa de %@"
           }
         }
@@ -2112,7 +2994,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld de %2$lld"
           }
         }
@@ -2130,7 +3018,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld sellos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld de %2$lld sellos"
           }
         }
@@ -2148,7 +3042,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ganado a las %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ganado a las %@"
           }
         }
@@ -2166,7 +3066,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ganado el %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ganado el %@"
           }
         }
@@ -2184,7 +3090,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "ganado el %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "ganado el %@"
           }
         }
@@ -2202,7 +3114,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "ganado hoy a las %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "ganado hoy a las %@"
           }
         }
@@ -2220,7 +3138,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Durmiendo profundamente."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Durmiendo profundamente."
           }
         }
@@ -2238,7 +3162,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Un día recién estrenado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Un día recién estrenado."
           }
         }
@@ -2256,7 +3186,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Dando vueltas sin prisa."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Dando vueltas sin prisa."
           }
         }
@@ -2274,7 +3210,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ya me voy relajando."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ya me voy relajando."
           }
         }
@@ -2292,7 +3234,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Tomándome la mañana con calma."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Tomándome la mañana con calma."
           }
         }
@@ -2310,7 +3258,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Echándome una siesta tranquila."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Tomando una siesta tranquila."
           }
         }
@@ -2328,7 +3282,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Acurrucándome para la noche."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Acurrucándome para la noche."
           }
         }
@@ -2346,7 +3306,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Acurrucado un ratito más."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Acurrucado un ratito más."
           }
         }
@@ -2364,7 +3330,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Arropado con una mantita."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Arropado con una mantita."
           }
         }
@@ -2382,7 +3354,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Descansando para mañana."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Descansando para mañana."
           }
         }
@@ -2400,7 +3378,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Hoy voy con calma."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Hoy voy con calma."
           }
         }
@@ -2418,7 +3402,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "El sol me ha encontrado esta tarde."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "El sol me encontró esta tarde."
           }
         }
@@ -2436,7 +3426,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Poniéndome cómodo para la noche."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Poniéndome cómodo para la noche."
           }
         }
@@ -2454,7 +3450,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Hoy me he despertado ligero."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Hoy desperté ligero."
           }
         }
@@ -2472,7 +3474,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Un día más bien lento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Un día más bien lento."
           }
         }
@@ -2490,7 +3498,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Listo para un largo descanso."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Listo para un largo descanso."
           }
         }
@@ -2508,7 +3522,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Todavía con un poco de sueño. Está bien."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Todavía con un poco de sueño. Está bien."
           }
         }
@@ -2526,7 +3546,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$lld / %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld / %2$lld"
           }
         }
@@ -2558,13 +3584,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "de %lld botella"
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "de %lld botellas"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "de %lld botella"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "de %lld botellas"
                 }
               }
@@ -2606,7 +3650,7 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
             "value" : "%1$lld de %#@target@"
           },
           "substitutions" : {
@@ -2617,13 +3661,41 @@
                 "plural" : {
                   "one" : {
                     "stringUnit" : {
-                      "state" : "needs_review",
+                      "state" : "translated",
                       "value" : "%arg botella"
                     }
                   },
                   "other" : {
                     "stringUnit" : {
-                      "state" : "needs_review",
+                      "state" : "translated",
+                      "value" : "%arg botellas"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %#@target@"
+          },
+          "substitutions" : {
+            "target" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg botella"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
                       "value" : "%arg botellas"
                     }
                   }

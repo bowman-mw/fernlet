@@ -13,7 +13,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo crear la actividad."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo crear la actividad."
           }
         }
@@ -31,7 +37,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Esa actividad ha caducado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Esa actividad ya venció."
           }
         }
@@ -49,7 +61,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Esta actividad ya está completa."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Esta actividad ya está completa."
           }
         }
@@ -67,7 +85,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo aceptar la solicitud para unirse."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo aceptar la solicitud para unirse."
           }
         }
@@ -99,13 +123,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "Puedes organizar hasta %lld actividad."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "Puedes organizar hasta %lld actividades."
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Puedes organizar hasta %lld actividad."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "Puedes organizar hasta %lld actividades."
                 }
               }
@@ -126,7 +168,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "La identidad de este móvil no está disponible."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "La identidad de este teléfono no está disponible."
           }
         }
@@ -144,7 +192,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo verificar esa invitación."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo verificar esa invitación."
           }
         }
@@ -162,7 +216,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ya te has unido al máximo de actividades."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ya te uniste al máximo de actividades."
           }
         }
@@ -180,7 +240,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo actualizar la actividad."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo actualizar la actividad."
           }
         }
@@ -198,7 +264,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ya le estás enviando cariño a %@; un momento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ya le estás enviando cariño a %@; un momento."
           }
         }
@@ -216,7 +288,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se ha cortado la conexión; no se ha enviado ningún corazón."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se cortó la conexión; no se envió ningún corazón."
           }
         }
@@ -234,7 +312,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Acabas de enviarle cariño a %@. Los corazones hacen una pausa de unos minutos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Acabas de enviarle cariño a %@. Los corazones hacen una pausa de unos minutos."
           }
         }
@@ -252,7 +336,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo enviar ese corazón en este momento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo enviar ese corazón en este momento."
           }
         }
@@ -270,7 +360,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo verificar a %@; no se envió ningún corazón."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo verificar a %@; no se envió ningún corazón."
           }
         }
@@ -288,7 +384,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo verificar a esta persona; no se envió ningún corazón."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo verificar a esta persona; no se envió ningún corazón."
           }
         }
@@ -306,7 +408,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%@ no ha respondido; inténtalo de nuevo en un momento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%@ no respondió; inténtalo de nuevo en un momento."
           }
         }
@@ -324,7 +432,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Activa Corazones cerca para enviarle cariño a %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Activa Corazones cerca para enviarle cariño a %@."
           }
         }
@@ -342,7 +456,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "No se ha enviado ningún corazón: se ha cortado la conexión."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "No se envió ningún corazón: se cortó la conexión."
           }
         }
@@ -360,7 +480,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%@ no está cerca y Fernlet no pudo guardar el corazón ahora; inténtalo de nuevo en un momento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%@ no está cerca y Fernlet no pudo guardar el corazón ahora; inténtalo de nuevo en un momento."
           }
         }
@@ -378,7 +504,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%@ no está cerca en este momento; por ahora, los corazones viajan en persona."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%@ no está cerca en este momento; por ahora, los corazones viajan en persona."
           }
         }
@@ -396,7 +528,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo conservar esa foto. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo conservar esa foto. Inténtalo de nuevo."
           }
         }
@@ -428,13 +566,31 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
+                  "value" : "Ya has compartido el máximo de %lld foto en esta sesión."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Ya has compartido el máximo de %lld fotos en esta sesión."
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
                   "value" : "Ya compartiste el máximo de %lld foto en esta sesión."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "needs_review",
+                  "state" : "translated",
                   "value" : "Ya compartiste el máximo de %lld fotos en esta sesión."
                 }
               }
@@ -455,7 +611,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Amigo de %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Amigo de %@"
           }
         }
@@ -473,7 +635,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Todavía se está conectando con otro Fernlet; compartir recetas enlaza solo dos Fernlet a la vez."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Todavía se está conectando con otro Fernlet; compartir recetas enlaza solo dos Fernlet a la vez."
           }
         }
@@ -491,7 +659,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo conectarse de forma segura con %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo conectarse de forma segura con %@."
           }
         }
@@ -509,7 +683,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo enviar esa receta."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo enviar esa receta."
           }
         }
@@ -527,7 +707,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%@ no responde; puede que ese Fernlet esté ocupado compartiendo con otra persona."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%@ no responde; puede que ese Fernlet esté ocupado compartiendo con otra persona."
           }
         }
@@ -545,7 +731,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Este móvil ya está conectado con %@; compartir recetas enlaza solo dos Fernlet a la vez."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Este teléfono ya está conectado con %@; compartir recetas enlaza solo dos Fernlet a la vez."
           }
         }
@@ -563,7 +755,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Todavía estás compartiendo con %@; compartir recetas enlaza solo dos Fernlet a la vez."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Todavía estás compartiendo con %@; compartir recetas enlaza solo dos Fernlet a la vez."
           }
         }
@@ -581,7 +779,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ese Fernlet cercano ya no está disponible."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ese Fernlet cercano ya no está disponible."
           }
         }
