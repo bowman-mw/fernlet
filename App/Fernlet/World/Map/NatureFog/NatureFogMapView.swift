@@ -79,6 +79,12 @@ final class NatureFogMapView: UIView {
     /// every half octave (the owner's zoom artifact, 2026-10-30).
     static let holdRange = 0.6...1.7
 
+    /// The furthest one frame's slide goes, in points, for the map still to count as sitting still (a drive at Home's
+    /// nearest zoom is about 2.5).
+    static let driftPoints = 4.0
+    /// How much the zoom may change in one frame, as a share, for a slide to count as drift.
+    static let driftZoomShare = 0.001
+
     private static let swayKey = "nf.sway"
     /// Core Animation files every transition under `kCATransition`, whatever key it is added with.
     private static let clearKey = "clearing"
@@ -200,7 +206,7 @@ final class NatureFogMapView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let change = sync(scale: scale, scene: scene)
-        noteMovement(viewport, motion: scene.motion)
+        noteMovement(viewport, size: size, motion: scene.motion)
         if let change { refresh(change, scene: scene, map: map) }
         lastMap = map
         placeOutgoing(viewport, size: size)
@@ -809,15 +815,31 @@ extension NatureFogMapView {
         container.sublayers?.first { $0.animation(forKey: clearKey) != nil }
     }
 
-    /// Pauses the sway while the map moves, and arranges for it to resume once the map sits still.
-    private func noteMovement(_ viewport: MapViewport, motion: NatureFogMotion) {
+    /// Pauses the sway while the map moves, and arranges for it to resume once the map sits still. The map
+    /// sliding slowly at one zoom (``isDrift(from:to:size:)``) counts as still: following the person moves it a
+    /// little every frame, for as long as they walk or drive, and the grass would never sway nor a zoom's scale
+    /// ever settle (follow smoothing, 2026-11-01).
+    private func noteMovement(_ viewport: MapViewport, size: CGSize, motion: NatureFogMotion) {
         if !motion.sways { setSway(false) }
         guard viewport != lastViewport else { return }
+        let drifting = lastViewport.map { Self.isDrift(from: $0, to: viewport, size: size) } ?? false
         lastViewport = viewport
+        guard !drifting else { return }
         lastMove = CACurrentMediaTime()
         isSettled = false
         setSway(false)
         scheduleSettle()
+    }
+
+    /// Whether the map went from `old` to `new` by sliding at most ``driftPoints`` at the same zoom: a following
+    /// camera's frame, not a pan or a pinch.
+    static func isDrift(from old: MapViewport, to new: MapViewport, size: CGSize) -> Bool {
+        guard old.isUsable, new.isUsable, size.width > 0, size.height > 0, old.width > 0, old.height > 0 else { return false }
+        let sameZoom = abs(new.width - old.width) <= old.width * driftZoomShare
+            && abs(new.height - old.height) <= old.height * driftZoomShare
+        guard sameZoom else { return false }
+        let across = (new.minX - old.minX) * new.pointsPerUnit(in: size), down = (new.minY - old.minY) * new.pointsPerUnit(in: size)
+        return (across * across + down * down).squareRoot() <= driftPoints
     }
 
     private func scheduleSettle() {

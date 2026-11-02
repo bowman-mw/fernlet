@@ -17,6 +17,9 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// CoreLocation's own speed for the reading, in metres a second; nil when it gave none (W-14: the stop
     /// watch tells a car pulling away from a red light from a person who stopped).
     var speed: Double? = nil
+    /// CoreLocation's course for the reading, in degrees clockwise from true north; nil when it gave none (the
+    /// follow glide carries Sprout on along it between a drive's readings, ``WorldFollowGlide``).
+    var course: Double? = nil
     /// Whether car detection says the person is in a car (round 7: Motion's automotive activity, read only
     /// while "Log my bike rides" is on and allowed); nil when Motion is off, and the stop watch then keeps its
     /// speed rule (W-14).
@@ -462,6 +465,7 @@ extension WorldLocationSource: CLLocationManagerDelegate {
             WorldFix(point: GeoPoint(location.coordinate.latitude, location.coordinate.longitude),
                      accuracy: location.horizontalAccuracy, at: location.timestamp, isPrecise: precise,
                      speed: location.speed >= 0 ? location.speed : nil,
+                     course: location.course >= 0 && location.courseAccuracy >= 0 ? location.course : nil,
                      altitude: location.verticalAccuracy >= 0 ? location.altitude : nil,
                      verticalAccuracy: location.verticalAccuracy >= 0 ? location.verticalAccuracy : nil)
         }
