@@ -42,8 +42,8 @@ extension FernletStore {
     /// The keys are MANUAL entries in the app catalog (`extractionState: manual`): this file is compiled
     /// only into the Demo configuration, so `Scripts/sync-string-catalogs.sh` never extracts them, and a
     /// manual entry is one the sync leaves alone.
-    static func reviewDemoSample(_ key: StaticString, _ english: String.LocalizationValue) -> String {
-        String(localized: key, defaultValue: english, comment: "App Review demo: sample data")
+    static func reviewDemoSample(_ key: StaticString, _ english: String) -> String {
+        String(localized: key, defaultValue: String.LocalizationValue(english), comment: "App Review demo: sample data")
     }
 
     /// Plants the demo's sample data. Skips (logged) when the diary already holds meals or recipes, so
