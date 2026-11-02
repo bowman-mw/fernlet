@@ -24,9 +24,15 @@ outline would leave one pixel of leaf, so the small fern is solid leaf shapes. C
 palette (`App/Fernlet/World/Theme/WorldPalette.swift`) and the companion's own inks.
 
 PIXELS STAY PIXELS. Every image is drawn as solid squares at whole-pixel positions, never resampled.
-The app icon stays a flat PNG set rather than an Icon Composer file, so Liquid Glass does not soften
-the edges. App icon PNGs are 8-bit RGB with no alpha, which App Store Connect requires; the tab icons
-and the LinkedIn logo keep their transparency. In the dark the bark-brown stem vanishes, so it turns
+
+LIQUID GLASS (owner, 2026-11-01). The app icon is `App/Fernlet/AppIcon.icon`, an Icon Composer file this
+script writes: the parchment as its fill, then the dot grid and ground shadow, Sprout's body, and its
+leaves and face floating in front. iOS draws the glass, the depth and the Dark, Tinted and Clear looks
+from those layers. The layers are drawn on the same 40-pixel grid as the flat icon, and the body and the
+front stay opaque, so the silhouette keeps its squares. The flat PNG set stays beside it for the
+apple-touch-icon's drawing and as the fallback under the same name. Those PNGs are 8-bit RGB with no alpha,
+which App Store Connect requires; the glass layers, the tab icons and the LinkedIn logo keep their
+transparency. In the dark the bark-brown stem vanishes, so it turns
 pale sage there, the treatment the smooth mark used: `favicon.svg` switches by itself with
 `prefers-color-scheme`, and the header mark ships as `fernlet-mark-header.svg` and `-dark.svg`, which
 the pages pick between with `<picture>`. The header is drawn at 30 and 22.5 CSS pixels (style.css),
@@ -38,6 +44,7 @@ NEEDS: Pillow (python3 -m pip install pillow).
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -50,6 +57,7 @@ except ImportError as missing:
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPROUT_SVG = os.path.join(REPO, "Site/assets/companion/thriving.svg")
 ICON_SET = os.path.join(REPO, "App/Fernlet/Assets.xcassets/AppIcon.appiconset")
+GLASS_ICON = os.path.join(REPO, "App/Fernlet/AppIcon.icon")
 SITE_ASSETS = os.path.join(REPO, "Site/assets")
 
 # --- palette (WorldPalette) ----------------------------------------------------------------------
@@ -189,6 +197,77 @@ def sprout_on_parchment(size, mode):
     return image
 
 
+def glass_layers():
+    """Sprout split for Liquid Glass, as 1024 x 1024 transparent images on the flat icon's grid.
+
+    The face and leaves come off the body, and the body keeps its own green under the face, so the layers can
+    shift apart in depth without showing a hole.
+    """
+    cell, ox, oy = 40, 32, 12
+    art = sprout()
+    leaves = {key: ink for key, ink in art.items() if key[1] <= 6}
+    face_inks = (hex_rgb("#2A1A10"), hex_rgb("#E8A3A0"))
+    face = {key: ink for key, ink in art.items() if ink in face_inks}
+    body = {key: (hex_rgb("#5E844D") if key in face else ink) for key, ink in art.items() if key not in leaves}
+    layers = {}
+    for name, grid in (("body", body), ("leaves", leaves), ("face", face)):
+        layers[name] = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+        paint(layers[name], grid, ox, oy, cell)
+    for mode, name in (("light", "ground"), ("dark", "ground-dark")):
+        layers[name] = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+        dot_grid(layers[name], cell * 2, ox, oy, *DOT[mode])
+        shade = hex_rgb(GROUND_SHADOW[mode])
+        shadow = {(x, 21): shade for x in range(7, 17)}
+        shadow.update({(x, 22): shade for x in range(9, 15)})
+        paint(layers[name], shadow, ox, oy, cell)
+    return layers
+
+
+def srgb(value):
+    """An Icon Composer colour string."""
+    return "srgb:" + ",".join(f"{channel / 255:.5f}" for channel in hex_rgb(value)) + ",1.00000"
+
+
+def glass_group(name, glass, opacity):
+    return {
+        "layers": [{"glass": glass, "image-name": f"{name}.png", "name": name}],
+        "shadow": {"kind": "layer-color", "opacity": opacity},
+        "specular": glass,
+        "translucency": {"enabled": False, "value": 0.5},
+    }
+
+
+def write_glass_icon():
+    """Writes App/Fernlet/AppIcon.icon. Groups run front to back, as Icon Composer lists them."""
+    assets = os.path.join(GLASS_ICON, "Assets")
+    os.makedirs(assets, exist_ok=True)
+    for name, image in glass_layers().items():
+        image.save(os.path.join(assets, f"{name}.png"), optimize=True)
+    ground = glass_group("ground", False, 0)
+    ground["layers"][0]["image-name-specializations"] = [
+        {"value": "ground.png"}, {"appearance": "dark", "value": "ground-dark.png"}]
+    del ground["layers"][0]["image-name"]
+    # iOS draws Tinted and Clear in one tone, where the soft shadow would turn into the brightest thing on the icon.
+    ground["layers"][0]["hidden-specializations"] = [{"value": False}, {"appearance": "tinted", "value": True}]
+    icon = {
+        "fill-specializations": [
+            {"value": {"solid": srgb(PAGE["light"])}},
+            {"appearance": "dark", "value": {"solid": srgb(PAGE["dark"])}},
+        ],
+        "groups": [
+            {**glass_group("face", False, 0), "layers": [
+                {"glass": False, "image-name": "face.png", "name": "face"},
+                {"glass": True, "image-name": "leaves.png", "name": "leaves"}], "specular": True},
+            glass_group("body", True, 0.5),
+            ground,
+        ],
+        "supported-platforms": {"squares": "shared"},
+    }
+    with open(os.path.join(GLASS_ICON, "icon.json"), "w", encoding="utf-8") as out:
+        json.dump(icon, out, indent=2, sort_keys=True)
+        out.write("\n")
+
+
 def sprout_up_close(size):
     """Option C: the Instagram picture. The leaf tip sits a cell and a half below the top; the circle
     crop keeps the leaves, eyes and cheeks and trims only the body's lower sides."""
@@ -266,6 +345,7 @@ def main():
     for mode, name in (("light", "fernlet-icon-1024.png"), ("dark", "fernlet-icon-dark-1024.png"),
                        ("tinted", "fernlet-icon-tinted-1024.png")):
         save_rgb(sprout_on_parchment(1024, mode), os.path.join(ICON_SET, name))
+    write_glass_icon()
     save_rgb(sprout_on_parchment(180, "light"), os.path.join(SITE_ASSETS, "apple-touch-icon.png"))
     tab_fern(1).save(os.path.join(SITE_ASSETS, "favicon-16.png"), optimize=True)
     tab_fern(2).save(os.path.join(SITE_ASSETS, "favicon-32.png"), optimize=True)
