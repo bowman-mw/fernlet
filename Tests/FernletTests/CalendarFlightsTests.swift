@@ -220,7 +220,7 @@ struct CalendarFlightsTests {
         store.setWorldAirportsAndFlights(false, defaults: defaults)
         let taken = store.recordWorldFlightEvents([.airportFound(token: "PDX", how: .landing, at: Self.now)], defaults: defaults)
         #expect(taken)
-        #expect(store.worldFog.atlas.book.count(of: .airport) == 0)
+        #expect(!store.worldFog.atlas.book.holdsAirportsOrFlights)
     }
 
     // MARK: The first look (screen 28)
