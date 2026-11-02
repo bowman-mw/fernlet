@@ -927,6 +927,11 @@ through `PlannedWorkout.displayedNotes` and `Workout.displayedNotes`.
 
 ### Companion and appearance
 
+The companion is called Sprout. ``CompanionName`` is where that name comes from: the person's own choice, or
+``CompanionName/standard`` ("Sprout", never translated) when they have none, read as
+``FernletSettings/companionDisplayName``. "Fernlet" is the app's name and never the companion's.
+
+- ``CompanionName``
 - ``CompanionState``
 - ``CompanionEmotion``
 - ``CompanionAppearance``

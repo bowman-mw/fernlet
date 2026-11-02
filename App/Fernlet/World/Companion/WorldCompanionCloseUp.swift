@@ -34,16 +34,16 @@ struct WorldCloseUpReaction: Equatable {
     /// No reaction showing.
     static let none = WorldCloseUpReaction(squishes: false, blushes: false, hearts: 0, line: nil)
 
-    /// The reaction for the governor's answer.
-    static func make(for response: PetInteractionGovernor.Response) -> WorldCloseUpReaction {
+    /// The reaction for the governor's answer; `name` is the companion's, for the settled lines.
+    static func make(for response: PetInteractionGovernor.Response, name: String) -> WorldCloseUpReaction {
         switch response {
         case .bounce:
             WorldCloseUpReaction(squishes: true, blushes: true, hearts: 3, line: WorldCloseUpCopy.tickles)
         case .settling:
-            WorldCloseUpReaction(squishes: true, blushes: true, hearts: 3, line: HomeCopy.settledThought)
+            WorldCloseUpReaction(squishes: true, blushes: true, hearts: 3, line: HomeCopy.settledThought(name: name))
         case .calmIdle(let showsSettledLine):
             WorldCloseUpReaction(squishes: false, blushes: true, hearts: 0,
-                                 line: showsSettledLine ? HomeCopy.settledAgainLine : nil)
+                                 line: showsSettledLine ? HomeCopy.settledAgainLine(name: name) : nil)
         }
     }
 }

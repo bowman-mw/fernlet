@@ -216,7 +216,7 @@ final class OnboardingCoordinatorModel {
     var goalPlanningLevel = "beginner"
     var goalPlanningInterests = ""
     var goalPlanningConstraints = ""
-    var starterName = "Fernlet"
+    var starterName = CompanionName.standard
     /// Typed, not a display string — the picker, the live preview, and the write in `complete()` all
     /// read this one value, so they cannot disagree about what colour was chosen.
     var starterColor: CompanionAssetColor = .fern
@@ -707,7 +707,7 @@ private struct OnboardingStarterScreen: View {
         VStack(spacing: 0) {
             OnboardingScreenContainer(
                 stepText: stepText,
-                title: "Make Fernlet yours",
+                title: "Make Sprout yours",
                 subtitle: "Pick a starter name and color. You can change these later.",
                 backAction: backAction
             ) {
@@ -723,10 +723,12 @@ private struct OnboardingStarterScreen: View {
                 .frame(maxWidth: .infinity)
 
                 SheetField("Name") {
-                    TextField("Fernlet", text: $starterName, prompt: .fieldPrompt("Fernlet"))
+                    TextField(text: $starterName, prompt: .fieldPrompt(verbatim: CompanionName.standard)) {
+                        Text(verbatim: CompanionName.standard)
+                    }
                         .textInputAutocapitalization(.words)
                         .sheetTextInput()
-                        // Read "Fernlet, text field" — the default name, with nothing saying it is one.
+                        // Read "Sprout, text field" — the default name, with nothing saying it is one.
                         .accessibilityLabel("Name")
                         .accessibilityIdentifier("onboarding.starter.name")
                 }

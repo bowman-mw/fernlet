@@ -10,11 +10,9 @@ import WorldMapStore
 extension FernletStore {
     // MARK: Homes and hotels
 
-    /// The companion's name as the approved copy says "Sprout": the person's choice, or "Fernlet".
-    var worldCompanionName: String {
-        let chosen = settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return chosen.isEmpty ? "Fernlet" : chosen
-    }
+    /// The companion's name as every screen says it: the person's choice, or "Sprout" (``CompanionName``).
+    /// The one app-side reader; screens call this rather than trimming `settings.companionName` themselves.
+    var worldCompanionName: String { settings.companionDisplayName }
 
     /// The homes and hotel as last read (none in a decoy; DEBUG scenes `homes` and `hotel` stand one in where
     /// the person stands, display only).

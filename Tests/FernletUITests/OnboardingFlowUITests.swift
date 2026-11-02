@@ -113,7 +113,7 @@ final class OnboardingFlowUITests: XCTestCase {
 
     @MainActor
     private func continueFromStarter(_ app: XCUIApplication) {
-        XCTAssertTrue(app.staticTexts["Make Fernlet yours"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Make Sprout yours"].waitForExistence(timeout: 2))
         app.buttons["Continue"].tap()
     }
 

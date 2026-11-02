@@ -94,7 +94,7 @@ struct WorldMapCompanion: View, Equatable {
         onHintEnded()
     }
 
-    /// The companion's real name ("Sprout"; "Fernlet" when none is chosen).
+    /// The companion's name: the person's choice, or "Sprout" when none is chosen.
     private var name: String { WorldRecenterCopy.companionName(store) }
 
     /// What VoiceOver calls the companion: its name; on its bike, one image with the bike ("Sprout, riding a

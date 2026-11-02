@@ -244,6 +244,11 @@ public nonisolated struct FernletSettings: Codable {
     /// once-per-day "you've already updated your shop today" note. Nil until the first listing change.
     public var shopLastPublishedDayKey: String? = nil
     public var companionName: String = ""
+    /// One-time marker for the companion's rename to Sprout (owner, 2026-11-01). Fresh installs start
+    /// `true`; a blob written before the rename decodes `false`, so a name still saved as onboarding's old
+    /// default "Fernlet" becomes "Sprout" once (``CompanionName/renamedOldDefault(_:)``), then this flips and a
+    /// name typed afterwards, "Fernlet" included, is never touched.
+    public var didMigrateCompanionNameToSprout: Bool = true
     /// The planner's person-level context. Its injury picker (`WorkoutProfile.injuryAreas`) is
     /// encoded at THIS blob's top level (`workoutInjuryAreas` + `unknownWorkoutInjuryAreaTokens`),
     /// not inside the nested profile, so an older build's key parking keeps it through a re-save.
@@ -595,7 +600,10 @@ public nonisolated struct FernletSettings: Codable {
         allowNearbyFriendState = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyFriendState) ?? false
         hasPromptedForPresence = try container.decodeIfPresent(Bool.self, forKey: .hasPromptedForPresence) ?? false
         shopLastPublishedDayKey = try container.decodeIfPresent(String.self, forKey: .shopLastPublishedDayKey)
-        companionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
+        let decodedCompanionName = try container.decodeIfPresent(String.self, forKey: .companionName) ?? ""
+        let renamedToSprout = try container.decodeIfPresent(Bool.self, forKey: .didMigrateCompanionNameToSprout) ?? false
+        companionName = renamedToSprout ? decodedCompanionName : CompanionName.renamedOldDefault(decodedCompanionName)
+        didMigrateCompanionNameToSprout = true
     }
 
     /// Workout configuration (profile, locations, progression, custom exercises) and the trainer
@@ -743,7 +751,7 @@ public nonisolated struct FernletSettings: Codable {
              didMigrateMilestonesFirstAidWidgets, didMigrateMealPhotosWidget, didMigrateSillyStatsWidget, personalCareTasks,
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
-             hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
+             hasPromptedForPresence, shopLastPublishedDayKey, companionName, didMigrateCompanionNameToSprout, workoutProfile,
              workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
              workoutLocations, workoutLocationWeights, activeWorkoutLocationID, workoutProgression,
              customExercises, workoutHiddenExercises, workoutExerciseAlternates,
@@ -863,6 +871,7 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(hasPromptedForPresence, forKey: .hasPromptedForPresence)
         try container.encodeIfPresent(shopLastPublishedDayKey, forKey: .shopLastPublishedDayKey)
         try container.encode(companionName, forKey: .companionName)
+        try container.encode(didMigrateCompanionNameToSprout, forKey: .didMigrateCompanionNameToSprout)
     }
 
     /// Mirror of `decodeWorkoutAndExport(from:)`.

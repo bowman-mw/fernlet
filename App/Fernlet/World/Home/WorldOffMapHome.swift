@@ -90,10 +90,9 @@ struct WorldOffMapHome<Companion: View>: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// The companion's own name, or Fernlet.
+    /// The companion's name (``FernletStore/worldCompanionName``).
     private var companionName: String {
-        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return chosen.isEmpty ? "Fernlet" : chosen
+        store.worldCompanionName
     }
 }
 

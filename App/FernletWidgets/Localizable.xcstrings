@@ -372,6 +372,7 @@
       }
     },
     "Fernlet companion" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

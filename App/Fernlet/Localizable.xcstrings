@@ -12101,6 +12101,7 @@
       }
     },
     "Fernlet" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12252,6 +12253,7 @@
       }
     },
     "Fernlet companion" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -17791,11 +17793,22 @@
       }
     },
     "Make Fernlet yours" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Haz tuyo a Fernlet"
+          }
+        }
+      }
+    },
+    "Make Sprout yours" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Haz tuyo a Sprout"
           }
         }
       }
@@ -44785,37 +44798,37 @@
       }
     },
     "home.thought.settled" : {
-      "comment" : "Home companion thought bubble when petting settles the companion. Fern is the companion's name; keep it as is.",
+      "comment" : "Home companion thought bubble when petting settles the companion. The placeholder is the companion's name (Sprout unless the person renamed it).",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Fern is soaking up all this love — feeling completely content."
+            "value" : "%@ is soaking up all this love — feeling completely content."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Fern está disfrutando de todo este cariño y se siente completamente contento."
+            "value" : "%@ está disfrutando de todo este cariño y se siente completamente contento."
           }
         }
       }
     },
     "home.thought.settledAgain" : {
-      "comment" : "Home companion thought bubble when the user keeps petting a settled companion. Warm, never a refusal. Fern is the companion's name.",
+      "comment" : "Home companion thought bubble when the user keeps petting a settled companion. Warm, never a refusal. The placeholder is the companion's name (Sprout unless the person renamed it).",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Fern is feeling nice and settled — check back in a little while."
+            "value" : "%@ is feeling nice and settled — check back in a little while."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Fern se siente tranquilo y a gusto. Vuelve a verlo en un ratito."
+            "value" : "%@ se siente tranquilo y a gusto. Vuelve a verlo en un ratito."
           }
         }
       }
@@ -44839,19 +44852,19 @@
       }
     },
     "home.thought.tap.notices" : {
-      "comment" : "Home companion thought bubble after a tap on the companion. 'Fernlet' is the app's name; keep it as is.",
+      "comment" : "Home companion thought bubble after a tap on the companion. The placeholder is the companion's name (Sprout unless the person renamed it).",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Fernlet notices you."
+            "value" : "%@ notices you."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Fernlet se fija en ti."
+            "value" : "%@ se fija en ti."
           }
         }
       }
