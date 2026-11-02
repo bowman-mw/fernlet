@@ -89,7 +89,7 @@ struct PassportSproutWearing: View {
             }
             PassportSproutPairs {
                 rowButton(.wardrobe, sprite: WorldSprites.face, title: Text("Wardrobe"), identifier: "wardrobe")
-                rowButton(.creationStudio, sprite: WorldSprites.pen, title: Text("Creation Studio"), identifier: "studio")
+                rowButton(.creationStudio, sprite: WorldSprites.pen, title: Text(LocalizedStringResource("passport.sprout.studio", defaultValue: "Creation Studio", comment: "Sprout's passport page: the half-width button that opens Creation Studio. Keep it short (Spanish: Estudio)")), identifier: "studio")
             }
         }
     }

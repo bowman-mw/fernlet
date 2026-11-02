@@ -13,7 +13,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo procesar la imagen. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo procesar la imagen. Inténtalo de nuevo."
           }
         }
@@ -31,7 +37,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo leer ningún texto en esa imagen. Prueba con una foto más nítida de la información nutricional."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo leer ningún texto en esa imagen. Prueba con una foto más nítida de la información nutricional."
           }
         }
@@ -49,7 +61,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Como haya ido el día, una pequeña nota de cuidado también cuenta."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Como haya ido el día, una pequeña nota de cuidado también cuenta."
           }
         }
@@ -70,6 +88,12 @@
             "state" : "translated",
             "value" : "Un momento para ti"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un momento para ti"
+          }
         }
       }
     },
@@ -85,7 +109,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abre Fernlet para responder: los mensajes de la sesión desaparecen cuando termina la sesión."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abre Fernlet para responder: los mensajes de la sesión desaparecen cuando termina la sesión."
           }
         }
@@ -103,7 +133,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Nuevo mensaje de %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Nuevo mensaje de %@"
           }
         }
@@ -124,6 +160,12 @@
             "state" : "translated",
             "value" : "un amigo"
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un amigo"
+          }
         }
       }
     },
@@ -139,7 +181,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Suelta con calma. El siguiente paso te espera cuando quieras."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Suelta con calma. El siguiente paso te espera cuando quieras."
           }
         }
@@ -157,7 +205,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Ya puedes soltar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Ya puedes soltar"
           }
         }
@@ -178,6 +232,12 @@
             "state" : "translated",
             "value" : "Empieza la siguiente serie cuando estés ^[listo](inflect: true)."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empieza la siguiente serie cuando estés ^[listo](inflect: true)."
+          }
         }
       }
     },
@@ -193,8 +253,14 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Terminó el descanso"
+            "state" : "translated",
+            "value" : "Se acabó el descanso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se acabó el descanso"
           }
         }
       }
@@ -214,6 +280,12 @@
             "state" : "translated",
             "value" : "Cambia el ritmo cuando estés ^[listo](inflect: true). La siguiente parte empieza cuando abras Fernlet."
           }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia el ritmo cuando estés ^[listo](inflect: true). La siguiente parte empieza cuando abras Fernlet."
+          }
         }
       }
     },
@@ -229,7 +301,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se acabó el tiempo de esta parte"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se acabó el tiempo de esta parte"
           }
         }
@@ -247,7 +325,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Hoy el tiempo está pesado. Sé un poco más amable contigo: algo pequeño y cálido también cuenta."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Hoy el clima está pesado. Sé un poco más amable contigo: algo pequeño y cálido también cuenta."
           }
         }

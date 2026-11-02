@@ -1,14 +1,18 @@
-# Fernlet Spanish glossary and style rules (`es`)
+# Fernlet Spanish glossary and style rules (`es`, Spain)
 
-**Status:** approved line by line by the owner, a native Spanish speaker, on 2026-10-20.
-Every Spanish string in Fernlet follows this file. A translation that needs a word not listed here
-uses the word Apple's Latin American Spanish iOS uses; if there is none, the owner picks it and it is
-added here in the same commit.
+**Status:** approved line by line by the owner, a native Spanish speaker, on 2026-10-20, for one
+neutral Spanish. On 2026-11-01 the owner split Spanish in two: `es` is **Spain Spanish (castellano)**
+and `es-MX` is Mexican Spanish, a separate localization with its own word choices. This file is the
+`es` (Spain) half; the rows changed for Spain on 2026-11-01 say so in their notes and await the
+owner's look. Every `es` string follows this file. A translation that needs a word not listed here
+uses the word Apple's Spain Spanish iOS uses; if there is none, the owner picks it and it is added
+here in the same commit.
 
 **Decided:**
-- **Variant:** one base `es` in neutral Spanish that leans Latin American where a choice is forced.
-  No regional variants yet.
-- **Address:** tú everywhere (D-L1 in `Docs/Localization-Plan-2026-07-19.md`).
+- **Variant:** `es` is castellano as spoken in Spain (2026-11-01). `es-MX` covers Mexico and is not
+  edited from this file.
+- **Address:** tú to the person (D-L1 in `Docs/Localization-Plan-2026-07-19.md`); **vosotros** when
+  a line speaks to two or more people at once (a hangout, two phones held together).
 - **Gender:** words that describe the user agree with the body profile's **Sex** answer
   (`UserProfile.sex`): female draws the feminine form, male the masculine. Male is the profile's
   default, so a user who never answered sees masculine forms. There is no separate “address me
@@ -19,12 +23,12 @@ added here in the same commit.
 
 ## Style rules
 
-### Neutral Latin American Spanish
+### Castellano (Spain)
 
-Avoid words tied to one country. Where no neutral word exists, use the Latin American one (celular, jugo, papa, computadora, agregar). No voseo, no vosotros.
+Write the way people in Spain talk and the way Apple's Spain Spanish iOS writes: móvil, añadir, zumo, patata, ordenador, coche, vídeo, Ajustes. Vosotros for a group (“Os habéis encontrado”), never ustedes. Still skip words that are rude elsewhere (see below): Spanish speakers outside Spain and Mexico fall back to this localization.
 
 - EN: Add your first meal
-- ES: Agrega tu primera comida
+- ES: Añade tu primera comida
 
 ### Tú, always
 
@@ -63,10 +67,10 @@ Buttons and menu items use the infinitive, as iOS does. Instructions and the com
 
 ### Apple's own words
 
-Use the names Apple uses in Latin American Spanish iOS: Salud, Configuración, Llavero de iCloud, código, Atajos, pantalla bloqueada, Actividad en vivo.
+Use the names Apple uses in Spain Spanish iOS: Salud, Ajustes, Llavero de iCloud, código, Atajos, pantalla de bloqueo, Actividad en directo. A tap on the screen is *tocar* (“Toca un día”), a touch-and-hold is *mantener pulsado*, and a physical button is *pulsar*.
 
 - EN: Turn it on in Settings › Health.
-- ES: Actívalo en Configuración › Salud.
+- ES: Actívalo en Ajustes › Salud.
 
 ### Keep it short
 
@@ -120,7 +124,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | Private (hub) | Privado |  |
 | Friends | Amigos | Generic masculine plural, as everyday Spanish uses it. |
 | Today | Hoy |  |
-| Settings | Configuración | Latin American iOS calls its Settings app “Configuración”; Spain says “Ajustes”. |
+| Settings | Ajustes | Spain's iOS name for Settings (2026-11-01; was “Configuración”, Latin America's). |
 | Silly stats | Estadísticas absurdas | Owner's pick over “Datos curiosos”. |
 | care · self-care | cuidado · autocuidado |  |
 | gentle | suave · con cariño | No single word. “Suave” for intensity (a gentle stretch: un estiramiento suave); “con cariño” or “trátate bien” for tone. |
@@ -135,9 +139,9 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | iCloud Keychain | Llavero de iCloud |  |
 | passcode | código | As in iOS's “Face ID y código”. |
 | Face ID | Face ID |  |
-| Lock Screen | pantalla bloqueada |  |
+| Lock Screen | pantalla de bloqueo | Spain's iOS term (2026-11-01). |
 | Home Screen | pantalla de inicio |  |
-| Live Activity | Actividad en vivo | Spain says “en directo”. |
+| Live Activity | Actividad en directo | Spain's iOS term (2026-11-01; was “en vivo”). |
 | Dynamic Island | Dynamic Island |  |
 | Shortcuts | Atajos |  |
 | Messages | Mensajes |  |
@@ -161,7 +165,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | delete everything | borrar todo | “Eliminar” for deleting one thing, “borrar” for wiping everything, as iOS's “Borrar contenido y configuración”. |
 | in person | en persona |  |
 | nearby · nearby friends | cerca · amigos cerca |  |
-| Report… | Reportar… | Latin American apps say “Reportar”; Spain says “Denunciar”. |
+| Report… | Denunciar… | Spain's word (2026-11-01; was “Reportar”, the Latin American one). |
 | block | bloquear |  |
 
 ### Food
@@ -170,14 +174,14 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | --- | --- | --- |
 | meal | comida |  |
 | breakfast | desayuno |  |
-| lunch | almuerzo | In Mexico the midday meal is “la comida”, but that collides with “meal” and the Food tab. |
+| lunch | almuerzo | In Spain the midday meal is also “la comida”, but that collides with “meal” and the Food tab. |
 | dinner | cena |  |
-| snack | snack | Every country has its own word; “snack” is understood everywhere. |
+| snack | tentempié | Spain's word for the meal slot (2026-11-01; was “snack”). |
 | log (verb) · log (noun) | registrar · registro |  |
 | recipe · recipe book | receta · recetario |  |
-| serving | porción |  |
+| serving | ración | As Spain's nutrition labels say “por ración” (2026-11-01; was “porción”). |
 | ingredient | ingrediente |  |
-| grocery list | lista de compras |  |
+| grocery list | lista de la compra | Spain's phrase (2026-11-01). |
 | nutrition label | información nutricional | Owner's pick over “etiqueta nutricional”. |
 | barcode | código de barras |  |
 | calories · cal | calorías · kcal | Short labels always say kcal, never cal. |
@@ -202,7 +206,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | stretch | estiramiento |  |
 | strength · cardio · mobility | fuerza · cardio · movilidad |  |
 | dumbbell · barbell · bench | mancuerna · barra · banco |  |
-| resistance band | banda elástica | “Liga” is the everyday word in Mexico. |
+| resistance band | banda elástica |  |
 | plateau | estancamiento |  |
 | effort | esfuerzo |  |
 | heart rate | frecuencia cardiaca | Apple Health's spelling. |
@@ -224,7 +228,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | predicted | previsto |  |
 | spotting | manchado |  |
 | flow: light · medium · heavy | flujo: leve · moderado · abundante |  |
-| cramps | cólicos | “Cólicos” is the everyday Latin American word. |
+| cramps | dolor menstrual · calambres | “Cólicos” is the Latin American word (2026-11-01). |
 | cervical mucus · egg white | moco cervical · clara de huevo |  |
 | ovulation · fertile window | ovulación · ventana fértil |  |
 | intimacy · intimate log | intimidad · registro íntimo |  |
@@ -235,7 +239,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 
 | English | Spanish | Notes |
 | --- | --- | --- |
-| wardrobe | clóset | “Guardarropa” works everywhere; “clóset” is Latin American, “armario” Spain. Owner's pick over “guardarropa”. |
+| wardrobe | armario | Spain's word (2026-11-01; the owner's pick for neutral Spanish was “clóset”). |
 | coins · shop | monedas · tienda |  |
 | hearts | corazones |  |
 | creation studio | estudio de creación |  |
@@ -248,7 +252,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | Done | OK | iOS in Spanish labels Done buttons “OK”; “Listo” also reads naturally. |
 | Cancel | Cancelar |  |
 | Save | Guardar |  |
-| Add | Agregar | “Añadir” is Spain's word. |
+| Add | Añadir | Spain's word (2026-11-01; was “Agregar”). |
 | Delete · Remove | Eliminar · Quitar |  |
 | Edit · Share | Editar · Compartir |  |
 | Continue · Next · Back | Continuar · Siguiente · Atrás |  |
@@ -259,3 +263,26 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | Open · Close · Search | Abrir · Cerrar · Buscar |  |
 | Learn more | Más información |  |
 
+
+### Spain's everyday words (2026-11-01)
+
+Where Spain and Latin America part ways, `es` takes Spain's word. `es-MX` keeps its own.
+
+| English | Spain (`es`) | Not | Notes |
+| --- | --- | --- | --- |
+| phone | móvil | celular |  |
+| hangout (meeting friends in person) | quedada | reunión | Fernlet's in-person hangout. |
+| tap · touch and hold · press (a button) | tocar · mantener pulsado · pulsar |  | As Apple's Spain iOS. |
+| video | vídeo | video | Spain writes the accent. |
+| computer · car · drive | ordenador · coche · conducir | computadora · carro, auto · manejar |  |
+| juice · potato · sweet potato | zumo · patata · boniato | jugo · papa · camote |  |
+| peach · strawberry · banana | melocotón · fresa · plátano | durazno · frutilla · banana |  |
+| peanut · avocado · shrimp | cacahuete · aguacate · gamba | maní, cacahuate · palta · camarón |  |
+| peas · green beans · beans | guisantes · judías verdes · alubias | chícharos, arvejas · ejotes · frijoles |  |
+| cake · smoothie · fridge | tarta · batido · nevera | pastel, torta · licuado · refrigerador |  |
+| glasses · T-shirt · sweater · sneakers | gafas · camiseta · jersey · zapatillas | lentes · playera · suéter · tenis |  |
+| apartment · bedroom · pool · blanket | piso · dormitorio · piscina · manta | departamento · recámara · alberca · cobija |  |
+| angry · cute · to miss someone | enfadado · bonito · echar de menos | enojado · lindo · extrañar |  |
+| to check · to go back · to hurry | comprobar · volver · darse prisa | checar · regresar · apurarse |  |
+| sore muscles (after training) | agujetas | dolor muscular | Everyday Spain word. |
+| walk (on foot) | andar · caminar · paseo | caminata | All fine in Spain; “paseo” for a gentle walk. |

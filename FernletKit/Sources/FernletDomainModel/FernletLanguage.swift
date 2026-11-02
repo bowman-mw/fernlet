@@ -73,4 +73,17 @@ public nonisolated enum FernletLanguage: String, CaseIterable, Sendable {
     /// A constant for the process's life on purpose: iOS relaunches an app whose language the
     /// person changes, so the value cannot go stale, and the engines that read it run per keystroke.
     public static let app: FernletLanguage = appLanguage(preferredLocalizations: Bundle.main.preferredLocalizations)
+
+    /// What Fernlet's hand-grouped numbers ("24,850 km") put between thousands in a localization: "." in
+    /// Spanish, except Mexico's (`es-MX`), which groups with "," as English does.
+    ///
+    /// - Parameter localization: A bundle localization identifier ("en", "es", "es-MX").
+    public static func thousandsSeparator(localization: String) -> String {
+        guard FernletLanguage(identifier: localization) == .spanish else { return "," }
+        return Locale(identifier: localization).region?.identifier == "MX" ? "," : "."
+    }
+
+    /// ``thousandsSeparator(localization:)`` for this process's main bundle, resolved once, as ``app`` is.
+    public static let appThousandsSeparator: String =
+        thousandsSeparator(localization: Bundle.main.preferredLocalizations.first ?? english.rawValue)
 }

@@ -13,7 +13,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "edad"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "edad"
           }
         }
@@ -31,7 +37,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "altura"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "altura"
           }
         }
@@ -49,7 +61,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "sexo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "sexo"
           }
         }
@@ -67,7 +85,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "peso"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "peso"
           }
         }
@@ -85,7 +109,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo borrar los valores de Salud que guardó en caché, así que no desactivó la integración con Salud. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo borrar los valores de Salud que guardó en caché, así que no desactivó la integración con Salud. Inténtalo de nuevo."
           }
         }
@@ -103,7 +133,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Los datos de Salud no están disponibles en este dispositivo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Los datos de Salud no están disponibles en este dispositivo."
           }
         }
@@ -121,7 +157,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Esos valores de altura y peso no parecen correctos, así que Fernlet no los ha guardado en Salud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Esos valores de estatura y peso no parecen correctos, así que Fernlet no los guardó en Salud."
           }
         }
@@ -139,7 +181,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo crear el tipo de HealthKit para %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo crear el tipo de HealthKit para %@."
           }
         }
@@ -157,7 +205,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet tiene desactivado compartir con Salud, así que no ha guardado nada ahí. Puedes activarlo en Ajustes › Salud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet tiene desactivado compartir con Salud, así que no guardó nada ahí. Puedes activarlo en Configuración › Salud."
           }
         }
@@ -175,7 +229,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se ha actualizado el acceso a Salud (%@)."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se actualizó el acceso a Salud (%@)."
           }
         }
@@ -193,7 +253,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Salud no tenía datos del perfil corporal. Se usarán los valores que has introducido a mano."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Salud no tenía datos del perfil corporal. Se usarán los valores que ingresaste a mano."
           }
         }
@@ -211,7 +277,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no ha podido actualizar el perfil desde Salud. Se usarán los valores que has introducido a mano. %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo actualizar el perfil desde Salud. Se usarán los valores que ingresaste a mano. %@"
           }
         }
@@ -229,7 +301,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se ha importado el perfil corporal desde Salud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se importó el perfil corporal desde Salud."
           }
         }
@@ -247,7 +325,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet ha actualizado ^[%1$lld dato](inflect: true) desde Salud. Para %2$@ se mantienen los valores que has introducido a mano."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet actualizó ^[%1$lld dato](inflect: true) desde Salud. Para %2$@ se mantienen los valores que ingresaste a mano."
           }
         }
@@ -265,7 +349,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se ha actualizado el perfil corporal desde Salud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se actualizó el perfil corporal desde Salud."
           }
         }
@@ -283,7 +373,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "%1$@: no se ha podido actualizar. Lo que registras a mano en la app sigue disponible. %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@: la actualización no estuvo disponible. Lo que registras a mano en la app sigue disponible. %2$@"
           }
         }
@@ -301,7 +397,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Se han actualizado los datos de %@ desde Salud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Se actualizaron los datos de %@ desde Salud."
           }
         }
@@ -319,7 +421,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Los datos de Salud no están disponibles en este dispositivo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Los datos de Salud no están disponibles en este dispositivo."
           }
         }
@@ -337,7 +445,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "El registro íntimo está disponible a partir de los 16 años. Fernlet verifica tu rango de edad con Apple: consulta Ajustes › Intimidad."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "El registro íntimo está disponible a partir de los 16 años. Fernlet verifica tu rango de edad con Apple: consulta Configuración › Intimidad."
           }
         }
@@ -355,7 +469,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Fernlet no pudo actualizar la altura o el peso en Salud. %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Fernlet no pudo actualizar la altura o el peso en Salud. %@"
           }
         }
@@ -373,7 +493,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Para revocar este acceso (%@), abre Ajustes > Privacidad y seguridad > Salud > Fernlet. iOS no permite que las apps revoquen los permisos de Salud directamente."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Para revocar este acceso (%@), abre Configuración > Privacidad y seguridad > Salud > Fernlet. iOS no permite que las apps revoquen los permisos de Salud directamente."
           }
         }
@@ -391,7 +517,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "contexto de actividad"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "contexto de actividad"
           }
         }
@@ -409,7 +541,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lee los pasos, la energía activa y los minutos de ejercicio, como contexto de tu actividad diaria."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lee los pasos, la energía activa y los minutos de ejercicio, como contexto de tu actividad diaria."
           }
         }
@@ -427,7 +565,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Contexto de actividad"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Contexto de actividad"
           }
         }
@@ -445,7 +589,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "contexto del cuerpo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "contexto del cuerpo"
           }
         }
@@ -463,7 +613,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lee el sueño, la frecuencia cardiaca en reposo, la variabilidad de la frecuencia cardiaca, la frecuencia respiratoria y la temperatura de la muñeca mientras duermes, para que tu compañero tenga en cuenta tu recuperación."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lee el sueño, la frecuencia cardiaca en reposo, la variabilidad de la frecuencia cardiaca, la frecuencia respiratoria y la temperatura de la muñeca mientras duermes, para que tu compañero tenga en cuenta tu recuperación."
           }
         }
@@ -481,7 +637,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Contexto del cuerpo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Contexto del cuerpo"
           }
         }
@@ -499,7 +661,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "perfil corporal"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "perfil corporal"
           }
         }
@@ -517,7 +685,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lee tu edad, sexo biológico, altura y peso de Salud. Fernlet puede guardar en Salud los cambios de altura y peso cuando el acceso a Salud lo permite."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lee tu edad, sexo biológico, altura y peso de Salud. Fernlet puede guardar en Salud los cambios de altura y peso cuando el acceso a Salud lo permite."
           }
         }
@@ -535,7 +709,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Perfil corporal"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Perfil corporal"
           }
         }
@@ -553,7 +733,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "seguimiento del ciclo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "seguimiento del ciclo"
           }
         }
@@ -571,7 +757,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lee y escribe observaciones del ciclo, como el flujo menstrual, la temperatura corporal basal, el moco cervical, el sangrado intermenstrual y los resultados de las pruebas de ovulación."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lee y escribe observaciones del ciclo, como el flujo menstrual, la temperatura corporal basal, el moco cervical, el sangrado intermenstrual y los resultados de las pruebas de ovulación."
           }
         }
@@ -589,7 +781,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Seguimiento del ciclo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Seguimiento del ciclo"
           }
         }
@@ -607,7 +805,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "registro íntimo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "registro íntimo"
           }
         }
@@ -625,7 +829,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lee y escribe la actividad sexual solo cuando se activa expresamente."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lee y escribe la actividad sexual solo cuando se activa expresamente."
           }
         }
@@ -643,7 +853,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registro íntimo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registro íntimo"
           }
         }
@@ -661,7 +877,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "mindfulness"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "mindfulness"
           }
         }
@@ -679,7 +901,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Guarda en Salud las sesiones de mindfulness que completas en Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Guarda en Salud las sesiones de mindfulness que completas en Fernlet."
           }
         }
@@ -697,7 +925,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Mindfulness"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Mindfulness"
           }
         }
@@ -715,7 +949,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "registro de entrenamientos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "registro de entrenamientos"
           }
         }
@@ -733,7 +973,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Lee y guarda entrenamientos en Salud para que Fernlet y Fitness estén sincronizados."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Lee y guarda entrenamientos en Salud para que Fernlet y Fitness estén sincronizados."
           }
         }
@@ -751,7 +997,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registro de entrenamientos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registro de entrenamientos"
           }
         }

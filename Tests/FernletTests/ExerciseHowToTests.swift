@@ -379,8 +379,9 @@ struct ExerciseHowToTests {
     /// `claude/spanish-switch-on` branch (Spanish round, 2026-10-21): every app-target catalog now
     /// carries `es`, so the app bundle has an `es.lproj` and a device set to Spanish draws Spanish —
     /// the owner's in-app review of the drafts. It merges to `main` only when the owner says Spanish
-    /// is ready (Docs/Localization-Plan-2026-07-19.md §4).
-    static let switchedOnLanguages: Set<String> = ["en", "es"]
+    /// is ready (Docs/Localization-Plan-2026-07-19.md §4). Mexico's Spanish (`es-MX`) joined on 2026-11-01, as a
+    /// complete copy of `es` with Mexican wording wherever Mexico differs.
+    static let switchedOnLanguages: Set<String> = ["en", "es", "es-MX"]
 
     /// The domain catalog carries Spanish, French and German drafts of every exercise string. Only a
     /// language the APP is switched on in can show: a package's resource bundle resolves to the

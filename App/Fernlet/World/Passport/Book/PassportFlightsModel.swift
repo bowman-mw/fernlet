@@ -160,10 +160,11 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
 
 /// The Flights page's numbers in words: distances and stop lengths.
 nonisolated enum PassportFlightsText {
-    /// "24,850 km" / "24.850 km": rounded to 10 km, grouped by threes ("." in Spanish, as the spec's §12 asks).
-    static func kilometres(_ metres: Double, language: FernletLanguage = .app) -> String {
+    /// "24,850 km" / "24.850 km": rounded to 10 km, grouped by threes ("." in Spain's Spanish, as the spec's §12
+    /// asks; "," in English and Mexico's Spanish).
+    static func kilometres(_ metres: Double, separator: String = FernletLanguage.appThousandsSeparator) -> String {
         let rounded = Int((max(metres, 0) / 10_000).rounded()) * 10
-        return grouped(rounded, separator: language == .spanish ? "." : ",") + " km"
+        return grouped(rounded, separator: separator) + " km"
     }
 
     /// `value` with its thousands grouped by `separator`.

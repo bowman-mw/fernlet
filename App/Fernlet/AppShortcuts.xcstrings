@@ -12,7 +12,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Añade agua en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Agrega agua en ${applicationName}"
           }
         }
@@ -29,7 +35,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cambia un paso de la receta en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cambia un paso de la receta en ${applicationName}"
           }
         }
@@ -46,7 +58,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Cambia mi entrenamiento en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Cambia mi entrenamiento en ${applicationName}"
           }
         }
@@ -63,7 +81,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Controla la cocina en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Controla la cocina en ${applicationName}"
           }
         }
@@ -80,7 +104,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Controla el entrenamiento en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Controla el entrenamiento en ${applicationName}"
           }
         }
@@ -97,7 +127,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Exporta una receta de ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Exporta una receta de ${applicationName}"
           }
         }
@@ -114,7 +150,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Exporta un plan de entrenamiento de ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Exporta un plan de entrenamiento de ${applicationName}"
           }
         }
@@ -131,7 +173,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Importa una receta a ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Importa una receta a ${applicationName}"
           }
         }
@@ -148,7 +196,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Importa un plan de entrenamiento a ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Importa un plan de entrenamiento a ${applicationName}"
           }
         }
@@ -165,7 +219,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registra una botella de agua en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registra una botella de agua en ${applicationName}"
           }
         }
@@ -182,7 +242,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registra una comida en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registra una comida en ${applicationName}"
           }
         }
@@ -199,7 +265,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registra comida en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registra comida en ${applicationName}"
           }
         }
@@ -216,7 +288,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Registra agua en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Registra agua en ${applicationName}"
           }
         }
@@ -233,7 +311,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abre un archivo de receta en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abre un archivo de receta en ${applicationName}"
           }
         }
@@ -250,7 +334,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abre un archivo de plan de entrenamiento en ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abre un archivo de plan de entrenamiento en ${applicationName}"
           }
         }
@@ -267,7 +357,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Abre mi diario de ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Abre mi diario de ${applicationName}"
           }
         }
@@ -284,7 +380,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Comparte un archivo de receta de ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Comparte un archivo de receta de ${applicationName}"
           }
         }
@@ -301,7 +403,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Comparte un archivo de plan de entrenamiento de ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Comparte un archivo de plan de entrenamiento de ${applicationName}"
           }
         }
@@ -318,7 +426,13 @@
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
+            "state" : "translated",
+            "value" : "Escribe en mi diario de ${applicationName}"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Escribe en mi diario de ${applicationName}"
           }
         }
