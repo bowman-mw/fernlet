@@ -55,6 +55,12 @@ nonisolated enum WorldAirportFlyOverSchedule {
                 CGPoint(x: middle.x + dx * reach, y: middle.y + dy * reach))
     }
 
+    /// ``path(along:beat:size:)`` as places on the map under `viewport`, where the plane stays through a pan or a pinch.
+    static func mapPath(along runway: (GeoPoint, GeoPoint), beat: Int, viewport: MapViewport, size: CGSize) -> (start: GeoPoint, end: GeoPoint)? {
+        guard viewport.isUsable, let path = path(along: runway, beat: beat, size: size) else { return nil }
+        return (viewport.geo(at: path.start, in: size), viewport.geo(at: path.end, in: size))
+    }
+
     /// The airport's offset into the beat, a minute off its runway planes' so the two rarely overlap.
     private static func offset(for token: String) -> TimeInterval {
         (WorldAirportPlaneSchedule.offset(for: token) + 60).truncatingRemainder(dividingBy: period)
@@ -81,17 +87,19 @@ final class WorldAirportFlyOverMemo {
 }
 
 /// A plane now and then crossing the map near an airport (``WorldAirportFlyOverSchedule``): the jet with its shadow
-/// far below, moving with the screen rather than the map, since it's in the air. None with Reduce Motion. Decoration,
-/// hidden from VoiceOver and touches.
+/// far below, flying between two places on the map, so a pan or a pinch mid-crossing moves it with everything else
+/// (owner 2026-11-02). None with Reduce Motion. Decoration, hidden from VoiceOver and touches.
 ///
 /// **Cheap:** between planes one sleeping task waits for the next, and a crossing is one SwiftUI animation.
 struct WorldAirportFlyOver: View {
     let token: String
     /// The airport's runway, whose line the plane follows.
     let runway: (GeoPoint, GeoPoint)
+    let viewport: MapViewport
     let size: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var path: (start: CGPoint, end: CGPoint)?
+    /// Where the plane under way flies between, as places on the map.
+    @State private var path: (start: GeoPoint, end: GeoPoint)?
     @State private var progress = 0.0
 
     /// The most planes one visit plays (a full day near one airport); a bound for the waiting loop.
@@ -102,7 +110,8 @@ struct WorldAirportFlyOver: View {
             if !reduceMotion, let path {
                 WorldSpriteView(sprite: WorldAirportSprites.rollingJet(tail: 0), scale: 3)
                     .shadow(color: .black.opacity(0.22), radius: 0, x: 10, y: 16)
-                    .modifier(WorldFlyOverMotion(progress: progress, start: path.start, end: path.end))
+                    .modifier(WorldFlyOverMotion(progress: progress, start: viewport.screenPoint(for: path.start, in: size),
+                                                 end: viewport.screenPoint(for: path.end, in: size)))
             }
         }
         .allowsHitTesting(false)
@@ -122,7 +131,7 @@ struct WorldAirportFlyOver: View {
             do {
                 try await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow)))
                 progress = 0
-                path = WorldAirportFlyOverSchedule.path(along: runway, beat: beat, size: size)
+                path = WorldAirportFlyOverSchedule.mapPath(along: runway, beat: beat, viewport: viewport, size: size)
                 try await Task.sleep(for: .milliseconds(50))
                 withAnimation(.linear(duration: WorldAirportFlyOverSchedule.crossing)) { progress = 1 }
                 try await Task.sleep(for: .seconds(WorldAirportFlyOverSchedule.crossing + 0.2))

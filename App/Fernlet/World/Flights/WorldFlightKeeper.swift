@@ -24,7 +24,8 @@ import WorldMapStore
 ///   ``maxRecentFlights`` that ended.
 /// - **The passport opens only while the phone is unlocked:** what ``onEvents`` could not take (it answers false)
 ///   waits in memory, at most ``maxPendingEvents``, and is handed again with the next reading's changes (a landing
-///   read with the phone locked still finds the airport once it is unlocked).
+///   read with the phone locked still finds the airport once it is unlocked). An airport lost even so is handed again
+///   while the person is still there (``handMissedFind()``).
 /// - **Kept across relaunches** (a phone switched off for the flight still lands): the detector's state is sealed in
 ///   the map's vault under the buffer key (readings arrive with the phone locked), at most every ``saveInterval``
 ///   or at once when something changed; never in a decoy, and every wipe removes it with the vault's folder.
@@ -58,6 +59,8 @@ final class WorldFlightKeeper {
     /// Called with what each reading changed (airports found, flights started and landed, layovers), after any
     /// it could not take before; answers whether it took them.
     @ObservationIgnored var onEvents: (([FlightEvent]) -> Bool)?
+    /// Whether the passport has the airport with this token, or wants nothing added (see ``handMissedFind()``).
+    @ObservationIgnored var passportHolds: (String) -> Bool = { _ in true }
     /// Whether a point is at one of the person's homes (a trip ends on getting home, §7).
     @ObservationIgnored var isHome: (GeoPoint) -> Bool = { _ in false }
     /// Whether the state may be written now (false in a decoy).
@@ -138,7 +141,27 @@ final class WorldFlightKeeper {
         publish()
         save(at: fix.at, changed: !verdict.events.isEmpty)
         hand(pending + verdict.events)
+        handMissedFind()
         return verdict.mayKeep
+    }
+
+    /// Hands again an airport the detector counts as found and won't report twice (landed at, or inside on a trip) when
+    /// the passport doesn't have it: what waits in memory goes if iOS closes Fernlet, and an earlier build dropped
+    /// what a locked phone couldn't save (owner's landing at PNS, 2026-11-02). Ten minutes at an airport aren't
+    /// counted: standing in one finds nothing by itself.
+    private func handMissedFind() {
+        guard pending.isEmpty, let find = heldFind, !passportHolds(find.token) else { return }
+        latestFind = find
+        hand([.airportFound(token: find.token, how: find.how, at: find.at)])
+    }
+
+    /// The airport the detector counts as found right now, from its own state (never a DEBUG scene's).
+    private var heldFind: WorldAirportFind? {
+        guard let lastAt else { return nil }
+        let state = WorldFlightGateState(detector, at: lastAt)
+        if let token = state.layoverAirport { return WorldAirportFind(token: token, how: .landing, at: state.layoverStart ?? lastAt) }
+        guard state.isOnTrip, let token = state.currentAirport else { return nil }
+        return WorldAirportFind(token: token, how: .ticket, at: lastAt)
     }
 
     /// The IATA code of the airport the person was last known to be at, when they have one.

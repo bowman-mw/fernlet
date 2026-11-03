@@ -265,28 +265,36 @@ final class WorldAtlasKeeper {
     }
 
     /// Records the person at the airport `token` at `date`, found by `find`, and announces a first visit or a new
-    /// trip on ``discoveries()`` once saved. Nothing in a decoy or before the passport can be read.
-    func recordAirport(token: String, at date: Date, by find: PassportBook.AirportFind) {
-        guard !isDecoy, loadStore() else { return }
+    /// trip on ``discoveries()`` once saved. Nothing in a decoy or before the passport can be read. Whether it was
+    /// saved: false in a decoy and when the passport can't be read or written, as with the phone locked, when a
+    /// passport already read stays in memory but its key can't save it (owner's landing at PNS, 2026-11-02).
+    @discardableResult
+    func recordAirport(token: String, at date: Date, by find: PassportBook.AirportFind) -> Bool {
+        guard !isDecoy, loadStore() else { return false }
         do {
             let event = try store.recordAirport(token: token, at: date, by: find)
             book = store.book
             onPassportChanged?()
             if let event { subscriber?.yield(event) }
+            return true
         } catch {
             FernletAuditLog.log("worldMap.passport.saveDeferred")
+            return false
         }
     }
 
     /// Keeps a flight Fernlet saw (its two airports and times, nothing else) under the one-flight rule. Nothing in
-    /// a decoy or before the passport can be read.
-    func recordFlight(_ flight: PassportFlight) {
-        update { $0.addFlights([flight]) > 0 }
+    /// a decoy or before the passport can be read. Whether the passport took it (``apply(_:)``).
+    @discardableResult
+    func recordFlight(_ flight: PassportFlight) -> Bool {
+        apply { $0.addFlights([flight]) > 0 }
     }
 
     /// Marks the latest trip through the airport `token` as a layover: its stamp says TRANSIT. Nothing in a decoy.
-    func markTransit(atAirport token: String) {
-        update { book in
+    /// Whether the passport took it (``apply(_:)``).
+    @discardableResult
+    func markTransit(atAirport token: String) -> Bool {
+        apply { book in
             guard let start = book.trips(atAirport: token).last else { return false }
             return book.setTransit(true, atAirport: token, trip: start)
         }
@@ -326,13 +334,9 @@ final class WorldAtlasKeeper {
         book.flights.filter { !$0.sources.isDisjoint(with: .imported) }.count
     }
 
-    /// Changes the saved passport by `change` (which says whether anything changed), never in a decoy.
-    private func update(_ change: (inout PassportBook) -> Bool) {
-        apply(change)
-    }
-
-    /// ``update(_:)`` that says whether the change was taken: false in a decoy, while the passport can't be
-    /// read, and when saving failed; true when it was saved or changed nothing.
+    /// Changes the saved passport by `change` (which says whether anything changed), never in a decoy. Whether the
+    /// change was taken: false in a decoy, while the passport can't be read, and when saving failed; true when it was
+    /// saved or changed nothing.
     @discardableResult
     func apply(_ change: (inout PassportBook) -> Bool) -> Bool {
         guard !isDecoy, loadStore() else { return false }
