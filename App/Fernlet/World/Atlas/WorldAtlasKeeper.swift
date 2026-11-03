@@ -20,6 +20,11 @@ import WorldMapStore
 /// 2026-10-30 (a Debug build on an iPhone 17 Pro Max). Until that ends every reader is answered as if there
 /// were no atlas, the newest fix waits and is read once it is open, and views that asked draw again then.
 ///
+/// **The shore mask** (``WorldShoreMask``, Docs/World-Shore-Pack.md), the fog's and Your world's land and water, opens
+/// with the atlas, in the same background task, so Home's first fog is drawn with it and never redrawn for it; opening
+/// it reads only its table and overview (``openedShore``). A missing or unreadable pack is logged once and the map
+/// falls back to the atlas's `LAND`. Drawing only: nothing here hands it to the passport's rules.
+///
 /// **Landmarks** (World-Exploration-Spec §2). The hand-written `WorldLandmarks.json` beside the pack is opened
 /// once, on first use (``bundledLandmarks(in:)``); a missing or malformed file is logged once and means no
 /// landmarks, and the atlas still works. With a list open, each fix is read through `AtlasWithLandmarks`, so a
@@ -58,6 +63,8 @@ final class WorldAtlasKeeper {
     static let landmarksResource = "WorldLandmarks"
     /// The bundled landmark list's file extension.
     static let landmarksExtension = "json"
+    /// The bundled shore pack's resource name (a frozen file name: `WorldShore.pack`).
+    static let shoreResource = "WorldShore"
     /// The least distance from the last fix read before another is read, in metres.
     static let minimumSpacing = 50.0
     /// The most discoveries a stream holds for a reader that hasn't caught up (the newest kept).
@@ -83,6 +90,10 @@ final class WorldAtlasKeeper {
     /// The opener ``beginOpening()`` runs off the main actor; nil (tests) opens on the main actor on first use.
     @ObservationIgnored private let openAtlasOffMain: (@Sendable () -> (any AtlasVisitResolving)?)?
     @ObservationIgnored private let openLandmarks: @MainActor () -> WorldLandmarks
+    /// Opens the shore mask; nil (tests) has none and falls back to the atlas's land.
+    @ObservationIgnored private let openShore: (@Sendable () -> ShoreOpening)?
+    /// The shore mask once its opening was tried: `.some(nil)` when there is none this session.
+    @ObservationIgnored private var shore: WorldShoreMask??
     @ObservationIgnored private var atlas: AtlasState = .notOpened
     /// Whether ``beginOpening()``'s background open is running: readers get nil meanwhile. Observed, so a view
     /// that read ``openedAtlas`` while it ran draws again when it ends.
@@ -110,14 +121,17 @@ final class WorldAtlasKeeper {
     /// ``bundledPack(in:open:)``; tests pass a fake). `openAtlas` returns nil when there is no atlas.
     /// `openLandmarks` opens the landmark list on first use (the app passes ``bundledLandmarks(in:)``); the
     /// default is no landmarks. `openAtlasOffMain` is the same opener for ``beginOpening()`` to run off the main
-    /// actor (the app passes ``bundledPackOffMain(in:open:)``); the default has none.
+    /// actor (the app passes ``bundledPackOffMain(in:open:)``); the default has none. `openShore` opens the shore mask
+    /// (the app passes ``bundledShore(in:)``); the default has none, so the map draws the atlas's land.
     init(vault: WorldMapVault, openAtlas: @escaping @MainActor () -> (any AtlasVisitResolving)?,
          openAtlasOffMain: (@Sendable () -> (any AtlasVisitResolving)?)? = nil,
-         openLandmarks: @escaping @MainActor () -> WorldLandmarks = { .empty }) {
+         openLandmarks: @escaping @MainActor () -> WorldLandmarks = { .empty },
+         openShore: (@Sendable () -> ShoreOpening)? = nil) {
         self.store = PassportStore(vault: vault)
         self.openAtlas = openAtlas
         self.openAtlasOffMain = openAtlasOffMain
         self.openLandmarks = openLandmarks
+        self.openShore = openShore
     }
 
     isolated deinit {
@@ -192,20 +206,75 @@ final class WorldAtlasKeeper {
         }
     }
 
-    /// Starts opening the atlas off the main actor (the app calls it while the launch screen is up). Once, and
-    /// only before anything opened it; nothing without an off-main opener.
-    func beginOpening() {
-        guard case .notOpened = atlas, !isOpeningAtlas, let openOffMain = openAtlasOffMain else { return }
-        isOpeningAtlas = true
-        Task { [weak self] in
-            let opened = await Task.detached(priority: .userInitiated) { openOffMain() }.value
-            self?.finishOpening(opened)
+    /// What opening the shore pack came to: logged on the main actor, once, whichever actor opened it.
+    nonisolated enum ShoreOpening: Sendable {
+        /// Open and answering.
+        case opened(WorldShoreMask)
+        /// Not in the bundle.
+        case missing
+        /// In the bundle, and refused or not readable.
+        case unreadable
+    }
+
+    /// The opener for the shore pack bundled in `bundle`: maps `WorldShore.pack`, so opening reads only its table and
+    /// overview. Safe off the main actor.
+    static func bundledShore(in bundle: Bundle = .main) -> @Sendable () -> ShoreOpening {
+        let found = bundle.url(forResource: shoreResource, withExtension: packExtension)
+        return {
+            guard let url = found else { return .missing }
+            do {
+                return .opened(try WorldShoreMask(data: Data(contentsOf: url, options: .mappedIfSafe)))
+            } catch {
+                return .unreadable
+            }
         }
     }
 
-    /// Takes the atlas ``beginOpening()`` opened (nil: unreadable, logged) and reads the fix that waited for it.
-    private func finishOpening(_ opened: (any AtlasVisitResolving)?) {
+    /// The shore mask for the screens that draw land and water (the fog, Your world), opened on first use like the
+    /// atlas. Nil with none: they draw the atlas's land. Nil too while the atlas is opening, as ``openedAtlas`` is.
+    /// Public data that ships in the app, so a decoy draws from it too.
+    var openedShore: WorldShoreMask? {
+        guard !isOpeningAtlas else { return nil }
+        if let shore { return shore }
+        guard let openShore else { return nil }
+        return adoptShore(openShore())
+    }
+
+    /// Keeps what opening the shore pack came to, logging a failure (at most once: this runs once a session).
+    @discardableResult
+    private func adoptShore(_ opening: ShoreOpening) -> WorldShoreMask? {
+        let mask: WorldShoreMask?
+        switch opening {
+        case .opened(let opened):
+            mask = opened
+        case .missing:
+            FernletAuditLog.log("worldMap.shore.packMissing")
+            mask = nil
+        case .unreadable:
+            FernletAuditLog.log("worldMap.shore.packUnreadable")
+            mask = nil
+        }
+        shore = .some(mask)
+        return mask
+    }
+
+    /// Starts opening the atlas and the shore mask off the main actor (the app calls it while the launch screen is
+    /// up). Once, and only before anything opened the atlas; nothing without an off-main opener.
+    func beginOpening() {
+        guard case .notOpened = atlas, !isOpeningAtlas, let openOffMain = openAtlasOffMain else { return }
+        isOpeningAtlas = true
+        let openShore = openShore
+        Task { [weak self] in
+            let opened = await Task.detached(priority: .userInitiated) { (atlas: openOffMain(), shore: openShore?()) }.value
+            self?.finishOpening(opened.atlas, shore: opened.shore)
+        }
+    }
+
+    /// Takes the atlas ``beginOpening()`` opened (nil: unreadable, logged) with the shore mask, and reads the fix that
+    /// waited for it.
+    private func finishOpening(_ opened: (any AtlasVisitResolving)?, shore opening: ShoreOpening?) {
         isOpeningAtlas = false
+        if let opening, shore == nil { adoptShore(opening) }
         guard case .notOpened = atlas else { return }
         if opened == nil { FernletAuditLog.log("worldMap.atlas.packUnreadable") }
         _ = adopt(opened)

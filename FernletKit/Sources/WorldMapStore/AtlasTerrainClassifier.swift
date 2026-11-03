@@ -36,6 +36,8 @@ public nonisolated struct AtlasTerrainClassifier: Sendable {
     public static let palmLatitude = 32.0
     /// The most plants one place is given.
     public static let maxFlora = 3
+    /// How many atlas cells ``nearbyClimateCode(at:)`` searches either side: 5, about 55 km at the shipped 0.1°.
+    public static let climateReachCells = 5
 
     /// The atlas the lookups read.
     public let atlas: WorldAtlas
@@ -49,6 +51,34 @@ public nonisolated struct AtlasTerrainClassifier: Sendable {
     public func terrain(at point: GeoPoint) -> AtlasTerrain {
         guard point.isValid, atlas.isLand(at: point) else { return .water }
         return Self.terrain(climateCode: atlas.climateCode(at: point), latitude: point.latitude)
+    }
+
+    /// The terrain of a `point` a finer map than `LAND` already calls land (the fog's ``WorldShoreMask``), so it never
+    /// answers water: real islands and thin coasts fall where the atlas has water, and often no climate at all.
+    /// Reads ``nearbyClimateCode(at:)``. The passport never asks this: its terrain stays ``terrain(at:)``.
+    public func landTerrain(at point: GeoPoint) -> AtlasTerrain {
+        Self.terrain(climateCode: nearbyClimateCode(at: point), latitude: point.latitude)
+    }
+
+    /// The Köppen-Geiger code under `point`, or else the nearest non-zero one within ``climateReachCells`` atlas cells,
+    /// searched outward ring by ring; 0 when there is none (the classifier's fallback then answers). Bounded: at
+    /// most (2 × ``climateReachCells`` + 1)² raster reads.
+    public func nearbyClimateCode(at point: GeoPoint) -> UInt8 {
+        guard point.isValid else { return 0 }
+        let here = atlas.climateCode(at: point)
+        guard here == 0 else { return here }
+        let spot = atlas.grid.spot(of: point)
+        for reach in 1...Self.climateReachCells {
+            for row in (spot.row - reach)...(spot.row + reach) where row >= 0 && row < atlas.grid.rows {
+                let onEdge = abs(row - spot.row) == reach
+                // A ring: the whole row at its top and bottom, its two ends between.
+                for col in stride(from: spot.col - reach, through: spot.col + reach, by: onEdge ? 1 : 2 * reach) {
+                    let code = atlas.climate[atlas.grid.index(row: row, col: col)]
+                    if code != 0 { return code }
+                }
+            }
+        }
+        return 0
     }
 
     /// The terrain at the centre of fog cell `cell`.

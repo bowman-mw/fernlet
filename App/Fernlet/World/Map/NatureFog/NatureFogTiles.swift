@@ -154,8 +154,8 @@ final class NatureFogTileBook {
     }
 
     /// Whether the tile at `key` lies mostly over the sea: three of its five sample points (its centre and the
-    /// middles of its quarters) are water in ``terrain``. False with no terrain. Bounded: five atlas reads a tile,
-    /// remembered.
+    /// middles of its quarters) are water in ``terrain``. False with no terrain. Bounded: five reads a tile, none of
+    /// which opens a shore tile (``NatureFogTerrain/placeholderIsWater(at:)``), remembered.
     func isSea(_ key: NatureTileKey) -> Bool {
         guard let terrain else { return false }
         if let known = seaTiles[key] { return known }
@@ -164,7 +164,7 @@ final class NatureFogTileBook {
         let wet = spots.filter { spot in
             let point = WebMercator.geo(x: (area.minX + area.width * spot.0) / units,
                                         y: (area.minY + area.height * spot.1) / units)
-            return terrain.classifier.terrain(at: point) == .water
+            return terrain.placeholderIsWater(at: point)
         }.count
         if seaTiles.count >= Self.seaMemoLimit { seaTiles = [:] }
         seaTiles[key] = wet >= 3

@@ -5,6 +5,9 @@ Builds `App/Fernlet/World/Atlas/WorldAtlas.pack`, the bundled atlas behind the W
 only:** the app never fetches anything. It reads the bundled pack and opens no connection for it, so the
 no-tracking wall gains no destination.
 
+The fog's and Your world's finer land and water are a second pack, `WorldShore.pack`, with its own generator and
+sources: `build_world_shore.py` and `fetch-shore-sources.sh` (see [Docs/World-Shore-Pack.md](../../Docs/World-Shore-Pack.md)).
+
 ## 1. Fetch the sources (once, with the owner's OK)
 
 ```sh

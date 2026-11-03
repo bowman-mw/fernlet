@@ -181,7 +181,9 @@ struct WorldMapHome: View {
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
         // Again once the atlas, opening off the main actor at launch, is open.
-        .task(id: store.worldFog.atlas.isOpeningAtlas) { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
+        .task(id: store.worldFog.atlas.isOpeningAtlas) {
+            terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas, shore: store.worldFog.atlas.openedShore)
+        }
         .onChange(of: roadsSource, initial: true) { roads.update(cells: store.worldRoadCells, atlas: store.worldFog.atlas.openedAtlas) }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }

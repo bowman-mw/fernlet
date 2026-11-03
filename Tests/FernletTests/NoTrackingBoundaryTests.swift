@@ -251,6 +251,16 @@ struct NoTrackingBoundaryTests {
             """
         ),
         PermittedDestination(
+            host: "www.openstreetmap.org",
+            reason: """
+            Not fetched. OpenStreetMap's copyright page, which the OSMF's attribution guideline asks a map \
+            credit to link. A `Link` hands it to Safari when the user taps the small "© OpenStreetMap" on a \
+            map drawing the bundled WorldShore.pack; the app sends it nothing and holds no client for it \
+            (Fernlet/World/Map/WorldOpenStreetMapCredit.swift). The pack ships inside the app and is never \
+            fetched (Docs/World-Shore-Pack.md).
+            """
+        ),
+        PermittedDestination(
             host: "example.com",
             reason: """
             RFC 2606 reserved documentation domain. Appears as UI placeholder TEXT in the product-import \

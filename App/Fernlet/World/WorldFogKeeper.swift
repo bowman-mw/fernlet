@@ -90,7 +90,8 @@ final class WorldFogKeeper {
         self.store = FogCellStore(vault: vault)
         self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) },
                                       openAtlasOffMain: WorldAtlasKeeper.bundledPackOffMain { try WorldAtlas(data: $0) },
-                                      openLandmarks: WorldAtlasKeeper.bundledLandmarks())
+                                      openLandmarks: WorldAtlasKeeper.bundledLandmarks(),
+                                      openShore: WorldAtlasKeeper.bundledShore())
         self.cornerNudge = WorldCornerNudgeKeeper(vault: vault)
         self.defaults = defaults
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }

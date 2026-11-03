@@ -3,8 +3,8 @@ import Synchronization
 import WorldMapStore
 
 /// The land under the fog (World-Exploration-Spec §1): which terrain set each fog hex draws, read from the
-/// bundled atlas's coastline mask, climate bands and urban boundaries, and the season it shows today in its own
-/// hemisphere (``AtlasSeason``).
+/// bundled shore mask (``WorldShoreMask``, or the atlas's coastline mask without it), the atlas's climate bands and
+/// urban boundaries, and the season it shows today in its own hemisphere (``AtlasSeason``).
 ///
 /// An immutable, `Sendable` snapshot made on the main actor (``home(_:)``) and read anywhere after: classifying a
 /// hex is a pure function of the snapshot, so tile drawing may run off the main actor. The atlas is public data
@@ -17,6 +17,9 @@ import WorldMapStore
 nonisolated struct NatureFogTerrain: Sendable, Equatable {
     let atlas: WorldAtlas
     let classifier: AtlasTerrainClassifier
+    /// The fine land and water (``WorldShoreMask``); nil (the pack missing or unreadable) reads the atlas's `LAND`.
+    /// The climate and the urban boundaries always come from the atlas.
+    let shore: WorldShoreMask?
     /// The day whose season the map shows.
     let date: Date
     let calendar: Calendar
@@ -25,10 +28,12 @@ nonisolated struct NatureFogTerrain: Sendable, Equatable {
     /// Which snapshot this is: a new one is a new generation, and the fog's tiles redraw.
     let generation: Int
 
-    /// Terrain from `atlas` showing `date`'s season (read in `calendar`), or `seasonOverride` everywhere.
-    init(atlas: WorldAtlas, date: Date = Date(), calendar: Calendar = .current, seasonOverride: AtlasSeason? = nil,
-         generation: Int = 1) {
+    /// Terrain from `atlas` (its land and water from `shore` when there is one) showing `date`'s season (read in
+    /// `calendar`), or `seasonOverride` everywhere.
+    init(atlas: WorldAtlas, shore: WorldShoreMask? = nil, date: Date = Date(), calendar: Calendar = .current,
+         seasonOverride: AtlasSeason? = nil, generation: Int = 1) {
         self.atlas = atlas
+        self.shore = shore
         classifier = AtlasTerrainClassifier(atlas: atlas)
         self.date = date
         self.calendar = calendar
@@ -36,29 +41,46 @@ nonisolated struct NatureFogTerrain: Sendable, Equatable {
         self.generation = generation
     }
 
-    /// Home's terrain from the opened atlas, or nil with none (the fog stays today's nature fog). The DEBUG season
-    /// hook (`FERNLET_UI_TEST_TERRAIN_SEASON`) fixes the season for screenshots.
+    /// Home's terrain from the opened atlas and shore mask (which open together), or nil with no atlas (the fog stays
+    /// today's nature fog). The DEBUG season hook (`FERNLET_UI_TEST_TERRAIN_SEASON`) fixes the season for screenshots.
     @MainActor
-    static func home(_ atlas: WorldAtlas?) -> NatureFogTerrain? {
-        atlas.map { NatureFogTerrain(atlas: $0, seasonOverride: UITestSupport.terrainSeasonOverride) }
+    static func home(_ atlas: WorldAtlas?, shore: WorldShoreMask? = nil) -> NatureFogTerrain? {
+        atlas.map { NatureFogTerrain(atlas: $0, shore: shore, seasonOverride: UITestSupport.terrainSeasonOverride) }
     }
 
-    /// Two snapshots are the same terrain when they are the same generation showing the same season.
+    /// Two snapshots are the same terrain when they are the same generation over the same shore mask, showing the same
+    /// season.
     static func == (lhs: NatureFogTerrain, rhs: NatureFogTerrain) -> Bool {
-        lhs.generation == rhs.generation && lhs.date == rhs.date && lhs.calendar == rhs.calendar
-            && lhs.seasonOverride == rhs.seasonOverride
+        lhs.generation == rhs.generation && lhs.shore === rhs.shore && lhs.date == rhs.date
+            && lhs.calendar == rhs.calendar && lhs.seasonOverride == rhs.seasonOverride
     }
 
-    /// The hex for fog cell `cell`, read from the atlas now; `urban` says whether its centre is in an urban
-    /// boundary (the memo answers that from its own short list).
+    /// The hex for fog cell `cell`, read now; `urban` says whether its centre is in an urban boundary (the memo
+    /// answers that from its own short list).
     func classify(_ cell: HexCell, urban: (GeoPoint) -> Bool) -> TerrainHex {
         let point = MercatorHexGrid.centreGeo(of: cell)
-        let terrain = classifier.terrain(at: point)
-        let land = terrain != .water
+        let ground = ground(at: point)
+        let land = ground.terrain != .water
         let season = seasonOverride ?? AtlasSeason.season(at: point.latitude, on: date, calendar: calendar)
-        let plants = land ? AtlasTerrainClassifier.flora(for: terrain, climateCode: atlas.climateCode(at: point), at: point) : []
-        return TerrainHex.classify(terrain: terrain, urban: land && urban(point), plants: plants,
+        let plants = land ? AtlasTerrainClassifier.flora(for: ground.terrain, climateCode: ground.climate, at: point) : []
+        return TerrainHex.classify(terrain: ground.terrain, urban: land && urban(point), plants: plants,
                                    latitude: point.latitude, season: season, forced: seasonOverride != nil)
+    }
+
+    /// What lies under `point`: with a shore mask, it alone says land or water, and land where the atlas has water
+    /// takes its climate from the nearest atlas cell that has one; with none, the atlas as ever.
+    private func ground(at point: GeoPoint) -> (terrain: AtlasTerrain, climate: UInt8) {
+        guard let shore else { return (classifier.terrain(at: point), atlas.climateCode(at: point)) }
+        guard shore.isLand(at: point) else { return (.water, 0) }
+        let climate = classifier.nearbyClimateCode(at: point)
+        return (AtlasTerrainClassifier.terrain(climateCode: climate, latitude: point.latitude), climate)
+    }
+
+    /// Whether a tile's placeholder should read as water at `point`. Asked on the main actor while tiles wait to be
+    /// painted, so with a shore mask it reads the half-degree overview and never opens a tile.
+    func placeholderIsWater(at point: GeoPoint) -> Bool {
+        guard let shore else { return classifier.terrain(at: point) == .water }
+        return shore.landShare(at: point) < WorldShoreMask.landShareThreshold
     }
 }
 

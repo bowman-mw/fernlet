@@ -2,8 +2,11 @@ import Foundation
 import Observation
 import WorldMapStore
 
-/// The atlas's land mask at half a degree (the mockup's `LAND05`), built once when the world view opens, for
-/// the far levels' faint land and sea: 720 × 360 cells, each land when the atlas puts land at its centre.
+/// The land at half a degree (the mockup's `LAND05`), built once when the world view opens, for the far levels' faint
+/// land and sea: 720 × 360 cells. The hexes read ``isLand(at:)``: with a shore mask a cell is land at a share of
+/// ``WorldShoreMask/landShareThreshold`` or more (so the Great Lakes and Finland's lakes read as water, and no tile is
+/// opened), and without one when the atlas puts land at its centre. The lines read ``atlasIsLand(at:)``, always the
+/// atlas's, whose lakes are land: a country line through Lake Superior stays where it was.
 nonisolated struct WorldViewLandRaster: Sendable {
     /// Degrees on a cell's side.
     static let step = 0.5
@@ -12,29 +15,49 @@ nonisolated struct WorldViewLandRaster: Sendable {
     /// Rows, north to south from 90°N.
     static let rows = 360
 
-    /// Every cell, row by row: whether it is land.
-    private let land: [Bool]
+    /// Every cell, row by row: whether its hexes draw land.
+    private let drawn: [Bool]
+    /// Every cell, row by row: whether the atlas puts land at its centre.
+    private let atlasLand: [Bool]
 
-    /// The raster of `atlas`. Bounded: exactly ``columns`` × ``rows`` lookups, each one constant time.
-    init(atlas: WorldAtlas) {
-        var land = [Bool](repeating: false, count: Self.columns * Self.rows)
-        for row in 0..<Self.rows {
-            let latitude = 90 - (Double(row) + 0.5) * Self.step
-            for col in 0..<Self.columns {
-                let longitude = -180 + (Double(col) + 0.5) * Self.step
-                land[row * Self.columns + col] = atlas.isLand(at: GeoPoint(latitude, longitude))
-            }
-        }
-        self.land = land
+    /// The raster of `atlas`, drawing `shore`'s land when there is one. Bounded: exactly ``columns`` × ``rows`` lookups
+    /// of each, each one constant time.
+    init(atlas: WorldAtlas, shore: WorldShoreMask? = nil) {
+        let fromAtlas = Self.cells { atlas.isLand(at: $0) }
+        atlasLand = fromAtlas
+        drawn = shore.map { mask in Self.cells { mask.landShare(at: $0) >= WorldShoreMask.landShareThreshold } } ?? fromAtlas
     }
 
-    /// Whether the cell under `point` is land (latitude clamped, longitude wrapped).
+    /// Whether `isLand` holds at each cell's centre, row by row. Bounded: ``columns`` × ``rows`` reads.
+    private static func cells(_ isLand: (GeoPoint) -> Bool) -> [Bool] {
+        var land = [Bool](repeating: false, count: columns * rows)
+        for row in 0..<rows {
+            let latitude = 90 - (Double(row) + 0.5) * step
+            for col in 0..<columns {
+                let longitude = -180 + (Double(col) + 0.5) * step
+                land[row * columns + col] = isLand(GeoPoint(latitude, longitude))
+            }
+        }
+        return land
+    }
+
+    /// Whether the cell under `point` draws land (latitude clamped, longitude wrapped).
     func isLand(at point: GeoPoint) -> Bool {
-        guard point.latitude.isFinite, point.longitude.isFinite else { return false }
-        let row = min(max(Int(((90 - point.latitude) / Self.step).rounded(.down)), 0), Self.rows - 1)
-        let shifted = (point.longitude + 180) / Self.step
-        let col = ((Int(shifted.rounded(.down)) % Self.columns) + Self.columns) % Self.columns
-        return land[row * Self.columns + col]
+        Self.index(of: point).map { drawn[$0] } ?? false
+    }
+
+    /// Whether the atlas puts land at the centre of the cell under `point` (latitude clamped, longitude wrapped).
+    func atlasIsLand(at point: GeoPoint) -> Bool {
+        Self.index(of: point).map { atlasLand[$0] } ?? false
+    }
+
+    /// The cell under `point`, nil when it isn't finite.
+    private static func index(of point: GeoPoint) -> Int? {
+        guard point.latitude.isFinite, point.longitude.isFinite else { return nil }
+        let row = min(max(Int(((90 - point.latitude) / step).rounded(.down)), 0), rows - 1)
+        let shifted = (point.longitude + 180) / step
+        let col = ((Int(shifted.rounded(.down)) % columns) + columns) % columns
+        return row * columns + col
     }
 }
 
@@ -42,8 +65,8 @@ nonisolated struct WorldViewLandRaster: Sendable {
 ///
 /// - the hexes each detail's grid has uncovered (``WorldViewHexGrid/uncovered(by:)`` over the lifted fog),
 ///   computed once off the main actor;
-/// - the land: the half-degree raster for World and Country, and for State and City the atlas's own mask at
-///   each hex's centre, kept per hex;
+/// - the land its hexes draw: the half-degree raster for World and Country, and for State and City the shore mask
+///   (``WorldViewMapFacts/shoreLand(_:samples:x:y:)``; without a mask the atlas's own at each hex's centre), kept per hex;
 /// - the place each land hex is in (its country, or from State in its plate group), looked up off the main
 ///   actor for the hexes on screen and kept per hex, for the lines on hex edges and the state labels;
 /// - each detail's hexes on found airports' grounds, and their runways (``WorldViewAirportTiles``);
@@ -82,6 +105,9 @@ final class WorldViewModel {
 
     /// The found airports' runways.
     private var runways: [WorldViewRunway] { WorldViewAirportTiles.runways(of: content.flights.grounds) }
+
+    /// Whether the hexes draw OpenStreetMap's data, so the map must credit it: true once the model holds the mask.
+    var drawsOpenStreetMapData: Bool { content.shore != nil }
 
     /// Whether a place lookup is running (a new detail's drawing waits for it, so its lines don't blink).
     var isLookingUpPlaces: Bool { placeTask != nil }
@@ -124,7 +150,8 @@ final class WorldViewModel {
             }.value
         }
         if raster == nil, let atlas = content.atlas {
-            raster = await Task.detached(priority: .userInitiated) { WorldViewLandRaster(atlas: atlas) }.value
+            let shore = content.shore
+            raster = await Task.detached(priority: .userInitiated) { WorldViewLandRaster(atlas: atlas, shore: shore) }.value
         }
         if roads.generation == 0, let atlas = content.atlas, !content.liftedCells.isEmpty {
             let cells = content.liftedCells
@@ -135,11 +162,12 @@ final class WorldViewModel {
         }
     }
 
-    /// Ends the place lookups (the page going away).
+    /// Ends the place lookups and lets the shore tiles the drawings decoded go (the page going away).
     func stop() {
         placeTask?.cancel()
         placeTask = nil
         pendingPlaces = nil
+        content.shore?.forgetTiles()
     }
 
     // MARK: Per hex
@@ -149,15 +177,11 @@ final class WorldViewModel {
         found[detail]?.contains(hex) ?? false
     }
 
-    /// Whether `hex` (drawn at the unwrapped Mercator centre `x`, `y`) of `detail` is land.
-    func isLand(_ hex: HexCell, x: Double, y: Double, at detail: AtlasZoomDetail) -> Bool {
-        let point = WebMercator.geo(x: WorldViewCamera.wrap(x), y: y)
-        if detail.level <= .country, let raster { return raster.isLand(at: point) }
-        if let known = landCache[detail]?[hex] { return known }
-        let land = WorldViewMapFacts.atlasLand(content.atlas, x: x, y: y)
-        if landCache[detail, default: [:]].count >= Self.maxCachedHexes { landCache[detail] = [:] }
-        landCache[detail, default: [:]][hex] = land
-        return land
+    /// Whether the hex drawn at the unwrapped Mercator centre `x`, `y` of `detail` gets a place looked up: land by the
+    /// atlas, whose lakes are land, as the lines and labels have always read it. Never the shore mask: this runs on
+    /// the main actor and must not decode a tile. One raster or atlas read.
+    func holdsPlace(x: Double, y: Double, at detail: AtlasZoomDetail) -> Bool {
+        WorldViewMapFacts.holdsPlace(raster: detail.level <= .country ? raster : nil, atlas: content.atlas, x: x, y: y)
     }
 
     /// What a map drawing of `detail` reads, copied so it can be built off the main actor (the copies share
@@ -165,7 +189,7 @@ final class WorldViewModel {
     func facts(at detail: AtlasZoomDetail) -> WorldViewMapFacts {
         WorldViewMapFacts(detail: detail, raster: raster, atlas: content.atlas, found: found[detail] ?? [],
                           places: placeCache[detail] ?? [:], roads: roads, lands: landCache[detail] ?? [:],
-                          airports: airportCells[detail] ?? [], runways: runways)
+                          airports: airportCells[detail] ?? [], runways: runways, shore: content.shore)
     }
 
     /// Keeps the land a map drawing looked up (its copy of the cache, grown), when it still fits the cache.
@@ -194,7 +218,7 @@ final class WorldViewModel {
         var missing: [HexCell] = [], seen = Set<HexCell>()
         // Bounded: the hexes on screen (WorldViewCamera.maxVisibleHexes), and maxBatch kept.
         for hex in hexes where missing.count < WorldViewPlaces.maxBatch && !isKnown(hex.cell, at: detail) {
-            guard seen.insert(hex.cell).inserted, isLand(hex.cell, x: hex.x, y: hex.y, at: detail) else { continue }
+            guard seen.insert(hex.cell).inserted, holdsPlace(x: hex.x, y: hex.y, at: detail) else { continue }
             missing.append(hex.cell)
         }
         guard !missing.isEmpty else { return }

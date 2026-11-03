@@ -62,6 +62,13 @@ struct WorldMapStack<Overlay: View>: View {
                     .mask { WorldMapCreditClearance(bottomInset: creditInset, active: kind == .appleMuted && !veiled) }
                     overlay(viewport, proxy.size)
                 }
+                if terrain?.shore != nil {
+                    // Above Apple's credit, on the same edge: the fog here draws OpenStreetMap's land and water.
+                    WorldOpenStreetMapCredit()
+                        .padding(.leading, 12)
+                        .padding(.bottom, creditInset + WorldMapCreditClearance.creditHeight + 2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
             }
         }
         .ignoresSafeArea()
@@ -93,6 +100,9 @@ final class WorldMapGeometry {
 /// the fog thins around it instead of stopping at a hard box. With no credit to keep clear, it masks
 /// nothing.
 struct WorldMapCreditClearance: View {
+    /// How far the hole reaches above the bottom inset.
+    static let creditHeight: CGFloat = 40
+
     let bottomInset: CGFloat
     let active: Bool
 
@@ -104,7 +114,7 @@ struct WorldMapCreditClearance: View {
                 if active {
                     // The map ignores the safe area, so the inset alone places the credit: its
                     // bottom edge sits on the inset, inside MapKit's own small margin.
-                    path.addRoundedRect(in: CGRect(x: 2, y: proxy.size.height - bottomInset - 40, width: 128, height: 44),
+                    path.addRoundedRect(in: CGRect(x: 2, y: proxy.size.height - bottomInset - Self.creditHeight, width: 128, height: 44),
                                         cornerSize: CGSize(width: 10, height: 10))
                 }
             }

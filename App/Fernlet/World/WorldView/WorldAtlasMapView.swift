@@ -67,6 +67,12 @@ struct WorldAtlasMapView: View {
                 if let camera {
                     mapLayers(camera, size: size)
                     controls(camera)
+                    if model.drawsOpenStreetMapData {
+                        WorldOpenStreetMapCredit()
+                            .padding(.leading, chromeInsets.leading)
+                            .padding(.bottom, 12)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    }
                 } else {
                     WorldPalette.rgb(WorldViewInk.sea(dark: false)).accessibilityHidden(true)
                 }

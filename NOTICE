@@ -72,6 +72,18 @@ This product includes software developed by the "Marcin Krzyzanowski"
   - This notice may not be removed or altered from any source or binary distribution.
   - Redistributions of any form whatsoever must retain the following acknowledgment: 'This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/).'
 
+Map data (the land and water drawn on the World map, App/Fernlet/World/Atlas/WorldShore.pack)
+
+© OpenStreetMap contributors. The pack is a database built from OpenStreetMap data and is available under the
+Open Database License 1.0 (https://opendatacommons.org/licenses/odbl/1-0/,
+https://www.openstreetmap.org/copyright). It comes from OpenStreetMap land polygons
+(https://osmdata.openstreetmap.de/data/land-polygons.html, data of 2026-10-31) and OpenStreetMap water through
+Overture Maps Foundation (https://overturemaps.org, base/water release 2026-10-21.0). Fernlet changed the data: the
+polygons were turned into grids of land and water, and small and seasonal water left out. The generator,
+Scripts/world-atlas/build_world_shore.py, is in this repository, and the pack is free to download from its releases
+(https://github.com/bowman-mw/fernlet/releases/tag/world-shore-v1); see Docs/World-Shore-Pack.md and
+App/Fernlet/World/Atlas/WorldShore.LICENSE.txt. Only that pack and notice are under the ODbL.
+
 Map data (the World atlas, App/Fernlet/World/Atlas/WorldAtlas.pack)
 
 The atlas is built on the build machine by Scripts/world-atlas/ and ships

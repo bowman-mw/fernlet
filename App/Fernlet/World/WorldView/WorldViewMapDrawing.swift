@@ -2,15 +2,20 @@ import SwiftUI
 import WorldMapStore
 
 /// What one map drawing reads about the hexes, copied off the model so it can be built off the main actor:
-/// the level's uncovered hexes, its land (the half-degree raster at World and Country, else the atlas's mask
-/// at each hex's centre, kept per hex) and the places looked up so far, and the crossed roads.
+/// the level's uncovered hexes, the land they draw (the half-degree raster at World and Country; from State in the
+/// shore mask sampled over each hex, or without a mask the atlas's at its centre, kept per hex), the land the lines read
+/// (always the atlas's), the places looked up so far, and the crossed roads.
 nonisolated struct WorldViewMapFacts: Sendable {
     /// The hex detail the facts are for.
     let detail: AtlasZoomDetail
     /// The half-degree land mask, once built.
     let raster: WorldViewLandRaster?
-    /// The atlas, for the land from State in.
+    /// The atlas, for the lines' land, and for the hexes' from State in with no shore mask.
     let atlas: WorldAtlas?
+    /// The shore mask, for the hexes' land from State in; nil falls back to the atlas's.
+    let shore: WorldShoreMask?
+    /// Where a hex of this detail is read in the shore mask, as Mercator offsets from its centre.
+    private let samples: [(x: Double, y: Double)]
     /// The level's uncovered hexes.
     let found: Set<HexCell>
     /// The level's places looked up so far (``WorldViewModel/place(of:at:)``).
@@ -21,7 +26,8 @@ nonisolated struct WorldViewMapFacts: Sendable {
     let airports: Set<HexCell>
     /// The found airports' runways.
     let runways: [WorldViewRunway]
-    /// The level's land per hex: the model's cache, plus what this drawing looked up (handed back to the model).
+    /// The land the level's hexes draw, per hex: the model's cache, plus what this drawing looked up (handed back to
+    /// the model).
     private(set) var lands: [HexCell: Bool]
 
     /// The named level the detail belongs to.
@@ -30,10 +36,12 @@ nonisolated struct WorldViewMapFacts: Sendable {
     /// The facts of `detail`, from the model's caches.
     init(detail: AtlasZoomDetail, raster: WorldViewLandRaster?, atlas: WorldAtlas?, found: Set<HexCell>,
          places: [HexCell: AtlasPlaceName?], roads: WorldRoadDrawing, lands: [HexCell: Bool],
-         airports: Set<HexCell> = [], runways: [WorldViewRunway] = []) {
+         airports: Set<HexCell> = [], runways: [WorldViewRunway] = [], shore: WorldShoreMask? = nil) {
         self.detail = detail
         self.raster = raster
         self.atlas = atlas
+        self.shore = shore
+        samples = Self.shoreSamples(in: detail.hexGrid)
         self.found = found
         self.places = places
         self.roads = roads
@@ -45,15 +53,20 @@ nonisolated struct WorldViewMapFacts: Sendable {
     /// Whether `hex` is uncovered.
     func isFound(_ hex: HexCell) -> Bool { found.contains(hex) }
 
-    /// Whether `hex` (drawn at the unwrapped Mercator centre `x`, `y`) is land; a hex not known yet is looked
+    /// Whether `hex` (drawn at the unwrapped Mercator centre `x`, `y`) draws land; a hex not known yet is looked
     /// up and kept (the land cache stays under ``WorldViewModel/maxCachedHexes``).
     mutating func isLand(_ hex: HexCell, x: Double, y: Double) -> Bool {
         if level <= .country, let raster { return raster.isLand(at: WebMercator.geo(x: WorldViewCamera.wrap(x), y: y)) }
         if let known = lands[hex] { return known }
-        let land = Self.atlasLand(atlas, x: x, y: y)
+        let land = shore.map { Self.shoreLand($0, samples: samples, x: x, y: y) } ?? Self.atlasLand(atlas, x: x, y: y)
         if lands.count >= WorldViewModel.maxCachedHexes { lands = [:] }
         lands[hex] = land
         return land
+    }
+
+    /// Whether the hex at the unwrapped Mercator centre `x`, `y` has a place for the lines to compare (the atlas's land).
+    func holdsPlace(x: Double, y: Double) -> Bool {
+        Self.holdsPlace(raster: level <= .country ? raster : nil, atlas: atlas, x: x, y: y)
     }
 
     /// The place `hex` is in: `.some(nil)` when looked up and none, nil while not looked up yet.
@@ -65,6 +78,36 @@ nonisolated struct WorldViewMapFacts: Sendable {
     /// Whether the atlas puts land at the unwrapped Mercator point (`x`, `y`); no atlas, no land.
     static func atlasLand(_ atlas: WorldAtlas?, x: Double, y: Double) -> Bool {
         atlas?.isLand(at: WebMercator.geo(x: WorldViewCamera.wrap(x), y: y)) ?? false
+    }
+
+    /// Whether the lines and labels read land at the unwrapped Mercator point (`x`, `y`): `raster`'s atlas land where
+    /// the level reads the raster, else the atlas's. Never the shore mask, so no line or label moves with it.
+    static func holdsPlace(raster: WorldViewLandRaster?, atlas: WorldAtlas?, x: Double, y: Double) -> Bool {
+        guard let raster else { return atlasLand(atlas, x: x, y: y) }
+        return raster.atlasIsLand(at: WebMercator.geo(x: WorldViewCamera.wrap(x), y: y))
+    }
+
+    /// How far out a hex's six outer samples sit, as a share of its centre-to-corner radius.
+    static let shoreSampleReach = 0.6
+
+    /// Where a hex of `grid` is read in the shore mask: its centre, then six points toward its corners.
+    static func shoreSamples(in grid: WorldViewHexGrid) -> [(x: Double, y: Double)] {
+        [(0, 0)] + grid.cornerOffsets.map { ($0.x * shoreSampleReach, $0.y * shoreSampleReach) }
+    }
+
+    /// Whether the hex centred on the unwrapped Mercator point (`x`, `y`) draws land: at least half of `samples` are
+    /// land. A hex from State in is 3 to 18 km across, so one reading at its centre would make islands and rivers
+    /// flicker in and out at random. Bounded: at most the seven samples, stopping once the count is settled.
+    static func shoreLand(_ shore: WorldShoreMask, samples: [(x: Double, y: Double)], x: Double, y: Double) -> Bool {
+        let needed = samples.count / 2 + samples.count % 2
+        var land = 0, water = 0
+        for sample in samples {
+            let point = WebMercator.geo(x: WorldViewCamera.wrap(x + sample.x), y: y + sample.y)
+            if shore.isLand(at: point) { land += 1 } else { water += 1 }
+            if land >= needed { return true }
+            if water > samples.count - needed { return false }
+        }
+        return false
     }
 }
 
@@ -167,7 +210,7 @@ nonisolated struct WorldViewMapDrawing: Sendable {
                 uncovered.closeSubpath()
             }
         }
-        let lines = linePaths(visible, camera: camera, facts: &facts)
+        let lines = linePaths(visible, camera: camera, facts: facts)
         let ordered = fills.values.sorted { ($0.found ? 1 : 0, $0.fill) < ($1.found ? 1 : 0, $1.fill) }
         return WorldViewMapDrawing(key: key, hexes: ordered, region: lines.region, country: lines.country,
                                    uncovered: uncovered, roads: roadPaths(camera, facts: facts, uncovered: uncovered),
@@ -191,9 +234,9 @@ nonisolated struct WorldViewMapDrawing: Sendable {
 
     /// The country and state lines on shared hex edges, where the level draws them.
     private static func linePaths(_ hexes: [WorldViewVisibleHex], camera: WorldViewCamera,
-                                  facts: inout WorldViewMapFacts) -> (region: Path, country: Path) {
+                                  facts: WorldViewMapFacts) -> (region: Path, country: Path) {
         guard camera.level.showsCountryLines else { return (Path(), Path()) }
-        let segments = WorldViewBorders.segments(hexes, facts: &facts)
+        let segments = WorldViewBorders.segments(hexes, facts: facts)
         return (edgePath(segments.region, camera: camera), edgePath(segments.country, camera: camera))
     }
 

@@ -2,7 +2,7 @@ import FernletDomainModel
 import Foundation
 import WorldMapStore
 
-/// What the world view draws, read once when it opens: the bundled atlas, the person's discovered cities
+/// What the world view draws, read once when it opens: the bundled atlas and shore mask, the person's discovered cities
 /// and counts from the sealed passport, the lifted fog, and where to open.
 ///
 /// Everything comes from the passport (`store.worldFog.atlas.book`) and the fog history; a decoy shows an
@@ -24,6 +24,8 @@ nonisolated struct WorldViewContent: Sendable {
     /// The flights' arcs, the airports' marks and the plate's counts (World-Airports-Spec §8; none in a decoy,
     /// and none in fixed demo content unless it carries flights).
     var flights = WorldFlightMap.none
+    /// The fine land and water its hexes draw (``WorldShoreMask``), or nil to draw the atlas's land.
+    var shore: WorldShoreMask?
 
     /// Nothing at all: no atlas, no cities, no fog.
     static let empty = WorldViewContent(atlas: nil, pins: [], cityCount: 0, countryCount: 0, liftedCells: [], start: nil)
@@ -55,9 +57,11 @@ extension WorldViewContent {
         let home = decoy ? nil : store.worldHomes.homes.first { $0.kind == .home }?.point
         let book = fog.atlas.book
         let flown = !book.flights.isEmpty || book.count(of: .airport) > 0
-        return make(atlas: fog.atlas.openedAtlas, book: book, cells: decoy ? [] : Array(fog.visibleCells),
-                    start: home ?? store.worldLocation.latest?.point,
-                    airports: flown ? store.worldLocation.flights.airportsShelf.pack() : nil)
+        var content = make(atlas: fog.atlas.openedAtlas, book: book, cells: decoy ? [] : Array(fog.visibleCells),
+                           start: home ?? store.worldLocation.latest?.point,
+                           airports: flown ? store.worldLocation.flights.airportsShelf.pack() : nil)
+        content.shore = fog.atlas.openedShore
+        return content
     }
 }
 
