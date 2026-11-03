@@ -10,19 +10,24 @@ import WorldMapStore
 ///   land and sea under the fog, the hexes the person uncovered in full, country lines from Country and state
 ///   lines from State on the hex edges, the major roads the person crossed in amber on the uncovered hexes from
 ///   Country in (``WorldRoadStyle``), and no county lines (answer 13).
-/// - **Zoom** World → Country → State → City (``AtlasZoomLevel``) with the framed control on the right
-///   (``WorldAtlasZoomControl``) or a pinch, one level a step. Reduce Motion: no animated zoom.
+/// - **Zoom** is free from World to a little past City (owner, 2026-11-02): a pinch follows the fingers and the map
+///   stays where they leave it; the framed control on the right (``WorldAtlasZoomControl``) glides to the
+///   next stop along World → Country → State → City (``AtlasZoomLevel``) and on in. Hexes step in half levels
+///   (``AtlasZoomDetail``). Reduce Motion:
+///   the control jumps instead of gliding, and the hexes don't fade.
 /// - **Pan** east and west all the way round; north and south clamped, the poles at the edges at World
 ///   (``WorldViewCamera``). It opens on the person's first home, else their latest fix, else 0°.
-/// - **City markers**: a gold square and the name farther out, the framed skyline and name plate from State in;
-///   cities closer than 30 pt share one ("Seattle +2"). Tapping one zooms to it; at City it calls
-///   `onOpenCity` with the city's token (the city view is wired by the lane).
+/// - **City markers**: an open gold square on the city and the name beside the found ground, the framed skyline
+///   and name plate from State in (``WorldAtlasMarkers``); cities closer than 30 pt share one ("Seattle +2").
+///   Tapping one zooms to it; at City it calls `onOpenCity` with the city's token.
 /// - **The plate** under the host's top chips (``WorldAtlasPlate``), and at City the state names as framed
 ///   letter-spaced capitals.
 /// - **Flights** (World-Airports-Spec §8, screen 22): every route one dotted great-circle arc
 ///   (``WorldFlightArcsLayer``), rings for airports only flown through and labelled dots for found ones
 ///   (``WorldFlightMarks``); a tap on an arc opens its card (``WorldFlightCard``), and the plate adds
 ///   "6 airports · 53 flights". Only this full-screen page draws them (Home never shows arcs).
+/// - **Found airports** show their grounds as blue hexes, with their real runways from City in
+///   (``WorldViewAirportTiles``).
 /// - **VoiceOver**: the land is decoration, each marker a button, each arc on screen a button
 ///   (``WorldFlightArcButtons``), the zoom level one adjustable element.
 struct WorldAtlasMapView: View {
@@ -47,10 +52,9 @@ struct WorldAtlasMapView: View {
 
     @State private var model = WorldViewModel()
     @State private var camera: WorldViewCamera?
-    @State private var dragStart: WorldViewCamera?
-    @State private var pinch: CGFloat = 1
-    @State private var pinchAnchor = UnitPoint.center
-    @State private var blend: CGFloat = 1
+    /// The zoom the control is gliding to, and the glide.
+    @State private var glideTarget: Double?
+    @State private var glide: Task<Void, Never>?
     @State private var centreDescription: AtlasZoomDescription?
     /// The flight arc whose card shows, and the ring named by a tap.
     @State private var flightPick = WorldFlightPick()
@@ -70,25 +74,28 @@ struct WorldAtlasMapView: View {
             .frame(width: size.width, height: size.height)
             .onAppear { start(size: size) }
             .onChange(of: size) { _, newSize in camera?.resize(to: newSize) }
+            .onChange(of: camera?.detail) { settle() }
         }
         .task {
             await model.prepare()
             settle()
         }
-        .onDisappear { model.stop() }
+        .onDisappear {
+            glide?.cancel()
+            model.stop()
+        }
     }
 
     // MARK: Layers
 
-    /// The map, the state labels and the markers, scaled together while a pinch or a zoom step runs.
+    /// The map, the flights, the state labels and the markers. The pan and the pinch sit on the whole stack, so a
+    /// finger that lands on a label moves the map too.
     private func mapLayers(_ camera: WorldViewCamera, size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             WorldViewMapCanvas(camera: camera, model: model, generation: generation)
                 .frame(width: size.width, height: size.height)
                 .contentShape(Rectangle())
-                .gesture(dragGesture)
-                .simultaneousGesture(pinchGesture(size: size))
-                .simultaneousGesture(SpatialTapGesture().onEnded { tapFlights(at: $0.location) })
+                .simultaneousGesture(SpatialTapGesture().onEnded { tapMap(at: $0.location) })
             if !flights.arcs.isEmpty {
                 WorldFlightArcsLayer(camera: camera, arcs: flights.arcs, picked: flightPick.arc)
             }
@@ -97,15 +104,18 @@ struct WorldAtlasMapView: View {
             if !flights.rings.isEmpty || !flights.found.isEmpty {
                 WorldFlightMarks(camera: camera, flights: flights, namedRing: flightPick.ring)
             }
-            WorldAtlasMarkers(camera: camera, clusters: model.clusters(at: camera.level)) { cluster in
+            WorldAtlasMarkers(camera: camera, clusters: model.clusters(at: camera.detail),
+                              spots: model.labelSpots(at: camera.detail)) { cluster in
                 tap(cluster)
             }
             if !flights.arcs.isEmpty {
                 WorldFlightArcButtons(camera: camera, arcs: flights.arcs) { flightPick = WorldFlightPick(arc: $0.id) }
             }
         }
-        .scaleEffect(pinch * blend, anchor: pinchAnchor)
         .clipped()
+        .contentShape(Rectangle())
+        .gesture(WorldMapPanRecognizer(onMove: pan(by:), onEnd: settle))
+        .gesture(WorldMapPinchRecognizer(onPinch: pinch(by:at:), onEnd: settle))
     }
 
     /// The plate under the host's chips and the zoom control on the right.
@@ -125,8 +135,9 @@ struct WorldAtlasMapView: View {
                 .padding(.horizontal, chromeInsets.leading + 30)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .padding(.top, chromeInsets.top)
-            WorldAtlasZoomControl(level: camera.level, spokenValue: spokenValue(camera),
-                                  onZoomIn: { step(in: true, focus: nil) }, onZoomOut: { step(in: false, focus: nil) })
+            WorldAtlasZoomControl(level: camera.level, canZoomIn: camera.canZoomIn, canZoomOut: camera.canZoomOut,
+                                  spokenValue: spokenValue(camera),
+                                  onZoomIn: { step(in: true) }, onZoomOut: { step(in: false) })
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .padding(.trailing, chromeInsets.trailing)
                 .padding(.bottom, chromeInsets.bottom)
@@ -149,15 +160,24 @@ struct WorldAtlasMapView: View {
         return flights.arcs.first { $0.id == id }
     }
 
-    /// A tap on the map: names a ring, opens an arc's card, or closes the card.
-    private func tapFlights(at point: CGPoint) {
-        guard let camera, !flights.arcs.isEmpty || !flights.rings.isEmpty else { return }
+    /// A tap on the map: a city's square acts like its label; else it names a ring, opens an arc's card, or closes
+    /// the card.
+    private func tapMap(at point: CGPoint) {
+        guard let camera else { return }
+        // Bounded: the level's markers (at most WorldViewCluster.maxPins).
+        let city = model.clusters(at: camera.detail).first { cluster in
+            let spot = camera.screenPoint(x: cluster.anchor.x, y: cluster.anchor.y)
+            return hypot(Double(spot.x - point.x), Double(spot.y - point.y)) <= WorldFlightInk.ringReach
+        }
+        if let city { tap(city); return }
+        guard !flights.arcs.isEmpty || !flights.rings.isEmpty else { return }
         flightPick = WorldFlightPick.at(point, camera: camera, flights: flights, current: flightPick)
     }
 
     /// What the map's drawing depends on beyond the camera: the uncovered hexes, the raster, the places.
     private var generation: Int {
         model.placeGeneration &+ (model.raster == nil ? 0 : 1) &+ (model.found.isEmpty ? 0 : 2) &+ (model.roads.roadCount > 0 ? 4 : 0)
+            &+ (model.airportCells.isEmpty ? 0 : 8)
     }
 
     /// The zoom level's spoken value.
@@ -179,70 +199,75 @@ struct WorldAtlasMapView: View {
         settle()
     }
 
-    /// A one-finger drag pans; the camera clamps and wraps as it goes.
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 3)
-            .onChanged { value in
-                if dragStart == nil { dragStart = camera }
-                guard var moved = dragStart else { return }
-                moved.pan(by: value.translation)
-                camera = moved
-            }
-            .onEnded { _ in
-                dragStart = nil
-                settle()
-            }
+    /// The fingers moved: the map moves with them, and any glide stops.
+    private func pan(by moved: CGSize) {
+        stopGlide()
+        camera?.pan(by: moved)
     }
 
-    /// A pinch follows the fingers, then steps one level in or out when it ends far enough.
-    private func pinchGesture(size: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                pinchAnchor = UnitPoint(x: value.startLocation.x / max(size.width, 1),
-                                        y: value.startLocation.y / max(size.height, 1))
-                pinch = min(max(value.magnification, 0.5), 2.2)
-            }
-            .onEnded { value in
-                pinch = 1
-                if value.magnification > 1.3 { step(in: true, focus: value.startLocation) }
-                if value.magnification < 0.77 { step(in: false, focus: value.startLocation) }
-            }
-    }
-
-    /// Steps one level in or out, keeping the place under `focus` (nil: the centre) still; animated unless
-    /// Reduce Motion is on.
-    private func step(in zoomingIn: Bool, focus: CGPoint?) {
-        guard var moved = camera,
-              let target = zoomingIn ? moved.level.zoomedIn : moved.level.zoomedOut else { return }
-        moved.setLevel(target, focus: focus)
+    /// The fingers spread by `ratio` round `focus`: the map zooms by exactly that, the place between them staying
+    /// between them.
+    private func pinch(by ratio: CGFloat, at focus: CGPoint) {
+        guard ratio > 0, var moved = camera else { return }
+        stopGlide()
+        moved.setZoom(moved.zoom + log(Double(ratio)) / log(AtlasZoomLevel.stepRatio), focus: focus)
         camera = moved
-        settle()
-        guard !reduceMotion else { return }
-        if let focus {
-            pinchAnchor = UnitPoint(x: focus.x / max(moved.size.width, 1), y: focus.y / max(moved.size.height, 1))
-        } else {
-            pinchAnchor = .center
-        }
-        blend = zoomingIn ? 0.7 : 1.4
-        withAnimation(.easeOut(duration: 0.3)) { blend = 1 }
     }
 
-    /// A marker's tap: farther out, centre on its city and zoom in a level; at City, open the city.
+    /// + or −: glides to the next level along, from where any glide under way is heading.
+    private func step(in zoomingIn: Bool) {
+        guard let camera else { return }
+        move(toZoom: WorldViewCamera.steppedZoom(from: glideTarget ?? camera.zoom, in: zoomingIn))
+    }
+
+    /// A marker's tap: farther out, glide to its city and in to the next level; from City in, open the city.
     private func tap(_ cluster: WorldViewCluster) {
-        guard var moved = camera else { return }
-        guard moved.level.canZoomIn else {
+        guard let camera else { return }
+        guard camera.level.canZoomIn else {
             onOpenCity(cluster.anchor.token)
             return
         }
-        moved.centre(on: WebMercator.geo(x: cluster.anchor.x, y: cluster.anchor.y))
-        camera = moved
-        step(in: true, focus: nil)
+        move(toZoom: WorldViewCamera.steppedZoom(from: camera.zoom, in: true),
+             centre: WebMercator.geo(x: cluster.anchor.x, y: cluster.anchor.y))
+    }
+
+    /// Stops the glide where it is.
+    private func stopGlide() {
+        glide?.cancel()
+        glide = nil
+        glideTarget = nil
+    }
+
+    /// Goes to `target`, and to `centre` if given: a third of a second's glide, or at once under Reduce Motion.
+    private func move(toZoom target: Double, centre: GeoPoint? = nil) {
+        stopGlide()
+        guard let start = camera else { return }
+        let path = WorldViewCamera.Glide(from: start, toZoom: target, centre: centre)
+        guard !reduceMotion else {
+            camera = path.camera(at: 1)
+            settle()
+            return
+        }
+        glideTarget = target
+        glide = Task { @MainActor in
+            // Bounded: frameCount frames.
+            for frame in 1...WorldViewCamera.Glide.frameCount {
+                do {
+                    try await Task.sleep(for: .milliseconds(WorldViewCamera.Glide.frameMilliseconds))
+                } catch {
+                    return
+                }
+                camera = path.camera(at: Double(frame) / Double(WorldViewCamera.Glide.frameCount))
+            }
+            glideTarget = nil
+            settle()
+        }
     }
 
     /// After a move: the place at the centre, and the places of the hexes on screen for the lines.
     private func settle() {
         guard let camera else { return }
         centreDescription = model.content.atlas?.zoomDescription(level: camera.level, centre: camera.centre)
-        model.requestPlaces(for: camera.visibleHexes(margin: 3), at: camera.level)
+        model.requestPlaces(for: camera.visibleHexes(margin: 3), at: camera.detail)
     }
 }

@@ -2,8 +2,8 @@ import CoreGraphics
 import Foundation
 import WorldMapStore
 
-/// Where the world view looks (World-Exploration-Spec §2, "The world view"): a zoom level and a centre in
-/// normalised Web Mercator, for a view of a given size. Pure maths, so the page and the tests share it.
+/// Where the world view looks (World-Exploration-Spec §2, "The world view"): a place on the free zoom and a
+/// centre in normalised Web Mercator, for a view of a given size. Pure maths, so the page and the tests share it.
 ///
 /// - **East–west wraps all the way round.** The centre's `x` is kept in `0..<1`; a point is drawn at its
 ///   nearest copy (``screenPoint(x:y:)``), and the hexes past the antimeridian are the same hexes as on the
@@ -12,9 +12,12 @@ import WorldMapStore
 ///   clamped harder, so the poles stay at the edges (owner, answer 9: "Make antarctica touch the bottom of the
 ///   screen"): the top edge never comes south of ``arcticEdgeLatitude`` and the bottom edge never north of
 ///   ``antarcticEdgeLatitude``. On an iPhone that leaves about 50 pt of play; a screen too short for both
-///   holds the band's middle.
-/// - **Zooming** steps one level of ``AtlasZoomLevel`` at a time, keeping the place under a focus point (a
-///   pinch, a tapped marker) where it was.
+///   holds the band's middle. Zooming in widens that band smoothly until the whole square is open, so nothing
+///   jumps on the way in or out.
+/// - **Zooming** is free (owner, 2026-11-02): ``zoom`` runs from 0 (World) through 3 (City) to
+///   ``AtlasZoomLevel/maxZoom`` and stops wherever the fingers leave it, keeping the place under a focus point (a pinch, a tapped marker) where it was. The levels
+///   of ``AtlasZoomLevel`` are the whole numbers on it; ``detail`` picks the hexes and ``level`` the lines, the
+///   plate and the zoom control's word.
 nonisolated struct WorldViewCamera: Equatable, Sendable {
     /// The latitude the World view's top edge stays north of: the Arctic is always on the top edge.
     static let arcticEdgeLatitude = 72.0
@@ -26,8 +29,10 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
     /// (about 13,000 on an iPhone, more on an iPad).
     static let maxDrawnHexes = 40_000
 
-    /// The zoom level.
-    private(set) var level: AtlasZoomLevel
+    /// The place on the free zoom: 0 is World, 3 is City, ``AtlasZoomLevel/maxZoom`` the closest.
+    private(set) var zoom: Double
+    /// Screen points a Mercator unit spans at this zoom (the width of the whole world, in points).
+    private(set) var scale: Double
     /// The centre's Mercator `x`, in `0..<1`.
     private(set) var x: Double
     /// The centre's Mercator `y`, clamped by the rules above.
@@ -38,7 +43,8 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
     /// A camera at `level` centred on `centre` (clamped and wrapped) in a view of `size`.
     init(level: AtlasZoomLevel, centre: GeoPoint, size: CGSize) {
         let unit = WebMercator.unit(centre.isValid ? centre : GeoPoint(0, 0))
-        self.level = level
+        self.zoom = Double(level.rank)
+        self.scale = level.pointsPerMercatorUnit
         self.x = Self.wrap(unit.x)
         self.y = unit.y
         self.size = CGSize(width: max(size.width, 1), height: max(size.height, 1))
@@ -47,8 +53,29 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
 
     // MARK: Reading
 
-    /// Screen points a Mercator unit spans at this level (the width of the whole world, in points).
-    var scale: Double { level.pointsPerMercatorUnit }
+    /// The hexes this zoom draws.
+    var detail: AtlasZoomDetail { AtlasZoomDetail(zoom: zoom) }
+
+    /// The named level this zoom belongs to.
+    var level: AtlasZoomLevel { detail.level }
+
+    /// Whether the view can go closer.
+    var canZoomIn: Bool { zoom < AtlasZoomLevel.maxZoom }
+
+    /// Whether the view can go farther out.
+    var canZoomOut: Bool { zoom > 0 }
+
+    /// Where + or − goes from `zoom`: the next whole step along, so a free zoom lands back on the ladder. The ladder's
+    /// last whole step and the closest zoom count as one stop, so no press moves the map only a little.
+    static func steppedZoom(from zoom: Double, in zoomingIn: Bool) -> Double {
+        let near = 0.02, lastWhole = AtlasZoomLevel.maxZoom.rounded(.down)
+        if zoomingIn {
+            let next = (zoom + near).rounded(.down) + 1
+            return next >= lastWhole ? AtlasZoomLevel.maxZoom : next
+        }
+        let next = (zoom - near).rounded(.up) - 1
+        return max(next >= lastWhole ? lastWhole - 1 : next, 0)
+    }
 
     /// The place at the view's centre.
     var centre: GeoPoint { WebMercator.geo(x: x, y: y) }
@@ -94,9 +121,17 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
 
     /// Moves to `level`, keeping the place under `focus` (a screen point; nil for the centre) where it is.
     mutating func setLevel(_ newLevel: AtlasZoomLevel, focus: CGPoint? = nil) {
+        setZoom(Double(newLevel.rank), focus: focus)
+    }
+
+    /// Moves to `newZoom` (held to the ladder's ends), keeping the place under `focus` (a screen point; nil for
+    /// the centre) where it is.
+    mutating func setZoom(_ newZoom: Double, focus: CGPoint? = nil) {
+        guard newZoom.isFinite else { return }
         let anchor = focus ?? CGPoint(x: size.width / 2, y: size.height / 2)
         let under = mercator(at: anchor)
-        level = newLevel
+        zoom = min(max(newZoom, 0), AtlasZoomLevel.maxZoom)
+        scale = AtlasZoomLevel.pointsPerMercatorUnit(atZoom: zoom)
         x = Self.wrap(under.x - (Double(anchor.x) - Double(size.width) / 2) / scale)
         y = under.y - (Double(anchor.y) - Double(size.height) / 2) / scale
         clamp()
@@ -127,17 +162,17 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
         return grown
     }
 
-    /// The range the centre's `y` may take at this level in this view.
+    /// The range the centre's `y` may take at this zoom in this view: round the poles' band's middle, by how far
+    /// the view is taller than the band at World, and by how far it is shorter once zoomed in (twice that, so the
+    /// whole square opens soon after the view stops holding both poles).
     var yRange: ClosedRange<Double> {
-        let half = Double(size.height) / 2 / scale
-        var lower = half, upper = 1 - half
-        if level == .world {
-            let north = WebMercator.unit(GeoPoint(Self.arcticEdgeLatitude, 0)).y
-            let south = WebMercator.unit(GeoPoint(Self.antarcticEdgeLatitude, 0)).y
-            lower = max(lower, south - half)
-            upper = min(upper, north + half)
-            guard lower <= upper else { let middle = (north + south) / 2; return middle...middle }
-        }
+        let height = Double(size.height) / scale, half = height / 2
+        let north = WebMercator.unit(GeoPoint(Self.arcticEdgeLatitude, 0)).y
+        let south = WebMercator.unit(GeoPoint(Self.antarcticEdgeLatitude, 0)).y
+        let band = south - north, middle = (north + south) / 2
+        if zoom == 0, height < band { return middle...middle }
+        let spread = height >= band ? (height - band) / 2 : (band - height) * 2
+        let lower = max(half, middle - spread), upper = min(1 - half, middle + spread)
         guard lower <= upper else { return 0.5...0.5 }
         return lower...upper
     }
@@ -170,6 +205,34 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
     }
 }
 
+nonisolated extension WorldViewCamera {
+    /// A smooth move from one camera to a new zoom and, if given, a new centre (the zoom control and a marker's tap).
+    /// The zoom is already on a ratio scale, so a steady change of it looks steady on screen.
+    struct Glide: Sendable {
+        /// How many steps a glide takes.
+        static let frameCount = 20
+        /// How long each step lasts.
+        static let frameMilliseconds = 16
+
+        let from: WorldViewCamera
+        let toZoom: Double
+        /// Where the view ends up centred, or nil to keep its centre.
+        let centre: GeoPoint?
+
+        /// The camera `progress` (0 to 1) of the way along, easing out.
+        func camera(at progress: Double) -> WorldViewCamera {
+            let t = min(max(progress, 0), 1), eased = 1 - (1 - t) * (1 - t)
+            var moved = from
+            moved.setZoom(from.zoom + (toZoom - from.zoom) * eased)
+            guard let centre else { return moved }
+            let unit = WebMercator.unit(centre)
+            let x = from.x + WorldViewCamera.wrappedDelta(unit.x - from.x) * eased, y = from.y + (unit.y - from.y) * eased
+            moved.centre(on: WebMercator.geo(x: WorldViewCamera.wrap(x), y: y))
+            return moved
+        }
+    }
+}
+
 /// One hex the view shows: its ID (``WorldViewCamera/canonical(_:in:)``) and the centre it is drawn at.
 nonisolated struct WorldViewVisibleHex: Sendable {
     /// The hex's one ID.
@@ -179,10 +242,10 @@ nonisolated struct WorldViewVisibleHex: Sendable {
 }
 
 nonisolated extension WorldViewCamera {
-    /// The level's hexes that touch the view, with `margin` hexes more on each side, row by row. Bounded: at
+    /// The detail's hexes that touch the view, with `margin` hexes more on each side, row by row. Bounded: at
     /// most `limit` (``maxVisibleHexes``; a map drawing passes ``maxDrawnHexes``).
     func visibleHexes(margin: Int = 1, limit: Int = maxVisibleHexes) -> [WorldViewVisibleHex] {
-        let grid = level.hexGrid, cap = min(max(limit, 0), Self.maxDrawnHexes)
+        let grid = detail.hexGrid, cap = min(max(limit, 0), Self.maxDrawnHexes)
         let radius = grid.radius, across = 3.0.squareRoot() * radius
         guard radius > 0, radius.isFinite else { return [] }
         let view = viewport, pad = Double(max(margin, 0) + 1) * across

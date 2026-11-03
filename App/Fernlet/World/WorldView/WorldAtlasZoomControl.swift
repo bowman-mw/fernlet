@@ -45,12 +45,17 @@ extension View {
 }
 
 /// The world map's zoom control on the right (World-Exploration-Spec §2; the mockup's `exzc`): **+**, the
-/// level's name and **−** in one framed column; + is dimmed at City and − at World.
+/// nearest level's name and **−** in one framed column; each button glides to the next level along, + is dimmed
+/// at City and − at World.
 ///
 /// To VoiceOver the level is **one adjustable element** ("Zoom level", valued "City, Oregon, United States"):
 /// swipe up or down to change it. + and − stay buttons, named "Zoom in" and "Zoom out", for Voice Control.
 struct WorldAtlasZoomControl: View {
     let level: AtlasZoomLevel
+    /// Whether the map can go closer.
+    let canZoomIn: Bool
+    /// Whether the map can go farther out.
+    let canZoomOut: Bool
     /// The spoken value: the level and the place (``WorldViewCopy/zoomValue(_:)``).
     let spokenValue: String
     let onZoomIn: () -> Void
@@ -58,7 +63,7 @@ struct WorldAtlasZoomControl: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            stepButton("+", enabled: level.canZoomIn, label: WorldViewCopy.zoomIn, id: "worldAtlas.zoom.in", action: onZoomIn)
+            stepButton("+", enabled: canZoomIn, label: WorldViewCopy.zoomIn, id: "worldAtlas.zoom.in", action: onZoomIn)
             Text(WorldViewCopy.level(level))
                 .font(.custom(FernletFontName.dmSansBold, size: 11.5, relativeTo: .caption2))
                 .multilineTextAlignment(.center)
@@ -73,13 +78,13 @@ struct WorldAtlasZoomControl: View {
                 .accessibilityValue(Text(verbatim: spokenValue))
                 .accessibilityAdjustableAction { direction in
                     switch direction {
-                    case .increment: if level.canZoomIn { onZoomIn() }
-                    case .decrement: if level.canZoomOut { onZoomOut() }
+                    case .increment: if canZoomIn { onZoomIn() }
+                    case .decrement: if canZoomOut { onZoomOut() }
                     @unknown default: break
                     }
                 }
                 .accessibilityIdentifier("worldAtlas.zoom.level")
-            stepButton("−", enabled: level.canZoomOut, label: WorldViewCopy.zoomOut, id: "worldAtlas.zoom.out",
+            stepButton("−", enabled: canZoomOut, label: WorldViewCopy.zoomOut, id: "worldAtlas.zoom.out",
                        action: onZoomOut)
         }
         .frame(minWidth: 50)

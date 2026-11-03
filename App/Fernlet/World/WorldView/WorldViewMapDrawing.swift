@@ -5,8 +5,8 @@ import WorldMapStore
 /// the level's uncovered hexes, its land (the half-degree raster at World and Country, else the atlas's mask
 /// at each hex's centre, kept per hex) and the places looked up so far, and the crossed roads.
 nonisolated struct WorldViewMapFacts: Sendable {
-    /// The level the facts are for.
-    let level: AtlasZoomLevel
+    /// The hex detail the facts are for.
+    let detail: AtlasZoomDetail
     /// The half-degree land mask, once built.
     let raster: WorldViewLandRaster?
     /// The atlas, for the land from State in.
@@ -17,19 +17,29 @@ nonisolated struct WorldViewMapFacts: Sendable {
     let places: [HexCell: AtlasPlaceName?]
     /// The crossed roads.
     let roads: WorldRoadDrawing
+    /// The hexes on found airports' grounds.
+    let airports: Set<HexCell>
+    /// The found airports' runways.
+    let runways: [WorldViewRunway]
     /// The level's land per hex: the model's cache, plus what this drawing looked up (handed back to the model).
     private(set) var lands: [HexCell: Bool]
 
-    /// The facts of `level`, from the model's caches.
-    init(level: AtlasZoomLevel, raster: WorldViewLandRaster?, atlas: WorldAtlas?, found: Set<HexCell>,
-         places: [HexCell: AtlasPlaceName?], roads: WorldRoadDrawing, lands: [HexCell: Bool]) {
-        self.level = level
+    /// The named level the detail belongs to.
+    var level: AtlasZoomLevel { detail.level }
+
+    /// The facts of `detail`, from the model's caches.
+    init(detail: AtlasZoomDetail, raster: WorldViewLandRaster?, atlas: WorldAtlas?, found: Set<HexCell>,
+         places: [HexCell: AtlasPlaceName?], roads: WorldRoadDrawing, lands: [HexCell: Bool],
+         airports: Set<HexCell> = [], runways: [WorldViewRunway] = []) {
+        self.detail = detail
         self.raster = raster
         self.atlas = atlas
         self.found = found
         self.places = places
         self.roads = roads
         self.lands = lands
+        self.airports = airports
+        self.runways = runways
     }
 
     /// Whether `hex` is uncovered.
@@ -60,14 +70,17 @@ nonisolated struct WorldViewMapFacts: Sendable {
 
 /// The map's hexes, lines and roads as ready paths (round 7 performance, 2026-10-31): built once for a camera
 /// that sees ``margin`` points past each edge of the screen, off the main actor, and reused by every frame
-/// while the map pans (``WorldViewMapCanvas`` moves it with the finger) until the view drifts ``refreshDrift``
-/// points from where it was built, the level, the data or the colour scheme changes. Its paths are in the
-/// build camera's screen points.
+/// while the map pans and pinches (``WorldViewMapCanvas`` moves and scales it with the fingers) until the view
+/// drifts ``refreshDrift`` points or ``refreshScale`` of its scale from where it was built, or the hex detail, the
+/// data or the colour scheme changes. Its paths are in the build camera's screen points.
 nonisolated struct WorldViewMapDrawing: Sendable {
     /// Points drawn past each edge of the screen, so a pan has room before the next drawing lands.
     static let margin = 200.0
     /// How far (points) the view may drift from the build camera before a fresh drawing is asked for.
     static let refreshDrift = 60.0
+    /// How far the view's scale may differ from the build camera's before a fresh drawing is asked for (scaled
+    /// this little, a drawing's lines and edges look the same).
+    static let refreshScale = 0.04
 
     /// What a drawing was built for.
     struct Key: Equatable, Sendable {
@@ -104,6 +117,8 @@ nonisolated struct WorldViewMapDrawing: Sendable {
     let uncovered: Path
     /// The crossed roads, one path per kind (empty where the level draws none).
     let roads: [RoadPath]
+    /// The found airports' runways (empty farther out than City, where they'd be specks).
+    let runways: Path
 
     /// The key a drawing for `screen` would have.
     static func key(for screen: WorldViewCamera, generation: Int, dark: Bool) -> Key {
@@ -111,17 +126,18 @@ nonisolated struct WorldViewMapDrawing: Sendable {
     }
 
     /// Whether `wanted` (the key for the camera on screen now) needs a fresh drawing: the data, the colours, the
-    /// level or the size changed, or the view drifted ``refreshDrift`` points or more from the build camera.
+    /// detail or the size changed, or the view drifted ``refreshDrift`` points or ``refreshScale`` of its scale
+    /// from the build camera.
     func isStale(for wanted: Key) -> Bool {
         let built = key.camera, now = wanted.camera
-        guard key.generation == wanted.generation, key.dark == wanted.dark, built.level == now.level,
-              built.size == now.size else { return true }
+        guard key.generation == wanted.generation, key.dark == wanted.dark, built.detail == now.detail,
+              built.size == now.size, abs(now.scale / built.scale - 1) < Self.refreshScale else { return true }
         let dx = WorldViewCamera.wrappedDelta(built.x - now.x) * now.scale, dy = (built.y - now.y) * now.scale
         return abs(dx) >= Self.refreshDrift || abs(dy) >= Self.refreshDrift
     }
 
     /// Where this drawing goes on a screen showing `screen`: its centre, and how much it is scaled (1 unless
-    /// the level changed and the next drawing has not landed yet).
+    /// the view zoomed since it was built and the next drawing has not landed yet).
     func placement(on screen: WorldViewCamera) -> (centre: CGPoint, scale: Double) {
         let built = key.camera
         return (screen.screenPoint(x: built.x, y: built.y), screen.scale / built.scale)
@@ -140,10 +156,11 @@ nonisolated struct WorldViewMapDrawing: Sendable {
         // Bounded: the hexes the build camera sees (maxDrawnHexes).
         for hex in visible {
             let land = facts.isLand(hex.cell, x: hex.x, y: hex.y), found = facts.isFound(hex.cell)
-            let ink = WorldViewInk.hex(land: land, found: found, dark: key.dark)
+            let airport = facts.airports.contains(hex.cell)
+            let ink = airport ? WorldViewInk.airport : WorldViewInk.hex(land: land, found: found, dark: key.dark)
             let outline = hexPoints(camera.screenPoint(x: hex.x, y: hex.y), corners)
             // In place: the dictionary's path is the only reference, so adding to it never copies it.
-            fills[ink.fill, default: HexFill(fill: ink.fill, edge: ink.edge, found: found, path: Path())].path.addLines(outline)
+            fills[ink.fill, default: HexFill(fill: ink.fill, edge: ink.edge, found: found || airport, path: Path())].path.addLines(outline)
             fills[ink.fill]?.path.closeSubpath()
             if found {
                 uncovered.addLines(outline)
@@ -153,7 +170,23 @@ nonisolated struct WorldViewMapDrawing: Sendable {
         let lines = linePaths(visible, camera: camera, facts: &facts)
         let ordered = fills.values.sorted { ($0.found ? 1 : 0, $0.fill) < ($1.found ? 1 : 0, $1.fill) }
         return WorldViewMapDrawing(key: key, hexes: ordered, region: lines.region, country: lines.country,
-                                   uncovered: uncovered, roads: roadPaths(camera, facts: facts, uncovered: uncovered))
+                                   uncovered: uncovered, roads: roadPaths(camera, facts: facts, uncovered: uncovered),
+                                   runways: runwayPath(camera, runways: facts.runways))
+    }
+
+    /// The runways on or near the camera's view, from City in. Bounded: ``WorldViewAirportTiles`` runways.
+    private static func runwayPath(_ camera: WorldViewCamera, runways: [WorldViewRunway]) -> Path {
+        guard camera.level >= .city else { return Path() }
+        let view = CGRect(origin: .zero, size: camera.size)
+        var path = Path()
+        for runway in runways {
+            let start = camera.screenPoint(x: runway.startX, y: runway.startY), end = camera.screenPoint(x: runway.endX, y: runway.endY)
+            let box = CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))
+            guard box.intersects(view) else { continue }
+            path.move(to: start)
+            path.addLine(to: end)
+        }
+        return path
     }
 
     /// The country and state lines on shared hex edges, where the level draws them.
@@ -200,6 +233,6 @@ nonisolated struct WorldViewMapDrawing: Sendable {
     /// The six corners of a hex on screen, as offsets from its centre.
     private static func cornerOffsets(_ camera: WorldViewCamera) -> [CGPoint] {
         let scale = camera.scale
-        return camera.level.hexGrid.cornerOffsets.map { CGPoint(x: $0.x * scale, y: $0.y * scale) }
+        return camera.detail.hexGrid.cornerOffsets.map { CGPoint(x: $0.x * scale, y: $0.y * scale) }
     }
 }
