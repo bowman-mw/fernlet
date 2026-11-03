@@ -93,8 +93,8 @@ struct FlightImportPlanTests {
     /// The owner's import: 178 flights add one page to the book, however they fall across the years, and every
     /// flight is in one year's log.
     @Test func aLongHistoryAddsOnePage() {
-        let model = PassportFlightsModel(flights: AirportFlightsDemo.many, point: { _ in nil })
-        #expect(model.flightCount == 178 && model.years.count == 13)
+        let model = PassportFlightsModel(flights: AirportFlightsDemo.many, point: { _ in nil }, now: .distantFuture)
+        #expect(model.flightCount == 178 && model.plannedCount == 0 && model.years.count == 13)
         #expect(model.years.reduce(0) { $0 + $1.flightCount } == 178)
         #expect(model.years.reduce(0) { $0 + $1.trips.count } == model.trips.count)
         #expect(model.layoverCount > 0, "the made-up history has connections")
@@ -102,6 +102,44 @@ struct FlightImportPlanTests {
         let bare = PassportBookModel(entries: [])
         let book = PassportBookModel(entries: [], showsFlights: !model.isEmpty)
         #expect(book.pageCount == bare.pageCount + 1)
+    }
+
+    /// A flight still to come is planned: out of the flown totals and named apart, in its year's log, and an ordinary
+    /// flown stub once it has left. A connection already under way counts as flown.
+    @Test func plannedFlightsStayOutOfTheFlownTotals() throws {
+        let points = ["PDX": GeoPoint(45.59, -122.60), "SEA": GeoPoint(47.45, -122.31), "JFK": GeoPoint(40.64, -73.78)]
+        let flights = [
+            Self.flight("PDX", "SEA", "2026-03-01T16:00:00Z", "2026-03-01T17:00:00Z", sources: .flighty),
+            Self.flight("SEA", "JFK", "2026-06-10T16:00:00Z", "2026-06-10T21:00:00Z", sources: .flighty),
+            Self.flight("JFK", "PDX", "2026-06-10T23:00:00Z", "2026-06-11T04:00:00Z", sources: .flighty),
+            Self.flight("PDX", "JFK", "2027-02-01T16:00:00Z", "2027-02-01T21:00:00Z", sources: .flighty),
+        ].compactMap { $0 }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
+        let formatter = ISO8601DateFormatter()
+        let may = try #require(formatter.date(from: "2026-05-01T00:00:00Z"))
+        let model = PassportFlightsModel(flights: flights, point: { points[$0] }, calendar: calendar, now: may)
+        #expect(model.trips.map(\.isPlanned) == [false, true, true])
+        #expect(model.flightCount == 1 && model.plannedCount == 3)
+        #expect(model.totalMetres == (model.trips.first?.metres ?? -1), "only what has flown")
+        #expect(model.layoverCount == 0, "a stop still to come is no layover yet")
+        #expect(model.log(ofYear: 2026)?.flightCount == 1 && model.log(ofYear: 2026)?.plannedCount == 2)
+        let onlyPlanned = try #require(model.log(ofYear: 2027))
+        #expect(onlyPlanned.flightCount == 0 && onlyPlanned.metres == 0 && onlyPlanned.plannedCount == 1)
+
+        let midStop = try #require(formatter.date(from: "2026-06-10T22:00:00Z"))
+        let underWay = PassportFlightsModel(flights: flights, point: { points[$0] }, calendar: calendar, now: midStop)
+        #expect(underWay.trips.map(\.isPlanned) == [false, false, true], "the connection has left")
+        #expect(underWay.flightCount == 3 && underWay.plannedCount == 1 && underWay.layoverCount == 1)
+    }
+
+    /// The header and a year's row leave out what there is none of.
+    @Test func thePlannedWordsLeaveOutWhatThereIsNoneOf() {
+        let distance = PassportFlightsText.kilometres(0)
+        let flown = String(localized: PassportFlightsCopy.totals(5, distance)), two = String(localized: PassportFlightsCopy.planned(2))
+        #expect(PassportFlightsCopy.summary(5, distance, planned: 0) == flown)
+        #expect(PassportFlightsCopy.summary(5, distance, planned: 2) == flown + " ·\u{00A0}" + two)
+        #expect(PassportFlightsCopy.summary(0, distance, planned: 2) == two)
     }
 
     /// In a year's log the header gives the year, so the days leave it out unless the trip lands in the next year.

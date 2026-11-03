@@ -60,8 +60,8 @@ struct PassportFlightsPage: View {
         } else {
             let distance = PassportFlightsText.kilometres(flights.totalMetres)
             PassportPageHeader(title: Text(PassportFlightsCopy.title),
-                               detail: Text(PassportFlightsCopy.totals(flights.flightCount, distance)))
-                .modifier(PassportFlightsSpokenHeader(label: String(localized: PassportFlightsCopy.totalsSpoken(flights.flightCount, distance))))
+                               detail: Text(verbatim: PassportFlightsCopy.summary(flights.flightCount, distance, planned: flights.plannedCount)))
+                .modifier(PassportFlightsSpokenHeader(label: PassportFlightsCopy.spokenSummary(flights.flightCount, distance, planned: flights.plannedCount)))
         }
     }
 
@@ -90,7 +90,8 @@ struct PassportFlightsYearPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             PassportPageHeader(title: Text(verbatim: String(log.year)),
-                               detail: Text(PassportFlightsCopy.totals(log.flightCount, PassportFlightsText.kilometres(log.metres))))
+                               detail: Text(verbatim: PassportFlightsCopy.summary(log.flightCount, PassportFlightsText.kilometres(log.metres),
+                                                                                  planned: log.plannedCount)))
                 .modifier(PassportFlightsSpokenHeader(label: PassportFlightsCopy.yearSpoken(log)))
                 .accessibilityFocused($headerFocused)
             ForEach(log.trips) { trip in
@@ -154,11 +155,11 @@ struct PassportFlightsYearRow: View {
                     HStack(spacing: 8) {
                         count
                         Spacer(minLength: 0)
-                        distance
+                        if log.flightCount > 0 { distance }
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         count
-                        distance
+                        if log.flightCount > 0 { distance }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -174,7 +175,7 @@ struct PassportFlightsYearRow: View {
     }
 
     private var count: some View {
-        Text(PassportFlightsCopy.count(log.flightCount))
+        Text(verbatim: PassportFlightsCopy.yearCount(log))
             .font(Font.custom(FernletFontName.dmSansBold, size: 12.5, relativeTo: .caption))
             .foregroundStyle(PassportBookPalette.text)
     }
@@ -186,23 +187,31 @@ struct PassportFlightsYearRow: View {
     }
 }
 
-/// The boarding-pass frame of a stub or a year's row: its padding, tint and hairline, and the dotted tear line.
+/// The boarding-pass frame of a stub or a year's row: its padding, tint and hairline, and the dotted tear line. A
+/// planned flight has no tint or tear line and a dashed outline: a ticket not yet used.
 struct PassportStubFrame: ViewModifier {
+    var isPlanned = false
+
     func body(content: Content) -> some View {
         content
             .fernletWrappingText()
             .padding(EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 10))
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(PassportBookPalette.paper2.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(PassportBookPalette.rule, lineWidth: 1.5))
-            .overlay(alignment: .leading) { PassportStubPerforation() }
+            .background(PassportBookPalette.paper2.opacity(isPlanned ? 0 : 0.55), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isPlanned ? PassportBookPalette.dim : PassportBookPalette.rule,
+                              style: StrokeStyle(lineWidth: 1.5, dash: isPlanned ? [6, 4] : [])))
+            .overlay(alignment: .leading) {
+                if !isPlanned { PassportStubPerforation() }
+            }
             .contentShape(Rectangle())
     }
 }
 
 /// One trip's boarding-pass stub (`.apstub`): the route's codes with a small jet between, the "Imported" tag, the
 /// days and the distance, and "via Helsinki · 2 h 40 min" for a stop. A button; VoiceOver reads "Portland to San
-/// Francisco, 12 March 2014, 880 km, imported".
+/// Francisco, 12 March 2014, 880 km, imported". A flight still to come draws in dim ink in a dashed frame with the
+/// "Planned" tag in place of "Imported", and VoiceOver says "planned".
 struct PassportFlightStub: View {
     let trip: PassportFlightTrip
     /// The trip's days, as this list writes them ("12 MAR 2014", or "12 MAR" under its year).
@@ -220,7 +229,7 @@ struct PassportFlightStub: View {
                 if let via { Text(via).font(Font.custom(FernletFontName.dmSansBold, size: 12.5, relativeTo: .caption))
                     .foregroundStyle(PassportBookPalette.moss) }
             }
-            .modifier(PassportStubFrame())
+            .modifier(PassportStubFrame(isPlanned: trip.isPlanned))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: spoken))
@@ -231,12 +240,22 @@ struct PassportFlightStub: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 5) {
                 codes
-                if trip.isImported { PassportImportedTag() }
+                tag
             }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) { codes }
-                if trip.isImported { PassportImportedTag().padding(.leading, -4) }
+                tag.padding(.leading, -4)
             }
+        }
+    }
+
+    /// "Planned" for a flight still to come, else "Imported" for one from a file or the calendar.
+    @ViewBuilder
+    private var tag: some View {
+        if trip.isPlanned {
+            PassportPlannedTag()
+        } else if trip.isImported {
+            PassportImportedTag()
         }
     }
 
@@ -245,14 +264,17 @@ struct PassportFlightStub: View {
     private var codes: some View {
         ForEach(Array(trip.codes.enumerated()), id: \.offset) { position, code in
             if position > 0 {
-                WorldSpriteView(sprite: PassportFlightSprites.jet, scale: 1.6, tint: PassportBookPalette.text)
+                WorldSpriteView(sprite: PassportFlightSprites.jet, scale: 1.6, tint: ink)
             }
             Text(verbatim: code)
                 .font(Font.custom(FernletFontName.dmSansBold, size: 17, relativeTo: .headline))
                 .tracking(0.85)
-                .foregroundStyle(PassportBookPalette.text)
+                .foregroundStyle(ink)
         }
     }
+
+    /// The route's colour: dim for a flight still to come.
+    private var ink: Color { trip.isPlanned ? PassportBookPalette.dim : PassportBookPalette.text }
 
     /// "via Helsinki · 2 h 40 min" for the first stop with a known length, or "via Helsinki" without one.
     private var via: LocalizedStringResource? {
@@ -268,7 +290,11 @@ struct PassportFlightStub: View {
         let places = trip.codes.map { city($0) ?? $0 }.joined(separator: joiner)
         var parts = [places, PassportDates.long(trip.departure), PassportFlightsText.kilometres(trip.metres)]
         if let via { parts.append(String(localized: via)) }
-        if trip.isImported { parts.append(String(localized: PassportFlightsCopy.importedSpoken)) }
+        if trip.isPlanned {
+            parts.append(String(localized: PassportFlightsCopy.plannedSpoken))
+        } else if trip.isImported {
+            parts.append(String(localized: PassportFlightsCopy.importedSpoken))
+        }
         return parts.joined(separator: ", ")
     }
 }
@@ -308,6 +334,23 @@ struct PassportImportedTag: View {
             .padding(.vertical, 3)
             .overlay(RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(PassportBookPalette.rule, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])))
+            .padding(.leading, 4)
+    }
+}
+
+/// The "Planned" tag on a flight still to come: small caps in moss, in a solid outline, so it reads apart from
+/// "Imported" without relying on its colour.
+struct PassportPlannedTag: View {
+    var body: some View {
+        Text(PassportFlightsCopy.plannedTag)
+            .font(Font.custom(FernletFontName.dmSansBold, size: 10.5, relativeTo: .caption2))
+            .tracking(0.6)
+            .textCase(.uppercase)
+            .foregroundStyle(PassportBookPalette.moss)
+            .fixedSize()
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(PassportBookPalette.moss, lineWidth: 1.5))
             .padding(.leading, 4)
     }
 }
@@ -419,9 +462,33 @@ nonisolated enum PassportFlightsCopy {
     static func count(_ count: Int) -> LocalizedStringResource {
         LocalizedStringResource("\(count) flights", comment: "Sprout's passport Flights page: how many flights left in a year")
     }
+    /// "2 planned" (a page's or a year's flights still to come).
+    static func planned(_ count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("passport.flights.planned", defaultValue: "\(count) planned",
+                                comment: "Sprout's passport Flights page: how many flights haven't left yet")
+    }
+    /// "23 flights · 61,300 km · 2 planned", leaving out what there is none of.
+    static func summary(_ count: Int, _ distance: String, planned plannedCount: Int) -> String {
+        let flown = String(localized: totals(count, distance)), planned = String(localized: planned(plannedCount))
+        guard plannedCount > 0 else { return flown }
+        // A no-break space after the dot: where the line wraps, it starts the next line rather than ending this one.
+        return count > 0 ? flown + " ·\u{00A0}" + planned : planned
+    }
+    /// ``summary(_:_:planned:)`` for VoiceOver: "23 flights, 61,300 km, 2 planned".
+    static func spokenSummary(_ count: Int, _ distance: String, planned plannedCount: Int) -> String {
+        let flown = String(localized: totalsSpoken(count, distance)), planned = String(localized: planned(plannedCount))
+        guard plannedCount > 0 else { return flown }
+        return count > 0 ? flown + ", " + planned : planned
+    }
+    /// A year's row's count: "23 flights", "23 flights · 2 planned", or "2 planned".
+    static func yearCount(_ log: PassportFlightYearLog) -> String {
+        let flown = String(localized: count(log.flightCount)), planned = String(localized: planned(log.plannedCount))
+        guard log.plannedCount > 0 else { return flown }
+        return log.flightCount > 0 ? flown + " · " + planned : planned
+    }
     /// "2024, 23 flights, 61,300 km" (VoiceOver: a year's row, its log's heading, and read on stepping to it).
     static func yearSpoken(_ log: PassportFlightYearLog) -> String {
-        String(log.year) + ", " + String(localized: totalsSpoken(log.flightCount, PassportFlightsText.kilometres(log.metres)))
+        String(log.year) + ", " + spokenSummary(log.flightCount, PassportFlightsText.kilometres(log.metres), planned: log.plannedCount)
     }
     static let yearHint = LocalizedStringResource("Opens this year's flights.", comment: "VoiceOver hint: a year's row on the passport's Flights page")
     static let backToFlights = LocalizedStringResource("Back to Flights", comment: "VoiceOver: the back button in a year's flights in the passport")
@@ -455,6 +522,8 @@ nonisolated enum PassportFlightsCopy {
     }
     static let imported = LocalizedStringResource("Imported", comment: "Sprout's passport Flights page: the tag on a flight added from a file or the calendar")
     static let importedSpoken = LocalizedStringResource("imported", comment: "VoiceOver: said after an imported flight's stub")
+    static let plannedTag = LocalizedStringResource("Planned", comment: "Sprout's passport Flights page: the tag on a flight that hasn't left yet")
+    static let plannedSpoken = LocalizedStringResource("planned", comment: "VoiceOver: said after the stub of a flight that hasn't left yet")
     /// " to " between the cities VoiceOver reads ("Portland to San Francisco").
     static let toJoiner = LocalizedStringResource(" to ", comment: "VoiceOver: between the cities of a flight's route, with spaces")
     static let fromFile = LocalizedStringResource("From a Flighty file", comment: "Sprout's passport Flights page: adds past flights from a Flighty export file")
