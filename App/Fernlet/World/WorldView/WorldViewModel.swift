@@ -38,41 +38,53 @@ nonisolated struct WorldViewLandRaster: Sendable {
     }
 }
 
-/// The world view's caches (World-Exploration-Spec §2; Power of 10: bounded, per level, drawn only on screen).
+/// The world view's caches (World-Exploration-Spec §2; Power of 10: bounded, per hex detail, drawn only on screen).
 ///
-/// - the hexes each level's grid has uncovered (``WorldViewHexGrid/uncovered(by:)`` over the lifted fog),
+/// - the hexes each detail's grid has uncovered (``WorldViewHexGrid/uncovered(by:)`` over the lifted fog),
 ///   computed once off the main actor;
 /// - the land: the half-degree raster for World and Country, and for State and City the atlas's own mask at
 ///   each hex's centre, kept per hex;
 /// - the place each land hex is in (its country, or from State in its plate group), looked up off the main
 ///   actor for the hexes on screen and kept per hex, for the lines on hex edges and the state labels;
-/// - each level's city markers (``WorldViewCluster``);
+/// - each detail's hexes on found airports' grounds, and their runways (``WorldViewAirportTiles``);
+/// - each detail's city markers (``WorldViewCluster``) and where their labels stand (``WorldViewLabelPlacement``),
+///   worked out once off the main actor;
 /// - the major roads the lifted fog has crossed (``AtlasRoadCrossings``), worked out once off the main actor and
 ///   drawn whole on the uncovered hexes (World-Exploration-Spec §2: "on the world view").
 @MainActor
 @Observable
 final class WorldViewModel {
-    /// The most hexes a level's land or place cache keeps before it starts afresh.
+    /// The most hexes a detail's land or place cache keeps before it starts afresh.
     nonisolated static let maxCachedHexes = 120_000
 
     /// What the view draws.
     private(set) var content = WorldViewContent.empty
     /// Whether ``load(_:)`` has run.
     private(set) var isLoaded = false
-    /// The hexes each level has uncovered (empty until computed, and always in a decoy).
-    private(set) var found: [AtlasZoomLevel: Set<HexCell>] = [:]
+    /// The hexes each detail has uncovered (empty until computed, and always in a decoy).
+    private(set) var found: [AtlasZoomDetail: Set<HexCell>] = [:]
     /// The half-degree land mask, once built.
     private(set) var raster: WorldViewLandRaster?
     /// Moves each time looked-up places arrive, so the map redraws its lines.
     private(set) var placeGeneration = 0
     /// The crossed roads (none until computed, and always none in a decoy, whose content has no lifted fog).
     private(set) var roads = WorldRoadDrawing.none
+    /// Each detail's hexes on found airports' grounds (empty until computed, and always in a decoy).
+    private(set) var airportCells: [AtlasZoomDetail: Set<HexCell>] = [:]
+    /// Each detail's markers with where their labels stand (empty until worked out).
+    private(set) var markerPlans: [AtlasZoomDetail: WorldViewMarkerPlan] = [:]
 
-    @ObservationIgnored private var landCache: [AtlasZoomLevel: [HexCell: Bool]] = [:]
-    @ObservationIgnored private var placeCache: [AtlasZoomLevel: [HexCell: AtlasPlaceName?]] = [:]
-    @ObservationIgnored private var clusterCache: [AtlasZoomLevel: [WorldViewCluster]] = [:]
+    @ObservationIgnored private var landCache: [AtlasZoomDetail: [HexCell: Bool]] = [:]
+    @ObservationIgnored private var placeCache: [AtlasZoomDetail: [HexCell: AtlasPlaceName?]] = [:]
+    @ObservationIgnored private var clusterCache: [AtlasZoomDetail: [WorldViewCluster]] = [:]
     @ObservationIgnored private var placeTask: Task<Void, Never>?
-    @ObservationIgnored private var pendingPlaces: (hexes: [HexCell], level: AtlasZoomLevel)?
+    @ObservationIgnored private var pendingPlaces: (hexes: [HexCell], detail: AtlasZoomDetail)?
+
+    /// The found airports' runways.
+    private var runways: [WorldViewRunway] { WorldViewAirportTiles.runways(of: content.flights.grounds) }
+
+    /// Whether a place lookup is running (a new detail's drawing waits for it, so its lines don't blink).
+    var isLookingUpPlaces: Bool { placeTask != nil }
 
     /// A place lookup still running ends with the model (the memory wall's ML1).
     isolated deinit {
@@ -91,9 +103,24 @@ final class WorldViewModel {
         if found.isEmpty, !content.liftedCells.isEmpty {
             let cells = content.liftedCells
             found = await Task.detached(priority: .userInitiated) {
-                var sets: [AtlasZoomLevel: Set<HexCell>] = [:]
-                for level in AtlasZoomLevel.allCases { sets[level] = level.hexGrid.uncovered(by: cells) }
+                var sets: [AtlasZoomDetail: Set<HexCell>] = [:]
+                for detail in AtlasZoomDetail.all { sets[detail] = detail.hexGrid.uncovered(by: cells) }
                 return sets
+            }.value
+        }
+        if airportCells.isEmpty, !content.flights.grounds.isEmpty {
+            let grounds = content.flights.grounds
+            airportCells = await Task.detached(priority: .userInitiated) {
+                var sets: [AtlasZoomDetail: Set<HexCell>] = [:]
+                for detail in AtlasZoomDetail.all { sets[detail] = WorldViewAirportTiles.cells(of: grounds, in: detail.hexGrid) }
+                return sets
+            }.value
+        }
+        if markerPlans.isEmpty, !content.pins.isEmpty {
+            // A label keeps off an airport's tiles as it does off the rest of the found ground.
+            let pins = content.pins, sets = found.merging(airportCells) { $0.union($1) }, flights = content.flights
+            markerPlans = await Task.detached(priority: .userInitiated) {
+                WorldViewMarkerPlan.all(pins: pins, found: sets, flights: flights)
             }.value
         }
         if raster == nil, let atlas = content.atlas {
@@ -117,95 +144,103 @@ final class WorldViewModel {
 
     // MARK: Per hex
 
-    /// Whether `hex` of `level` is uncovered.
-    func isFound(_ hex: HexCell, at level: AtlasZoomLevel) -> Bool {
-        found[level]?.contains(hex) ?? false
+    /// Whether `hex` of `detail` is uncovered.
+    func isFound(_ hex: HexCell, at detail: AtlasZoomDetail) -> Bool {
+        found[detail]?.contains(hex) ?? false
     }
 
-    /// Whether `hex` (drawn at the unwrapped Mercator centre `x`, `y`) of `level` is land.
-    func isLand(_ hex: HexCell, x: Double, y: Double, at level: AtlasZoomLevel) -> Bool {
+    /// Whether `hex` (drawn at the unwrapped Mercator centre `x`, `y`) of `detail` is land.
+    func isLand(_ hex: HexCell, x: Double, y: Double, at detail: AtlasZoomDetail) -> Bool {
         let point = WebMercator.geo(x: WorldViewCamera.wrap(x), y: y)
-        if level <= .country, let raster { return raster.isLand(at: point) }
-        if let known = landCache[level]?[hex] { return known }
+        if detail.level <= .country, let raster { return raster.isLand(at: point) }
+        if let known = landCache[detail]?[hex] { return known }
         let land = WorldViewMapFacts.atlasLand(content.atlas, x: x, y: y)
-        if landCache[level, default: [:]].count >= Self.maxCachedHexes { landCache[level] = [:] }
-        landCache[level, default: [:]][hex] = land
+        if landCache[detail, default: [:]].count >= Self.maxCachedHexes { landCache[detail] = [:] }
+        landCache[detail, default: [:]][hex] = land
         return land
     }
 
-    /// What a map drawing of `level` reads, copied so it can be built off the main actor (the copies share
+    /// What a map drawing of `detail` reads, copied so it can be built off the main actor (the copies share
     /// storage until either side changes).
-    func facts(at level: AtlasZoomLevel) -> WorldViewMapFacts {
-        WorldViewMapFacts(level: level, raster: raster, atlas: content.atlas, found: found[level] ?? [],
-                          places: placeCache[level] ?? [:], roads: roads, lands: landCache[level] ?? [:])
+    func facts(at detail: AtlasZoomDetail) -> WorldViewMapFacts {
+        WorldViewMapFacts(detail: detail, raster: raster, atlas: content.atlas, found: found[detail] ?? [],
+                          places: placeCache[detail] ?? [:], roads: roads, lands: landCache[detail] ?? [:],
+                          airports: airportCells[detail] ?? [], runways: runways)
     }
 
     /// Keeps the land a map drawing looked up (its copy of the cache, grown), when it still fits the cache.
-    func keepLands(_ lands: [HexCell: Bool], at level: AtlasZoomLevel) {
-        guard lands.count <= Self.maxCachedHexes, lands.count > landCache[level]?.count ?? 0 else { return }
-        landCache[level] = lands
+    func keepLands(_ lands: [HexCell: Bool], at detail: AtlasZoomDetail) {
+        guard lands.count <= Self.maxCachedHexes, lands.count > landCache[detail]?.count ?? 0 else { return }
+        landCache[detail] = lands
     }
 
-    /// The place `hex` of `level` is in: `.some(nil)` when looked up and none (the sea, unclaimed land), nil
+    /// The place `hex` of `detail` is in: `.some(nil)` when looked up and none (the sea, unclaimed land), nil
     /// while not looked up yet.
-    func place(of hex: HexCell, at level: AtlasZoomLevel) -> AtlasPlaceName?? {
-        guard let cache = placeCache[level], let entry = cache[hex] else { return nil }
+    func place(of hex: HexCell, at detail: AtlasZoomDetail) -> AtlasPlaceName?? {
+        guard let cache = placeCache[detail], let entry = cache[hex] else { return nil }
         return .some(entry)
     }
 
-    /// Whether `hex`'s place at `level` has been looked up.
-    func isKnown(_ hex: HexCell, at level: AtlasZoomLevel) -> Bool {
-        placeCache[level]?.keys.contains(hex) ?? false
+    /// Whether `hex`'s place at `detail` has been looked up.
+    func isKnown(_ hex: HexCell, at detail: AtlasZoomDetail) -> Bool {
+        placeCache[detail]?.keys.contains(hex) ?? false
     }
 
-    /// Looks up, off the main actor, the places of the land hexes in `hexes` of `level` not yet known (at most
+    /// Looks up, off the main actor, the places of the land hexes in `hexes` of `detail` not yet known (at most
     /// ``WorldViewPlaces/maxBatch``), then redraws. One lookup runs at a time; a request while one runs waits for it, the
     /// newest request kept.
-    func requestPlaces(for hexes: [WorldViewVisibleHex], at level: AtlasZoomLevel) {
-        guard level.showsCountryLines, content.atlas != nil else { return }
+    func requestPlaces(for hexes: [WorldViewVisibleHex], at detail: AtlasZoomDetail) {
+        guard detail.level.showsCountryLines, content.atlas != nil else { return }
         var missing: [HexCell] = [], seen = Set<HexCell>()
         // Bounded: the hexes on screen (WorldViewCamera.maxVisibleHexes), and maxBatch kept.
-        for hex in hexes where missing.count < WorldViewPlaces.maxBatch && !isKnown(hex.cell, at: level) {
-            guard seen.insert(hex.cell).inserted, isLand(hex.cell, x: hex.x, y: hex.y, at: level) else { continue }
+        for hex in hexes where missing.count < WorldViewPlaces.maxBatch && !isKnown(hex.cell, at: detail) {
+            guard seen.insert(hex.cell).inserted, isLand(hex.cell, x: hex.x, y: hex.y, at: detail) else { continue }
             missing.append(hex.cell)
         }
         guard !missing.isEmpty else { return }
-        guard placeTask == nil else { pendingPlaces = (missing, level); return }
-        runLookup(missing, at: level)
+        guard placeTask == nil else { pendingPlaces = (missing, detail); return }
+        runLookup(missing, at: detail)
     }
 
     /// Runs one lookup batch and, when it lands, the newest waiting request.
-    private func runLookup(_ cells: [HexCell], at level: AtlasZoomLevel) {
+    private func runLookup(_ cells: [HexCell], at detail: AtlasZoomDetail) {
         guard let atlas = content.atlas else { return }
         placeTask = Task { [weak self] in
             let looked = await Task.detached(priority: .userInitiated) {
-                WorldViewPlaces.lookUp(cells, in: level.hexGrid, atlas: atlas, countryOnly: !level.showsAdmin1Lines)
+                WorldViewPlaces.lookUp(cells, in: detail.hexGrid, atlas: atlas, countryOnly: !detail.level.showsAdmin1Lines)
             }.value
             guard let self, !Task.isCancelled else { return }
-            self.merge(looked, at: level)
+            self.merge(looked, at: detail)
         }
     }
 
     /// Keeps `looked` and starts the waiting request, if any.
-    private func merge(_ looked: [(HexCell, AtlasPlaceName?)], at level: AtlasZoomLevel) {
-        if placeCache[level, default: [:]].count + looked.count > Self.maxCachedHexes { placeCache[level] = [:] }
-        for (cell, place) in looked { placeCache[level, default: [:]][cell] = .some(place) }
-        placeGeneration &+= 1
+    private func merge(_ looked: [(HexCell, AtlasPlaceName?)], at detail: AtlasZoomDetail) {
+        if placeCache[detail, default: [:]].count + looked.count > Self.maxCachedHexes { placeCache[detail] = [:] }
+        for (cell, place) in looked { placeCache[detail, default: [:]][cell] = .some(place) }
         placeTask = nil
-        guard let pending = pendingPlaces else { return }
-        pendingPlaces = nil
-        let still = pending.hexes.filter { !isKnown($0, at: pending.level) }
-        if !still.isEmpty { runLookup(still, at: pending.level) }
+        if let pending = pendingPlaces {
+            pendingPlaces = nil
+            let still = pending.hexes.filter { !isKnown($0, at: pending.detail) }
+            if !still.isEmpty { runLookup(still, at: pending.detail) }
+        }
+        placeGeneration &+= 1
     }
 
     // MARK: Markers
 
-    /// The city markers at `level`, computed once a level.
-    func clusters(at level: AtlasZoomLevel) -> [WorldViewCluster] {
-        if let cached = clusterCache[level] { return cached }
-        let made = WorldViewCluster.clusters(of: content.pins, at: level)
-        clusterCache[level] = made
+    /// The city markers at `detail`: the plan's once worked out, else computed once a detail.
+    func clusters(at detail: AtlasZoomDetail) -> [WorldViewCluster] {
+        if let plan = markerPlans[detail] { return plan.clusters }
+        if let cached = clusterCache[detail] { return cached }
+        let made = WorldViewCluster.clusters(of: content.pins, scale: detail.pointsPerMercatorUnit)
+        clusterCache[detail] = made
         return made
+    }
+
+    /// Where the labels of `detail`'s markers stand, by anchor token (empty until worked out).
+    func labelSpots(at detail: AtlasZoomDetail) -> [String: WorldViewLabelSpot] {
+        markerPlans[detail]?.spots ?? [:]
     }
 }
 

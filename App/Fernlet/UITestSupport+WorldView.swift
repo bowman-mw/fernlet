@@ -34,6 +34,8 @@ enum WorldAtlasMapDebugScreen: String, Identifiable {
     case state
     /// The passport's small world map (`ps-world`), which opens the world view.
     case preview
+    /// Country over the south-east US, with flights: the world view's flight marks and labels (demo seed only).
+    case flights
 
     var id: String { rawValue }
 
@@ -42,6 +44,7 @@ enum WorldAtlasMapDebugScreen: String, Identifiable {
         switch self {
         case .city: .city
         case .state: .state
+        case .flights: .country
         case .world, .preview: .world
         }
     }
@@ -50,6 +53,7 @@ enum WorldAtlasMapDebugScreen: String, Identifiable {
         switch self {
         case .city: GeoPoint(45.42, -122.63)
         case .state: GeoPoint(45.6, -122.6)
+        case .flights: GeoPoint(34.5, -82)
         case .world, .preview: nil
         }
     }
@@ -67,6 +71,11 @@ private struct WorldAtlasMapHook: ViewModifier {
                       let wanted = WorldAtlasMapDebugScreen(rawValue: raw) else { return }
                 do {
                     try await Task.sleep(for: .seconds(1.5))
+                    store.worldFog.atlas.beginOpening()
+                    // Bounded: ten seconds at most.
+                    for _ in 0..<40 where store.worldFog.atlas.isOpeningAtlas {
+                        try await Task.sleep(for: .seconds(0.25))
+                    }
                 } catch {
                     return
                 }
@@ -74,7 +83,9 @@ private struct WorldAtlasMapHook: ViewModifier {
             }
             .fullScreenCover(item: $screen) { wanted in
                 let source: WorldAtlasMapView.Source = UITestSupport.shouldSeedDemoContent
-                    ? .content(WorldAtlasMapDemo.content(atlas: store.worldFog.atlas.openedAtlas)) : .store(store)
+                    ? .content(wanted == .flights ? WorldAtlasMapDemo.flightContent(atlas: store.worldFog.atlas.openedAtlas,
+                                                                                    airports: store.worldLocation.flights.airportsShelf.pack())
+                        : WorldAtlasMapDemo.content(atlas: store.worldFog.atlas.openedAtlas)) : .store(store)
                 WorldAtlasMapDebugHost(source: source, screen: wanted) { screen = nil }
             }
     }
@@ -124,6 +135,38 @@ enum WorldAtlasMapDemo {
         return WorldViewContent(atlas: atlas, pins: pins, cityCount: pins.count,
                                 countryCount: Set(cities.map(\.countryCode)).count, liftedCells: fogCells(),
                                 start: cityPoints.first)
+    }
+
+    /// The airports of the demo flights: found ones first, then the ones only flown through.
+    static let flightAirports: [(code: String, point: GeoPoint, found: Bool)] = [
+        ("ATL", GeoPoint(33.6407, -84.4277), true), ("PNS", GeoPoint(30.4734, -87.1866), true),
+        ("TUL", GeoPoint(36.1984, -95.8881), false), ("PIT", GeoPoint(40.4915, -80.2329), false),
+        ("ALB", GeoPoint(42.7483, -73.8017), false), ("FAY", GeoPoint(34.9912, -78.8803), false),
+        ("JAX", GeoPoint(30.4941, -81.6879), false), ("BOS", GeoPoint(42.3656, -71.0096), false)
+    ]
+
+    /// Atlanta and Pensacola found, with their airports, and a flight from Atlanta to each airport: the owner's
+    /// 2026-11-02 view of the map. Bounded: fixed lists.
+    static func flightContent(atlas: WorldAtlas?, airports: WorldAirports?) -> WorldViewContent {
+        let places = [GeoPoint(33.749, -84.388), GeoPoint(30.4213, -87.2169)]
+        let cities = places.compactMap { atlas?.city(at: $0) }
+        let cells = places.flatMap { MercatorHexGrid.cells(around: $0, within: 4_000) }
+        let marks = flightAirports.map { airport -> WorldFlightAirportMark in
+            let unit = WebMercator.unit(airport.point)
+            return WorldFlightAirportMark(code: airport.code, name: airport.code, mercator: CGPoint(x: unit.x, y: unit.y))
+        }
+        let arcs = flightAirports.dropFirst().map { airport -> WorldFlightArc in
+            WorldFlightArc(route: WorldFlightRoute("ATL", airport.code), from: "ATL", to: airport.code, fromName: "ATL",
+                           toName: airport.code, flights: 1, allImported: false, kilometres: 0,
+                           path: WorldFlightArcs.mercatorPath(from: flightAirports[0].point, to: airport.point))
+        }
+        let found = zip(flightAirports, marks).filter { $0.0.found }.map(\.1)
+        let rings = zip(flightAirports, marks).filter { !$0.0.found }.map(\.1)
+        let grounds = found.compactMap { airports?.airport(code: $0.code) }
+        let flights = WorldFlightMap(arcs: arcs, rings: rings, found: found, airportCount: found.count, flightCount: arcs.count,
+                                     grounds: grounds)
+        return WorldViewContent(atlas: atlas, pins: cities.map { WorldViewCityPin(city: $0, name: WorldViewNames.city($0)) },
+                                cityCount: cities.count, countryCount: 1, liftedCells: cells, start: places.first, flights: flights)
     }
 
     /// One fog cell every 1.2 km over each patch, and along each walk the cells a walk lifts (50 m round a point

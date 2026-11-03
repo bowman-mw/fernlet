@@ -21,7 +21,8 @@ public nonisolated enum AtlasZoomLevel: String, CaseIterable, Codable, Comparabl
 
     /// The World level's scale: the mockup's 874 pt for 176° of latitude.
     public static let worldPointsPerDegree = 874.0 / 176.0
-    /// The City level's scale: 360 pt a degree of latitude (owner, answer 13: the closest the world view goes).
+    /// The City level's scale: 360 pt a degree of latitude (owner, answer 13), the closest named level. The free
+    /// zoom goes on past it to ``maxZoom``.
     public static let cityPointsPerDegree = 360.0
     /// The scale between neighbouring levels: the cube root of City over World.
     public static let stepRatio = pow(cityPointsPerDegree / worldPointsPerDegree, 1.0 / 3.0)
@@ -44,15 +45,27 @@ public nonisolated enum AtlasZoomLevel: String, CaseIterable, Codable, Comparabl
 
     /// Screen points a degree of latitude spans at ``referenceLatitude``: exactly 360 at City, each level
     /// out ``stepRatio`` times fewer.
-    public var pointsPerDegreeOfLatitude: Double {
-        Self.cityPointsPerDegree / pow(Self.stepRatio, Double(AtlasZoomLevel.city.rank - rank))
-    }
+    public var pointsPerDegreeOfLatitude: Double { Self.pointsPerDegreeOfLatitude(atZoom: Double(rank)) }
 
     /// Screen points a normalised Web Mercator unit spans at this level (the same everywhere on the map, so
     /// the hexes stay regular and the same size on screen).
-    public var pointsPerMercatorUnit: Double {
-        let unitsPerDegree = GeoPoint.metresPerDegree * WebMercator.unitsPerMetre(at: Self.referenceLatitude)
-        return pointsPerDegreeOfLatitude / unitsPerDegree
+    public var pointsPerMercatorUnit: Double { Self.pointsPerMercatorUnit(atZoom: Double(rank)) }
+
+    /// The closest the view goes on the free zoom (owner, 2026-11-02: "25ish km"): top to bottom about 21 km on an
+    /// iPhone 17 at 45° and about 27 km on a Pro Max at 31°. Held under 5, where a finer hex detail would start, so the
+    /// reach costs no more lookups or drawing than 4.5 does and zooming stays quick.
+    public static let maxZoom = 4.8
+
+    /// Screen points a degree of latitude spans at `zoom`, a place on the ladder between 0 (World) and
+    /// ``maxZoom`` that need not be a level.
+    public static func pointsPerDegreeOfLatitude(atZoom zoom: Double) -> Double {
+        cityPointsPerDegree / pow(stepRatio, Double(AtlasZoomLevel.city.rank) - zoom)
+    }
+
+    /// Screen points a normalised Web Mercator unit spans at `zoom` (see ``pointsPerDegreeOfLatitude(atZoom:)``).
+    public static func pointsPerMercatorUnit(atZoom zoom: Double) -> Double {
+        let unitsPerDegree = GeoPoint.metresPerDegree * WebMercator.unitsPerMetre(at: referenceLatitude)
+        return pointsPerDegreeOfLatitude(atZoom: zoom) / unitsPerDegree
     }
 
     /// The next level in, or nil at City (the + control is dimmed there).
@@ -78,6 +91,9 @@ public nonisolated enum AtlasZoomLevel: String, CaseIterable, Codable, Comparabl
     /// The world-view hex grid at this level.
     public var hexGrid: WorldViewHexGrid { WorldViewHexGrid(level: self) }
 
+    /// The hex detail drawn exactly at this level.
+    public var detail: AtlasZoomDetail { AtlasZoomDetail(halfSteps: rank * 2) }
+
     /// The viewport this level shows in a view of `size`, centred on `centre`.
     public func viewport(centredOn centre: GeoPoint, size: CGSize) -> MapViewport {
         let mid = WebMercator.unit(centre)
@@ -87,29 +103,77 @@ public nonisolated enum AtlasZoomLevel: String, CaseIterable, Codable, Comparabl
     }
 }
 
-/// The world view's hexes at one zoom level: regular pointy-top hexagons over Web Mercator, the same
+/// How fine the world view's hexes are at a place on the free zoom: one of the ladder's half steps, from World to
+/// ``AtlasZoomLevel/maxZoom``. A detail's hexes are ``WorldViewHexGrid/hexAcrossPoints`` across at its own scale and grow with the
+/// zoom until the next detail takes over, at about twice that, so a screen never holds more hexes than it
+/// does at a level. The named ``level`` (lines, plate, zoom control) changes halfway between two levels, and stays
+/// City past City. The finest hexes are about 360 m across at 45°.
+public nonisolated struct AtlasZoomDetail: Hashable, Comparable, Sendable {
+    /// The finest detail's half steps: the last whole half step on the free zoom.
+    public static let maxHalfSteps = Int((AtlasZoomLevel.maxZoom * 2).rounded(.down))
+    /// Every detail, the farthest out first.
+    public static let all = (0...maxHalfSteps).map { AtlasZoomDetail(halfSteps: $0) }
+
+    /// Half steps up the ladder from World.
+    public let halfSteps: Int
+
+    /// The detail `halfSteps` up the ladder, held to the ladder.
+    public init(halfSteps: Int) {
+        self.halfSteps = min(max(halfSteps, 0), Self.maxHalfSteps)
+    }
+
+    /// The detail that draws `zoom`.
+    public init(zoom: Double) {
+        self.init(halfSteps: zoom.isFinite ? Int((zoom * 2).rounded(.down)) : 0)
+    }
+
+    /// Details compare by ``halfSteps``: the farthest out is the least.
+    public static func < (lhs: AtlasZoomDetail, rhs: AtlasZoomDetail) -> Bool { lhs.halfSteps < rhs.halfSteps }
+
+    /// Where this detail starts on the free zoom.
+    public var zoom: Double { Double(halfSteps) / 2 }
+
+    /// The named level this detail belongs to: the nearest on the ladder, halves rounding in.
+    public var level: AtlasZoomLevel {
+        let rank = (halfSteps + 1) / 2
+        return AtlasZoomLevel.allCases.first { $0.rank == rank } ?? .city
+    }
+
+    /// Screen points a Mercator unit spans where this detail starts.
+    public var pointsPerMercatorUnit: Double { AtlasZoomLevel.pointsPerMercatorUnit(atZoom: zoom) }
+
+    /// The detail's hex grid.
+    public var hexGrid: WorldViewHexGrid { WorldViewHexGrid(detail: self) }
+}
+
+/// The world view's hexes at one detail: regular pointy-top hexagons over Web Mercator, the same
 /// axial layout and rounding as the fog's ``MercatorHexGrid``, sized so a hex is ``hexAcrossPoints`` across
-/// (flat side to flat side) on screen at its level. At City that is about 3.1 km at 45°.
+/// (flat side to flat side) on screen where its detail starts. At City that is about 3.1 km at 45°.
 ///
 /// The fog's own cells are about 35 m across, so a fog cell lies under the hex holding its centre; a hex is
 /// uncovered when any lifted fog cell's centre lies in it (``uncovered(by:)``). The IDs are ``HexCell``s of
-/// this grid, not of the fog's, and a level's grid never changes.
+/// this grid, not of the fog's, and a detail's grid never changes.
 public nonisolated struct WorldViewHexGrid: Hashable, Sendable {
     /// A hex's width on screen, flat side to flat side, in points (the mockup's ~10 pt).
     public static let hexAcrossPoints = 10.0
     /// The most fog cells one aggregation reads: ``FogCellStore/maxCells`` (a test pins the two equal).
     public static let maxLiftedCells = 250_000
 
-    /// The level whose scale sizes the grid.
-    public let level: AtlasZoomLevel
+    /// The detail whose scale sizes the grid.
+    public let detail: AtlasZoomDetail
+
+    /// The grid of `detail`.
+    public init(detail: AtlasZoomDetail) {
+        self.detail = detail
+    }
 
     /// The grid at `level`.
     public init(level: AtlasZoomLevel) {
-        self.level = level
+        self.init(detail: level.detail)
     }
 
     /// The centre-to-corner radius in Mercator units: ``hexAcrossPoints`` across is √3 radii.
-    public var radius: Double { Self.hexAcrossPoints / (3.0.squareRoot() * level.pointsPerMercatorUnit) }
+    public var radius: Double { Self.hexAcrossPoints / (3.0.squareRoot() * detail.pointsPerMercatorUnit) }
 
     /// A hex's width on the ground near `latitude`, flat side to flat side, in metres.
     public func groundAcrossMetres(at latitude: Double) -> Double {

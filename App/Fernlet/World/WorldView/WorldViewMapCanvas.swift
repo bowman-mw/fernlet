@@ -26,6 +26,17 @@ nonisolated enum WorldViewInk {
     /// A hex's edge line.
     static let hexEdgeWidth = 0.8
 
+    /// A found airport's hexes: a stronger blue than found water, in both modes, so grounds read apart from the sea.
+    static let airport: (fill: UInt32, edge: UInt32) = (0x4A86D8, 0x3B76C6)
+    /// A runway: the mockup's dark runway ink (`--ap-rwy`), which holds on the blue by day and night.
+    static let runway: UInt32 = 0x4A4F57
+    /// A runway's centre line (`--ap-mark`).
+    static let runwayMark: UInt32 = 0xD8DCE2
+    /// A runway's width.
+    static let runwayWidth = 3.5
+    /// The zoom from which a runway is long enough on screen to carry its centre line.
+    static let runwayMarkZoom = 3.5
+
     /// The chips' paper (`#FFF6E2`, in both modes as drawn).
     static let paper = WorldPalette.rgb(0xFFF6E2)
     /// The chips' text: the bark ink, darker under Increase Contrast (11:1 on the paper).
@@ -41,37 +52,56 @@ nonisolated enum WorldViewInk {
 }
 
 /// The world view's map: the level's hexes over the whole screen, faint land and sea under the fog and what
-/// the person uncovered in full, then the country lines (from Country) and state lines (from State) on the
-/// hex edges, then the crossed major roads in amber, clipped to the uncovered hexes (from Country in), in one
+/// the person uncovered in full and found airports' grounds in blue, their runways from City in, then the country
+/// lines (from Country) and state lines (from State) on the hex edges, then the crossed major roads in amber, clipped to the uncovered hexes (from Country in), in one
 /// path per colour. Decoration to VoiceOver: the markers and the zoom control carry the meaning.
 ///
-/// The paths are a ``WorldViewMapDrawing`` built off the main actor for a little more than the screen; a pan
-/// frame only moves the last one, and a fresh one is built when the view has drifted, the data or the colours
-/// changed (one build at a time, so a long pan never starves it). A level step builds the new level's drawing
-/// at once, so the first frame at the new level is already right.
+/// The paths are a ``WorldViewMapDrawing`` built off the main actor for a little more than the screen; a pan or
+/// pinch frame only moves and scales the last one, and a fresh one is built when the view has drifted, the data or
+/// the colours changed (one build at a time, so a long gesture never starves it). A new hex detail's drawing fades
+/// in over the old one (Reduce Motion: no fade), once the places it needs for its lines have arrived.
 struct WorldViewMapCanvas: View {
     let camera: WorldViewCamera
     let model: WorldViewModel
     /// Read so the map redraws when places, uncovered hexes or the raster arrive.
     let generation: Int
 
+    /// How long the old hexes take to fade.
+    private static let fade = 0.22
+
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The drawing on screen (nil until the first lands: the sea alone).
     @State private var drawing: WorldViewMapDrawing?
+    /// The old detail's drawing, fading out over `drawing`.
+    @State private var fading: WorldViewMapDrawing?
+    @State private var fadingOpacity = 0.0
     /// The drawing being built, or the last one built.
     @State private var request: WorldViewMapDrawing.Key?
+    /// The last key built, so one build runs at a time.
+    @State private var finished: WorldViewMapDrawing.Key?
 
     var body: some View {
         let dark = colorScheme == .dark
-        Canvas(rendersAsynchronously: false) { context, size in
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(WorldPalette.rgb(WorldViewInk.sea(dark: dark))))
-            guard let drawing else { return }
-            Self.draw(drawing, on: camera, in: &context)
+        ZStack {
+            canvas(drawing, dark: dark)
+            if fading != nil {
+                canvas(fading, dark: dark).opacity(fadingOpacity)
+            }
         }
         .accessibilityHidden(true)
         .task(id: request) { await build() }
         .onAppear { refresh() }
         .onChange(of: wanted) { refresh() }
+    }
+
+    /// One drawing where it falls on screen, over the sea.
+    private func canvas(_ drawing: WorldViewMapDrawing?, dark: Bool) -> some View {
+        Canvas(rendersAsynchronously: false) { context, size in
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(WorldPalette.rgb(WorldViewInk.sea(dark: dark))))
+            guard let drawing else { return }
+            Self.draw(drawing, on: camera, in: &context)
+        }
     }
 
     /// The key a drawing of the camera on screen now would have.
@@ -81,35 +111,45 @@ struct WorldViewMapCanvas: View {
 
     // MARK: Building
 
-    /// Asks for a fresh drawing when none is on its way and the one on screen is stale; a new level's is built
-    /// at once.
+    /// Asks for a fresh drawing when none is on its way and the one on screen is stale.
     private func refresh() {
         let wanted = wanted
         guard let request else { self.request = wanted; return }
-        if let drawing, drawing.key.camera.level != wanted.camera.level {
-            var facts = model.facts(at: wanted.camera.level)
-            self.drawing = WorldViewMapDrawing.build(wanted, facts: &facts)
-            model.keepLands(facts.lands, at: wanted.camera.level)
-            self.request = wanted
-            return
-        }
-        guard drawing?.key == request, drawing?.isStale(for: wanted) ?? true else { return }
+        guard finished == request, request != wanted, drawing?.isStale(for: wanted) ?? true else { return }
         self.request = wanted
     }
 
-    /// Builds the requested drawing off the main actor, shows it, and looks again (the view may have moved on).
+    /// Builds the requested drawing off the main actor, shows it, and looks again (the view may have moved on). A
+    /// new detail's drawing waits while places are being looked up: their arrival asks for a fresh one, with lines,
+    /// and the old drawing keeps scaling with the fingers until then.
     private func build() async {
         guard let key = request, drawing?.key != key else { return }
-        let start = model.facts(at: key.camera.level)
+        let detail = key.camera.detail
+        let start = model.facts(at: detail)
         let built = await Task.detached(priority: .userInitiated) {
             var facts = start
             let made = WorldViewMapDrawing.build(key, facts: &facts)
             return (drawing: made, lands: facts.lands)
         }.value
         guard !Task.isCancelled else { return }
-        model.keepLands(built.lands, at: key.camera.level)
-        drawing = built.drawing
+        model.keepLands(built.lands, at: detail)
+        finished = key
+        if drawing?.key.camera.detail == detail || !model.isLookingUpPlaces || drawing == nil { show(built.drawing) }
         refresh()
+    }
+
+    /// Puts `new` on screen, fading the old drawing out over it when the hexes changed.
+    private func show(_ new: WorldViewMapDrawing) {
+        let old = drawing
+        drawing = new
+        guard let old, old.key.camera.detail != new.key.camera.detail, !reduceMotion else { return }
+        fading = old
+        fadingOpacity = 1
+        withAnimation(.easeOut(duration: Self.fade)) {
+            fadingOpacity = 0
+        } completion: {
+            if fadingOpacity == 0 { fading = nil }
+        }
     }
 
     // MARK: Drawing
@@ -121,11 +161,12 @@ struct WorldViewMapCanvas: View {
         context.translateBy(x: placement.centre.x, y: placement.centre.y)
         context.scaleBy(x: placement.scale, y: placement.scale)
         context.translateBy(x: -built.size.width / 2, y: -built.size.height / 2)
-        // Bounded: one entry per fill colour (four).
+        // Bounded: one entry per fill colour (five).
         for hexes in drawing.hexes {
             context.fill(hexes.path, with: .color(WorldPalette.rgb(hexes.fill)))
             context.stroke(hexes.path, with: .color(WorldPalette.rgb(hexes.edge)), lineWidth: WorldViewInk.hexEdgeWidth)
         }
+        drawRunways(drawing, in: &context)
         let ink = WorldPalette.rgb(WorldViewInk.line(dark: drawing.key.dark)).opacity(WorldViewInk.lineOpacity)
         let style = { (width: Double) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         context.stroke(drawing.region, with: .color(ink), style: style(WorldViewInk.regionLineWidth))
@@ -142,6 +183,18 @@ struct WorldViewMapCanvas: View {
     }
 }
 
+private extension WorldViewMapCanvas {
+    /// The runways, with a dashed centre line once they are long enough on screen to carry one.
+    static func drawRunways(_ drawing: WorldViewMapDrawing, in context: inout GraphicsContext) {
+        guard !drawing.runways.isEmpty else { return }
+        context.stroke(drawing.runways, with: .color(WorldPalette.rgb(WorldViewInk.runway)),
+                       style: StrokeStyle(lineWidth: WorldViewInk.runwayWidth, lineCap: .butt))
+        guard drawing.key.camera.zoom >= WorldViewInk.runwayMarkZoom else { return }
+        context.stroke(drawing.runways, with: .color(WorldPalette.rgb(WorldViewInk.runwayMark)),
+                       style: StrokeStyle(lineWidth: 0.8, lineCap: .butt, dash: [4, 4]))
+    }
+}
+
 /// The lines on hex edges (World-Exploration-Spec §2, "drawn on the hex edges"): each visible land hex is
 /// compared with its east, south-east and south-west neighbours (so every edge is looked at once), and an
 /// edge between two different places carries the line ``WorldAtlas/border(between:and:)`` names, when the
@@ -154,11 +207,11 @@ nonisolated enum WorldViewBorders {
     /// The forward neighbours: the axial step and the edge's corners (pointy-top, corners from 30°, y down).
     static let forward: [(dq: Int, dr: Int, corner: Int, next: Int)] = [(1, 0, 5, 0), (0, 1, 0, 1), (-1, 1, 1, 2)]
 
-    /// The state-line and country-line edges among `hexes` at the facts' level (whose land cache grows with
+    /// The state-line and country-line edges among `hexes` at the facts' detail (whose land cache grows with
     /// the neighbours it looks up).
     static func segments(_ hexes: [WorldViewVisibleHex],
                          facts: inout WorldViewMapFacts) -> (region: [Edge], country: [Edge]) {
-        let level = facts.level, grid = level.hexGrid
+        let level = facts.level, grid = facts.detail.hexGrid
         let across = 3.0.squareRoot() * grid.radius
         var region: [Edge] = [], country: [Edge] = []
         // Bounded: the hexes drawn (WorldViewCamera.maxDrawnHexes), three edges each.

@@ -53,8 +53,7 @@ struct WorldFlightMarks: View {
             if named { codePlate(item.cluster.code) }
         }
         .alignmentGuide(.leading) { _ in size / 2 }
-        .alignmentGuide(.top) { d in d[VerticalAlignment.center] }
-        .offset(x: item.point.x, y: item.point.y)
+        .worldMapPinned(at: item.point, .leading)
     }
 
     /// A found airport: its tower standing on the airport (its foot on the point), the code's plate beside the foot.
@@ -65,8 +64,8 @@ struct WorldFlightMarks: View {
             codePlate(item.cluster.code)
         }
         .alignmentGuide(.leading) { _ in width / 2 }
-        .alignmentGuide(.top) { d in d[VerticalAlignment.bottom] - Self.towerScale }
-        .offset(x: item.point.x, y: item.point.y)
+        .alignmentGuide(.bottom) { d in d[VerticalAlignment.bottom] - Self.towerScale }
+        .worldMapPinned(at: item.point, .bottomLeading)
     }
 
     /// The code on a paper plate (DM Sans Bold 12), growing with Larger Text up to xxxLarge.

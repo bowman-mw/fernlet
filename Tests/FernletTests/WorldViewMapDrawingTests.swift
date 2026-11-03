@@ -14,7 +14,7 @@ struct WorldViewMapDrawingTests {
     private static let portland = GeoPoint(45.5152, -122.6784)
 
     private static func facts(_ level: AtlasZoomLevel, found: Set<HexCell> = []) -> WorldViewMapFacts {
-        WorldViewMapFacts(level: level, raster: nil, atlas: nil, found: found, places: [:], roads: .none, lands: [:])
+        WorldViewMapFacts(detail: level.detail, raster: nil, atlas: nil, found: found, places: [:], roads: .none, lands: [:])
     }
 
     /// The grown camera shows the same place at the same spot, `margin` points further in, and its centre is

@@ -57,11 +57,15 @@ nonisolated struct WorldViewCluster: Hashable, Sendable {
     /// How many more cities share the marker (the "+N").
     var others: Int { max(members.count - 1, 0) }
 
-    /// The markers for `pins` at `level`: biggest first, each pin joining the first marker whose anchor lies
-    /// within ``radius`` points (the short way round the world), else starting its own. Bounded: at most
-    /// ``maxPins`` pins, each comparing only the markers in the 3 × 3 buckets of `radius` around it.
+    /// The markers for `pins` at `level`.
     static func clusters(of pins: [WorldViewCityPin], at level: AtlasZoomLevel) -> [WorldViewCluster] {
-        let scale = level.pointsPerMercatorUnit
+        clusters(of: pins, scale: level.pointsPerMercatorUnit)
+    }
+
+    /// The markers for `pins` at `scale` (points per Mercator unit): biggest first, each pin joining the first
+    /// marker whose anchor lies within ``radius`` points (the short way round the world), else starting its own.
+    /// Bounded: at most ``maxPins`` pins, each comparing only the markers in the 3 × 3 buckets of `radius` around it.
+    static func clusters(of pins: [WorldViewCityPin], scale: Double) -> [WorldViewCluster] {
         guard scale > 0, !pins.isEmpty else { return [] }
         let ordered = pins.prefix(maxPins).sorted { $0.isBigger(than: $1) }
         let columns = max(Int((scale / radius).rounded(.up)), 1)

@@ -124,8 +124,8 @@ struct WorldAtlasMapTests {
         await model.prepare()
         #expect(model.found.isEmpty)
         let hex = AtlasZoomLevel.world.hexGrid.cell(containing: Self.portland)
-        #expect(!model.isFound(hex, at: .world))
-        #expect(model.clusters(at: .world).isEmpty)
+        #expect(!model.isFound(hex, at: AtlasZoomLevel.world.detail))
+        #expect(model.clusters(at: AtlasZoomLevel.world.detail).isEmpty)
     }
 
     /// The demo's uncovered hexes are found at every level, and only the demo's: a far hex stays fogged.
@@ -135,8 +135,8 @@ struct WorldAtlasMapTests {
         model.load(WorldViewContent(atlas: nil, pins: [], cityCount: 0, countryCount: 0, liftedCells: cells, start: nil))
         await model.prepare()
         for level in AtlasZoomLevel.allCases {
-            #expect(model.isFound(level.hexGrid.cell(containing: Self.portland), at: level), "\(level)")
-            #expect(!model.isFound(level.hexGrid.cell(containing: GeoPoint(-33.87, 151.21)), at: level))
+            #expect(model.isFound(level.hexGrid.cell(containing: Self.portland), at: level.detail), "\(level)")
+            #expect(!model.isFound(level.hexGrid.cell(containing: GeoPoint(-33.87, 151.21)), at: level.detail))
         }
     }
 

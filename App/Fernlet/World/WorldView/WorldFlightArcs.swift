@@ -81,6 +81,8 @@ nonisolated struct WorldFlightMap: Sendable {
     var airportCount: Int
     /// How many flights the passport keeps (the plate's count).
     var flightCount: Int
+    /// The found airports whose grounds and runways the map draws (``WorldViewAirportTiles``).
+    var grounds: [WorldAirport] = []
 
     /// No flights and no airports.
     static let none = WorldFlightMap(arcs: [], rings: [], found: [], airportCount: 0, flightCount: 0)
@@ -317,12 +319,13 @@ nonisolated extension WorldFlightMap {
         }
         let spanish = WorldViewNames.language == .spanish
         // Bounded: the book's airports, at most maxMarks.
-        let found = book.visits(of: .airport).keys.sorted().prefix(WorldFlightArcs.maxMarks).compactMap { token in
-            airports.airport(token: token).map { (code: $0.code, airport: Airport(point: $0.point, name: $0.city(spanish: spanish))) }
-        }
-        return make(book: book, found: found) { code in
+        let grounds = book.visits(of: .airport).keys.sorted().prefix(WorldFlightArcs.maxMarks).compactMap { airports.airport(token: $0) }
+        let found = grounds.map { (code: $0.code, airport: Airport(point: $0.point, name: $0.city(spanish: spanish))) }
+        var map = make(book: book, found: found) { code in
             airports.point(iata: code).map { Airport(point: $0.point, name: airports.airport(code: code)?.city(spanish: spanish) ?? code) }
         }
+        map.grounds = grounds
+        return map
     }
 
     /// A mark for `code` at `airport`.
