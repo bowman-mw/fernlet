@@ -82,10 +82,12 @@ private struct WorldAtlasMapHook: ViewModifier {
                 screen = wanted
             }
             .fullScreenCover(item: $screen) { wanted in
+                let shore = store.worldFog.atlas.openedShore
                 let source: WorldAtlasMapView.Source = UITestSupport.shouldSeedDemoContent
                     ? .content(wanted == .flights ? WorldAtlasMapDemo.flightContent(atlas: store.worldFog.atlas.openedAtlas,
-                                                                                    airports: store.worldLocation.flights.airportsShelf.pack())
-                        : WorldAtlasMapDemo.content(atlas: store.worldFog.atlas.openedAtlas)) : .store(store)
+                                                                                    airports: store.worldLocation.flights.airportsShelf.pack(),
+                                                                                    shore: shore)
+                        : WorldAtlasMapDemo.content(atlas: store.worldFog.atlas.openedAtlas, shore: shore)) : .store(store)
                 WorldAtlasMapDebugHost(source: source, screen: wanted) { screen = nil }
             }
     }
@@ -128,13 +130,13 @@ enum WorldAtlasMapDemo {
         [GeoPoint(45.51, -122.715), GeoPoint(45.525, -122.68), GeoPoint(45.515, -122.625)]
     ]
 
-    /// The demo content over `atlas` (nil: the sea alone).
-    static func content(atlas: WorldAtlas?) -> WorldViewContent {
+    /// The demo content over `atlas` (nil: the sea alone), its hexes drawn from `shore`.
+    static func content(atlas: WorldAtlas?, shore: WorldShoreMask? = nil) -> WorldViewContent {
         let cities = cityPoints.compactMap { atlas?.city(at: $0) }
         let pins = cities.map { WorldViewCityPin(city: $0, name: WorldViewNames.city($0)) }
         return WorldViewContent(atlas: atlas, pins: pins, cityCount: pins.count,
                                 countryCount: Set(cities.map(\.countryCode)).count, liftedCells: fogCells(),
-                                start: cityPoints.first)
+                                start: cityPoints.first, shore: shore)
     }
 
     /// The airports of the demo flights: found ones first, then the ones only flown through.
@@ -147,7 +149,7 @@ enum WorldAtlasMapDemo {
 
     /// Atlanta and Pensacola found, with their airports, and a flight from Atlanta to each airport: the owner's
     /// 2026-11-02 view of the map. Bounded: fixed lists.
-    static func flightContent(atlas: WorldAtlas?, airports: WorldAirports?) -> WorldViewContent {
+    static func flightContent(atlas: WorldAtlas?, airports: WorldAirports?, shore: WorldShoreMask? = nil) -> WorldViewContent {
         let places = [GeoPoint(33.749, -84.388), GeoPoint(30.4213, -87.2169)]
         let cities = places.compactMap { atlas?.city(at: $0) }
         let cells = places.flatMap { MercatorHexGrid.cells(around: $0, within: 4_000) }
@@ -166,7 +168,8 @@ enum WorldAtlasMapDemo {
         let flights = WorldFlightMap(arcs: arcs, rings: rings, found: found, airportCount: found.count, flightCount: arcs.count,
                                      grounds: grounds)
         return WorldViewContent(atlas: atlas, pins: cities.map { WorldViewCityPin(city: $0, name: WorldViewNames.city($0)) },
-                                cityCount: cities.count, countryCount: 1, liftedCells: cells, start: places.first, flights: flights)
+                                cityCount: cities.count, countryCount: 1, liftedCells: cells, start: places.first, flights: flights,
+                                shore: shore)
     }
 
     /// One fog cell every 1.2 km over each patch, and along each walk the cells a walk lifts (50 m round a point

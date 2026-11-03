@@ -1,0 +1,15 @@
+WorldShore.pack is a database of land and water built from OpenStreetMap data.
+
+© OpenStreetMap contributors. It is available under the Open Database License 1.0:
+https://opendatacommons.org/licenses/odbl/1-0/
+https://www.openstreetmap.org/copyright
+
+Sources: OpenStreetMap land polygons from osmdata.openstreetmap.de (data of 2026-10-31), and OpenStreetMap water
+through Overture Maps Foundation's base/water data (release 2026-10-21.0).
+
+Changes: the polygons were turned into grids of land and water bits, inland water was filtered by kind and size,
+and the grids were compressed. Scripts/world-atlas/build_world_shore.py in the Fernlet repository
+(https://github.com/bowman-mw/fernlet) makes the pack, and the pack itself is free to download from that repository's
+releases (https://github.com/bowman-mw/fernlet/releases/tag/world-shore-v1). See Docs/World-Shore-Pack.md there.
+
+Only this file and WorldShore.pack are under the ODbL. Fernlet's code and its other data keep their own terms.

@@ -239,7 +239,9 @@ struct AcknowledgmentsView: View {
     /// citation stays in English, as its authors wrote it; the licence's address is in NOTICE, not here.
     private var mapDataSection: some View {
         FernletFramedSection(header: Text("Map data")) {
-            paragraph(Text("The World map's land, lakes, seas, countries, states and provinces, cities and major roads come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data."))
+            paragraph(Text("The land, coasts, lakes and rivers drawn on the World map come from OpenStreetMap, © OpenStreetMap contributors, under the Open Database License (ODbL). Fernlet changed the data: it turned the shapes into grids of land and water and left out small and seasonal water. That database and how it's made are public in Fernlet's source repository."))
+            WorldOpenStreetMapCredit()
+            paragraph(Text("The countries, states and provinces, seas, cities and major roads, and the land and lakes behind the passport's rules, come from Natural Earth, which is in the public domain and asks for no credit. All of the map's sources travel inside the app: Fernlet never downloads map data."))
             paragraph(Text("The climate zones that pick the map's terrain and plants come from this work, under the Creative Commons Attribution 4.0 International license (CC BY 4.0). Fernlet changed the data: it reduced the map to cells a tenth of a degree wide and turned its climate classes into terrain."))
             Text(verbatim: Self.koppenCitation)
                 .font(.fernlet(.body))

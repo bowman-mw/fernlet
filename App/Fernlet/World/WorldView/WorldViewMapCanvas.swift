@@ -207,10 +207,9 @@ nonisolated enum WorldViewBorders {
     /// The forward neighbours: the axial step and the edge's corners (pointy-top, corners from 30°, y down).
     static let forward: [(dq: Int, dr: Int, corner: Int, next: Int)] = [(1, 0, 5, 0), (0, 1, 0, 1), (-1, 1, 1, 2)]
 
-    /// The state-line and country-line edges among `hexes` at the facts' detail (whose land cache grows with
-    /// the neighbours it looks up).
-    static func segments(_ hexes: [WorldViewVisibleHex],
-                         facts: inout WorldViewMapFacts) -> (region: [Edge], country: [Edge]) {
+    /// The state-line and country-line edges among `hexes` at the facts' detail. Their land is the atlas's
+    /// (``WorldViewMapFacts/holdsPlace(x:y:)``), not what the hexes draw, so the shore mask moves no line.
+    static func segments(_ hexes: [WorldViewVisibleHex], facts: WorldViewMapFacts) -> (region: [Edge], country: [Edge]) {
         let level = facts.level, grid = facts.detail.hexGrid
         let across = 3.0.squareRoot() * grid.radius
         var region: [Edge] = [], country: [Edge] = []
@@ -221,7 +220,7 @@ nonisolated enum WorldViewBorders {
                 let nx = hex.x + across * (Double(step.dq) + Double(step.dr) / 2), ny = hex.y + 1.5 * grid.radius * Double(step.dr)
                 let cell = WorldViewCamera.canonical((nx, ny), in: grid)
                 let there: AtlasPlaceName?
-                if facts.isLand(cell, x: nx, y: ny) {
+                if facts.holdsPlace(x: nx, y: ny) {
                     guard let looked = facts.place(of: cell) else { continue }
                     there = looked
                 } else {

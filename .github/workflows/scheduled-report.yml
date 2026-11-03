@@ -225,6 +225,12 @@ jobs:
           set -euo pipefail
           Scripts/fetch-branded-catalog.sh
 
+      # The same for the map's land and water ("Ensure world shore pack"; Docs/World-Shore-Pack.md).
+      - name: Fetch the World shore pack (Scripts/fetch-world-shore.sh)
+        run: |
+          set -euo pipefail
+          Scripts/fetch-world-shore.sh
+
       - name: Release build, warnings as errors, unsigned
         run: |
           set -euo pipefail

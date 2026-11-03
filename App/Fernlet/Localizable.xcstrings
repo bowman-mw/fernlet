@@ -28277,6 +28277,23 @@
         }
       }
     },
+    "Map data from OpenStreetMap" : {
+      "comment" : "VoiceOver label of the small map credit; it opens OpenStreetMap's copyright page.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos del mapa de OpenStreetMap"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos del mapa de OpenStreetMap"
+          }
+        }
+      }
+    },
     "Map history stays on this iPhone. A decoy session shows none of it." : {
       "localizations" : {
         "es" : {
@@ -33913,66 +33930,6 @@
         }
       }
     },
-    "passport.flights.planned" : {
-      "extractionState" : "extracted_with_value",
-      "comment" : "Sprout's passport Flights page: how many flights haven't left yet",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld planned"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld planned"
-                }
-              }
-            }
-          }
-        },
-        "es" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld previsto"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld previstos"
-                }
-              }
-            }
-          }
-        },
-        "es-MX" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld programado"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld programados"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "PER SERVING" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -35591,23 +35548,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Programado"
-          }
-        }
-      }
-    },
-    "planned" : {
-      "comment" : "VoiceOver: said after the stub of a flight that hasn't left yet",
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "previsto"
-          }
-        },
-        "es-MX" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "programado"
           }
         }
       }
@@ -47232,6 +47172,7 @@
       }
     },
     "The World map's land, lakes, seas, countries, states and provinces, cities and major roads come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -47493,6 +47434,22 @@
         }
       }
     },
+    "The countries, states and provinces, seas, cities and major roads, and the land and lakes behind the passport's rules, come from Natural Earth, which is in the public domain and asks for no credit. All of the map's sources travel inside the app: Fernlet never downloads map data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos que usan las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos que usan las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+          }
+        }
+      }
+    },
     "The cycle backup saved from your other iPhone stays in iCloud." : {
       "localizations" : {
         "es" : {
@@ -47655,6 +47612,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La copia de seguridad del diario guardada desde tu otro iPhone se queda en iCloud."
+          }
+        }
+      }
+    },
+    "The land, coasts, lakes and rivers drawn on the World map come from OpenStreetMap, © OpenStreetMap contributors, under the Open Database License (ODbL). Fernlet changed the data: it turned the shapes into grids of land and water and left out small and seasonal water. That database and how it's made are public in Fernlet's source repository." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tierra, las costas, los lagos y los ríos que se dibujan en el mapa del Mundo vienen de OpenStreetMap, © OpenStreetMap contributors, bajo la Open Database License (ODbL). Fernlet cambió los datos: convirtió las formas en cuadrículas de tierra y agua y dejó fuera el agua pequeña y la de temporada. Esa base de datos y la forma de hacerla son públicas en el repositorio de código de Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tierra, las costas, los lagos y los ríos que se dibujan en el mapa del Mundo vienen de OpenStreetMap, © OpenStreetMap contributors, bajo la Open Database License (ODbL). Fernlet cambió los datos: convirtió las formas en cuadrículas de tierra y agua y dejó fuera el agua pequeña y la de temporada. Esa base de datos y la forma de hacerla son públicas en el repositorio de código de Fernlet."
           }
         }
       }
@@ -76271,6 +76244,65 @@
         }
       }
     },
+    "passport.flights.planned" : {
+      "comment" : "Sprout's passport Flights page: how many flights haven't left yet",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld planned"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld planned"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld previsto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld previstos"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld programado"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld programados"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "passport.friendShops" : {
       "comment" : "Sprout's passport, page 1: the gold row opening friends' shops, for the hour after a session. Spanish: Tiendas de amigos",
       "extractionState" : "extracted_with_value",
@@ -76811,6 +76843,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "movimiento"
+          }
+        }
+      }
+    },
+    "planned" : {
+      "comment" : "VoiceOver: said after the stub of a flight that hasn't left yet",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "previsto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "programado"
           }
         }
       }
@@ -83173,30 +83222,6 @@
         }
       }
     },
-    "settings.search.title.airportsAndFlights" : {
-      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Airports and flights"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aeropuertos y vuelos"
-          }
-        },
-        "es-MX" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aeropuertos y vuelos"
-          }
-        }
-      }
-    },
     "settings.search.title.aiStatus" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -83217,6 +83242,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estado de la IA"
+          }
+        }
+      }
+    },
+    "settings.search.title.airportsAndFlights" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Airports and flights page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Airports and flights"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aeropuertos y vuelos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aeropuertos y vuelos"
           }
         }
       }
