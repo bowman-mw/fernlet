@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 
 /// The bundled shore pack, opened: the fog's and Your world's land and water, far finer than the atlas's `LAND`
-/// (Docs/World-Shore-Pack.md). **Drawing only**: the passport's rules stay on ``WorldAtlas``, so nothing earned changes.
+/// (Docs/World-Shore-Pack.md). The passport's land rules read it too, and only ever add (`WorldAtlasShore.swift`).
 ///
 /// **Opening** reads the header, the table and the half-degree overview, and refuses (``WorldShoreMaskError``, never a
 /// trap) what the doc's list refuses. Hand it mapped bytes: the tiles are read only when a lookup needs one. It

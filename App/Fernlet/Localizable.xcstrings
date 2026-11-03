@@ -47434,18 +47434,18 @@
         }
       }
     },
-    "The countries, states and provinces, seas, cities and major roads, and the land and lakes behind the passport's rules, come from Natural Earth, which is in the public domain and asks for no credit. All of the map's sources travel inside the app: Fernlet never downloads map data." : {
+    "The countries, states and provinces, seas, cities and major roads, and the coarser land and lakes the passport's rules start from, come from Natural Earth, which is in the public domain and asks for no credit. All of the map's sources travel inside the app: Fernlet never downloads map data." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos que usan las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos más generales de los que parten las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos que usan las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos más generales de los que parten las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
           }
         }
       }
@@ -47616,18 +47616,18 @@
         }
       }
     },
-    "The land, coasts, lakes and rivers drawn on the World map come from OpenStreetMap, © OpenStreetMap contributors, under the Open Database License (ODbL). Fernlet changed the data: it turned the shapes into grids of land and water and left out small and seasonal water. That database and how it's made are public in Fernlet's source repository." : {
+    "The land, coasts, lakes and rivers on the World map and in the passport's land rules come from OpenStreetMap, © OpenStreetMap contributors, under the Open Database License (ODbL). Fernlet changed the data: it turned the shapes into grids of land and water and left out small and seasonal water. That database and how it's made are public in Fernlet's source repository." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La tierra, las costas, los lagos y los ríos que se dibujan en el mapa del Mundo vienen de OpenStreetMap, © OpenStreetMap contributors, bajo la Open Database License (ODbL). Fernlet cambió los datos: convirtió las formas en cuadrículas de tierra y agua y dejó fuera el agua pequeña y la de temporada. Esa base de datos y la forma de hacerla son públicas en el repositorio de código de Fernlet."
+            "value" : "La tierra, las costas, los lagos y los ríos del mapa del Mundo y de las reglas de tierra del pasaporte vienen de OpenStreetMap, © OpenStreetMap contributors, bajo la Open Database License (ODbL). Fernlet cambió los datos: convirtió las formas en cuadrículas de tierra y agua y dejó fuera el agua pequeña y la de temporada. Esa base de datos y la forma de hacerla son públicas en el repositorio de código de Fernlet."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La tierra, las costas, los lagos y los ríos que se dibujan en el mapa del Mundo vienen de OpenStreetMap, © OpenStreetMap contributors, bajo la Open Database License (ODbL). Fernlet cambió los datos: convirtió las formas en cuadrículas de tierra y agua y dejó fuera el agua pequeña y la de temporada. Esa base de datos y la forma de hacerla son públicas en el repositorio de código de Fernlet."
+            "value" : "La tierra, las costas, los lagos y los ríos del mapa del Mundo y de las reglas de tierra del pasaporte vienen de OpenStreetMap, © OpenStreetMap contributors, bajo la Open Database License (ODbL). Fernlet cambió los datos: convirtió las formas en cuadrículas de tierra y agua y dejó fuera el agua pequeña y la de temporada. Esa base de datos y la forma de hacerla son públicas en el repositorio de código de Fernlet."
           }
         }
       }

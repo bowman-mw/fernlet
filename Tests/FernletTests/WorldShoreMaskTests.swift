@@ -443,8 +443,8 @@ struct WorldShoreDrawingTests {
         #expect(!terrain.classify(waterHex.cell, urban: { _ in false }).set.isWater, "the mask's island is land")
     }
 
-    /// The climate search: the code under the point first, then the nearest ring, and 0 past the reach; the passport's
-    /// `terrain(at:)` is untouched.
+    /// The climate search: the code under the point first, then the nearest ring, and 0 past the reach; `terrain(at:)`,
+    /// the atlas's own answer, is untouched.
     @Test func theClimateSearchIsNearAndBounded() throws {
         var world = WorldAtlasTestPackBuilder.standardWorld(rows: 36)
         world.set(lat: -52.5, lon: -122.5, state: 1, climate: 4, continent: 1)
@@ -455,7 +455,7 @@ struct WorldShoreDrawingTests {
         #expect(classifier.nearbyClimateCode(at: GeoPoint(-42.5, -132.5)) == 4, "two rings out, on the ring's corner")
         #expect(classifier.nearbyClimateCode(at: GeoPoint(-52.5, -92.5)) == 0, "six cells east is past the reach")
         #expect(classifier.landTerrain(at: GeoPoint(-52.5, -112.5)) == .desert)
-        #expect(classifier.terrain(at: GeoPoint(-52.5, -112.5)) == .water, "the passport's terrain stays the atlas's")
+        #expect(classifier.terrain(at: GeoPoint(-52.5, -112.5)) == .water, "the atlas's own answer stays")
         #expect(classifier.nearbyClimateCode(at: GeoPoint(.nan, 0)) == 0)
         let bare = try WorldAtlas(data: WorldAtlasTestPackBuilder(rows: 36).build())
         #expect(AtlasTerrainClassifier(atlas: bare).nearbyClimateCode(at: GeoPoint(2.5, 2.5)) == 0)

@@ -383,6 +383,24 @@ source's file name, URL, SHA-256 and licence.
   polygons (each box tested before its rings). About 0.03 ms a fix, 0.1 ms a whole visit, on a Mac.
 - **Terrain:** water or land from `LAND`, a class from `CLIM` and the latitude, flora from the class, the latitude
   and (for cacti) the Americas.
+- **With the shore mask** (owner's pick, 2026-11-03; `WorldAtlasShore.swift`,
+  [World-Shore-Pack.md](World-Shore-Pack.md)). Where the map draws real land, the passport treats it as land too. These
+  only add to the rules above, and without the pack the fix reads as above:
+  - **Terrain** follows the mask both ways: the mask's water is water, and the mask's land takes its class from the
+    climate under it or nearby. A class is one entry, so a shoreline read as water costs nothing.
+  - **Continent:** on the mask's land where the rule above names none, the nearest `CONT` cell within 5 cells (about
+    55 km), ring by ring. Never the country's own continent, which is wrong for Russia east of 60°E and France overseas.
+    Past the reach it stays none (Clipperton, the Diomedes).
+  - **Country:** the outlines answer first. On the mask's land with none, the nearest country within 3 km
+    (`shoreCountryReachMetres`), when no other sovereign state lies within 6 km (`shoreCountryRivalMetres`) and real
+    water within 3 km (`shoreWaterReachMetres`). A wrong stamp can never be taken back, so anything else keeps today's
+    answer: Sandhamn, 5,982 m from Sweden's outline, has no country, while Kastellorizo isn't given Turkey at 4.9 km. The
+    water test keeps the rule to coasts, so Bir Tawil and Kashmir's unassigned strip stay no one's. North Korea stays
+    excluded. Measured 2026-11-03: of 434,566 km² of the mask's land with no country outside Antarctica, 345,948 km²
+    passes the reach and rival tests and 11,789 km² of that has no water within 3 km.
+  - **Ocean, sea, city and landmark** do not change. A fix whose outlines give no country still counts every city.
+  - **Nothing earned changes.** A visit only adds entries. No past fix is read again: fog cells hold no dates, so an
+    earlier visit counts at the next fix there. A fix on the shore now moves its country's trip clock.
 - **Landmark:** within the landmark's find radius of its point (below).
 - **State or province** (`WorldAtlas.admin1(at:)`): the entry whose rings hold the fix, among only the entries of
   the country under it when `CTRY` has one there (each box first), else among all. The plate's

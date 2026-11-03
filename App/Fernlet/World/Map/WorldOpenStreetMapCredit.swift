@@ -22,6 +22,7 @@ struct WorldOpenStreetMapCredit: View {
                     .background(WorldPalette.paper, in: Rectangle())
             }
             .accessibilityLabel(Text("Map data from OpenStreetMap", comment: "VoiceOver label of the small map credit; it opens OpenStreetMap's copyright page."))
+            .accessibilityInputLabels([Text(verbatim: "OpenStreetMap")])
         }
     }
 }
