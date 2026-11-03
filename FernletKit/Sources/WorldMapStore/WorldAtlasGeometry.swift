@@ -177,6 +177,39 @@ public nonisolated struct AtlasPolygon: Hashable, Sendable {
         return inside
     }
 
+    /// The flat-earth distance in metres from `point` to the nearest edge of the outline when it is at most `metres`,
+    /// else nil. A point inside is measured to its outline too, never as zero. The longitude difference is taken the
+    /// short way round. An edge within reach crosses the reach's latitudes, so it is listed in the bands they span.
+    /// Bounded: those bands' entries (at most ``AtlasEdgeBands/maxEntriesPerEdge`` an edge on average).
+    func distance(from point: GeoPoint, within metres: Double) -> Double? {
+        guard point.isValid, metres.isFinite, metres >= 0 else { return nil }
+        let y = point.latitude * Self.unitsPerDegree, reach = metres / GeoPoint.metresPerDegree * Self.unitsPerDegree
+        guard y + reach >= Double(minLat), y - reach <= Double(maxLat) else { return nil }
+        let bands = bands
+        var nearest = Double.infinity
+        // Bounded: the reach's bands, at most AtlasEdgeBands.maxBands.
+        for band in bands.band(of: y - reach)...bands.band(of: y + reach) {
+            for slot in bands.slots(of: band) {
+                guard let (current, previous) = edge(bands.entries[slot]) else { continue }
+                nearest = min(nearest, edgeDistance(from: point, current, previous))
+            }
+        }
+        return nearest <= metres ? nearest : nil
+    }
+
+    /// The flat-earth distance in metres from `point` to the edge between two point indices, both in range.
+    private func edgeDistance(from point: GeoPoint, _ first: Int, _ second: Int) -> Double {
+        let perLat = GeoPoint.metresPerDegree, perLon = point.metresPerDegreeLongitude
+        let ax = AtlasGrid.normalised(Double(lons[first]) / Self.unitsPerDegree - point.longitude) * perLon
+        let ay = (Double(lats[first]) / Self.unitsPerDegree - point.latitude) * perLat
+        let bx = AtlasGrid.normalised(Double(lons[second]) / Self.unitsPerDegree - point.longitude) * perLon
+        let by = (Double(lats[second]) / Self.unitsPerDegree - point.latitude) * perLat
+        let dx = bx - ax, dy = by - ay, length = dx * dx + dy * dy
+        let along = length == 0 ? 0 : min(max(-(ax * dx + ay * dy) / length, 0), 1)
+        let x = ax + along * dx, y = ay + along * dy
+        return (x * x + y * y).squareRoot()
+    }
+
     /// The edge an ``AtlasEdgeBands`` entry names, as its current and previous point indices (a ring's
     /// closing edge runs from its first point back to its last), or nil for one out of range.
     private func edge(_ entry: UInt32) -> (current: Int, previous: Int)? {

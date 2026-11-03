@@ -364,7 +364,12 @@ public nonisolated struct AtlasWithLandmarks: AtlasVisitResolving {
     /// The atlas's visit at `point`, with the tokens of the landmarks it finds (in file order). An invalid
     /// point finds none.
     public func visit(at point: GeoPoint) -> AtlasVisit {
-        var visit = atlas.visit(at: point)
+        visit(at: point, shore: nil)
+    }
+
+    /// The same, the atlas's visit read with `shore` (a landmark's find rule never reads it).
+    public func visit(at point: GeoPoint, shore: WorldShoreMask?) -> AtlasVisit {
+        var visit = atlas.visit(at: point, shore: shore)
         guard point.isValid else { return visit }
         visit.landmarks = landmarks.found(at: point).map(\.token)
         return visit

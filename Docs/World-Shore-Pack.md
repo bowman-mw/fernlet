@@ -21,9 +21,12 @@ between the generator (`Scripts/world-atlas/build_world_shore.py`) and the Swift
   fail one.
 - **Checksum.** `WorldShoreMask.expectedSHA256` pins the shipped file. Regenerating the pack changes it on purpose, in
   the same commit.
-- **Drawing only.** The fog and Your world's picture read it. The passport's rules (country, ocean within reach,
-  continent, terrain stamps) stay on the atlas's `LAND`, so nothing already earned changes, and without the pack the map
-  falls back to `LAND`.
+- **The map, and the passport's land rules.** The fog and Your world's picture read it. So do the passport's terrain,
+  continent and country rules (owner's pick, 2026-11-03; [World-Atlas-Pack.md](World-Atlas-Pack.md), "The rules the reader
+  applies"), which only add to what the atlas answers, so nothing already earned changes. Ocean, sea, city and landmark
+  stay on the atlas. Without the pack the map falls back to `LAND` and the passport reads the atlas alone. Entries come
+  partly from this data, but stay on the phone and in the sealed backup, so nothing is publicly used under the working
+  reading below; a person should check that reading.
 
 ## Sources and licence
 

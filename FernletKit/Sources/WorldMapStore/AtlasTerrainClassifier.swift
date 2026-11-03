@@ -55,7 +55,7 @@ public nonisolated struct AtlasTerrainClassifier: Sendable {
 
     /// The terrain of a `point` a finer map than `LAND` already calls land (the fog's ``WorldShoreMask``), so it never
     /// answers water: real islands and thin coasts fall where the atlas has water, and often no climate at all.
-    /// Reads ``nearbyClimateCode(at:)``. The passport never asks this: its terrain stays ``terrain(at:)``.
+    /// Reads ``nearbyClimateCode(at:)``. The fog and the passport ask this when they have a mask, ``terrain(at:)`` when not.
     public func landTerrain(at point: GeoPoint) -> AtlasTerrain {
         Self.terrain(climateCode: nearbyClimateCode(at: point), latitude: point.latitude)
     }

@@ -23,7 +23,8 @@ import WorldMapStore
 /// **The shore mask** (``WorldShoreMask``, Docs/World-Shore-Pack.md), the fog's and Your world's land and water, opens
 /// with the atlas, in the same background task, so Home's first fog is drawn with it and never redrawn for it; opening
 /// it reads only its table and overview (``openedShore``). A missing or unreadable pack is logged once and the map
-/// falls back to the atlas's `LAND`. Drawing only: nothing here hands it to the passport's rules.
+/// falls back to the atlas's `LAND`. Each fix is read with it too, so the passport's land rules match the map
+/// (`WorldAtlasShore.swift`); without it they are the atlas's own.
 ///
 /// **Landmarks** (World-Exploration-Spec §2). The hand-written `WorldLandmarks.json` beside the pack is opened
 /// once, on first use (``bundledLandmarks(in:)``); a missing or malformed file is logged once and means no
@@ -305,7 +306,7 @@ final class WorldAtlasKeeper {
         }
         let nearby = lastRead.map { $0.distance(to: point) < Self.minimumSpacing } ?? false
         guard let resolver = resolver(), loadStore() else { return }
-        let visit = nearby ? (lastVisit ?? resolver.visit(at: point)) : resolver.visit(at: point)
+        let visit = (nearby ? lastVisit : nil) ?? resolver.visit(at: point, shore: openedShore)
         let tripsBefore = store.book.returnCount
         let found: [AtlasDiscovery]
         do {

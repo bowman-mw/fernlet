@@ -226,8 +226,7 @@ public nonisolated final class WorldAtlas: Sendable {
         let terrain = AtlasTerrainClassifier(atlas: self).terrain(at: point)
         guard point.isValid else { return AtlasVisit(terrain: terrain) }
         let found = country(at: point)
-        let excluded = found.map { Self.excludedFromPassport.contains($0.code)
-            || Self.excludedFromPassport.contains($0.sovereignCode) } ?? false
+        let excluded = found.map(Self.isExcludedFromPassport) ?? false
         let country = excluded ? nil : found
         let city = excluded ? nil : city(at: point, inCountry: found?.code)
         var visit = AtlasVisit(countryCode: country?.code, sovereignCode: country?.sovereignCode,
@@ -241,6 +240,11 @@ public nonisolated final class WorldAtlas: Sendable {
     }
 
     // MARK: Helpers
+
+    /// Whether `country` is left out of the passport (``excludedFromPassport``), by its own code or its sovereign's.
+    static func isExcludedFromPassport(_ country: AtlasCountry) -> Bool {
+        excludedFromPassport.contains(country.code) || excludedFromPassport.contains(country.sovereignCode)
+    }
 
     /// A fraction of a cell (0..<1) as a sub-cell index, 0...15.
     static func sub(_ fraction: Double) -> Int {

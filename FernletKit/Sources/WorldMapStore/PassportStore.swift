@@ -6,12 +6,20 @@ import Foundation
 public nonisolated protocol AtlasVisitResolving: Sendable {
     /// Everything the atlas says about a fix at `point`.
     func visit(at point: GeoPoint) -> AtlasVisit
+    /// The same, read with the fine land and water of `shore` when there is one (`WorldAtlasShore.swift`). The default
+    /// has no use for it and reads ``visit(at:)``.
+    func visit(at point: GeoPoint, shore: WorldShoreMask?) -> AtlasVisit
     /// Whether the atlas puts water at `point` (the weekly corner skips water, owner 2026-10-29). The default
     /// reads ``visit(at:)``'s terrain; the bundled atlas answers from its land mask alone.
     func isWater(at point: GeoPoint) -> Bool
 }
 
 extension AtlasVisitResolving {
+    /// ``visit(at:)``: a resolver with no fine land and water of its own ignores `shore`.
+    public func visit(at point: GeoPoint, shore: WorldShoreMask?) -> AtlasVisit {
+        visit(at: point)
+    }
+
     /// Water when ``visit(at:)`` says the terrain is water.
     public func isWater(at point: GeoPoint) -> Bool {
         visit(at: point).terrain == .water
