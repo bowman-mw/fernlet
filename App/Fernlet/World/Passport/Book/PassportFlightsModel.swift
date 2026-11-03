@@ -10,6 +10,9 @@ nonisolated struct PassportFlightTrip: Equatable, Identifiable, Sendable {
     let legs: [PassportFlight]
     /// The great-circle distance flown, in metres (legs whose airports the list doesn't place count 0).
     let metres: Double
+    /// Whether it hasn't left yet (a Flighty file also lists flights still to come): it draws as planned, stays out of
+    /// the totals, and becomes an ordinary stub once it has left. A trip under way counts as flown.
+    var isPlanned = false
 
     var id: String { legs.map { "\($0.route)@\($0.departure.timeIntervalSince1970)" }.joined(separator: ",") }
     /// The codes in order: from, each stop, to.
@@ -30,9 +33,12 @@ nonisolated struct PassportFlightTrip: Equatable, Identifiable, Sendable {
 nonisolated struct PassportFlightYearLog: Equatable, Identifiable, Sendable {
     let year: Int
     let trips: [PassportFlightTrip]
-    /// Every flight in it, each leg counted.
+    /// Every flight flown in it, each leg counted.
     let flightCount: Int
+    /// How far those flew.
     let metres: Double
+    /// Every planned flight in it, each leg counted.
+    let plannedCount: Int
 
     var id: Int { year }
 
@@ -40,8 +46,10 @@ nonisolated struct PassportFlightYearLog: Equatable, Identifiable, Sendable {
     init(year: Int, trips: [PassportFlightTrip]) {
         self.year = year
         self.trips = trips
-        flightCount = trips.reduce(0) { $0 + $1.legs.count }
-        metres = trips.reduce(0) { $0 + $1.metres }
+        let flown = trips.filter { !$0.isPlanned }
+        flightCount = flown.reduce(0) { $0 + $1.legs.count }
+        metres = flown.reduce(0) { $0 + $1.metres }
+        plannedCount = trips.reduce(0) { $0 + ($1.isPlanned ? $1.legs.count : 0) }
     }
 }
 
@@ -49,7 +57,8 @@ nonisolated struct PassportFlightYearLog: Equatable, Identifiable, Sendable {
 /// keeps, Fernlet's own and imported, joined into trips and grouped by the year they left, newest year first. The book
 /// gains one page however many flights it holds: a history that fits one page (``tripsOnOnePage``) shows its stubs
 /// under year headings, and a longer one lists its years, each opening its own log. The header's totals count every
-/// flight; layovers are totalled under the list.
+/// flight flown and name the planned ones apart (``PassportFlightTrip/isPlanned``); layovers flown are totalled under
+/// the list.
 ///
 /// A value built from the passport's flights (`book.flights`, empty in a decoy) and the airport list's points.
 /// Bounded by ``PassportBook/maxFlights``.
@@ -57,10 +66,13 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
     let trips: [PassportFlightTrip]
     /// The years with flights, newest first.
     let years: [PassportFlightYearLog]
-    /// Every flight, counted once.
+    /// Every flight flown, counted once.
     let flightCount: Int
+    /// How far those flew.
     let totalMetres: Double
-    /// The stops with a known length, and their total.
+    /// Every planned flight, counted once.
+    let plannedCount: Int
+    /// The stops flown with a known length, and their total.
     let layoverCount: Int
     let layoverSeconds: TimeInterval
 
@@ -71,17 +83,20 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
     /// The longest stop a trip joins through (spec §9.2: a stop over 20 hours isn't shown).
     static let maxStop: TimeInterval = 20 * 3_600
 
-    /// The page for `flights`, placing airports by `point` and dating by `calendar`.
-    init(flights: [PassportFlight], point: (String) -> GeoPoint?, calendar: Calendar = .current) {
+    /// The page for `flights` at `now`, placing airports by `point` and dating by `calendar`.
+    init(flights: [PassportFlight], point: (String) -> GeoPoint?, calendar: Calendar = .current, now: Date = Date()) {
         let sorted = flights.prefix(PassportBook.maxFlights).sorted { $0.departure < $1.departure }
         let trips = Self.trips(sorted, calendar: calendar).map { legs in
-            PassportFlightTrip(legs: legs, metres: legs.reduce(0) { $0 + Self.metres($1, point: point) })
+            PassportFlightTrip(legs: legs, metres: legs.reduce(0) { $0 + Self.metres($1, point: point) },
+                               isPlanned: (legs.first?.departure ?? now) > now)
         }
         self.trips = trips
         years = Self.years(trips, calendar: calendar)
-        flightCount = sorted.count
-        totalMetres = trips.reduce(0) { $0 + $1.metres }
-        let stops = trips.flatMap { $0.stops.compactMap(\.seconds) }
+        let flown = trips.filter { !$0.isPlanned }
+        flightCount = flown.reduce(0) { $0 + $1.legs.count }
+        plannedCount = sorted.count - flightCount
+        totalMetres = flown.reduce(0) { $0 + $1.metres }
+        let stops = flown.flatMap { $0.stops.compactMap(\.seconds) }
         layoverCount = stops.count
         layoverSeconds = stops.reduce(0, +)
     }

@@ -33913,6 +33913,66 @@
         }
       }
     },
+    "passport.flights.planned" : {
+      "extractionState" : "extracted_with_value",
+      "comment" : "Sprout's passport Flights page: how many flights haven't left yet",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld planned"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld planned"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld previsto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld previstos"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld programado"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld programados"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "PER SERVING" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -35514,6 +35574,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Planea tus objetivos"
+          }
+        }
+      }
+    },
+    "Planned" : {
+      "comment" : "Sprout's passport Flights page: the tag on a flight that hasn't left yet",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previsto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programado"
+          }
+        }
+      }
+    },
+    "planned" : {
+      "comment" : "VoiceOver: said after the stub of a flight that hasn't left yet",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "previsto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "programado"
           }
         }
       }
