@@ -83,11 +83,14 @@ jobs:
           done
 
       # The no-tracking wall applies to the website too: nothing may load from another origin.
+      # One navigation link is allowed off-origin: /testflight/'s button to the public TestFlight
+      # invite (a link the visitor taps, not an asset the page loads).
       - name: No third-party assets in the site
         run: |
           set -euo pipefail
           if grep -rnE '(src|href)="https?://' Site --include='*.html' \
-               | grep -vE 'href="https://(github\.com/bowman-mw/fernlet|fernlet\.com)'; then
+               | grep -vE 'href="https://(github\.com/bowman-mw/fernlet|fernlet\.com)' \
+               | grep -vE '^Site/testflight/index\.html:[0-9]+:.*href="https://testflight\.apple\.com/join/JPSRJKU6"'; then
             echo "::error::a page references an off-origin asset — the site must be self-contained"
             exit 1
           fi
