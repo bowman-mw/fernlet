@@ -734,6 +734,10 @@ final class FernletStore {
     /// Injectable so tests can isolate it from the shared `.standard` suite, like
     /// `webImageAttemptDefaults`; nothing reads it during init.
     @ObservationIgnored var recipePortionGramsDefaults: UserDefaults = .standard
+    /// Backing store for ``WorkoutCalibrationDeferral`` — the device-local "Not now" on a strength
+    /// check (w4): the moment a check may be offered again. Injectable so tests can isolate it from
+    /// the shared `.standard` suite, like `webImageAttemptDefaults`; nothing reads it during init.
+    @ObservationIgnored var calibrationDeferralDefaults: UserDefaults = .standard
     /// Backing store for ``FoodSearchCorrectionMemory`` — the device-local record of searches the
     /// user has corrected once (research §26 fix 1.10), republished into `foodCatalog` as a ranking
     /// input.
@@ -5257,6 +5261,16 @@ final class FernletStore {
         applyGuidedTransition(state)
     }
 
+    /// Put the current strength check off from the in-app sheet — the runner's "Not now" (w4): the
+    /// check may be offered again in two weeks (``WorkoutCalibrationDeferral``), and the run moves past
+    /// the check's remaining steps to what follows it, finishing (and logging) when nothing does.
+    func guidedPutOffStrengthCheck() {
+        guard var state = guidedRunState, state.canPutOffStrengthCheck else { return }
+        WorkoutCalibrationDeferral.putOff(in: calibrationDeferralDefaults)
+        state.putOffStrengthCheck(now: Date())
+        applyGuidedTransition(state)
+    }
+
     /// Mirrors a guided-run transition to the app-group file, naming a failed write (R7).
     ///
     /// Recovery is the next event: the following transition rewrites the file and the foreground
@@ -5407,6 +5421,8 @@ final class FernletStore {
     /// `logPlannedRun` finds when the finish is seen again.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
+        // A run that ends with its strength check's test set skipped counts as "Not now" (w4).
+        WorkoutCalibrationDeferral.noteFinished(state, in: calibrationDeferralDefaults)
         // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
         if logPlannedRun(state) { return }
         let dayKey = state.committedDayKey
@@ -7214,9 +7230,7 @@ final class FernletStore {
         }
         // This device's AI day summaries (device-local since 2026-10-15: the persisted score history
         // never carries them). `resetDiary` already emptied the in-memory rows; this is the file.
-        if !deviceDaySummaryStore.clearAll() {
-            incompleteStores.append("your day summaries")
-        }
+        if !deviceDaySummaryStore.clearAll() { incompleteStores.append("your day summaries") }
         // The World map's sealed location history (fog cells, its locked-phone buffer, the saved walk
         // lines, the workout-space pins, Where you've been's log and device side, and the solo photos'
         // places, one folder) and both of its device keys, plus its device-only settings. World build only.
@@ -7254,6 +7268,10 @@ final class FernletStore {
         // `fernlet.workoutCues.maxHeartRate`): a fact about their body, unlike the heart-rate switches
         // beside it, which are kept. Same plain `UserDefaults` removal, no failure signal.
         WorkoutZonePreferences.clearMaxHeartRate()
+        // "Not now" on a strength check (`fernlet.workoutCalibration.askAgainFrom`): when a check may
+        // be offered again — a trace of what the person did on a day, so it goes with the history it
+        // was about. Same plain `UserDefaults` removal, no failure signal.
+        WorkoutCalibrationDeferral.clear(in: calibrationDeferralDefaults)
         // Which recipes this device already spent its one automatic web-image download on — the
         // same class of device-local `UserDefaults` sidecar; clear it with the others so the
         // bookkeeping doesn't outlive the recipes it described.

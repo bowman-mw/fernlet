@@ -210,3 +210,127 @@ enum WorkoutSetEditing {
         return updated
     }
 }
+
+// MARK: - "Is that weight right?" (w2)
+
+/// The one question a typed set weight raises before it is saved (w2, 2026-11-10): "500 lb? Last
+/// time was 50." Never a block — "Keep 500" saves it as typed, "Fix it" goes back to the rows — and
+/// never raised twice for the same lift and value (``key``).
+struct SetWeightQuestion: Equatable, Identifiable {
+    /// What the weight was measured against.
+    enum Reference: Equatable {
+        /// The lift's weight the last time it was logged.
+        case lastTime
+        /// The heaviest of this session's other sets of the lift.
+        case otherSets
+    }
+
+    /// The lift's name as logged.
+    var lift: String
+    /// The typed weight being asked about, in ``unit``.
+    var weight: Double
+    /// The weight it stands far above, in ``unit``: last time's, or the next heaviest set's.
+    var usual: Double
+    var reference: Reference
+    var unit: LoadUnit
+
+    /// The lift and the value asked about — what "never twice for the same value" is keyed on.
+    var key: String { SetWeightCheck.key(lift: lift, weight: weight) }
+    var id: String { key }
+}
+
+/// The pure rule behind ``SetWeightQuestion`` (owner, 2026-11-10): ask before saving when a set is
+/// more than 1.5 times the session's other sets or last time's weight.
+///
+/// Only the lift's heaviest set is ever asked about, so one save raises at most one question per
+/// lift: it is asked when it is more than ``ratio`` times last time's weight, else when it is more
+/// than ``ratio`` times every other set of the lift (the next heaviest set). Exactly 1.5 times asks
+/// nothing; a lighter set never does; a lift with one set and no last time has nothing to compare.
+/// The engine's side of w2 — which weight the next suggestion builds on — lives in the load engine.
+enum SetWeightCheck {
+    /// A set this many times the reference, or less, is saved without a question.
+    static let ratio = 1.5
+
+    /// The question `weights` raise, or nil.
+    ///
+    /// - Parameters:
+    ///   - lift: The lift's name as logged.
+    ///   - weights: Each set's weight as it will be saved, blanks already filled; nil or zero for none.
+    ///   - lastTime: The lift's last logged weight in `unit`, or nil when it has none.
+    ///   - unit: The unit the weights were typed in.
+    ///   - settled: ``key(lift:weight:)`` of every value already asked about or already saved, which
+    ///     is never asked about again.
+    static func question(
+        lift: String, weights: [Double?], lastTime: Double?, unit: LoadUnit, settled: Set<String> = []
+    ) -> SetWeightQuestion? {
+        let typed = weights.prefix(ExerciseResult.maxSets).compactMap { $0 }.filter { $0.isFinite && $0 > 0 }
+        guard let heaviest = typed.max(), !settled.contains(key(lift: lift, weight: heaviest)) else { return nil }
+        if let lastTime, lastTime.isFinite, lastTime > 0, isFarAbove(heaviest, lastTime) {
+            return SetWeightQuestion(lift: lift, weight: heaviest, usual: lastTime, reference: .lastTime, unit: unit)
+        }
+        var others = typed
+        if let index = others.firstIndex(of: heaviest) { others.remove(at: index) }
+        guard let next = others.max(), isFarAbove(heaviest, next) else { return nil }
+        return SetWeightQuestion(lift: lift, weight: heaviest, usual: next, reference: .otherSets, unit: unit)
+    }
+
+    /// Whether `weight` is more than ``ratio`` times `usual` (a hundredth's tolerance, so a typed
+    /// 75 against 50 is not "more than").
+    static func isFarAbove(_ weight: Double, _ usual: Double) -> Bool {
+        weight > usual * ratio + WorkoutLoadEngine.weightTolerance
+    }
+
+    /// One lift's value as the "already asked" sets hold it: the normalized name and the weight to
+    /// the hundredth. In memory only, never persisted.
+    static func key(lift: String, weight: Double) -> String {
+        "\(WorkoutExerciseCatalog.normalizedName(lift))|\(Int((weight * 100).rounded()))"
+    }
+
+    /// The keys of every weight in `weights` — what a sheet settles when it opens, so a value that was
+    /// already saved is never asked about.
+    static func keys(lift: String, weights: [Double?]) -> Set<String> {
+        Set(weights.prefix(ExerciseResult.maxSets).compactMap { $0 }.map { key(lift: lift, weight: $0) })
+    }
+
+    /// A logged weight read in `unit`: converted when `unitToken` ("lb" / "kg") names the other unit,
+    /// as written when it names none. Nil for no weight or one that is not positive.
+    static func weight(_ weight: Double?, unitToken: String?, in unit: LoadUnit) -> Double? {
+        guard let weight, weight.isFinite, weight > 0 else { return nil }
+        guard let from = unitToken.flatMap(LoadUnit.init(rawValue:)) else { return weight }
+        return unit.converted(weight, from: from)
+    }
+}
+
+extension ExerciseSetsDraft {
+    /// Each row's weight as it will be saved (a blank repeating the row above), or all nil when no row
+    /// carries one.
+    var filledWeights: [Double?] {
+        LoggedSet.filledWeights(loggedSets) ?? Array(repeating: nil, count: rows.count)
+    }
+
+    /// The question this lift's typed weights raise before saving (``SetWeightCheck``), or nil.
+    func weightQuestion(lastTime: Double?, settled: Set<String>) -> SetWeightQuestion? {
+        SetWeightCheck.question(lift: name, weights: filledWeights, lastTime: lastTime, unit: unit, settled: settled)
+    }
+}
+
+extension WorkoutSetEditing {
+    /// The first question the changed lifts raise before an edit is saved, or nil. A lift whose rows
+    /// were not touched is never asked about, and neither is a value the lift already had when the
+    /// sheet opened (it was saved once already).
+    ///
+    /// - Parameter lastTime: The lift's last logged weight in the given unit, by name.
+    static func weightQuestion(
+        in drafts: [ExerciseSetsDraft], original: [ExerciseSetsDraft], settled: Set<String>,
+        lastTime: (String, LoadUnit) -> Double?
+    ) -> SetWeightQuestion? {
+        let before = Dictionary(original.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for draft in drafts.prefix(Workout.maxExerciseResults) where before[draft.id] != draft {
+            let opened = before[draft.id].map { SetWeightCheck.keys(lift: draft.name, weights: $0.filledWeights) } ?? []
+            if let asked = draft.weightQuestion(lastTime: lastTime(draft.name, draft.unit), settled: settled.union(opened)) {
+                return asked
+            }
+        }
+        return nil
+    }
+}

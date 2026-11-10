@@ -83,8 +83,9 @@ enum GuidedLoadFormat {
         WorkoutActivityLoadText.range(low: tracking.rangeLow, high: tracking.rangeHigh, unit: unit(tracking), locale: .current)
     }
 
-    /// Where the picker starts when there is no suggestion yet: an empty bar, a light dumbbell, a
-    /// light stack.
+    /// Where the picker starts when there is no suggestion yet and the location's weights are not
+    /// known: an empty bar, a light dumbbell, a light stack. With its weights known it starts at the
+    /// lightest load the location owns (``GuidedWorkoutRunState/Tracking/steppedWeight(direction:start:)``, w1).
     static func startWeight(_ tracking: GuidedWorkoutRunState.Tracking) -> Double {
         let pounds = tracking.unitRaw != LoadUnit.kg.rawValue
         switch tracking.equipmentRaw {
@@ -97,14 +98,18 @@ enum GuidedLoadFormat {
 
 // MARK: - The load panel
 
-/// The panel under a tracked lift's card: the calibration cue, the weight picker (the suggestion
-/// preselected, so an untouched lift logs as done at that weight), the "Plates" disclosure on a
-/// barbell lift (``GuidedPlatesDisclosure``), the override question, the optional effort tap on the
-/// last set, and Edit reps — which a warm-up set does without: its reps are never read.
+/// The panel under a tracked lift's card: the calibration cue — with "Not now" on a strength check
+/// (``GuidedStrengthCheckNotNow``, w4) — the weight picker (the suggestion preselected, so an untouched
+/// lift logs as done at that weight), the "Plates" disclosure on a barbell lift
+/// (``GuidedPlatesDisclosure``), the override question, the optional effort tap on the last set, and
+/// Edit reps — which a warm-up set does without: its reps are never read.
 struct GuidedLoadPanel: View {
     var store: FernletStore
     let exercise: GuidedWorkoutRunState.Exercise
     let isLastSet: Bool
+    /// Runs "Not now" on a strength check — the runner passes its announced transition, so the move
+    /// past the check is spoken and cued like any skip; nil runs the store's transition as it is.
+    var onPutOffStrengthCheck: (() -> Void)?
     @State private var editingReps = false
     /// World build (`b3-runner-set`): a framed card, the weight centred between framed − and +.
     @Environment(\.fernletFramedLook) private var look
@@ -114,6 +119,10 @@ struct GuidedLoadPanel: View {
             VStack(alignment: look == nil ? .leading : .center, spacing: 14) {
                 if let cue = GuidedCalibrationCue.text(for: tracking.calibrationRaw) {
                     cue.font(.fernlet(.body)).foregroundStyle(look?.text ?? Color.bark).fernletWrappingText()
+                }
+                if tracking.calibrationRaw != nil, store.guidedRunState?.canPutOffStrengthCheck == true,
+                   store.guidedRunState?.currentExercise?.id == exercise.id {
+                    GuidedStrengthCheckNotNow(action: onPutOffStrengthCheck ?? store.guidedPutOffStrengthCheck)
                 }
                 if tracking.isLoadable {
                     GuidedWeightPicker(store: store, exerciseID: exercise.id, tracking: tracking)
@@ -163,6 +172,37 @@ enum GuidedCalibrationCue {
     /// Ramp sets and max singles don't ask how they felt.
     static func asksEffort(_ raw: String?) -> Bool {
         raw != GuidedWorkoutRunState.CalibrationToken.ramp && raw != GuidedWorkoutRunState.CalibrationToken.attempt
+    }
+}
+
+/// "Not now" on a strength check (w4, 2026-11-10): a quiet button under the check's cue, with the one
+/// line that says what it does. Tapping it puts the check off for two weeks
+/// (``WorkoutCalibrationDeferral``) and moves the run on to what follows the check — never a penalty,
+/// and nothing about it is logged as a miss.
+struct GuidedStrengthCheckNotNow: View {
+    let action: () -> Void
+    @Environment(\.fernletFramedLook) private var look
+
+    var body: some View {
+        VStack(alignment: look == nil ? .leading : .center, spacing: 4) {
+            Button(action: action) {
+                Text("Not now")
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                    .foregroundStyle(look?.link ?? Color.moss)
+                    .underline(look == nil)
+            }
+            .buttonStyle(.plain)
+            .fernletTapTarget()
+            .accessibilityHint(Text("Skips the strength check today. Fernlet will ask again in 2 weeks."))
+            .accessibilityInputLabels([Text("Not now"), Text("Skip strength check")])
+            .accessibilityIdentifier("workout.guided.strengthCheck.notNow")
+            Text("Fernlet will ask again in 2 weeks.",
+                 comment: "Guided workout: the line under 'Not now' on a strength check, saying the check comes back in two weeks.")
+                .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .fernletWrappingText()
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -399,15 +439,19 @@ struct GuidedRepsRow: Identifiable, Equatable {
     var isDrop = false
 
     /// The editor's rows for a tracked lift: the saved reps (or the target for each set), each at its
-    /// saved weight (or the selected one), with the saved drop marks.
+    /// saved weight — else the weight the set was done at when its Done was tapped, else the selected
+    /// one (s4, ``GuidedWorkoutRunState/Tracking/setWeights(count:)``) — with the saved drop marks. So
+    /// the sheet opens on what the taps recorded, and saving it untouched changes nothing.
     static func rows(for tracking: GuidedWorkoutRunState.Tracking?, sets: Int) -> [GuidedRepsRow] {
         let target = tracking?.targetReps ?? 0
         let reps = tracking?.actualReps
             ?? Array(repeating: target, count: min(max(1, sets), GuidedWorkoutRunState.Tracking.maxSets))
         let weights = tracking?.actualWeights
+        let tapped = tracking?.setWeights(count: reps.count)
         let drops = tracking?.actualDrops
         return reps.prefix(GuidedWorkoutRunState.Tracking.maxSets).enumerated().map { index, count in
-            let weight = weights.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? tracking?.selected
+            let weight = weights.flatMap { $0.indices.contains(index) ? $0[index] : nil }
+                ?? tapped.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? tracking?.selected
             let drop = drops.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? false
             return GuidedRepsRow(reps: count, weight: SetRowDraft.text(for: weight), isDrop: drop)
         }
@@ -438,6 +482,21 @@ struct GuidedRepsRow: Identifiable, Equatable {
         return (capped.map { min(max($0.reps, 0), 50) }, filledWeights(capped).map { $0 ?? 0 }, capped.map(\.isDrop))
     }
 
+    /// The question the rows' typed weights raise before the reps editor saves (w2,
+    /// ``SetWeightCheck``): the heaviest against last time's weight (in the lift's unit), else against
+    /// the lift's other sets. Nil when nothing stands out, or the value is `settled`.
+    static func weightQuestion(
+        for rows: [GuidedRepsRow], lift: String, tracking: GuidedWorkoutRunState.Tracking?,
+        lastTime: GuidedWorkoutRunState.LastTime?, settled: Set<String>
+    ) -> SetWeightQuestion? {
+        let unit: LoadUnit = tracking?.unitRaw == LoadUnit.kg.rawValue ? .kg : .lb
+        return SetWeightCheck.question(
+            lift: lift, weights: filledWeights(rows),
+            lastTime: SetWeightCheck.weight(lastTime?.weight, unitToken: lastTime?.unitRaw, in: unit),
+            unit: unit, settled: settled
+        )
+    }
+
     /// The row's set number, counting only the sets that are not drop sets; nil for a drop set.
     static func setNumber(at index: Int, in rows: [GuidedRepsRow]) -> Int? {
         guard rows.indices.contains(index), !rows[index].isDrop else { return nil }
@@ -458,6 +517,10 @@ struct GuidedRepsEditor: View {
     var store: FernletStore
     let exercise: GuidedWorkoutRunState.Exercise
     @State private var rows: [GuidedRepsRow]
+    /// The question a typed weight raised on Save (w2), while its alert is up.
+    @State private var weightQuestion: SetWeightQuestion?
+    /// Values never asked about (again): the weights the sheet opened with, and any already asked.
+    @State private var settledWeights: Set<String>
     @Environment(\.fernletFramedLook) private var look
 
     /// Reps a set may be edited to.
@@ -466,7 +529,28 @@ struct GuidedRepsEditor: View {
     init(store: FernletStore, exercise: GuidedWorkoutRunState.Exercise) {
         self.store = store
         self.exercise = exercise
-        _rows = State(initialValue: GuidedRepsRow.rows(for: exercise.tracking, sets: exercise.sets))
+        let opened = GuidedRepsRow.rows(for: exercise.tracking, sets: exercise.sets)
+        _rows = State(initialValue: opened)
+        _settledWeights = State(initialValue: SetWeightCheck.keys(lift: exercise.name, weights: GuidedRepsRow.filledWeights(opened)))
+    }
+
+    /// Save: asks first when a typed weight stands far above last time's or the other sets'
+    /// (``GuidedRepsRow/weightQuestion(for:lift:tracking:lastTime:settled:)``), once per value.
+    private func saveTapped() {
+        if takesLoad, let asked = GuidedRepsRow.weightQuestion(
+            for: rows, lift: exercise.name, tracking: exercise.tracking, lastTime: exercise.lastTime, settled: settledWeights
+        ) {
+            settledWeights.insert(asked.key)
+            weightQuestion = asked
+            return
+        }
+        save()
+    }
+
+    /// Writes the rows to the run and closes the sheet.
+    private func save() {
+        store.guidedSetActualSets(rows, exerciseID: exercise.id)
+        dismiss()
     }
 
     /// Whether the lift takes a load, so each set shows its weight and a drop set can be added.
@@ -504,13 +588,11 @@ struct GuidedRepsEditor: View {
                 }
                 .padding(20)
             }
-            SheetSaveBar(label: "Save") {
-                store.guidedSetActualSets(rows, exerciseID: exercise.id)
-                dismiss()
-            }
+            SheetSaveBar(label: "Save", action: saveTapped)
         }
         .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .tint(Color.moss)
+        .setWeightQuestion($weightQuestion, onKeep: save)
     }
 }
 

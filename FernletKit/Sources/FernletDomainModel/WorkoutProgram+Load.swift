@@ -284,11 +284,14 @@ extension WorkoutProgram {
     }
 
     /// The owned loads a guided run steps through for this lift (R6): those around its suggestion,
-    /// or around the middle of what the location has when there is no suggestion yet.
+    /// or — with no suggestion yet, a lift with no history (w1) — the lightest the location owns, so the
+    /// runner's picker starts at the empty bar or the lightest dumbbell and opens upward from there.
     static func runnerLoads(for guidance: LoadGuidance, at location: WorkoutLocation) -> [Double]? {
         guard let ladder = loadLadder(for: guidance, at: location) else { return nil }
-        let middle = ladder.loads[ladder.loads.count / 2]
-        return ladder.window(around: guidance.prescription?.suggested ?? middle, count: LoadGuidance.maxRunnerLoads)
+        guard let suggested = guidance.prescription?.suggested else {
+            return Array(ladder.loads.prefix(LoadGuidance.maxRunnerLoads))
+        }
+        return ladder.window(around: suggested, count: LoadGuidance.maxRunnerLoads)
     }
 
     /// Counts the compound lifts ahead of each pick — the fatigue context a result records.

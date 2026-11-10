@@ -6,7 +6,9 @@ import FernletDomainModel
 /// At start, a lift's ``LoadGuidance`` becomes the run's ``GuidedWorkoutRunState/Tracking`` (the
 /// suggestion preselected, so finishing untouched needs no extra tap). At finish, each tracked lift
 /// becomes an ``ExerciseResult`` and its logged line ("Bench press - 3 x 8 @ 105 lb", with
-/// "(did 8, 8, 6)" when edited), and the session's text is rebuilt around those lines. A lift the
+/// "(did 8, 8, 6)" when edited), and the session's text is rebuilt around those lines. Each set is
+/// logged at the weight it was done at (s4): a weight changed mid-lift reads "(did 8 @ 100, 8 @ 100,
+/// 8 @ 110)", and the reps editor's own per-set weights win over the taps' record. A lift the
 /// runner skipped past is logged as skipped and never becomes a result, so a short-on-time skip is not
 /// read as a miss; a warm-up set it skipped leaves no trace. A warm-up set crosses as a calibration
 /// ramp, so it logs "(ramp-up)" and no estimate reads it. The run state cannot import the domain, so
@@ -93,7 +95,28 @@ enum GuidedRunLoadLog {
             compoundsBefore: tracking.compoundsBefore,
             unfueled: unfueled
         )
-        return withEditedWeights(result, tracking: tracking)
+        return withDoneWeights(withEditedWeights(result, tracking: tracking), tracking: tracking)
+    }
+
+    /// `result` with each set at the weight it was done at (s4): the weight on the bar when its Done
+    /// was tapped (``GuidedWorkoutRunState/Tracking/doneWeights``), so a weight changed mid-lift is
+    /// logged set by set ("(did 8 @ 100, 8 @ 100, 8 @ 110)") and never rewrites the finished sets. As
+    /// after an edit, the working weight is the heaviest set's and a lighter set keeps the session from
+    /// counting as completed, so a dropped set repeats the load. Unchanged when the reps editor listed
+    /// the weights itself (the edit wins), when no set recorded one (an older run), and when every set
+    /// was done at the selected weight — which stays byte-identical to the log before.
+    static func withDoneWeights(_ result: ExerciseResult, tracking: GuidedWorkoutRunState.Tracking) -> ExerciseResult {
+        guard tracking.actualWeights == nil, tracking.doneWeights?.isEmpty == false else { return result }
+        let reps = result.repsPerSet
+        guard let weights = tracking.setWeights(count: reps.count), weights.count == reps.count else { return result }
+        let allAtSelected = tracking.selected.map { selected in
+            weights.allSatisfy { abs($0 - selected) <= WorkoutLoadEngine.weightTolerance }
+        } ?? false
+        guard !allAtSelected else { return result }
+        var recorded = result
+        recorded.record(zip(reps, weights).map { LoggedSet(reps: $0.0, weight: $0.1) },
+                        unit: tracking.unitRaw.flatMap(LoadUnit.init(rawValue:)))
+        return recorded
     }
 
     /// `result` with the reps editor's per-set weights recorded (`b3-edit-reps` draft 2): a set at
@@ -112,10 +135,14 @@ enum GuidedRunLoadLog {
     /// The finished run's log: its text with each tracked lift's own line, and the results — or
     /// nil when no step was tracked (a run from before load tracking keeps its plan text). A ramp-up
     /// set that was skipped ("Skip warm-up sets") leaves no line at all: the lift was not skipped,
-    /// only its warm-up.
+    /// only its warm-up. A strength check put off with "Not now" (w4) leaves one "skipped" line, however
+    /// many max attempts it held.
     static func log(for state: GuidedWorkoutRunState) -> (text: String, results: [ExerciseResult])? {
         guard state.exercises.contains(where: { $0.tracking != nil }) else { return nil }
-        let kept = state.exercises.filter { !($0.isRampSet && $0.tracking?.skipped == true) }
+        let kept = state.exercises.enumerated().filter { index, exercise in
+            !(exercise.isRampSet && exercise.tracking?.skipped == true)
+                && !repeatsSkippedAttempt(at: index, in: state.exercises)
+        }.map(\.element)
         var lines: [UUID: String] = [:]
         var results: [ExerciseResult] = []
         for exercise in kept {
@@ -131,6 +158,18 @@ enum GuidedRunLoadLog {
         }
         let steps = kept.map { prescribed($0) }
         return (WorkoutSessionBlocks.planText(for: steps, loggedLines: lines), results)
+    }
+
+    /// Whether the step at `index` is a skipped max attempt straight after another skipped attempt of
+    /// the same lift — which the log folds into the one "skipped" line before it.
+    static func repeatsSkippedAttempt(at index: Int, in exercises: [GuidedWorkoutRunState.Exercise]) -> Bool {
+        guard index > 0, exercises.indices.contains(index) else { return false }
+        let attempt = GuidedWorkoutRunState.CalibrationToken.attempt
+        let step = exercises[index]
+        let before = exercises[index - 1]
+        return step.tracking?.skipped == true && step.tracking?.calibrationRaw == attempt
+            && before.tracking?.skipped == true && before.tracking?.calibrationRaw == attempt
+            && before.name == step.name
     }
 
     /// A run step back as a domain step, for the plan-text layout (warm-up and cool-down summaries, and

@@ -177,6 +177,66 @@ struct WorkoutProgressionTests {
         #expect(tracking(loads: nil, selected: nil).steppedWeight(direction: 1, start: 10) == 10)
     }
 
+    // MARK: - w1 a first-time lift can be set light
+
+    /// A barbell garage — a bar, a rack and a bench, so its lifts are barbell lifts — with three pairs of
+    /// 45s and the smaller plates: far more than 48 totals, which is where the runner's window used to
+    /// sit in the middle of the ladder.
+    func plateRichGym() -> WorkoutLocation {
+        var gym = WorkoutLocation(name: "Barbell garage", ownedEquipment: [.barbell, .weightPlates, .weightBench, .squatRack])
+        var weights = WorkoutWeightInventory(unit: .lb)
+        weights.setBar(45)
+        for (count, plate) in [(3, 45.0), (1, 35.0), (1, 25.0), (2, 10.0), (1, 5.0), (1, 2.5)] {
+            weights.setPairs(count, of: plate)
+        }
+        gym.weights = weights
+        return gym
+    }
+
+    @Test func aFirstTimeLiftsPickerStartsAtTheLightestLoadOwnedAndOpensUpward() throws {
+        let gym = plateRichGym()
+        let ladder = try #require(gym.weights.ladder(for: .barbell, in: .lb))
+        #expect(ladder.loads.count > LoadGuidance.maxRunnerLoads, "the fixture must overflow the runner's window")
+        let session = try plan(location: gym)
+        let lift = try #require(lifting(session).first { $0.guidance?.equipment == .barbell })
+        #expect(lift.guidance?.prescription == nil, "no history, so no suggestion")
+        let loads = try #require(lift.guidance?.loads)
+        #expect(loads.count == LoadGuidance.maxRunnerLoads)
+        #expect(loads.first == 45, "the window starts at the empty bar, not the middle of the ladder")
+        #expect(loads == Array(ladder.loads.prefix(LoadGuidance.maxRunnerLoads)))
+
+        // In the runner: nothing picked yet, the first tap either way lands on the empty bar…
+        var picker = try #require(GuidedRunLoadLog.tracking(for: lift))
+        #expect(picker.selected == nil)
+        let start = GuidedLoadFormat.startWeight(picker)
+        #expect(picker.steppedWeight(direction: 1, start: start) == 45)
+        #expect(picker.steppedWeight(direction: -1, start: start) == 45)
+        // …and from there it steps both ways through the loads owned.
+        picker.selected = 45
+        let heavier = try #require(picker.steppedWeight(direction: 1, start: start))
+        #expect(heavier == loads[1] && heavier > 45)
+        picker.selected = heavier
+        #expect(picker.steppedWeight(direction: -1, start: start) == 45)
+        picker.selected = 45
+        #expect(picker.steppedWeight(direction: -1, start: start) == 45, "nothing is lighter than the bar")
+
+        // The lightest dumbbell, not the 10 lb default start, when the pairs owned are known.
+        #expect(tracking(loads: [5, 12.5, 20, 35], selected: nil).steppedWeight(direction: 1, start: 10) == 5)
+    }
+
+    @Test func aLiftWithASuggestionStillCarriesTheLoadsAroundIt() throws {
+        let gym = plateRichGym()
+        let baseline = try plan(location: gym)
+        let name = try #require(lifting(baseline).first { $0.guidance?.equipment == .barbell }).name
+        let session = try plan(location: gym, history: [key(name): [session(28, 225, reps: 10, target: 10)]])
+        let lift = try #require(lifting(session).first { $0.name == name })
+        let suggested = try #require(lift.guidance?.prescription?.suggested)
+        let loads = try #require(lift.guidance?.loads)
+        #expect(loads.count == LoadGuidance.maxRunnerLoads)
+        #expect(try #require(loads.first) < suggested && suggested < (try #require(loads.last)))
+        #expect(try #require(loads.first) > 45, "a lift with history keeps its window around the suggestion")
+    }
+
     @Test func aRunSavedBeforeOwnedLoadsStillDecodes() throws {
         let json = #"{"targetReps":10,"step":5,"unitRaw":"lb","askReasonOnOverride":false,"easierSession":false,"compoundsBefore":0,"selected":20}"#
         let old = try JSONDecoder().decode(GuidedWorkoutRunState.Tracking.self, from: Data(json.utf8))

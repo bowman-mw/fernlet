@@ -314,6 +314,151 @@ struct GuidedWorkoutRunStoreTests {
         store.clearGuidedRun()
     }
 
+    // MARK: Finished sets keep the weight they were done at (s4)
+
+    /// A bench press the planner gave a weight: 3 × 8, 95–110 lb, 100 suggested and preselected.
+    private func loadedBench() -> PrescribedExercise {
+        let weight = WeightPrescription(low: 95, high: 110, suggested: 100, step: 5, unit: .lb, confidence: .low)
+        return PrescribedExercise(
+            name: "Bench press", sets: 3, reps: "8", role: .main, fromCatalog: true,
+            guidance: LoadGuidance(targetReps: 8, prescription: weight, equipment: .barbell, unit: .lb)
+        )
+    }
+
+    /// Sets 1–2 at 100, "Heavier" to 110 for set 3 — across a relaunch, so the recorded weights are
+    /// read back from the app-group file. Before the fix the whole lift logged as "3 x 8 @ 110 lb".
+    @Test func aWeightChangedMidLiftLogsEachSetAtItsOwnWeight() throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let s = session("Push", [loadedBench()])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        store.guidedMarkSetDone()
+        store.guidedSkipRest()
+        store.guidedMarkSetDone()
+        store.guidedSkipRest()
+        let id = try #require(store.guidedRunState?.currentExercise?.id)
+        store.guidedSelectWeight(110, exerciseID: id)
+        #expect(store.guidedRunState?.contentState.load?.weight == 110, "the Lock Screen shows the set in hand")
+
+        let relaunched = makeStore()
+        relaunched.reconcileGuidedRunFromAppGroup()
+        let done: [Double] = [100, 100]
+        #expect(relaunched.guidedRunState?.currentExercise?.tracking?.doneWeights == done)
+        relaunched.guidedMarkSetDone()   // set 3, the last → finish → log
+
+        let logged = try #require(relaunched.day.workouts.first { $0.name == "Push" && $0.loggedFromGuidedSession == true })
+        #expect(logged.exercises.contains("Bench press - 3 x 8 @ 110 lb (did 8 @ 100, 8 @ 100, 8 @ 110)"))
+        let result = try #require(logged.exerciseResults?.first)
+        let perSet: [Double] = [100, 100, 110]
+        #expect(result.setWeights == perSet && result.selectedWeight == 110)
+        relaunched.clearGuidedRun()
+    }
+
+    /// A Lock Screen "Done set" runs the same transition, so it records the weight in hand too.
+    @Test func anIntentDoneSetKeepsItsWeight() async throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let s = session("Push", [loadedBench()])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        let outcome = await GuidedWorkoutIntentRunner.markSetDone(directory: appGroupDirectory)
+        #expect(outcome == .applied(.resting))
+        let file = try #require(GuidedWorkoutRunStateStore(directory: appGroupDirectory).read())
+        let one: [Double] = [100]
+        #expect(file.exercises.first?.tracking?.doneWeights == one)
+        store.clearGuidedRun()
+    }
+
+    // MARK: "Not now" on a strength check (w4)
+
+    /// A fresh defaults suite for one test's deferral, so no test puts a check off for another.
+    private func deferralDefaults() throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: "fernlet.tests.calibrationDeferral.\(UUID().uuidString)"))
+    }
+
+    /// A strength check as the planner writes it: ramp sets, then the test set, each its own step.
+    private func strengthCheck() -> [PrescribedExercise] {
+        [(CalibrationStep.ramp, 65.0, 8), (.ramp, 95.0, 4), (.test, 110.0, 5)].map { step, load, reps in
+            let weight = WeightPrescription(low: load, high: load, suggested: load, step: 5, unit: .lb, confidence: .medium)
+            return PrescribedExercise(
+                name: "Bench press", sets: 1, reps: "\(reps)", role: .main, fromCatalog: true,
+                guidance: LoadGuidance(targetReps: reps, prescription: weight, equipment: .barbell, unit: .lb, calibration: step)
+            )
+        }
+    }
+
+    @Test func notNowOnAStrengthCheckAsksAgainInTwoWeeksAndMovesOn() throws {
+        let store = makeStore()
+        store.calibrationDeferralDefaults = try deferralDefaults()
+        store.clearGuidedRun()
+        let curl = PrescribedExercise(name: "Curl", sets: 1, reps: "12", role: .accessory, fromCatalog: true)
+        let s = session("Push", strengthCheck() + [curl])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(in: store.calibrationDeferralDefaults) == nil)
+        store.guidedMarkSetDone()   // the first ramp set, done
+        #expect(store.guidedRunState?.canPutOffStrengthCheck == true)
+
+        let before = Date()
+        store.guidedPutOffStrengthCheck()
+
+        let again = try #require(WorkoutCalibrationDeferral.askAgainFrom(in: store.calibrationDeferralDefaults))
+        let twoWeeks = TimeInterval(WorkoutCalibrationDeferral.deferralDays) * 86_400
+        #expect(abs(again.timeIntervalSince(before) - twoWeeks) < 60)
+        #expect(WorkoutCalibrationDeferral.isPutOff(in: store.calibrationDeferralDefaults))
+        let run = try #require(store.guidedRunState)
+        #expect(run.currentExercise?.name == "Curl" && run.isWorking && !run.canPutOffStrengthCheck)
+        #expect(run.exercises.map { $0.tracking?.skipped == true } == [false, true, true, false])
+
+        store.guidedMarkSetDone()   // the curl → finish → log
+        let logged = try #require(store.day.workouts.first { $0.name == "Push" })
+        #expect(logged.exercises.components(separatedBy: "\n").filter { $0 == "Bench press - skipped" }.count == 1)
+        #expect(logged.exercises.contains("Bench press - 1 x 8 @ 65 lb (ramp-up)"), "the ramp set done stays logged")
+        #expect(logged.exerciseResults?.contains { $0.calibration == .test } != true, "no test result, so no estimate reads it")
+        store.clearGuidedRun()
+    }
+
+    @Test func aRunThatEndsWithItsTestSetSkippedCountsAsNotNow() throws {
+        let curl = PrescribedExercise(name: "Curl", sets: 1, reps: "12", role: .accessory, fromCatalog: true)
+        // Skipped past: "Skip to next exercise" on the test set, then the run finishes.
+        let skipping = makeStore()
+        skipping.calibrationDeferralDefaults = try deferralDefaults()
+        skipping.clearGuidedRun()
+        let skippedSession = session("Push", Array(strengthCheck().suffix(1)) + [curl])
+        commitPlan(skipping, skippedSession)
+        #expect(skipping.startGuidedRun(skippedSession) == true)
+        skipping.guidedSkipToNextExercise()
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(in: skipping.calibrationDeferralDefaults) == nil, "not until the run ends")
+        skipping.guidedMarkSetDone()
+        #expect(skipping.guidedRunState?.isFinishedNaturally == true)
+        #expect(WorkoutCalibrationDeferral.isPutOff(in: skipping.calibrationDeferralDefaults))
+        skipping.clearGuidedRun()
+
+        // Tested: a run whose test set was done writes nothing.
+        let testing = makeStore()
+        testing.calibrationDeferralDefaults = try deferralDefaults()
+        testing.clearGuidedRun()
+        let testedSession = session("Pull", Array(strengthCheck().suffix(1)) + [curl])
+        commitPlan(testing, testedSession)
+        #expect(testing.startGuidedRun(testedSession) == true)
+        testing.guidedMarkSetDone()
+        testing.guidedMarkSetDone()
+        #expect(testing.guidedRunState?.isFinishedNaturally == true)
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(in: testing.calibrationDeferralDefaults) == nil)
+        testing.clearGuidedRun()
+    }
+
+    @Test func deleteEverythingForgetsAStrengthCheckPutOff() throws {
+        let store = makeStore()
+        let defaults = try deferralDefaults()
+        store.calibrationDeferralDefaults = defaults
+        WorkoutCalibrationDeferral.putOff(in: defaults)
+        #expect(WorkoutCalibrationDeferral.isPutOff(in: defaults))
+        _ = store.resetAll()
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(in: defaults) == nil)
+    }
+
     // MARK: An intent's "Done set" reaches the open in-app run at once
 
     /// A Lock Screen or Siri "Done set" runs in the app's process but writes only the app-group file.

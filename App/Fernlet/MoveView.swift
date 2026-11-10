@@ -1026,6 +1026,11 @@ struct WorkoutSheet: View {
     @State private var editingRowID: UUID?
     /// "Last time" for the open page's exercise, read once per pick.
     @State private var liftLastTime: String?
+    /// The question a typed set weight raised (w2), while its alert is up; the values already asked
+    /// about, never asked about again; and whether it interrupted Save (else the page's Add to workout).
+    @State private var weightQuestion: SetWeightQuestion?
+    @State private var settledWeights: Set<String> = []
+    @State private var weightQuestionOnSave = false
     @Environment(\.fernletFramedLook) private var look
 
     var intensity: WorkoutIntensity {
@@ -1282,8 +1287,25 @@ struct WorkoutSheet: View {
         liftPath = [.lift]
     }
 
+    /// Whether the open set-by-set lift's typed weights raise a question before they are kept (w2,
+    /// ``SetWeightCheck``) — raised here, once per value, with what it interrupted remembered.
+    private func asksAboutWeight(onSave: Bool) -> Bool {
+        guard logsBySet, logMode == .strengthTraining, let exercise = draft.exercise,
+              exercise.inputKind == .strength, let sets = setsDraft,
+              let asked = SetWeightCheck.question(
+                  lift: exercise.name, weights: sets.filledWeights,
+                  lastTime: store.lastLoggedWeight(for: exercise.name, in: sets.unit),
+                  unit: sets.unit, settled: settledWeights
+              ) else { return false }
+        settledWeights.insert(asked.key)
+        weightQuestionOnSave = onSave
+        weightQuestion = asked
+        return true
+    }
+
     /// The page's button: the exercise joins the list, or replaces the row it was opened from.
     private func commitLift() {
+        guard !asksAboutWeight(onSave: false) else { return }
         let before = exerciseRows.count
         addDraftExercise()
         guard exerciseRows.count > before else { return }
@@ -1504,6 +1526,7 @@ struct WorkoutSheet: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: WorkoutLiftRoute.self) { _ in page }
         }
+        .setWeightQuestion($weightQuestion) { weightQuestionOnSave ? saveWorkout() : commitLift() }
         .onChange(of: liftPath) { _, path in
             // Back from an exercise's page drops what it held; Add to workout already took it.
             guard path.isEmpty else { return }
@@ -1574,7 +1597,9 @@ struct WorkoutSheet: View {
         // states its precondition rather than trusting the button.
         guard !saveDisabled else { return }
         // A typed-but-not-yet-added exercise draft would otherwise be silently dropped on Save —
-        // fold it into the rows first (guarded by the same validity addDraftExercise uses).
+        // fold it into the rows first (guarded by the same validity addDraftExercise uses), after
+        // the one question a weight far above the rest raises (w2).
+        if logMode == .strengthTraining, draft.hasExercise, asksAboutWeight(onSave: true) { return }
         if logMode == .strengthTraining, draft.hasExercise {
             addDraftExercise()
         }
@@ -3234,6 +3259,10 @@ struct EditWorkoutSheet: View {
     /// when the sheet opened — the save writes back only the lifts that changed.
     @State private var setDrafts: [ExerciseSetsDraft]
     private let originalSetDrafts: [ExerciseSetsDraft]
+    /// The question a typed set weight raised on Save (w2), while its alert is up, and the values
+    /// already asked about, which are never asked about again.
+    @State private var weightQuestion: SetWeightQuestion?
+    @State private var settledWeights: Set<String> = []
     @State private var showHealthRefusalAlert = false
     @State private var showDiscardConfirm = false
     /// The sheet's stack: the lift whose sets are open on their own page (`b3-workout-edit` draft 2).
@@ -3380,6 +3409,20 @@ struct EditWorkoutSheet: View {
         }
     }
 
+    /// Save: asks first when a corrected set's weight stands far above last time's or the lift's other
+    /// sets (``WorkoutSetEditing/weightQuestion(in:original:settled:lastTime:)``), once per value.
+    private func saveTapped() {
+        if let asked = WorkoutSetEditing.weightQuestion(
+            in: setDrafts, original: originalSetDrafts, settled: settledWeights,
+            lastTime: { store.lastLoggedWeight(for: $0, in: $1) }
+        ) {
+            settledWeights.insert(asked.key)
+            weightQuestion = asked
+            return
+        }
+        saveEdits()
+    }
+
     /// Writes the edited fields back through the store.
     ///
     /// Consumes the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet open
@@ -3416,6 +3459,7 @@ struct EditWorkoutSheet: View {
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
+        .setWeightQuestion($weightQuestion, onKeep: saveEdits)
         .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -3465,7 +3509,7 @@ struct EditWorkoutSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(disabled: trimmedName.isEmpty) { saveEdits() }
+            SheetSaveBar(disabled: trimmedName.isEmpty) { saveTapped() }
         }
         .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .safeAreaInset(edge: .top, spacing: 0) {

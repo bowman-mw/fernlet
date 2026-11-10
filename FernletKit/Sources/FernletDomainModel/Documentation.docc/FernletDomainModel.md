@@ -791,7 +791,9 @@ estimate — so the same history always builds the same plan.
   offers a harder variation — the same work one difficulty step up, a squat may step to a split
   squat (``LoadGuidance/harderVariation``) — as the plan editor's first swap; more reps, then a set,
   stays the plan. The guided runner's lighter and heavier buttons step through the loads the location
-  owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6).
+  owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6): those around the
+  suggestion, or for a lift with no history the lightest it owns, so a first-time lift starts at the
+  empty bar or the lightest dumbbell and opens upward (w1, 2026-11-10).
 - **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
   plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
   the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
