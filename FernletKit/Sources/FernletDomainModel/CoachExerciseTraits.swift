@@ -44,8 +44,8 @@ public nonisolated enum CoachExerciseTraits {
     /// horizontal; shoulders without chest: vertical). Nil — any plane — for everything else.
     static func plane(for target: ExerciseTarget, name: String) -> MovementPlane? {
         guard target.movementPattern == .push || target.movementPattern == .pull else { return nil }
-        if verticalWords.contains { name.contains($0) } { return .vertical }
-        if horizontalWords.contains { name.contains($0) } { return .horizontal }
+        if verticalWords.contains(where: { name.contains($0) }) { return .vertical }
+        if horizontalWords.contains(where: { name.contains($0) }) { return .horizontal }
         guard target.movementPattern == .push else { return nil }
         if target.primaryMuscles.contains(.chest) { return .horizontal }
         let shoulders: Set<MuscleGroup> = [.frontDelts, .sideDelts]
@@ -65,10 +65,10 @@ public nonisolated enum CoachExerciseTraits {
     /// The modality: cardio for a treadmill entry, locomotion or a cardio word; a stretch, a jump or
     /// throw, or a balance drill by its word; strength otherwise.
     static func modality(for target: ExerciseTarget, name: String) -> ExerciseModality {
-        if mobilityWords.contains { name.contains($0) } { return .mobility }
-        if balanceWords.contains { name.contains($0) } { return .balance }
-        if target.inputKind == .treadmill || cardioWords.contains { name.contains($0) } { return .cardio }
-        if powerWords.contains { name.contains($0) } { return .power }
+        if mobilityWords.contains(where: { name.contains($0) }) { return .mobility }
+        if balanceWords.contains(where: { name.contains($0) }) { return .balance }
+        if target.inputKind == .treadmill || cardioWords.contains(where: { name.contains($0) }) { return .cardio }
+        if powerWords.contains(where: { name.contains($0) }) { return .power }
         return target.movementPattern == .locomotion ? .cardio : .strength
     }
 
@@ -82,8 +82,8 @@ public nonisolated enum CoachExerciseTraits {
     /// The difficulty: foundational for an assisted or supported step (it wins: an "Assisted pull-up"
     /// is the easy one) or a machine; advanced for a harder-step word; standard otherwise.
     static func difficulty(for target: ExerciseTarget, name: String) -> ExerciseDifficulty {
-        if foundationalWords.contains { name.contains($0) } { return .foundational }
-        if advancedWords.contains { name.contains($0) } { return .advanced }
+        if foundationalWords.contains(where: { name.contains($0) }) { return .foundational }
+        if advancedWords.contains(where: { name.contains($0) }) { return .advanced }
         return target.equipment == .machine ? .foundational : .standard
     }
 
