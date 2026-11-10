@@ -27,7 +27,7 @@ import WorldMapStore
 /// - **A drive that ended on foot resumes quickly:** within ``resumeWindow`` of that end, readings at a car's
 ///   speed spanning ``resumeHold`` start it again, not the full ``carHold`` (a light that still fooled the foot
 ///   rule). ``lastDriveEnd`` says why the last drive ended, for the location source's cool-down.
-/// - **Cycling** only with Motion ("Log my bike rides" on and allowed): a confident cycling sample starts a
+/// - **Cycling** only with Motion ("Log my bike rides" or background mapping on, and allowed): a confident cycling sample starts a
 ///   ride; it ends at the moment something else began once that has held ``rideGap`` (a red light is
 ///   shorter), or at once when the coprocessor says car. A ride of at least ``minRideTime`` whose distance
 ///   is unknown or at least ``minRideMetres`` ends as ``WorldRideEvent/rideEnded(_:)``, its distance from
@@ -136,7 +136,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
 
     /// How the person is moving now.
     private(set) var mode: WorldRideMode = .onFoot
-    /// Whether motion samples are being shown (Log my bike rides on and Motion allowed); without them the
+    /// Whether motion samples are being shown ("Log my bike rides" or background mapping on, and Motion allowed); without them the
     /// watch decides by speed alone and never sees a bike. Turning it off forgets the motion and ends a ride
     /// unlogged.
     var usesMotion = false {

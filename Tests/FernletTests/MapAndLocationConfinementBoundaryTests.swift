@@ -14,7 +14,7 @@ import Testing
 ///   `WorldLocationSource.swift`, the World map's location (plan step 5a), whose readings leave the file as
 ///   plain `GeoPoint`s.
 /// - **CoreMotion** only in `WorldMotionSource.swift` (round 7, car and bike detection), read only while "Log
-///   my bike rides" is on; its activity leaves the file as plain `WorldMotionSample`s and is never kept.
+///   my bike rides" or background mapping is on; its activity leaves the file as plain `WorldMotionSample`s and is never kept.
 ///
 /// The watch build's planned MapKit route card (`WorkoutRouteMapView.swift`) and GPS recorder join these
 /// lists when main is merged into `world-ui`. A stale entry (a listed file that no longer imports the

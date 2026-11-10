@@ -25,9 +25,10 @@ struct AppPermissionDeclarationsTests {
         // drive is traced in full, so "using little battery" went).
         "NSLocationWhenInUseUsageDescription": "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive or ride. It stays on this iPhone.",
-        // Car and bike detection (owner, 2026-10-25: "Approve both"; round 7): asked only when "Log my bike
-        // rides" is turned on.
-        "NSMotionUsageDescription": "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone."
+        // Car and bike detection (owner, 2026-10-25: "Approve both"; round 7), reworded when background mapping
+        // began reading Motion too (owner, 2026-11-09: "The motion permission looks good"): asked when "Log my
+        // bike rides" or background mapping is turned on.
+        "NSMotionUsageDescription": "Fernlet uses motion to tell when you're in a car or on a bike, so your trips map properly and bike rides log. It stays on this iPhone."
     ]
 
     /// Approved texts declared in `App/Fernlet/Info.plist` itself, never as a build setting (Xcode drops

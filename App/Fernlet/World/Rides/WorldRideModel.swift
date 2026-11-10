@@ -2,8 +2,8 @@ import Foundation
 import WorldMapStore
 
 /// What the motion coprocessor says the person is doing, in plain values: no CoreMotion type leaves
-/// `WorldMotionSource.swift` (round 7, car and bike detection). Read only while "Log my bike rides" is on
-/// and Motion & Fitness is allowed, held in memory, never kept.
+/// `WorldMotionSource.swift` (round 7, car and bike detection). Read only while "Log my bike rides" or
+/// background mapping is on and Motion & Fitness is allowed, held in memory, never kept.
 nonisolated enum WorldMotionKind: String, Equatable, Sendable {
     case stationary
     case walking
@@ -29,7 +29,7 @@ nonisolated enum WorldRideMode: Equatable, Sendable {
     /// In a car or bus since `since`: the companion rides along, quick starts and banners pause, only a
     /// lane of fog lifts along the road, and with background mapping the road is traced.
     case driving(since: Date)
-    /// On a bike since `since` (only with Motion: "Log my bike rides" on and allowed).
+    /// On a bike since `since` (only with Motion: "Log my bike rides" or background mapping on, and allowed).
     case cycling(since: Date)
 }
 

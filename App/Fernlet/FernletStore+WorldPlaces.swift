@@ -42,10 +42,12 @@ extension FernletStore {
                         thinLine: worldLocation.rides.isDriving)
     }
 
-    /// Arms background mapping when the person turned it on and Always is allowed, or turns it off.
+    /// Arms background mapping when the person turned it on and Always is allowed, or turns it off; car and bike
+    /// detection reads Motion with it, when allowed (``worldRidesReadMotion(defaults:)``).
     func applyWorldBackgroundMapping() {
         let on = WorldMapPreferences.alwaysLowPower()
         worldLocation.setLowPowerAlways(on && worldLocation.permission == .always)
+        worldLocation.rides.usesMotion = worldRidesReadMotion()
     }
 
     /// At launch, once the store is ready (W-09 B1): with background mapping's switch on, builds the map's

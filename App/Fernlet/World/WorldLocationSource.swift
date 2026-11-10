@@ -21,7 +21,7 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// follow glide carries Sprout on along it between a drive's readings, ``WorldFollowGlide``).
     var course: Double? = nil
     /// Whether car detection says the person is in a car (round 7: Motion's automotive activity, read only
-    /// while "Log my bike rides" is on and allowed); nil when Motion is off, and the stop watch then keeps its
+    /// while "Log my bike rides" or background mapping is on, and allowed); nil when Motion is off, and the stop watch then keeps its
     /// speed rule (W-14).
     var inCar: Bool? = nil
     /// Whether the reading is inside the grounds of the airport just landed at (the flight gate): the passport

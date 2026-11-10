@@ -2,7 +2,8 @@ import Foundation
 import WorldMapStore
 
 /// Car and bike detection on the phone (round 7; `b1-home-car`, `b1-home-bike`): the ``WorldRideWatch``
-/// fed with the map's readings and, while "Log my bike rides" is on and Motion & Fitness is allowed, the
+/// fed with the map's readings and, while "Log my bike rides" or background mapping is on and Motion &
+/// Fitness is allowed, the
 /// motion coprocessor's activity (``WorldMotionReading``). Owned by ``WorldLocationSource`` (`rides`), so
 /// it hears every reading the map hears; in memory only, nothing on disk.
 ///
@@ -81,8 +82,8 @@ final class WorldRideKeeper {
         self.motion = motion ?? WorldMotionSource()
     }
 
-    /// Whether motion samples are read (the store sets it: "Log my bike rides" on and Motion allowed, no
-    /// decoy). Off, the keeper decides by speed alone and never sees a bike; a ride on ends unlogged.
+    /// Whether motion samples are read (the store sets it: "Log my bike rides" or background mapping on, Motion
+    /// allowed, no decoy). Off, the keeper decides by speed alone and never sees a bike; a ride on ends unlogged.
     var usesMotion = false {
         didSet {
             guard usesMotion != oldValue else { return }

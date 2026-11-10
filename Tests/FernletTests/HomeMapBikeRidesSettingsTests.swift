@@ -50,6 +50,9 @@ struct HomeMapBikeRidesSettingsTests {
         #expect(page.contains(".accessibilityIdentifier(\"settings.homeMap.bikeRides\")"))
         #expect(page.contains("logsBikeRides = await store.setWorldBikeRides(on)"))
         #expect(!page.contains("WorldMapPreferences.setLogsBikeRides"), "the store owns the switch's preference")
+        // Background mapping turned on asks for Motion too (owner 2026-11-09), both where Always was already
+        // allowed and where iOS has just allowed it.
+        #expect(page.components(separatedBy: "await store.askWorldMotionForBackgroundMapping()").count == 3)
         // As drawn: the bike row follows Save new routes in The map.
         let saveRoutes = try #require(page.range(of: "\"settings.homeMap.saveRoutes\""))
         let bikeRides = try #require(page.range(of: "\"settings.homeMap.bikeRides\""))
