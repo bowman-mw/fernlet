@@ -1,6 +1,7 @@
 import AppIntents
 import FernletFoundation
 import Foundation
+import UIKit
 
 /// How a drive hint reached the map.
 nonisolated enum WorldDriveSignalOutcome: Equatable, Sendable {
@@ -14,28 +15,36 @@ nonisolated enum WorldDriveSignalOutcome: Equatable, Sendable {
 
 /// Hands a drive hint from Driving Focus or the Start a drive / End a drive actions to the map's location source
 /// (owner 2026-11-09, car signals: `WorldLocationSource.hintDrive(_:now:)`). It uses the store already in memory
-/// when there is one, so a hint reaches the running map while the phone is locked, and otherwise loads it through
-/// the one shared path (`FernletStoreAccess`), which refuses a locked phone. Nothing is written; only background
-/// mapping's own location runs.
+/// when there is one, so a hint reaches the running map while the phone is locked; with no store and the phone locked,
+/// the map's location a locked launch runs before the store (`WorldLockedMapping`, started here when it hasn't been);
+/// otherwise it loads the store through the one shared path (`FernletStoreAccess`). Nothing is written; only
+/// background mapping's own location runs.
 @MainActor
 enum WorldDriveSignal {
     /// Hands `on` to the map; how it went.
     static func post(_ on: Bool) async -> WorldDriveSignalOutcome {
-        guard WorldMapPreferences.alwaysLowPower() else { return .backgroundMappingOff }
-        let store: FernletStore
-        if let loaded = FernletStoreAccess.shared.loaded {
-            store = loaded
-        } else {
-            do {
-                store = try await FernletStoreAccess.shared.load()
-            } catch {
-                FernletAuditLog.log("worldMap.cars.hintUnavailable")
-                return .unavailable
-            }
+        guard WorldMapPreferences.alwaysLowPower() || WorldMapPreferences.backgroundMappingMarked() else {
+            return .backgroundMappingOff
         }
-        store.wireWorldRides()
-        store.worldLocation.hintDrive(on)
-        return .delivered
+        if let loaded = FernletStoreAccess.shared.loaded {
+            loaded.wireWorldRides()
+            loaded.worldLocation.hintDrive(on)
+            return .delivered
+        }
+        if !UIApplication.shared.isProtectedDataAvailable {
+            guard let early = WorldLockedMapping.shared.start() else { return .unavailable }
+            early.hintDrive(on)
+            return .delivered
+        }
+        do {
+            let store = try await FernletStoreAccess.shared.load()
+            store.wireWorldRides()
+            store.worldLocation.hintDrive(on)
+            return .delivered
+        } catch {
+            FernletAuditLog.log("worldMap.cars.hintUnavailable")
+            return .unavailable
+        }
     }
 }
 

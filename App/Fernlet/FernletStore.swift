@@ -787,9 +787,16 @@ final class FernletStore {
     /// Lazy, so nothing asks CoreLocation for anything until the launch screen lifts (the map's location runs
     /// while Fernlet is open, W-09 (i)), or, with background mapping on, until the store loads
     /// (`armWorldBackgroundMappingAtLaunch()`, W-09 B1); every reading goes to
-    /// ``worldFog``, which decides whether it lifts the fog.
+    /// ``worldFog``, which decides whether it lifts the fog. A source a locked launch already started before the
+    /// store (`WorldLockedMapping`, owner 2026-11-09) is taken over rather than a second one built: its drive, fence
+    /// or listen carries on, and its car book reads the disk again now the phone allows it.
     @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
-        let source = WorldLocationSource()
+        let adopted = WorldLockedMapping.shared.handOver()
+        let source = adopted ?? WorldLocationSource()
+        if adopted != nil {
+            source.cars.isDecoy = duressSessionActive
+            source.cars.reload()
+        }
         source.onFix = { [weak self] fix in
             self?.liftWorldFog(fix)
             self?.worldWalk.record(fix)

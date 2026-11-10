@@ -105,6 +105,9 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   it. A low-power reading faster than walking starts a listen too
 ///   (``listens(afterLowPowerSpeed:)``). Background mapping off, Always withdrawn or the delete funnel take the
 ///   fence down (``removeLeavingFence()``).
+/// - **A locked launch (owner 2026-11-09):** when iOS relaunches a closed Fernlet with the phone locked, a source
+///   starts before the store (`WorldLockedMapping`), answering "is background mapping on?" from the switch's marker
+///   (``init(backgroundMapping:)``); the store's own source is that one once the phone unlocks.
 /// - **Car signals (owner 2026-11-09):** ``cars`` reads the audio route with every reading and on each route change;
 ///   CarPlay or a car the car book knows connected holds a drive and shortens its start (`WorldRideKeeper.carLinked`),
 ///   and connecting while the app runs in the background starts a listen. Driving Focus's "Map my drive" filter and the
@@ -228,7 +231,14 @@ final class WorldLocationSource: NSObject {
     /// The Info.plist purpose key the walk's temporary full-accuracy request names (a frozen token).
     static let walkAccuracyPurposeKey = "WorldWalk"
 
-    override init() {
+    /// Whether background mapping's switch is on: the switch itself (``WorldMapPreferences/alwaysLowPower(in:)``), or,
+    /// for the source a locked launch starts before the store (`WorldLockedMapping`, owner 2026-11-09), its marker,
+    /// which a locked phone can still read.
+    @ObservationIgnored private let backgroundMapping: @MainActor () -> Bool
+
+    /// A source answering "is background mapping on?" with `backgroundMapping` (the switch when nil).
+    init(backgroundMapping: (@MainActor () -> Bool)? = nil) {
+        self.backgroundMapping = backgroundMapping ?? { WorldMapPreferences.alwaysLowPower() }
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = Self.fullPace.accuracy
@@ -432,7 +442,7 @@ final class WorldLocationSource: NSObject {
             endCoolDown()
             return
         }
-        guard Self.tracesDrive(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
+        guard Self.tracesDrive(permission: permission, backgroundMapping: backgroundMapping(),
                                declaresBackground: Self.declaresBackgroundLocation, walking: isWalking) else { return }
         endCoolDown()
         endListening()
@@ -530,7 +540,7 @@ final class WorldLocationSource: NSObject {
     /// reading is too rough.
     private func armFence(at fix: WorldFix? = nil) {
         guard let fix = fix ?? latest,
-              Self.armsFence(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
+              Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self)),
               let radius = Self.fenceRadius(afterQuietListens: quietListens, accuracy: fix.accuracy) else { return }
         let centre = CLLocationCoordinate2D(latitude: fix.point.latitude, longitude: fix.point.longitude)
@@ -560,7 +570,7 @@ final class WorldLocationSource: NSObject {
     /// on, or the fence is no longer allowed.
     fileprivate func startListening(for duration: TimeInterval = WorldLocationSource.listenTime) {
         guard listening == nil, trace == nil, !isUpdating, !isWalking, Self.declaresBackgroundLocation,
-              Self.armsFence(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
+              Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: true) else { return }
         manager.allowsBackgroundLocationUpdates = true
         listening = Task { [weak self] in
@@ -611,7 +621,7 @@ final class WorldLocationSource: NSObject {
         if permission != .notAsked { isAsking = false }
         guard permission != .always else {
             // Background mapping, when the person turned it on, runs as soon as Always is allowed.
-            if WorldMapPreferences.alwaysLowPower() { setLowPowerAlways(true) }
+            if backgroundMapping() { setLowPowerAlways(true) }
             return
         }
         setLowPowerAlways(false)
