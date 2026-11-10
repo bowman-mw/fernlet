@@ -2200,6 +2200,14 @@ final class FernletStore {
     /// self-stopping on a poll that reports the session gone. Memory-only.
     @ObservationIgnored var sessionPollTask: Task<Void, Never>?
 
+    /// Whether the seams' executor last stood this session's search down with
+    /// `holdCommittedLinks()` — the background row of a running continued task — and no fresh search
+    /// or teardown has run since. Written only by `executeProximityRunActions(_:)`
+    /// (`ProximityRunSeams.swift`), read only by the policy funnel, which feeds it as
+    /// `ProximityRunPolicy.Input.searchOwedAfterBackgroundHold` so a foreground return re-opens the
+    /// search on any tab. Memory-only: a relaunch holds no links, so there is nothing to remember.
+    @ObservationIgnored var meshSearchHeldInBackground = false
+
     /// The three scene-side facts of the last edge, retained so the view's and the store's own edges
     /// can re-run the policy without a scene (P7 item 3).
     @ObservationIgnored private var proximityEdgeFacts: ProximityEdgeFacts?
@@ -2357,7 +2365,10 @@ final class FernletStore {
                 allowConnectByTapping: settings.allowConnectByTapping,
                 lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
                 homeIsFrontmost: homeIsFrontmost,
-                tapHangoutPending: tapToConnect.isHangoutPending
+                tapHangoutPending: tapToConnect.isHangoutPending,
+                // Ended sessions are owed nothing: a search that gave up, or a session past its
+                // ceiling, must not be revived by a foreground return.
+                searchOwedAfterBackgroundHold: meshSearchHeldInBackground && meshNetworkManager.isSessionLive
             )
         }
         let gate = ProximityRunPolicy.verdict(for: sampledInput()).routedAccessGate

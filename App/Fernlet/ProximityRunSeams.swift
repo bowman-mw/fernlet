@@ -56,6 +56,13 @@
 // nobody" timeout: a committed peer is not nobody. Off the FACTS, not off the previous verdict —
 // the way out of a hold need not be direct, and foreground-on-Home (discovery `hold`) leaves the
 // radios down with the hold row already behind it.
+//
+// The way out no longer waits for a Friends visit (2026-11-09, the owner's phone test: two phones
+// backgrounded with a World hangout up, the continued task expired, and neither reconnected on
+// return). The executor records each hold in `FernletStore.meshSearchHeldInBackground`, the funnel
+// feeds it to the policy as `searchOwedAfterBackgroundHold`, and the policy then answers discovery
+// `foregroundOnly` on every foreground tab until a new search or a teardown clears it — so the
+// same `discoveryStart` rows below bring the radios back on Home.
 
 import Foundation
 import FernletFoundation
@@ -290,18 +297,21 @@ extension FernletStore {
         for action in actions {
             switch action {
             case .startJoin:
+                meshSearchHeldInBackground = false
                 meshNetworkManager.startJoin()
             case .resumeSearch:
                 meshNetworkManager.resumeSearchingForPartitionedMesh()
             case .stopJoin:
                 meshNetworkManager.stopJoin()
             case .leaveSession:
+                meshSearchHeldInBackground = false
                 meshNetworkManager.leaveSession()
             case .armDiscoveryTimeout:
                 armDiscoveryTimeout()
             case .cancelDiscoveryTimeout:
                 cancelDiscoveryTimeout()
             case .holdLinks:
+                meshSearchHeldInBackground = true
                 meshNetworkManager.holdCommittedLinks()
             case .presence(let state):
                 presenceManager.apply(state)

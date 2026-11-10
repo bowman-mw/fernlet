@@ -335,7 +335,7 @@ import ProximityKit
         let downstairs = Self.verdict(tab: .home, continuation: .running, session: .peerCommitted)
         let ontoHome = Self.actions(from: held, to: downstairs, Self.facts(inSession: true, committed: true))
         #expect(ontoHome == [.cancelDiscoveryTimeout, .presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
-                "discovery `hold` touches no radio — the mesh is still held, and still dark")
+                "discovery `hold` touches no radio — without the store's hold fact the mesh is still held, and still dark")
         let ontoFriends = Self.actions(
             from: downstairs,
             to: Self.verdict(continuation: .running, session: .peerCommitted),
@@ -343,6 +343,61 @@ import ProximityKit
         )
         #expect(ontoFriends == [.resumeSearch, .recipeShare(.stop)],
                 "and the next Friends visit still gets its radios back")
+    }
+
+    /// **The way out no longer waits for Friends** (2026-11-09, the owner's phone test: two phones
+    /// with a World hangout up went to the background, the continued task expired, and neither
+    /// reconnected on return). Once the executor has recorded the hold, the policy answers
+    /// discovery `foregroundOnly` on Home too, and the same `discoveryStart` rows re-open the
+    /// radios: over a peer still committed, over a mesh whose links died behind the hold (with the
+    /// give-up timeout, since nobody is committed), and never twice over a search already up.
+    @Test func aForegroundReturnOntoHomeAfterAHoldResumesTheSearch() {
+        func owed(_ phase: ScenePhase, _ continuation: ProximityContinuationState,
+                  _ session: ProximitySessionPresence) -> ProximityRunPolicy.Verdict {
+            ProximityRunPolicy.verdict(for: ProximityRunPolicy.Input(
+                scenePhase: phase, selectedTab: .home, duressSessionActive: false, protectedDataAvailable: true,
+                belowMinimumAge: false, deleteAllInProgress: false, continuation: continuation, session: session,
+                allowNearbyPresence: true, allowNearbyRecipeShares: true, sessionPhotoReviewBlocksDiscovery: false,
+                searchOwedAfterBackgroundHold: true
+            ))
+        }
+        let expiredWithAPeer = Self.actions(
+            from: owed(.background, .expired, .peerCommitted), to: owed(.active, .expired, .peerCommitted),
+            Self.facts(inSession: true, committed: true)
+        )
+        #expect(expiredWithAPeer == [.resumeSearch, .presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
+                "the task expired behind the hold and the slot still reads committed: the radios come back, no timeout")
+        let expiredLinksGone = Self.actions(
+            from: owed(.background, .expired, .meshHeld), to: owed(.active, .expired, .meshHeld),
+            Self.facts(inSession: true)
+        )
+        #expect(expiredLinksGone == [.resumeSearch, .armDiscoveryTimeout, .presence(.foregroundOnly),
+                                     .recipeShare(.foregroundOnly)],
+                "the links died behind the hold: resume the same mesh, and arm the give-up clock for a peer who never returns")
+        let alreadyUp = Self.actions(
+            from: owed(.background, .expired, .peerCommitted), to: owed(.active, .expired, .peerCommitted),
+            Self.facts(searching: true, inSession: true, committed: true)
+        )
+        #expect(alreadyUp == [.presence(.foregroundOnly), .recipeShare(.foregroundOnly)],
+                "a search that is already up is not started twice")
+        let blip = Self.actions(
+            from: owed(.active, .expired, .peerCommitted), to: owed(.active, .expired, .meshHeld),
+            Self.facts(searching: true, inSession: true)
+        )
+        #expect(blip.isEmpty, "and a link that drops later, on Home, no longer stands the search down under it")
+    }
+
+    /// The executor is what remembers the hold: it raises the store's flag on `.holdLinks` and
+    /// lowers it on a fresh search or a teardown — the three writes, and the funnel's one read.
+    @Test func theExecutorRecordsTheHoldAndTheFunnelFeedsIt() throws {
+        let seams = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ProximityRunSeams.swift"))
+        #expect(seams.components(separatedBy: "meshSearchHeldInBackground = true").count - 1 == 1,
+                "raised once, beside `holdCommittedLinks()`")
+        #expect(seams.components(separatedBy: "meshSearchHeldInBackground = false").count - 1 == 2,
+                "lowered by a fresh search and by the session's teardown, and by nothing else")
+        let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
+        #expect(store.contains("searchOwedAfterBackgroundHold: meshSearchHeldInBackground && meshNetworkManager.isSessionLive"),
+                "the funnel feeds the flag only while the session is live, so an ended session is never revived")
     }
 
     /// A discovery verdict of `run` never occurs (invariant 5); the transition answers it with no
