@@ -68392,6 +68392,126 @@
         }
       }
     },
+    "workoutNote.dayNote.alreadyLeftOut" : {
+      "comment" : "Workout session note: the person typed a body area in the plan sheet's 'Anything else?' field, and their saved limits already leave that area's exercises out entirely, so nothing more was needed. The argument is the area or areas in lowercase, e.g. 'knee'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Already leaving out work for your %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya dejamos fuera el trabajo de tu %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya dejamos fuera el trabajo de tu %@."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.easing" : {
+      "comment" : "Workout session note: the person typed that a body area is sore in the plan sheet's 'Anything else?' field, so today's plan trains around it (lighter, supported moves). The argument is the area or areas in lowercase, e.g. 'knee', 'knee and shoulder'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Going easy on your %@ today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy vamos con suavidad con tu %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy vamos con calma con tu %@."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.matched" : {
+      "comment" : "Workout session note: exercises in the plan whose names share a word with what the person typed in the plan sheet's 'Anything else?' field. The argument is a comma-separated list of exercise names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Picked to match your note: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elegido según tu nota: %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elegido según tu nota: %@."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.nothingApplied" : {
+      "comment" : "Workout session note: the planner could not apply anything the person typed in the plan sheet's 'Anything else?' field. 'Equipment & limits' is the name of the button on the same sheet that opens Workout setup; translate it exactly as that button is translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing in your note could be applied to this plan. Lasting limits and equipment are set in Equipment & limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido aplicar nada de tu nota a este plan. Los límites duraderos y el equipo se ajustan en Equipo y límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo aplicar nada de tu nota a este plan. Los límites duraderos y el equipo se ajustan en Equipo y límites."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.shortened" : {
+      "comment" : "Workout session note: the person typed that they are short on time in the plan sheet's 'Anything else?' field, so the session was fitted into a shorter length. The argument is that length in minutes (20, 30, 45 or 60).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept to about %lld minutes, as you asked."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ajustado a unos %lld minutos, como pediste."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ajustado a unos %lld minutos, como pediste."
+          }
+        }
+      }
+    },
     "workoutNote.fill.around" : {
       "comment" : "Workout session note: too few of this session's own lifts were safe for an injured body area, so safe lifts for other body areas fill it. Arguments: the session's name (e.g. 'Arms'), then the injured area or two areas in lowercase (e.g. 'elbow', 'elbow and wrist or hand').",
       "extractionState" : "extracted_with_value",
@@ -69568,30 +69688,6 @@
         }
       }
     },
-    "workoutNote.noted" : {
-      "comment" : "Workout session note: echoes the note the person typed when asking for a plan. The argument is their own text.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Noted: %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anotado: %@"
-          }
-        },
-        "es-MX" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anotado: %@"
-          }
-        }
-      }
-    },
     "workoutNote.offer.mobility" : {
       "comment" : "Workout session note: fewer than three lifts were safe or possible for this session, so it offers stretching in place of lifting (the person asked not to be suggested walks). The argument is the session's name (e.g. 'Arms').",
       "extractionState" : "extracted_with_value",
@@ -70704,6 +70800,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estiramientos suaves o una caminata tranquila - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.restDaySeated" : {
+      "comment" : "A line of a workout plan on a day the person marked themselves unwell, when an injured ankle, knee or hip rules out a walk: optional gentle stretches done sitting or lying down. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle stretching, seated - %lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estiramientos suaves en posición sentada - %lld min"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estiramientos suaves en posición sentada - %lld min"
           }
         }
       }

@@ -74622,6 +74622,102 @@
         }
       }
     },
+    "move.adjust.aiOff" : {
+      "comment" : "Line under the 'Adjust with AI' field on today's workout plan: the request was not applied because on-device AI is switched off or not available on this device. The request stays in the field.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On-device AI is off."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La IA del dispositivo está desactivada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La IA del dispositivo está desactivada."
+          }
+        }
+      }
+    },
+    "move.adjust.couldNot" : {
+      "comment" : "Line under the 'Adjust with AI' field on today's workout plan: the on-device model could not answer this time. The request stays in the field.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't adjust just now. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido ajustar ahora. Inténtalo de nuevo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo ajustar ahora. Intenta de nuevo."
+          }
+        }
+      }
+    },
+    "move.adjust.nothingNeeded" : {
+      "comment" : "Line under the 'Adjust with AI' field on today's workout plan: the plan already matches what the person asked for, so it is unchanged. The request stays in the field.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing needed changing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hacía falta cambiar nada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hacía falta cambiar nada."
+          }
+        }
+      }
+    },
+    "move.adjust.tooFewLifts" : {
+      "comment" : "Line under the 'Adjust with AI' field on today's workout plan: the adjustment was refused because it would have left fewer than three exercises in a session that had four or more. The plan is unchanged and the request stays in the field.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That would leave too few lifts, so your plan is as it was."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quedarían muy pocos ejercicios, así que tu plan sigue como estaba."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quedarían muy pocos ejercicios, así que tu plan sigue como estaba."
+          }
+        }
+      }
+    },
     "move.goal.notSet" : {
       "comment" : "Spoken in place of the movement goal when the user has not set one. Reads inside the sentence 'Goal, …'.",
       "extractionState" : "extracted_with_value",
@@ -74939,6 +75035,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hoy"
+          }
+        }
+      }
+    },
+    "move.plan.updated.changesReplaced" : {
+      "comment" : "Second sentence of the 'Updated for …' line on today's workout plan: the person's own edits or AI adjustment to one or more sessions were replaced by the rebuild. The argument is the session name or names, e.g. 'Upper', 'Upper and Lower'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your changes to %@ were replaced."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus cambios en %@ se han sustituido."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus cambios en %@ se reemplazaron."
+          }
+        }
+      }
+    },
+    "move.plan.updated.hidden" : {
+      "comment" : "Line on today's workout plan: the not-yet-started sessions were rebuilt because the person hid an exercise ('Don't suggest this') that was in them.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated to leave out what you've hidden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizado para dejar fuera lo que has ocultado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizado para dejar fuera lo que ocultaste."
+          }
+        }
+      }
+    },
+    "move.plan.updated.limits" : {
+      "comment" : "Line on today's workout plan: the not-yet-started sessions were rebuilt because the person changed the body areas to work around.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated for your limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizado según tus límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizado según tus límites."
+          }
+        }
+      }
+    },
+    "move.plan.updated.space" : {
+      "comment" : "Line on today's workout plan: the not-yet-started sessions were rebuilt because the person changed workout space (or its equipment). The argument is the space's name, e.g. 'Home'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated for %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizado para %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Actualizado para %@."
           }
         }
       }
