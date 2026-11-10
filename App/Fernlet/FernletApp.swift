@@ -452,6 +452,7 @@ struct FernletApp: App {
                 // the keychain actually holds. Scene activation retries the same call, but a background
                 // relaunch may never become active.
                 lockService.refreshStateFromKeychain()
+                retryLaunchRefusedWhileLocked()
                 // P5 item 10: the unlock edge, literal for the same reason, and the one that fires
                 // while the app is BACKGROUNDED — the ciphertext jobs the re-entry owes run there.
                 if case .ready(let store) = loader.phase {
@@ -691,6 +692,15 @@ struct FernletApp: App {
         ])
         guard current.iCloudSyncEnabled else { return }
         await reloadPersistenceForPreferenceChange(current)
+    }
+
+    /// A launch the locked phone refused loads its store at the unlock (owner 2026-11-09), in the background too: a
+    /// background relaunch never becomes active, and the failure screen's Retry would have waited for a tap. The map's
+    /// location a locked launch started (`WorldLockedMapping`) then hands over to the store.
+    @MainActor
+    private func retryLaunchRefusedWhileLocked() {
+        guard FernletStoreLoader.wasRefusedWhileLocked(loader.phase) else { return }
+        Task { await loader.retry(healthKitService: healthKitService) }
     }
 
     /// Runs the Phase-6 backup-exclusion launch gate — once per process once it actually

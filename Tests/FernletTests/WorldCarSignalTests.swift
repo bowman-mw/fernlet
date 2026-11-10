@@ -238,7 +238,7 @@ struct WorldCarSignalTests {
         }
         #expect(source.rides.isDriving, "ten seconds at a car's speed after a hint")
         #expect(WorldLocationSource.hintLife == 30 * 60 && WorldLocationSource.hintListenTime == 5 * 60)
-        if !WorldMapPreferences.alwaysLowPower() {
+        if !WorldMapPreferences.alwaysLowPower(), !WorldMapPreferences.backgroundMappingMarked() {
             #expect(await WorldDriveSignal.post(true) == .backgroundMappingOff)
         }
     }

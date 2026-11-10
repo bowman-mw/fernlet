@@ -127,6 +127,13 @@ final class WorldCarKeeper {
         save(next)
     }
 
+    /// Reads the book from disk again (the store adopting the source a locked launch started, which learned nothing
+    /// and may have read nothing while the phone was locked).
+    func reload() {
+        book = Self.loadBook(from: defaults)
+        tellLink()
+    }
+
     /// Delete everything: the book goes from memory (the funnel's `WorldMapPreferences.clearAll` removes it and the
     /// salt from disk).
     func forgetAll() {

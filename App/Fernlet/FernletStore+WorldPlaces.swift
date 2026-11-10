@@ -46,6 +46,8 @@ extension FernletStore {
     /// detection reads Motion with it, when allowed (``worldRidesReadMotion(defaults:)``).
     func applyWorldBackgroundMapping() {
         let on = WorldMapPreferences.alwaysLowPower()
+        // The marker a locked launch reads follows the switch (owner 2026-11-09): an install from before it gets one.
+        WorldMapPreferences.syncBackgroundMarker()
         worldLocation.setLowPowerAlways(on && worldLocation.permission == .always)
         worldLocation.rides.usesMotion = worldRidesReadMotion()
     }

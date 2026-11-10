@@ -68,9 +68,16 @@ final class WorldTripShortcutInbox {
     }
 }
 
-/// The app delegate, for the quick action only: a cold launch's shortcut item, and the scene delegate that hears a
-/// running app's.
+/// The app delegate, for the quick action: a cold launch's shortcut item, and the scene delegate that hears a running
+/// app's. Also the launch's first moment (owner 2026-11-09): with the phone locked, the map's location starts before
+/// the store, which can't load until it unlocks (`WorldLockedMapping`).
 final class FernletShortcutAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        WorldLockedMapping.shared.startIfLocked(protectedData: application.isProtectedDataAvailable)
+        return true
+    }
+
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         if let item = options.shortcutItem { WorldTripShortcut.handle(item) }
