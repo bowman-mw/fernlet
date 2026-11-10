@@ -37,6 +37,22 @@
         }
       }
     },
+    "\"Start a drive\" and \"End a drive\" can run when your car connects." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Empezar un trayecto” y “Terminar un trayecto” pueden ejecutarse cuando tu coche se conecta."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Empezar un trayecto” y “Terminar un trayecto” pueden ejecutarse cuando tu carro se conecta."
+          }
+        }
+      }
+    },
     "%@" : {
 
     },
@@ -6759,6 +6775,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agregar 15 segundos de descanso"
+          }
+        }
+      }
+    },
+    "Add Fernlet's \"Map my drive\" filter to Driving in Settings › Focus, so the map starts when you drive." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade el filtro “Mapear mi trayecto” de Fernlet a Conducción en Ajustes › Concentración, para que el mapa empiece cuando conduces."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrega el filtro “Mapear mi trayecto” de Fernlet a Conducción en Configuración › Concentración, para que el mapa empiece cuando manejas."
           }
         }
       }
@@ -16579,6 +16611,22 @@
         }
       }
     },
+    "Driving Focus" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo Conducción"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modo Conducción"
+          }
+        }
+      }
+    },
     "Drop set" : {
       "localizations" : {
         "es" : {
@@ -17673,6 +17721,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Terminar sesión"
+          }
+        }
+      }
+    },
+    "End a drive" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar un trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar un trayecto"
           }
         }
       }
@@ -19961,6 +20025,38 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Fernlet knows you're driving when your iPhone connects to it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet sabe que conduces cuando tu iPhone se conecta a él."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet sabe que manejas cuando tu iPhone se conecta a él."
+          }
+        }
+      }
+    },
+    "Fernlet maps the road from the start of every drive." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet mapea la carretera desde el principio de cada trayecto."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet mapea el camino desde el principio de cada trayecto."
           }
         }
       }
@@ -28495,6 +28591,22 @@
         }
       }
     },
+    "Map my drive" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapear mi trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapear mi trayecto"
+          }
+        }
+      }
+    },
     "Map the world in the background" : {
       "localizations" : {
         "es" : {
@@ -29816,6 +29928,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Músculos que descansar"
+          }
+        }
+      }
+    },
+    "My car" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mi coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mi carro"
           }
         }
       }
@@ -43387,6 +43515,22 @@
         }
       }
     },
+    "Shortcuts" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atajos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atajos"
+          }
+        }
+      }
+    },
     "Shorter rest" : {
       "localizations" : {
         "es" : {
@@ -45123,6 +45267,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empezar con Fernlet"
+          }
+        }
+      }
+    },
+    "Start a drive" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar un trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar un trayecto"
           }
         }
       }
@@ -46910,6 +47070,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dientes cepillados. Empieza el maratón."
+          }
+        }
+      }
+    },
+    "Tells Fernlet the drive is over." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dice a Fernlet que el trayecto ha terminado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dice a Fernlet que el trayecto terminó."
+          }
+        }
+      }
+    },
+    "Tells Fernlet you're driving, so it maps the road from the start." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dice a Fernlet que conduces, para que mapee la carretera desde el principio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dice a Fernlet que manejas, para que mapee el camino desde el principio."
           }
         }
       }
@@ -69205,6 +69397,246 @@
         }
       }
     },
+    "homeMap.car.forget" : {
+      "comment" : "Settings, Home map: destructive row under one of several cars; the car's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget \"%@\""
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar “%@”"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar “%@”"
+          }
+        }
+      }
+    },
+    "homeMap.car.forgetMessage" : {
+      "comment" : "Settings, Home map: the forget-car confirmation's message",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet may learn it again after a few drives."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet puede volver a aprenderlo tras unos cuantos trayectos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet puede volver a aprenderlo después de unos cuantos trayectos."
+          }
+        }
+      }
+    },
+    "homeMap.car.forgetOnly" : {
+      "comment" : "Settings, Home map: destructive row under the one known car",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget my car"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar mi coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar mi carro"
+          }
+        }
+      }
+    },
+    "homeMap.car.forgetTitle" : {
+      "comment" : "Settings, Home map: the forget-car confirmation's title; the car's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget \"%@\"?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Olvidar “%@”?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Olvidar “%@”?"
+          }
+        }
+      }
+    },
+    "homeMap.car.forgotten" : {
+      "comment" : "VoiceOver, Settings, Home map: after forgetting a car; its name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forgot %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidado: %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidado: %@."
+          }
+        }
+      }
+    },
+    "homeMap.car.header" : {
+      "comment" : "Settings, Home map: the section about the person's cars",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your car"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu carro"
+          }
+        }
+      }
+    },
+    "homeMap.car.marked" : {
+      "comment" : "VoiceOver, Settings, Home map: after marking a Bluetooth device as a car; its name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is your car."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ es tu coche."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ es tu carro."
+          }
+        }
+      }
+    },
+    "homeMap.car.none" : {
+      "comment" : "Settings, Home map: My car's value before Fernlet knows a car",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguno todavía"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguno todavía"
+          }
+        }
+      }
+    },
+    "homeMap.car.noneYet" : {
+      "comment" : "Settings, Home map: under My car before any car is known; Fernlet learns it from drives or asks on Home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet learns your car's Bluetooth after a few drives, or asks you."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet aprende el Bluetooth de tu coche tras unos cuantos trayectos, o te lo pregunta."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet aprende el Bluetooth de tu carro después de unos cuantos trayectos, o te lo pregunta."
+          }
+        }
+      }
+    },
+    "homeMap.car.use" : {
+      "comment" : "Settings, Home map: marks the connected Bluetooth device as a car; the device's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use \"%@\" as my car"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar “%@” como mi coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usar “%@” como mi carro"
+          }
+        }
+      }
+    },
     "homeMap.delete.history.message" : {
       "comment" : "Settings, Home map: what deleting the map history does",
       "extractionState" : "stale",
@@ -90202,6 +90634,102 @@
         }
       }
     },
+    "worldCar.question" : {
+      "comment" : "Home: asks whether a Bluetooth device seen on a drive is the person's car; its name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Is \"%@\" your car?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿“%@” es tu coche?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿“%@” es tu carro?"
+          }
+        }
+      }
+    },
+    "worldCar.question.line" : {
+      "comment" : "Home: under the car question, what Yes does; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ will know you're driving whenever you connect."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sabrá que conduces cada vez que te conectes."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ sabrá que manejas cada vez que te conectes."
+          }
+        }
+      }
+    },
+    "worldCar.question.notMyCar" : {
+      "comment" : "Home: the car question's answer that the device isn't the person's car",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not my car"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No es mi coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No es mi carro"
+          }
+        }
+      }
+    },
+    "worldCar.question.yes" : {
+      "comment" : "Home: the car question's answer that the device is the person's car",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sí"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sí"
+          }
+        }
+      }
+    },
     "worldCity.card.kind" : {
       "comment" : "World city card: under the city's name, its size class (City) and its country",
       "extractionState" : "extracted_with_value",
@@ -91158,6 +91686,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ duerme, como en el mapa (se acuesta a las %2$@)."
+          }
+        }
+      }
+    },
+    "worldDrive.intent.backgroundMappingOff" : {
+      "comment" : "Shortcuts: the Start a drive or End a drive action ran with background mapping off",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn on Map the world in the background in Fernlet's Settings first."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero activa “Mapear el mundo en segundo plano” en los Ajustes de Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero activa “Mapear el mundo en segundo plano” en la Configuración de Fernlet."
           }
         }
       }

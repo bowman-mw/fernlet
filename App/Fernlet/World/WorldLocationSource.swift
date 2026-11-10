@@ -105,6 +105,14 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   it. A low-power reading faster than walking starts a listen too
 ///   (``listens(afterLowPowerSpeed:)``). Background mapping off, Always withdrawn or the delete funnel take the
 ///   fence down (``removeLeavingFence()``).
+/// - **A locked launch (owner 2026-11-09):** when iOS relaunches a closed Fernlet with the phone locked, a source
+///   starts before the store (`WorldLockedMapping`), answering "is background mapping on?" from the switch's marker
+///   (``init(backgroundMapping:)``); the store's own source is that one once the phone unlocks.
+/// - **Car signals (owner 2026-11-09):** ``cars`` reads the audio route with every reading and on each route change;
+///   CarPlay or a car the car book knows connected holds a drive and shortens its start (`WorldRideKeeper.carLinked`),
+///   and connecting while the app runs in the background starts a listen. Driving Focus's "Map my drive" filter and the
+///   Start a drive / End a drive actions reach ``hintDrive(_:now:)``: a hint shortens the start for ``hintLife`` and
+///   listens ``hintListenTime``; its end ends a quiet drive.
 /// - **A bike ride, followed closely (Refinements group 19, `ref-ride-line`, owner-approved 2026-10-29):**
 ///   exactly as a drive is traced, under the same conditions
 ///   (``followsRide(permission:backgroundMapping:declaresBackground:walking:)``), a ride car and bike
@@ -148,6 +156,13 @@ final class WorldLocationSource: NSObject {
     let rides = WorldRideKeeper()
     /// The flight gate (World-Airports-Spec §6.1): weighs every reading first, and none it refuses goes further.
     let flights = WorldFlightKeeper()
+    /// The connected car (owner 2026-11-09, car signals): CarPlay or a car the car book knows, read with every reading.
+    let cars = WorldCarKeeper()
+
+    /// How long a hint (Driving Focus on, the Start a drive action) primes a drive's start.
+    nonisolated static let hintLife: TimeInterval = 30 * 60
+    /// How long the listen a hint starts runs: the drive usually starts within a few minutes of the Focus turning on.
+    nonisolated static let hintListenTime: TimeInterval = 5 * 60
 
     /// Whether a walk is recording (updates keep running off the map).
     private(set) var isWalking = false
@@ -216,7 +231,14 @@ final class WorldLocationSource: NSObject {
     /// The Info.plist purpose key the walk's temporary full-accuracy request names (a frozen token).
     static let walkAccuracyPurposeKey = "WorldWalk"
 
-    override init() {
+    /// Whether background mapping's switch is on: the switch itself (``WorldMapPreferences/alwaysLowPower(in:)``), or,
+    /// for the source a locked launch starts before the store (`WorldLockedMapping`, owner 2026-11-09), its marker,
+    /// which a locked phone can still read.
+    @ObservationIgnored private let backgroundMapping: @MainActor () -> Bool
+
+    /// A source answering "is background mapping on?" with `backgroundMapping` (the switch when nil).
+    init(backgroundMapping: (@MainActor () -> Bool)? = nil) {
+        self.backgroundMapping = backgroundMapping ?? { WorldMapPreferences.alwaysLowPower() }
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = Self.fullPace.accuracy
@@ -232,6 +254,27 @@ final class WorldLocationSource: NSObject {
             if cycling { self?.startTrace(.ride) } else { self?.endTrace(.ride) }
             self?.applyPace()
         }
+        rides.carLinked = cars.isLinked
+        cars.onLinkChanged = { [weak self] linked in self?.carLinkChanged(linked) }
+    }
+
+    /// A car connected or went (CarPlay, or a car the car book knows): car detection hears it, and a car connecting
+    /// while the app runs in the background with nothing continuous on starts a listen.
+    private func carLinkChanged(_ linked: Bool) {
+        rides.carLinked = linked
+        if linked { startListening() }
+    }
+
+    /// Driving Focus turned on or off, or the Start a drive or End a drive action ran (owner 2026-11-09, car signals).
+    /// On primes a drive's start for ``hintLife`` and, with Always and background mapping on, starts a listen of
+    /// ``hintListenTime``; off ends a quiet drive.
+    func hintDrive(_ on: Bool, now: Date = Date()) {
+        guard on else {
+            rides.endHint(at: now)
+            return
+        }
+        rides.hint(until: now.addingTimeInterval(Self.hintLife))
+        startListening(for: Self.hintListenTime)
     }
 
     /// The cool-down and the listen end with the source (the memory wall's ML1); both capture it weakly, so this
@@ -399,7 +442,7 @@ final class WorldLocationSource: NSObject {
             endCoolDown()
             return
         }
-        guard Self.tracesDrive(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
+        guard Self.tracesDrive(permission: permission, backgroundMapping: backgroundMapping(),
                                declaresBackground: Self.declaresBackgroundLocation, walking: isWalking) else { return }
         endCoolDown()
         endListening()
@@ -497,7 +540,7 @@ final class WorldLocationSource: NSObject {
     /// reading is too rough.
     private func armFence(at fix: WorldFix? = nil) {
         guard let fix = fix ?? latest,
-              Self.armsFence(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
+              Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self)),
               let radius = Self.fenceRadius(afterQuietListens: quietListens, accuracy: fix.accuracy) else { return }
         let centre = CLLocationCoordinate2D(latitude: fix.point.latitude, longitude: fix.point.longitude)
@@ -522,16 +565,17 @@ final class WorldLocationSource: NSObject {
         if !isUpdating, !isWalking { manager.stopUpdatingLocation() }
     }
 
-    /// The person left the fence: continuous updates for ``listenTime``, unless updates already run (the map in
-    /// front, a walk, a trace) or a listen is on, or the fence is no longer allowed.
-    fileprivate func startListening() {
+    /// The person left the fence (or a car connected, or a hint came): continuous updates for `duration`
+    /// (``listenTime`` by default), unless updates already run (the map in front, a walk, a trace) or a listen is
+    /// on, or the fence is no longer allowed.
+    fileprivate func startListening(for duration: TimeInterval = WorldLocationSource.listenTime) {
         guard listening == nil, trace == nil, !isUpdating, !isWalking, Self.declaresBackgroundLocation,
-              Self.armsFence(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
+              Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: true) else { return }
         manager.allowsBackgroundLocationUpdates = true
         listening = Task { [weak self] in
             do {
-                try await Task.sleep(for: .seconds(WorldLocationSource.listenTime))
+                try await Task.sleep(for: .seconds(duration))
             } catch {
                 return
             }
@@ -577,7 +621,7 @@ final class WorldLocationSource: NSObject {
         if permission != .notAsked { isAsking = false }
         guard permission != .always else {
             // Background mapping, when the person turned it on, runs as soon as Always is allowed.
-            if WorldMapPreferences.alwaysLowPower() { setLowPowerAlways(true) }
+            if backgroundMapping() { setLowPowerAlways(true) }
             return
         }
         setLowPowerAlways(false)
@@ -602,6 +646,8 @@ final class WorldLocationSource: NSObject {
             return
         }
         let lowPower = !isUpdating && !isWalking && trace == nil && listening == nil
+        // The route with every reading: a suspended app hears no route change, and a car may have connected since.
+        cars.refresh()
         rides.handle(fix)
         if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
         var stamped = fix
@@ -609,6 +655,7 @@ final class WorldLocationSource: NSObject {
         stamped.atLandedAirport = flights.layoverAirport != nil
         latest = stamped
         onFix?(stamped)
+        cars.noteReading(stamped, mode: rides.mode)
         guard lowPower, trace == nil else { return }
         armFence(at: stamped)
         if Self.listens(afterLowPowerSpeed: stamped.speed) { startListening() }

@@ -307,7 +307,8 @@ struct WorldPinMap: View {
 
     var body: some View {
         WorldMapStack(kind: .appleMuted, camera: $camera,
-                      ground: WorldGround(lifted: store.duressSessionActive ? [] : store.worldFog.visibleCells),
+                      ground: WorldGround(lifted: store.duressSessionActive ? [] : store.worldFog.visibleCells,
+                                          driven: store.duressSessionActive ? [] : store.worldFog.drivenCells),
                       phase: .day, darkMode: colorScheme == .dark, creditInset: Self.creditInset) { _, size in
             // On the spot the sheet keeps: MapKit's camera centre, the middle of the area above the credit's
             // inset (W-12), where the fog now lines up with the tiles.

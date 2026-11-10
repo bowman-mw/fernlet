@@ -212,6 +212,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         // Calendar" (switches only: the flights themselves are passport records in the sealed vault).
         "fernlet.worldMap.airportsAndFlights": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.flightsFromCalendar": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Car signals (2026-11-09): the car book (scrambled tags of the Bluetooth devices seen on drives, the names
+        // of the person's cars and of the one device waiting to be asked about) and the salt its tags are made with.
+        "fernlet.worldMap.carBook": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.carTagSalt": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
         "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),

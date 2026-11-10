@@ -38,6 +38,11 @@ final class FernletStoreAccess: @unchecked Sendable {
     /// its sole writer: nothing can seed it with an instance built elsewhere.
     private var store: FernletStore?
 
+    /// The store a `load()` already built, read without the protected-data check: for a caller that only needs what
+    /// is already in memory while the phone is locked (a drive hint reaching the running map, owner 2026-11-09). Never
+    /// builds one; nil before the first `load()`.
+    var loaded: FernletStore? { store }
+
     /// The single in-flight `load()`, held only while that load is running so later callers await
     /// it instead of starting a second one. `nil` whenever no load is in flight.
     private var loadingStore: Task<FernletStore, Error>?

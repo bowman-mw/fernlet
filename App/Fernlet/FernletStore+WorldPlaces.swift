@@ -46,6 +46,8 @@ extension FernletStore {
     /// detection reads Motion with it, when allowed (``worldRidesReadMotion(defaults:)``).
     func applyWorldBackgroundMapping() {
         let on = WorldMapPreferences.alwaysLowPower()
+        // The marker a locked launch reads follows the switch (owner 2026-11-09): an install from before it gets one.
+        WorldMapPreferences.syncBackgroundMarker()
         worldLocation.setLowPowerAlways(on && worldLocation.permission == .always)
         worldLocation.rides.usesMotion = worldRidesReadMotion()
     }
@@ -126,11 +128,12 @@ extension FernletStore {
     }
 
     /// The delete funnel's (`resetAll()`) World map step between the fog and the settings: Where you've been's
-    /// capture forgets its stops, and background mapping stops with the setting that goes next, so iOS's
-    /// low-power updates end and the leaving fence iOS holds round the last place the person was seen comes down
-    /// too (owner 2026-11-09).
-    func forgetWorldPlacesAndBackgroundMapping() {
+    /// capture forgets its stops, the car book forgets its cars in memory (the settings that go next delete it and its
+    /// salt from disk), and background mapping stops with its setting, so iOS's low-power updates end and the leaving
+    /// fence iOS holds round the last place the person was seen comes down too (owner 2026-11-09).
+    func forgetWorldPlacesCarsAndBackgroundMapping() {
         worldPlaces.forget()
+        worldLocation.cars.forgetAll()
         worldLocation.setLowPowerAlways(false)
     }
 

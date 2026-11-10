@@ -148,6 +148,14 @@ public final class WorldMapVault {
         public static let fog = File(name: "fog.bin", purpose: FernletCryptoPurpose.AEAD.worldMapFogV1, role: .store)
         /// The locked-phone buffer of cells waiting to be merged into the fog.
         public static let pendingFog = File(name: "fog-pending.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPendingV1, role: .buffer)
+        /// The cells only driven past, never walked (`DrivenFogStore`, owner 2026-11-09): drawn as see-through fog. The
+        /// fog store's purpose and key, bound to its own context, so neither file ever opens as the other.
+        public static let drivenFog = File(name: "fog-driven.bin", purpose: FernletCryptoPurpose.AEAD.worldMapFogV1,
+                                           role: .store, context: Data("driven".utf8))
+        /// The locked-phone buffer of cells driven past while the phone was locked, under the buffer's purpose and key
+        /// with its own context.
+        public static let pendingDriven = File(name: "fog-pending-driven.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPendingV1,
+                                               role: .buffer, context: Data("driven".utf8))
         /// "Where you've been" (`PlaceLogStore`): the 30-day timeline and Places you return to, sealed with
         /// the Private tab's hub key (never a vault key), so it opens only while Private is open.
         public static let places = File(name: "places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesV1, role: .store)

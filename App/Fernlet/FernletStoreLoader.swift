@@ -29,6 +29,13 @@ final class FernletStoreLoader {
 
     /// Current launch state; starts `.preparing` and only ever advances via `loadStore`/`retry`.
     private(set) var phase: Phase = .preparing
+
+    /// Whether `phase` is a load the locked phone refused (`FernletStoreAccess`'s protected-data check), which the
+    /// unlock retries by itself (owner 2026-11-09); any other failure waits for the failure screen's Retry.
+    static func wasRefusedWhileLocked(_ phase: Phase) -> Bool {
+        guard case .failed(let error) = phase, case ExchangeIntentServiceError.deviceLocked = error else { return false }
+        return true
+    }
     /// The progress line `LaunchScreen` shows while `phase == .preparing`.
     private(set) var statusMessage: String = LaunchPreparationService.initialStatusMessage
 

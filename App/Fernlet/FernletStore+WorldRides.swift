@@ -35,6 +35,8 @@ extension FernletStore {
         let rides = worldLocation.rides
         rides.onBikeRide = { [weak self] ride in self?.logWorldBikeRide(ride) }
         rides.usesMotion = worldRidesReadMotion()
+        // The car book learns, shows and asks nothing in a decoy (owner 2026-11-09, car signals).
+        worldLocation.cars.isDecoy = duressSessionActive
         wireWorldFlights()
     }
 

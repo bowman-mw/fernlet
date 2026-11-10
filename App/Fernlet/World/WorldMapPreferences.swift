@@ -1,3 +1,4 @@
+import FernletFoundation
 import Foundation
 
 /// The World map's device-only settings (World app plan steps 5a and 5b; design page answers 4 and 20).
@@ -28,6 +29,12 @@ import Foundation
 /// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
 ///   location and Not now both answer it.
 /// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
+/// - **Background mapping's marker** (owner 2026-11-09, the locked launch): an empty file in Application Support that
+///   mirrors the Always switch for the app's own defaults, because a launch the locked phone refuses can't trust what
+///   it reads; ``clearAll(in:)`` removes it with the rest.
+/// - **The car book and its salt** (owner 2026-11-09, car signals): which Bluetooth devices are the person's cars
+///   (``WorldCarBook``, kept by ``WorldCarKeeper``), and the random salt their scrambled tags are made with, so a wipe
+///   makes every old tag meaningless as well as deleting it.
 ///
 /// Device-only `UserDefaults`, never in the synced settings: they describe this phone's location
 /// behaviour. Every key is cleared by the delete funnel (``clearAll(in:)``,
@@ -47,6 +54,26 @@ nonisolated enum WorldMapPreferences {
         static let bikeRidesCheckedThrough = "fernlet.worldMap.bikeRidesCheckedThrough"
         static let airportsAndFlights = "fernlet.worldMap.airportsAndFlights"
         static let flightsFromCalendar = "fernlet.worldMap.flightsFromCalendar"
+        static let carBook = "fernlet.worldMap.carBook"
+        static let carTagSalt = "fernlet.worldMap.carTagSalt"
+    }
+
+    /// The car book's saved bytes (``WorldCarKeeper``); nil before the first car or sighting.
+    static func carBookData(in defaults: UserDefaults = .standard) -> Data? {
+        defaults.data(forKey: Key.carBook)
+    }
+
+    /// Saves the car book's bytes.
+    static func setCarBookData(_ data: Data, in defaults: UserDefaults = .standard) {
+        defaults.set(data, forKey: Key.carBook)
+    }
+
+    /// The salt the car book's tags are made with, created once on this iPhone (a wipe makes a new one).
+    static func carTagSalt(in defaults: UserDefaults = .standard) -> String {
+        if let salt = defaults.string(forKey: Key.carTagSalt), !salt.isEmpty { return salt }
+        let salt = UUID().uuidString
+        defaults.set(salt, forKey: Key.carTagSalt)
+        return salt
     }
 
     /// Whether "Airports and flights" is on (default on).
@@ -153,9 +180,58 @@ nonisolated enum WorldMapPreferences {
         defaults.bool(forKey: Key.alwaysLowPower)
     }
 
-    /// Sets the low-power Always mode.
+    /// Sets the low-power Always mode; for the app's own defaults, its marker too (``backgroundMappingMarked()``).
     static func setAlwaysLowPower(_ on: Bool, in defaults: UserDefaults = .standard) {
         defaults.set(on, forKey: Key.alwaysLowPower)
+        if defaults === UserDefaults.standard { setBackgroundMarker(on) }
+    }
+
+    // MARK: Background mapping's marker (owner 2026-11-09, the locked launch)
+
+    /// The marker's name in Application Support (a frozen token).
+    static let backgroundMarkerName = "WorldMapBackground.on"
+
+    /// Where the marker lives: Application Support, or `directory` (tests).
+    static func backgroundMarkerURL(in directory: URL? = nil) -> URL? {
+        let folder = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        return folder?.appendingPathComponent(backgroundMarkerName, isDirectory: false)
+    }
+
+    /// Whether background mapping's marker is there: an empty file that mirrors the switch, so a launch the locked
+    /// phone refuses (iOS relaunching a closed Fernlet for a fence, a significant change or a Focus filter) can still
+    /// tell background mapping is on and start the map's location (`WorldLockedMapping`). Being there is readable
+    /// whatever the lock; the file holds nothing.
+    static func backgroundMappingMarked(in directory: URL? = nil) -> Bool {
+        guard let url = backgroundMarkerURL(in: directory) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// Writes the marker to match the switch in the app's own defaults (a launch the phone allowed reads the switch
+    /// itself, so an install from before the marker gets one).
+    static func syncBackgroundMarker() {
+        setBackgroundMarker(alwaysLowPower())
+    }
+
+    /// Puts the marker in place (readable after the first unlock, never backed up) or removes it, in `directory` when
+    /// given; a failure is logged and leaves things as they were.
+    static func setBackgroundMarker(_ on: Bool, in directory: URL? = nil) {
+        guard let url = backgroundMarkerURL(in: directory) else { return }
+        let files = FileManager.default
+        do {
+            guard on else {
+                if files.fileExists(atPath: url.path) { try files.removeItem(at: url) }
+                return
+            }
+            guard !files.fileExists(atPath: url.path) else { return }
+            try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var marked = url
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try marked.setResourceValues(values)
+        } catch {
+            FernletAuditLog.log("worldMap.backgroundMarker.failed")
+        }
     }
 
     /// Whether a finished walk keeps its line on this iPhone (default on).
@@ -194,5 +270,8 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.bikeRidesCheckedThrough)
         defaults.removeObject(forKey: Key.airportsAndFlights)
         defaults.removeObject(forKey: Key.flightsFromCalendar)
+        defaults.removeObject(forKey: Key.carBook)
+        defaults.removeObject(forKey: Key.carTagSalt)
+        if defaults === UserDefaults.standard { setBackgroundMarker(false) }
     }
 }

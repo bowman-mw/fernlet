@@ -376,6 +376,16 @@ struct WorldMapHome: View {
                     .frame(maxWidth: .infinity)
                     .transition(.opacity)
                     .task(id: loggedWalk.id) { await holdToast(loggedWalk) }
+            } else if store.worldLocation.rides.loggedRide == nil, cardContext == nil, !isRiding,
+                      let question = store.worldLocation.cars.askable {
+                // Is this Bluetooth device your car? (owner 2026-11-09): never while riding along, so never to someone moving.
+                WorldCarQuestionNote(question: question, companion: WorldRecenterCopy.companionName(store)) { isCar in
+                    store.worldLocation.cars.answer(isCar: isCar)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, WorldWalkToast.bottomLift)
+                .frame(maxWidth: .infinity)
+                .transition(.opacity)
             } else {
                 // A bike ride that logged itself (`b1-home-bike`, round 7).
                 WorldRideNote(store: store, isFrontmost: isFrontmost && scenePhase == .active)
@@ -451,7 +461,8 @@ struct WorldMapHome: View {
         let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
         let demo = WorldRoadTestScenes.isOn(decoy: store.duressSessionActive)
         return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged).union(demo ? WorldRoadTestScenes.cells : []),
-                           veils: airportVeils.veils(for: store), trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
+                           veils: airportVeils.veils(for: store), driven: store.worldFog.drivenCells,
+                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
                                + (demo ? [WorldRoadTestScenes.walk] : []),
                            traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog)
     }

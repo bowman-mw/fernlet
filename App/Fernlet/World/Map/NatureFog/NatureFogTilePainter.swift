@@ -29,7 +29,7 @@ nonisolated enum NatureFogTileContent {
         let area = NatureFogTileBook.area(of: order.key)
         let layout = grower.layout(in: area)
         // A tile of open sea has no land hexes but still draws its water (World-Exploration-Spec §1).
-        guard !layout.hexes.isEmpty || !layout.seas.isEmpty || !layout.veils.isEmpty else {
+        guard !layout.hexes.isEmpty || !layout.seas.isEmpty || !layout.veils.isEmpty || !layout.drivenVeils.isEmpty else {
             return NatureFogTile(key: order.key, ground: nil, pieces: [], trees: layout.trees)
         }
         let format = UIGraphicsImageRendererFormat()
