@@ -170,7 +170,25 @@ measured against `Docs/Food-Search-Phase0-Baseline-2026-10-29.md`:
   (``BundledFoodSource/searchVocabulary(limit:)``), caches them, and rebuilds when the branded
   catalog attaches or detaches. The catalog never applies a suggestion.
 
-None of the three reaches ``FoodCatalog/candidates(for:limit:ranking:)``,
+**The review fixes (2026-11-09).** Still typed surface only:
+- **A brand's products join rows that already matched.** The brand-field fetch also runs BESIDE the
+  normal gate, for the query's leading one- and two-word runs, and hands the scorer its rows as
+  `FoodItemSearch.BrandFieldPool`s. "chobani blueberry yogurt" matched one row by name and hid the
+  brand's other twenty; the pool supplies them. The scorer adds a pool only when `FoodBrandAgreement`
+  reads its run as the typed brand, so "turkey burger" gains nothing, and rows that NAME the brand
+  lead the pool's rows (below this person's logged rows). No pool is fetched while the
+  last word is under three letters, and the `LIKE` reads at most
+  ``SQLiteBundledFoodSource/brandFieldScanLimit`` gate rows.
+- **A brand typed without its apostrophe.** The sources match the brand word at its singular
+  ("amys" → `amy%`) and a hyphen in the brand field reads as a space.
+- **Single-letter brands.** `FoodBrandInitialism` reads "m&m's", "m&ms" and "a&w root beer"; each
+  source answers ``BundledFoodSource/initialismCandidates(letters:productQuery:limit:)`` with an FTS5
+  phrase (`"m m"`), and rows whose NAME states the letters lead the list.
+- **The offered spelling is checked.** ``FoodCatalog/spellingSuggestion(for:)`` returns nil when the
+  corrected query would itself find nothing. The three search fields now show it under "No catalog
+  matches." as "Did you mean …?"; tapping it fills the field.
+
+None of these reaches ``FoodCatalog/candidates(for:limit:ranking:)``,
 ``FoodCatalog/scoredResults(for:limit:stripsStopwords:)`` or any confidence gate.
 
 **Concurrency.** The target has no `defaultIsolation(MainActor.self)` — everything is

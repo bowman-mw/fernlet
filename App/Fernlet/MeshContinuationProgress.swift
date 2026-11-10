@@ -16,6 +16,10 @@
 // widenings belong to items 5/6. This file takes `TimeInterval`s and an `Int`, computes nothing
 // about the mesh, and imports nothing but Foundation — which also makes it free to test.
 //
+// **Every tick must MOVE the number, not merely not lower it** (2026-11-09). The scale is 10,000
+// units rather than the probe's 100, because 1 % of a 6-hour budget is 216 seconds: the 30-second
+// tick reported an unchanged count seven times in eight, which is a stalled bar to the system.
+//
 // **The bar never reaches the total**, exactly as `NetworkMeshFeasibilityProbe.updateBackgroundTask`
 // clamps to `total - 1`: a `Progress` that completes is a task that has finished, and this one has
 // not. The ceiling's own expiry ends it, not the bar.
@@ -44,8 +48,13 @@ import Foundation
 /// ``completedUnitCount`` converts without a trap on any input, including a NaN budget.
 nonisolated struct MeshContinuationProgress: Equatable, Sendable {
 
-    /// The scale the task's `Progress` is reported on — the probe's 100.
-    static let totalUnitCount: Int64 = 100
+    /// The scale the task's `Progress` is reported on: 10,000 units.
+    ///
+    /// It was the probe's 100 until 2026-11-09. Against the 6-hour ceiling one unit of 100 is 216
+    /// seconds, so seven of every eight 30-second poller ticks wrote the number the system already
+    /// had — and the system ends a continued task whose progress stops advancing. At 10,000 a unit
+    /// is 2.16 seconds, so every tick moves the count (by about 14) for the whole session.
+    static let totalUnitCount: Int64 = 10_000
 
     /// No progress at all: where a task starts, and where a missing or unusable budget leaves it.
     static let zero = MeshContinuationProgress(fraction: 0)

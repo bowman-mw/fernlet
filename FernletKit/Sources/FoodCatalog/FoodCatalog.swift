@@ -76,6 +76,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     private static let partialUserCandidateLimit = 72
     /// Rows each source may hand the brand route for one reading of the query.
     private static let brandFieldCandidateLimit = 400
+    /// The shortest last word a typed query may end in for its brand-field pools to be fetched. A
+    /// two-letter product prefix ("kind ch") passes a six-figure share of the branded catalog through
+    /// the brand filter on every keystroke; from three letters the filter reads a few thousand rows.
+    private static let brandPoolMinimumLastWord = 3
     /// The most index words read per source for the spelling suggestion.
     private static let vocabularyLimit = 250_000
     private var _searchVocabulary: FoodSearchVocabulary?
@@ -288,6 +292,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let fetchLimit = typed ? TypeaheadDuplicateCollapse.fetchLimit(for: limit) : limit
         let candidates = index(for: query, stripsStopwords: stripsStopwords)
         guard !isSuperseded(typed) else { return [] }
+        let pools = typed ? brandFieldPools(for: query, stripsStopwords: stripsStopwords) : []
+        guard !isSuperseded(typed) else { return [] }
         let normal = FoodItemSearch.results(
             for: query,
             in: candidates,
@@ -296,13 +302,15 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
             history: typed ? searchHistory : .empty,
             now: rankingNow,
             ranking: ranking,
-            brandAware: typed
+            brandAware: typed,
+            brandFieldPools: pools
         )
         guard !isSuperseded(typed) else { return [] }
-        let ranked = normal.isEmpty && typed
+        let answered = normal.isEmpty && typed
             ? typedFallback(for: query, limit: fetchLimit, stripsStopwords: stripsStopwords, now: rankingNow, ranking: ranking)
             : normal
-        guard typed else { return promotingCorrection(ranked, for: query, limit: limit, ranking: ranking) }
+        guard typed else { return promotingCorrection(answered, for: query, limit: limit, ranking: ranking) }
+        let ranked = leadingWithInitialism(answered, for: query, limit: fetchLimit, now: rankingNow, ranking: ranking)
         let ownIDs = Set(userItems.map(\.id))
         let history = searchHistory
         let isPersonal: (FoodItem) -> Bool = { item in
@@ -311,6 +319,57 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         let shown = TypeaheadDuplicateCollapse.collapsing(ranked, limit: limit, isProtected: isPersonal)
         let aliased = insertingCuratedAlias(into: shown, for: query, limit: limit, isPersonal: isPersonal)
         return promotingCorrection(aliased, for: query, limit: limit, ranking: ranking)
+    }
+
+    /// Puts a single-letter brand's own rows first (``FoodBrandInitialism``, 2026-11-09): "m&m's" has
+    /// no search token and "m&ms" searched `ms*`, so the brand's rows are fetched by exact phrase and
+    /// lead whatever the ordinary search answered. Inert — `rows` returned as they came — unless the
+    /// query opens with two or more single characters AND some food's NAME states them.
+    ///
+    /// Typed surface only. With product words ("m&m peanut") the phrase rows are ranked by the ordinary
+    /// scorer over those words; with none, ``initialismOrder(_:letters:now:)`` ranks them. Bounded:
+    /// ``brandFieldCandidateLimit`` rows per source.
+    private func leadingWithInitialism(
+        _ rows: [FoodItem], for query: String, limit: Int, now: Date, ranking: FoodSearchRanking
+    ) -> [FoodItem] {
+        guard limit > 0, let reading = FoodBrandInitialism.reading(of: query), !Task.isCancelled else { return rows }
+        let cap = Self.brandFieldCandidateLimit
+        let fetched = source.initialismCandidates(letters: reading.letters, productQuery: reading.product, limit: cap)
+            + (brandedSource?.initialismCandidates(letters: reading.letters, productQuery: reading.product, limit: cap) ?? [])
+            + userItems
+        let pool = fetched.filter { FoodBrandAgreement.states(reading.letters, in: FoodItemSearch.normalized($0.name)) }
+        guard !pool.isEmpty else { return rows }
+        let led = reading.product.isEmpty
+            ? initialismOrder(pool, letters: reading.letters, now: now)
+            : FoodItemSearch.results(
+                for: reading.product, in: FoodItemSearch.Index(foodItems: pool), limit: limit,
+                stripsStopwords: false, history: searchHistory, now: now, ranking: ranking
+            )
+        let ledIDs = Set(led.map(\.id))
+        return Array((led + rows.filter { !ledIDs.contains($0.id) }).prefix(limit))
+    }
+
+    /// A single-letter brand's rows when only the brand was typed ("m&m's"): this person's logged rows
+    /// first, then names that OPEN with the brand, then the maker with the most rows (Mars before a
+    /// supermarket bakery's "M&M cookies"), then the shortest name — the plain product before its
+    /// variations. R2: one sort over at most two capped source pools and the person's own items.
+    private func initialismOrder(_ pool: [FoodItem], letters: [String], now: Date) -> [FoodItem] {
+        let history = searchHistory
+        let opening = letters.joined(separator: " ") + " "
+        var rowsPerMaker: [String: Int] = [:]
+        for item in pool { rowsPerMaker[FoodItemSearch.normalized(item.brandSource ?? ""), default: 0] += 1 }
+        let keyed = pool.map { item -> (item: FoodItem, weight: Int, opens: Bool, maker: Int) in
+            (item, history.weight(for: item.id, now: now),
+             (FoodItemSearch.normalized(item.name) + " ").hasPrefix(opening),
+             rowsPerMaker[FoodItemSearch.normalized(item.brandSource ?? "")] ?? 0)
+        }
+        return keyed.sorted { first, second in
+            if first.weight != second.weight { return first.weight > second.weight }
+            if first.opens != second.opens { return first.opens }
+            if first.maker != second.maker { return first.maker > second.maker }
+            if first.item.name.count != second.item.name.count { return first.item.name.count < second.item.name.count }
+            return first.item.name.localizedStandardCompare(second.item.name) == .orderedAscending
+        }.map(\.item)
     }
 
     /// A typed query's answer when the full gate presented nothing: first the brand-field route
@@ -344,15 +403,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         for query: String, limit: Int, stripsStopwords: Bool, now: Date, ranking: FoodSearchRanking
     ) -> [FoodItem] {
         let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
-        let branded = brandedSource
         for split in FoodBrandAgreement.splits(of: tokens) {
-            guard let word = split.brand.first, !Task.isCancelled else { continue }
+            guard !Task.isCancelled else { continue }
             let product = split.product.joined(separator: " ")
-            let pool = (source.brandFieldCandidates(
-                brandWord: word, productQuery: product, stripsStopwords: stripsStopwords, limit: Self.brandFieldCandidateLimit
-            ) + (branded?.brandFieldCandidates(
-                brandWord: word, productQuery: product, stripsStopwords: stripsStopwords, limit: Self.brandFieldCandidateLimit
-            ) ?? [])).filter { FoodBrandAgreement.states(split.brand, in: FoodItemSearch.normalized($0.brandSource ?? "")) }
+            let pool = brandFieldRows(run: split.brand, product: product, stripsStopwords: stripsStopwords)
             guard !pool.isEmpty else { continue }
             let found = FoodItemSearch.results(
                 for: product, in: FoodItemSearch.Index(foodItems: pool), limit: limit,
@@ -363,15 +417,63 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return []
     }
 
+    /// The rows of both bundled sources whose BRAND FIELD states the whole `run` and whose index passes
+    /// the gate for `product`. The sources match on the run's first word, read at its singular so a
+    /// brand typed without its apostrophe ("amys", "kelloggs") still reaches "Amy's Kitchen" and
+    /// "Kellogg Company"; ``FoodBrandAgreement/statesBrand(_:in:)`` then checks the whole run. Bounded
+    /// by ``brandFieldCandidateLimit`` per source.
+    private func brandFieldRows(run: [String], product: String, stripsStopwords: Bool) -> [FoodItem] {
+        guard let first = run.first else { return [] }
+        let word = FoodItemSearch.matchVariants(for: first)
+            .filter { first.hasPrefix($0) }
+            .min { $0.count < $1.count } ?? first
+        let fetched = source.brandFieldCandidates(
+            brandWord: word, productQuery: product, stripsStopwords: stripsStopwords, limit: Self.brandFieldCandidateLimit
+        ) + (brandedSource?.brandFieldCandidates(
+            brandWord: word, productQuery: product, stripsStopwords: stripsStopwords, limit: Self.brandFieldCandidateLimit
+        ) ?? [])
+        return fetched.filter { FoodBrandAgreement.statesBrand(run, in: FoodItemSearch.normalized($0.brandSource ?? "")) }
+    }
+
+    /// The brand-field pools for a typed query's LEADING runs (2026-11-09), fetched beside the normal
+    /// gate so a brand's products are offered even when a few rows already matched by name: "chobani
+    /// blueberry yogurt" matched one row and hid Chobani's other twenty. The pools only supply
+    /// candidates; ``FoodItemSearch`` adds a pool's rows when the brand rule reads its run as the typed
+    /// brand, so a generic first word adds nothing.
+    ///
+    /// Typed surface only. Bounded: at most ``FoodBrandAgreement/maximumRunWords`` pools, each at most
+    /// ``brandFieldCandidateLimit`` rows per source, and none while the last word is still shorter than
+    /// ``brandPoolMinimumLastWord``. The product words are already search tokens, so the sources are
+    /// asked not to strip them again.
+    private func brandFieldPools(for query: String, stripsStopwords: Bool) -> [FoodItemSearch.BrandFieldPool] {
+        let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)
+        guard tokens.count >= 2, (tokens.last?.count ?? 0) >= Self.brandPoolMinimumLastWord else { return [] }
+        var pools: [FoodItemSearch.BrandFieldPool] = []
+        for length in 1...min(FoodBrandAgreement.maximumRunWords, tokens.count - 1) {
+            guard !Task.isCancelled else { break }
+            let run = Array(tokens.prefix(length))
+            let product = Array(tokens.dropFirst(length))
+            let rows = brandFieldRows(run: run, product: product.joined(separator: " "), stripsStopwords: false)
+            if !rows.isEmpty { pools.append(FoodItemSearch.BrandFieldPool(run: run, product: product, foodItems: rows)) }
+        }
+        return pools
+    }
+
     /// A spelling to OFFER for a typed query ("chobanni yogurt" → "chobani yogurt"), or nil — the
     /// 2026-10-29 brand fixes' labelled suggestion. Never applied by the catalog: the search surface shows
     /// it and runs it only when the person taps it. Reads the base and branded indexes' own vocabulary
     /// (``FoodSearchVocabulary``), built on first use and rebuilt when the branded catalog attaches or
-    /// detaches.
+    /// detaches. Nil when the corrected query would itself find nothing.
+    ///
+    /// The first call reads up to ``vocabularyLimit`` words per source on the calling thread; call it
+    /// off the main actor, as the typeahead does.
     public func spellingSuggestion(for query: String) -> String? {
         let vocabulary = searchVocabulary()
-        guard !vocabulary.isEmpty else { return nil }
-        return vocabulary.suggestion(for: query)
+        guard !vocabulary.isEmpty, let suggestion = vocabulary.suggestion(for: query) else { return nil }
+        // Offered only when tapping it would show something: the words are each known to the index,
+        // which does not mean one food carries them all.
+        guard !results(for: suggestion, limit: 1, context: .userTyped).isEmpty else { return nil }
+        return suggestion
     }
 
     private func searchVocabulary() -> FoodSearchVocabulary {

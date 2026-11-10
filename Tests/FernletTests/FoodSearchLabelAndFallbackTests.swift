@@ -123,10 +123,24 @@ struct FoodSearchLabelAndFallbackTests {
         #expect(FoodItemSearch.matchVariants(for: "eggs") == ["eggs", "egg"])
         #expect(FoodItemSearch.matchVariants(for: "oats") == ["oats", "oat"])
         #expect(FoodItemSearch.matchVariants(for: "grapes") == ["grapes", "grape"])
-        #expect(FoodItemSearch.matchVariants(for: "berries") == ["berries", "berry"])
+        #expect(FoodItemSearch.matchVariants(for: "berries") == ["berries", "berry", "berrie"])
+        // 2026-11-09: "cookies" used to offer only "cooky", and an -es plural only its -s stem.
+        #expect(FoodItemSearch.matchVariants(for: "cookies") == ["cookies", "cooky", "cookie"])
+        #expect(FoodItemSearch.matchVariants(for: "sandwiches") == ["sandwiches", "sandwiche", "sandwich"])
+        #expect(FoodItemSearch.matchVariants(for: "tomatoes") == ["tomatoes", "tomatoe", "tomato"])
+        #expect(FoodItemSearch.matchVariants(for: "olives") == ["olives", "olive"]) // not "oliv"
         #expect(FoodItemSearch.matchVariants(for: "egg") == ["egg"])     // singular: no stem
         #expect(FoodItemSearch.matchVariants(for: "gas") == ["gas"])     // < 4 chars: not stemmed
         #expect(FoodItemSearch.matchVariants(for: "grass") == ["grass"]) // -ss guard: not "gras"
+    }
+
+    // A plural typed beside another word reaches the singular-named product (the other word earns the
+    // row its score; a lone stem match stays below the floor, as `pluralQueryReachesSingularCanonicalFood` states).
+    @Test func pluralBesideAnotherWordReachesTheSingularProduct() {
+        let cookie = makeFood(name: "Protein Cookie, Chocolate Chip", source: .usda, dataType: .branded)
+        let sandwich = makeFood(name: "Turkey Sandwich, on wheat", source: .usda, dataType: .branded)
+        #expect(FoodItemSearch.results(for: "protein cookies", in: [cookie, sandwich]).map(\.name) == [cookie.name])
+        #expect(FoodItemSearch.results(for: "turkey sandwiches", in: [cookie, sandwich]).map(\.name) == [sandwich.name])
     }
 
     // End-to-end through the real FTS5 index (built from in-memory items): the plural query "eggs" must

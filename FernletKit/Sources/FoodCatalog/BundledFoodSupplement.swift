@@ -127,6 +127,11 @@ public nonisolated final class SupplementedBundledFoodSource: BundledFoodSource,
         primary.searchVocabulary(limit: limit)
     }
 
+    /// The file's single-letter-brand route only: supplement rows are unbranded staples.
+    public func initialismCandidates(letters: [String], productQuery: String, limit: Int) -> [FoodItem] {
+        primary.initialismCandidates(letters: letters, productQuery: productQuery, limit: limit)
+    }
+
     /// Supplement rows passing the FTS-equivalent prefix-AND gate for `query`.
     private func supplementMatches(_ query: String, stripsStopwords: Bool) -> [FoodItem] {
         let tokens = FoodItemSearch.searchTokens(in: query, stripsStopwords: stripsStopwords)

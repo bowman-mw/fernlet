@@ -21,6 +21,18 @@ struct CatalogTypeaheadResultSetTests {
         #expect(results.visibleMatches(for: editedQuery).isEmpty)
     }
 
+    @Test func aSpellingIsOfferedOnlyForTheSettledMissItAnswers() {
+        var results = CatalogTypeaheadResultSet()
+        results.bind([], to: "chobanni yogurt", suggestion: "chobani yogurt")
+        #expect(results.visibleSuggestion(for: "chobanni yogurt") == "chobani yogurt")
+        #expect(results.visibleSuggestion(for: "chobanni yogurts") == nil, "an edited field offers nothing stale")
+        results.bind([Self.apple], to: "apple", suggestion: "apples")
+        #expect(results.visibleSuggestion(for: "apple") == nil, "rows were found, so nothing is offered")
+        results.bind([], to: "chobanni yogurt", suggestion: "chobani yogurt")
+        results.clear()
+        #expect(results.visibleSuggestion(for: "chobanni yogurt") == nil)
+    }
+
     @Test func mealComposerCannotStageAStaleAppleRow() {
         let apple = Self.apple
         let results = settledAppleResults(apple)

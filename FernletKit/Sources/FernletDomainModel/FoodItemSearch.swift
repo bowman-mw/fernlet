@@ -217,10 +217,12 @@ public nonisolated enum FoodItemSearch {
 
         fileprivate func matches(
             _ query: SearchQuery, limit: Int, history: FoodSearchHistory, now: Date, ranking: FoodSearchRanking,
-            brandAware: Bool
+            brandAware: Bool, brandFieldPools: [BrandFieldPool]
         ) -> [FoodItem] {
-            scoredMatches(query, limit: limit, history: history, now: now, ranking: ranking, brandAware: brandAware)
-                .map(\.foodItem)
+            scoredMatches(
+                query, limit: limit, history: history, now: now, ranking: ranking, brandAware: brandAware,
+                brandFieldPools: brandFieldPools
+            ).map(\.foodItem)
         }
 
         /// Scores, ranks, floors and demotes — steps 1–5 of the ordering documented on
@@ -237,7 +239,8 @@ public nonisolated enum FoodItemSearch {
             history: FoodSearchHistory,
             now: Date,
             ranking: FoodSearchRanking,
-            brandAware: Bool
+            brandAware: Bool,
+            brandFieldPools: [BrandFieldPool] = []
         ) -> [(foodItem: FoodItem, score: Int)] {
             let isBrandQuery = FoodBrandLexicon.queryContainsBrandToken(query.normalized)
             // Fix 1.8's BOTH floors, applied as part of scoring so a floored row never enters the
@@ -255,7 +258,9 @@ public nonisolated enum FoodItemSearch {
                       score >= FoodItemSearch.minimumBindScore else { return nil }
                 return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
             }
-            let branded = brandAware ? FoodItemSearch.markingTypedBrand(scored, query: query) : scored
+            let branded = brandAware
+                ? FoodItemSearch.markingTypedBrand(scored, query: query, pools: brandFieldPools, history: history, now: now)
+                : scored
             let ranked = FoodItemSearch.markingIdentity(branded, query: query, ranking: ranking, isBrandQuery: isBrandQuery)
                 .sorted { first, second in
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
@@ -307,6 +312,9 @@ public nonisolated enum FoodItemSearch {
         /// Whether the row agrees with a brand the person typed (``FoodBrandAgreement``). Set only on the
         /// typed surface (`brandAware`); false everywhere else, which makes the key inert there.
         var brandAgrees = false
+        /// Whether the row came from a ``BrandFieldPool``: its brand field says the typed brand and its
+        /// name does not. False for every row the gate matched, which makes the key inert without pools.
+        var viaBrandField = false
         let normalizedName: String
 
         init(entry: Index.Entry, score: Int, history: Int) {
@@ -319,25 +327,85 @@ public nonisolated enum FoodItemSearch {
     }
 
     /// Marks the rows that agree with a brand the query names (the 2026-10-29 targeted brand fixes, see
-    /// ``FoodBrandAgreement``). Inert — nothing marked, the order unchanged — when the query names no
+    /// ``FoodBrandAgreement``), and adds the typed brand's products whose names never say it (`pools`,
+    /// 2026-11-09). Inert — nothing marked or added, the order unchanged — when the query names no
     /// brand. Typed surface only: `scoredResults` and the resolver never pass `brandAware`.
     ///
     /// The brand fields are normalized here, over the rows that survived the gate, and only when the
     /// query could name a brand at all (two or more words, or a chain) — not in ``Index``, which would
     /// pay for every hydrated row of every broad one-word prefix.
-    /// R2: two bounded passes over `rows`.
-    fileprivate static func markingTypedBrand(_ rows: [RankedRow], query: SearchQuery) -> [RankedRow] {
+    /// R2: bounded passes over `rows` and over each of the (at most two) pools.
+    fileprivate static func markingTypedBrand(
+        _ rows: [RankedRow], query: SearchQuery, pools: [BrandFieldPool], history: FoodSearchHistory, now: Date
+    ) -> [RankedRow] {
         guard query.tokens.count >= 2 || FoodBrandLexicon.queryContainsBrandToken(query.normalized) else { return rows }
-        let texts = rows.map {
-            FoodBrandAgreement.Row(normalizedName: $0.normalizedName, normalizedBrand: normalized($0.foodItem.brandSource ?? ""))
-        }
+        let texts = rows.map(brandText)
+        let matchedIDs = Set(rows.map(\.foodItem.id))
+        let extras = pools.map { brandFieldRows(of: $0, excluding: matchedIDs, history: history, now: now) }
+        var brandFieldOnly: [[String]: Int] = [:]
+        for (pool, extra) in zip(pools, extras) { brandFieldOnly[pool.run] = extra.count }
         guard let typed = FoodBrandAgreement.typedBrand(
-            tokens: query.tokens, normalizedQuery: query.normalized, matched: texts
+            tokens: query.tokens, normalizedQuery: query.normalized, matched: texts, brandFieldOnly: brandFieldOnly
         ) else { return rows }
-        return zip(rows, texts).map { row, text in
+        let marked = zip(rows, texts).map { row, text in
             var marked = row
             marked.brandAgrees = typed.agrees(text)
             return marked
+        }
+        guard let run = typed.run, let chosen = zip(pools, extras).first(where: { $0.0.run == run }) else { return marked }
+        return marked + chosen.1
+    }
+
+    /// One ranked row as the brand rule reads it. A food the person made by hand or had estimated for
+    /// them is personal: its brand field is the app's label, so its name speaks for the brand.
+    private static func brandText(_ row: RankedRow) -> FoodBrandAgreement.Row {
+        FoodBrandAgreement.Row(
+            normalizedName: row.normalizedName,
+            normalizedBrand: normalized(row.foodItem.brandSource ?? ""),
+            isPersonal: row.foodItem.source == .manual || row.foodItem.source == .aiResolved
+        )
+    }
+
+    /// A pool's rows as ranked rows: those whose brand field states the pool's whole run and whose NAME
+    /// carries every product word, scored against the product words alone (the name never says the
+    /// brand). Rows the gate already matched are left to it. Every row returned agrees with the brand.
+    /// R2: one bounded pass over the pool.
+    private static func brandFieldRows(
+        of pool: BrandFieldPool, excluding matchedIDs: Set<UUID>, history: FoodSearchHistory, now: Date
+    ) -> [RankedRow] {
+        let phrase = pool.product.joined(separator: " ")
+        let product = SearchQuery(tokens: pool.product, effective: phrase, normalized: phrase)
+        return pool.index.entries.compactMap { entry -> RankedRow? in
+            guard !matchedIDs.contains(entry.foodItem.id),
+                  FoodBrandAgreement.statesBrand(pool.run, in: normalized(entry.foodItem.brandSource ?? "")),
+                  carries(pool.product, nameTokens: entry.nameTokens, name: entry.normalizedName),
+                  let score = score(entry, query: product), score >= minimumBindScore else { return nil }
+            var row = RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
+            row.brandAgrees = true
+            row.viaBrandField = true
+            return row
+        }
+    }
+
+    /// The products of one brand a typed query may name, fetched by BRAND FIELD (2026-11-09): rows whose
+    /// brand field has the leading `run` and whose names pass the gate for the remaining `product`
+    /// words. "chobani blueberry yogurt" matches one row by name; Chobani's other twenty blueberry
+    /// yogurts are named "Greek Yogurt, Blueberry" and reach the list only through this.
+    ///
+    /// A pool is a CANDIDATE set. Its rows join the answer only when ``FoodBrandAgreement`` reads the
+    /// run as the typed brand, counting these rows, so a generic first word ("turkey burger") adds
+    /// nothing. ``FoodCatalog`` builds at most ``FoodBrandAgreement/maximumRunWords`` pools, each capped.
+    public struct BrandFieldPool: Sendable {
+        /// The leading brand run, in query order.
+        public let run: [String]
+        /// The product words left over (never empty).
+        public let product: [String]
+        fileprivate let index: Index
+
+        public init(run: [String], product: [String], foodItems: [FoodItem]) {
+            self.run = run
+            self.product = product
+            self.index = Index(foodItems: foodItems)
         }
     }
 
@@ -437,6 +505,8 @@ public nonisolated enum FoodItemSearch {
     ///   ingredient first (F5, the recipe surfaces only); the default keeps the standard order.
     /// - Parameter brandAware: The typed surface only (2026-10-29 brand fixes): rows agreeing with a brand
     ///   the query names rank first, above history (``FoodBrandAgreement``). False everywhere else.
+    /// - Parameter brandFieldPools: The typed brand's products fetched by brand field
+    ///   (``BrandFieldPool``); read only when `brandAware`. Empty everywhere but `FoodCatalog`'s typed path.
     public static func results(
         for query: String,
         in index: Index,
@@ -445,12 +515,16 @@ public nonisolated enum FoodItemSearch {
         history: FoodSearchHistory = .empty,
         now: Date = Date(),
         ranking: FoodSearchRanking = .standard,
-        brandAware: Bool = false
+        brandAware: Bool = false,
+        brandFieldPools: [BrandFieldPool] = []
     ) -> [FoodItem] {
         // R5: `limit` reaches `prefix(_:)`, which traps on a negative length. Asking for no results
         // is answered with no results.
         guard limit > 0, let prepared = searchQuery(query, stripsStopwords: stripsStopwords) else { return [] }
-        return index.matches(prepared, limit: limit, history: history, now: now, ranking: ranking, brandAware: brandAware)
+        return index.matches(
+            prepared, limit: limit, history: history, now: now, ranking: ranking, brandAware: brandAware,
+            brandFieldPools: brandAware ? brandFieldPools : []
+        )
     }
 
     /// Bounded leave-one-out fallback for a typed query whose normal AND result was empty.
@@ -482,7 +556,9 @@ public nonisolated enum FoodItemSearch {
             )
             return RankedRow(entry: entry, score: score, history: history.weight(for: entry.foodItem.id, now: now))
         }
-        let branded = brandAware ? markingTypedBrand(scored, query: prepared) : scored
+        let branded = brandAware
+            ? markingTypedBrand(scored, query: prepared, pools: [], history: history, now: now)
+            : scored
         let ranked = markingIdentity(branded, query: prepared, ranking: ranking, isBrandQuery: isBrandQuery)
         .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
         .map { (foodItem: $0.foodItem, score: $0.score) }
@@ -605,6 +681,11 @@ public nonisolated enum FoodItemSearch {
         let firstIsIngredient = first.identity > 0, secondIsIngredient = second.identity > 0
         if firstIsIngredient != secondIsIngredient { return firstIsIngredient }
         if first.history != second.history { return first.history > second.history }
+        // A row that NAMES the typed brand leads the brand's rows that do not ("Heinz, Tomato Ketchup"
+        // before Kraft Heinz's "Tomato Ketchup"): the two are scored against different words — the
+        // whole query and the product alone — so their scores cannot order them. Below history, so
+        // the brand's product this person logs still comes first.
+        if first.viaBrandField != second.viaBrandField { return second.viaBrandField }
         if first.foodItem.source != second.foodItem.source {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
         }
@@ -693,7 +774,7 @@ public nonisolated enum FoodItemSearch {
         return queryTokens.allSatisfy { queryToken in
             let forms = Set(matchVariants(for: queryToken))
             return nameTokens.contains { token in
-                forms.contains(token) || singularStem(token).map { forms.contains($0) } == true
+                forms.contains(token) || singularStems(token).contains { forms.contains($0) }
             }
         }
     }
@@ -973,7 +1054,7 @@ public nonisolated enum FoodItemSearch {
 
     /// The acceptable match forms for a single query token, used by BOTH the in-memory scorer gate
     /// (above) and the SQLite FTS5 candidate query (`BundledFoodStore.candidates`). Returns the token
-    /// itself plus, when it looks like a regular English plural, its singular stem — so a plural query
+    /// itself plus, when it looks like a regular English plural, its singular stems — so a plural query
     /// ("eggs", "oats", "grapes", "berries") can reach the singular canonical food ("egg", "oat",
     /// "grape", "berry") that the one-directional prefix gate would otherwise miss (`egg*` matches but
     /// `eggs*` doesn't). Each form is applied as an equality-or-prefix match by the scorer and as a
@@ -985,7 +1066,7 @@ public nonisolated enum FoodItemSearch {
     /// still reaches a singular catalog name. English alone returns exactly what it always did.
     nonisolated public static func matchVariants(for token: String) -> [String] {
         var forms = [token]
-        if let stem = singularStem(token), stem != token { forms.append(stem) }
+        for stem in singularStems(token) where stem != token && !forms.contains(stem) { forms.append(stem) }
         // R2: bounded by the active packs and their few rules.
         for pack in InputLanguages.current.packs {
             for form in pack.singularForms(of: token) where form.count >= 3 && !forms.contains(form) {
@@ -995,19 +1076,32 @@ public nonisolated enum FoodItemSearch {
         return forms
     }
 
-    /// Conservative singular stem for a regular English plural. Only the two suffixes needed to reach
-    /// the canonical singular foods are handled — `ies → y` (berries → berry) and a trailing `s`
-    /// (eggs → egg, oats → oat, grapes → grape). We deliberately do NOT strip `es` wholesale (that
-    /// would mangle non-plurals) since the trailing-`s` rule already recovers `grape`/`apple`/`banana`
-    /// via the scorer's / FTS's prefix match. Possessive/mass `ss` endings ("grass") are left alone.
-    nonisolated private static func singularStem(_ token: String) -> String? {
-        guard token.count >= minimumStemTokenLength else { return nil }
+    /// Conservative singular stems for a regular English plural, nearest spelling first:
+    /// - `ies → y` and `ies → ie` (berries → berry; cookies → cookie, brownies → brownie);
+    /// - a trailing `s` (eggs → egg, oats → oat, grapes → grape);
+    /// - `es` after a sibilant or an `o` (sandwiches → sandwich, boxes → box, tomatoes → tomato).
+    ///
+    /// We deliberately do NOT strip `es` wholesale: "grapes" must not become "grap", which prefixes
+    /// "grapefruit". Possessive/mass `ss` endings ("grass") are left alone.
+    ///
+    /// The `ie` and sibilant stems were added on 2026-11-09: with only `ies → y`, "cookies" searched
+    /// `cookies*` and `cooky*` and never reached a row named "Cookie", and "sandwiches" reached 3,824 of
+    /// the 6,795 rows "sandwich" does.
+    nonisolated private static func singularStems(_ token: String) -> [String] {
+        guard token.count >= minimumStemTokenLength else { return [] }
         if token.hasSuffix("ies"), token.count >= 5 {
-            return String(token.dropLast(3)) + "y"
+            return [String(token.dropLast(3)) + "y", String(token.dropLast(1))]
         }
-        if token.hasSuffix("s"), !token.hasSuffix("ss") {
-            return String(token.dropLast(1))
+        guard token.hasSuffix("s"), !token.hasSuffix("ss") else { return [] }
+        var stems = [String(token.dropLast(1))]
+        let withoutES = String(token.dropLast(2))
+        if token.hasSuffix("es"), token.count >= 5, esPluralEndings.contains(where: { withoutES.hasSuffix($0) }) {
+            stems.append(withoutES)
         }
-        return nil
+        return stems
     }
+
+    /// The endings a noun takes `es` after ("sandwich", "dish", "box", "glass", "fizz", "tomato").
+    /// Frozen English matching input (localization wall).
+    nonisolated private static let esPluralEndings = ["ch", "sh", "x", "ss", "z", "o"]
 }
