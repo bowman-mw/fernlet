@@ -541,13 +541,15 @@ public nonisolated struct CoachExerciseDefinition: Codable, Equatable, Sendable 
         }
         let kind = inputKind.flatMap(CoachPlanTokens.inputKind) ?? .strength
 
-        return .success(ExerciseTarget(
+        // The traits the planner's filters read beyond these tags — plane, modality, difficulty and
+        // required gear — get defaults read from the name (``CoachExerciseTraits``, e8.5).
+        return .success(CoachExerciseTraits.applied(to: ExerciseTarget(
             name: trimmedName,
             primaryMuscles: primary,
             secondaryMuscles: secondary.subtracting(primary),
             equipment: gear,
             movementPattern: pattern,
-            inputKind: kind))
+            inputKind: kind)))
     }
 }
 

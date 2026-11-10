@@ -290,6 +290,147 @@ struct WorkoutLoadPlanningTests {
 
     // MARK: - The planner's context
 
+    // MARK: - s4 finished sets keep the weight they were done at
+
+    /// "Done set" then "Skip rest": one finished set, the next one in hand.
+    func doSet(_ state: inout GuidedWorkoutRunState) {
+        state.markSetDone(now: day(0))
+        state.skipRest(now: day(0))
+    }
+
+    @Test func finishedSetsKeepTheWeightTheyWereDoneAt() throws {
+        var state = runState([bench()])
+        let id = try #require(state.exercises.first).id
+        doSet(&state)
+        doSet(&state)
+        state.selectWeight(110, forExercise: id)
+        let done: [Double] = [100, 100]
+        #expect(state.exercises[0].tracking?.doneWeights == done, "Heavier rewrote the sets already done")
+        state.markSetDone(now: day(0))
+        #expect(state.isFinishedNaturally)
+        let log = try #require(GuidedRunLoadLog.log(for: state))
+        // w2 (2026-11-10): the working weight is the one most sets were done at — 100, not the last set's 110.
+        #expect(log.text.contains("Bench press - 3 x 8 @ 100 lb (did 8 @ 100, 8 @ 100, 8 @ 110)"))
+        let result = try #require(log.results.first)
+        let perSet: [Double] = [100, 100, 110]
+        #expect(result.setWeights == perSet)
+        #expect(result.selectedWeight == 100 && result.actualReps == nil)
+        #expect(result.loggedSets == perSet.map { LoggedSet(reps: 8, weight: $0) })
+        // The session reads as completed at 100, with the heavier last set as extra: the next plan
+        // builds on 100, never on a weight only one set was done at.
+        let exposure = LiftExposure(date: day(0), result: result)
+        #expect((exposure.weight, exposure.lighterSets, exposure.completed) == (100, 0, true))
+    }
+
+    @Test func aSetDroppedInTheRunnerRepeatsTheLoadAndAnUntouchedLiftLogsAsBefore() throws {
+        var dropped = runState([bench()])
+        let id = try #require(dropped.exercises.first).id
+        doSet(&dropped)
+        doSet(&dropped)
+        dropped.selectWeight(90, forExercise: id)
+        dropped.markSetDone(now: day(0))
+        let result = try #require(GuidedRunLoadLog.log(for: dropped)?.results.first)
+        let perSet: [Double] = [100, 100, 90]
+        #expect(result.setWeights == perSet && result.workingWeight == 100)
+        #expect(result.loggedLine == "Bench press - 3 x 8 @ 100 lb (did 8 @ 100, 8 @ 100, 8 @ 90)")
+        let exposure = LiftExposure(date: day(0), result: result)
+        #expect((exposure.weight, exposure.lighterSets, exposure.completed) == (100, 1, false))
+
+        // Every set done at the one weight: the same record and line as before sets recorded a weight.
+        var plain = runState([bench()])
+        doSet(&plain)
+        doSet(&plain)
+        plain.markSetDone(now: day(0))
+        let same = try #require(GuidedRunLoadLog.log(for: plain)?.results.first)
+        #expect(same.setWeights == nil && same.wasEdited == false && same.selectedWeight == 100)
+        #expect(same.loggedLine == "Bench press - 3 x 8 @ 100 lb")
+    }
+
+    @Test func theRepsEditorOpensOnTheTapsRecordAndAnEditStillWins() throws {
+        var state = runState([bench()])
+        let id = try #require(state.exercises.first).id
+        doSet(&state)
+        doSet(&state)
+        state.selectWeight(110, forExercise: id)
+        // The sheet opens on what the taps recorded; saving it untouched keeps no weights of its own.
+        let opened = GuidedRepsRow.rows(for: state.exercises[0].tracking, sets: 3)
+        #expect(opened.map(\.weight) == ["100", "100", "110"])
+        let untouched = GuidedRepsRow.saved(opened)
+        state.setActualSets(reps: untouched.reps, weights: untouched.weights, drops: untouched.drops, forExercise: id)
+        #expect(state.exercises[0].tracking?.actualWeights == nil && state.exercises[0].tracking?.actualReps == nil)
+        // A typed correction is kept, and the picker afterwards still moves only the set still to do.
+        state.setActualSets(reps: [8, 6, 8], weights: [95, 100, 110], drops: [false, false, false], forExercise: id)
+        state.selectWeight(105, forExercise: id)
+        let edited: [Double] = [95, 100, 105]
+        #expect(state.exercises[0].tracking?.actualWeights == edited)
+        state.markSetDone(now: day(0))
+        let result = try #require(GuidedRunLoadLog.log(for: state)?.results.first)
+        #expect(result.loggedLine == "Bench press - 3 x 8 @ 105 lb (did 8 @ 95, 6 @ 100, 8 @ 105)")
+    }
+
+    @Test func aSetEditedBeforeItsDoneKeepsItsTypedWeight() throws {
+        var state = runState([bench()])
+        let id = try #require(state.exercises.first).id
+        doSet(&state)
+        doSet(&state)
+        // Set 3 went lighter and shorter; it is typed into Edit reps before "Done set", picker untouched.
+        state.setActualSets(reps: [8, 8, 6], weights: [100, 100, 90], drops: [false, false, false], forExercise: id)
+        state.markSetDone(now: day(0))
+        let result = try #require(GuidedRunLoadLog.log(for: state)?.results.first)
+        #expect(result.loggedLine == "Bench press - 3 x 8 @ 100 lb (did 8 @ 100, 8 @ 100, 6 @ 90)")
+        // A drop set under the last one is never moved by the picker.
+        var withDrop = runState([bench()])
+        let dropID = try #require(withDrop.exercises.first).id
+        doSet(&withDrop)
+        withDrop.setActualSets(reps: [8, 8, 8, 8], weights: [100, 100, 100, 75], drops: [false, false, false, true],
+                               forExercise: dropID)
+        withDrop.selectWeight(110, forExercise: dropID)
+        let kept: [Double] = [100, 110, 110, 75]
+        #expect(withDrop.exercises[0].tracking?.actualWeights == kept)
+    }
+
+    @Test func aRunSavedBeforeSetsRecordedTheirWeightStillDecodesAndLogsAsBefore() throws {
+        let json = #"{"targetReps":8,"step":5,"unitRaw":"lb","askReasonOnOverride":false,"easierSession":false,"compoundsBefore":0,"selected":100}"#
+        let old = try JSONDecoder().decode(GuidedWorkoutRunState.Tracking.self, from: Data(json.utf8))
+        #expect(old.doneWeights == nil && old.selected == 100)
+        let sameForAll: [Double] = [100, 100, 100]
+        #expect(old.setWeights(count: 3) == sameForAll)
+        // A lift with no set done writes no key, so an untouched run's bytes are what they were.
+        let fresh = try #require(GuidedRunLoadLog.tracking(for: bench()))
+        #expect(!String(decoding: try JSONEncoder().encode(fresh), as: UTF8.self).contains("doneWeights"))
+        // The recorded weights survive the app-group round trip.
+        var state = runState([bench()])
+        doSet(&state)
+        let back = try JSONDecoder().decode(GuidedWorkoutRunState.self, from: JSONEncoder().encode(state))
+        let one: [Double] = [100]
+        #expect(back == state && back.exercises[0].tracking?.doneWeights == one)
+        // An older build's run restored on its last set: the sets done before the update take the
+        // weight in hand, exactly as they logged then.
+        var restored = runState([bench()])
+        restored.currentSet = 3
+        restored.selectWeight(110, forExercise: restored.exercises[0].id)
+        restored.markSetDone(now: day(0))
+        let result = try #require(GuidedRunLoadLog.log(for: restored)?.results.first)
+        #expect(result.loggedLine == "Bench press - 3 x 8 @ 110 lb" && result.setWeights == nil)
+    }
+
+    @Test func aSkippedLiftRecordsNoWeightsAndALatePickFillsTheSetsBeforeIt() throws {
+        var skipped = runState([bench(), bench()])
+        skipped.markCurrentSkipped()
+        skipped.markSetDone(now: day(0))
+        #expect(skipped.exercises[0].tracking?.doneWeights == nil)
+        // No weight picked for set 1 (a first-time lift): the pick before set 2 stands for both.
+        var late = runState([bench()])
+        let id = try #require(late.exercises.first).id
+        late.selectWeight(nil, forExercise: id)
+        doSet(&late)
+        #expect(late.exercises[0].tracking?.doneWeights == nil)
+        late.selectWeight(50, forExercise: id)
+        doSet(&late)
+        let both: [Double] = [50, 50]
+        #expect(late.exercises[0].tracking?.doneWeights == both)
+    }
+
     @Test func theContextReadsResultsAndHandLogsButNeverGuidedPlanText() throws {
         func workout(_ text: String, guided: Bool, results: [ExerciseResult]? = nil) -> Workout {
             Workout(name: "Push", type: .upper, exercises: text, rpe: nil, notes: "", duration: nil,
@@ -310,7 +451,9 @@ struct WorkoutLoadPlanningTests {
             todayKey: todayKey, settings: FernletSettings(), locale: Locale(identifier: "en_US")
         )
         let bench = context.history(for: "Bench press")
-        #expect(bench.map(\.weight) == [100, 145, 125])
+        // w2 (2026-11-10): of two hand-written lines on one day the one with the most sets is the
+        // session — 3 × 8 at 135, not the single heavier set at 145.
+        #expect(bench.map(\.weight) == [100, 135, 125])
         #expect(bench.map(\.structured) == [true, false, true])
         #expect(context.calibration.lastCalibration == FernletDate.date(fromDayKey: FernletDate.dayKey(for: day(25))))
         #expect(context.defaultUnit == .lb)
@@ -368,9 +511,8 @@ struct WorkoutLoadPlanningTests {
         let perKilogram = try #require(context.recovery.proteinGramsPerKg)
         #expect(abs(perKilogram - 0.8) < 0.001)
         #expect(context.recovery.proteinUnderFloor)
-        // The food-logs switch reads as on until switched off, and nothing reads a weigh-in yet.
+        // The food-logs switch reads as on until switched off.
         #expect(context.foodAware)
-        #expect(context.bodyWeights.isEmpty)
         var off = FernletSettings()
         off.workoutFoodAware = false
         let quiet = WorkoutLoadContextBuilder.build(days: [:], today: FernletDay(date: "2026-10-20"),

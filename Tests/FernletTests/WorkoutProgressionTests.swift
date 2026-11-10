@@ -5,13 +5,14 @@
 // trained Strength lifters (G2), the harder variation offered at the heaviest weight a location has
 // (N7), the runner stepping through the weights a location owns (R6), and the monthly strength check
 // waiting for a day with more time (N3); what each goal hears (G7), the focus (G6) and the age-adjusted
-// copy (G9); and the protein and body-weight lines of the trend story (G11, G13). The training-age
+// copy (G9); and the protein line of the trend story (G11; no note reads body weight, w10). The training-age
 // pacing and the fixed steps (G3, G4, G8) are pinned beside the engine in WorkoutLoadEngineTests and
 // WorkoutLoadPlanningTests, with the food question and the protein context's builder (G12, G11).
 
 import Foundation
 import Testing
 import FernletDomainModel
+import FernletFoundation
 @testable import Fernlet
 
 /// G2 blocks, N7 harder variation, R6 owned-weight stepping, N3 the strength check's roomier day.
@@ -42,11 +43,11 @@ struct WorkoutProgressionTests {
         location: WorkoutLocation = .fullGym, history: [String: [LiftExposure]] = [:], today: Int = 30,
         experience: ExperienceLevel? = nil, calibration: CalibrationSettings = CalibrationSettings(hasCoach: true),
         length: WorkoutSessionLength = .noLimit, traits: LifterTraits = .unknown, focus: WorkoutStrengthFocus = .both,
-        recovery: RecoverySummary = .unknown, foodAware: Bool = false, bodyWeights: [BodyWeightSample] = []
+        recovery: RecoverySummary = .unknown, foodAware: Bool = false, deloadWeek: Bool = false
     ) throws -> WorkoutProgram.SessionSuggestion {
         let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, recovery: recovery,
                                       calibration: calibration, traits: traits, experience: experience, focus: focus,
-                                      foodAware: foodAware, bodyWeights: bodyWeights)
+                                      foodAware: foodAware, deloadWeek: deloadWeek)
         let plan = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .beginner), location: location,
             context: "", split: Self.split(template), rotationIndex: 0, load: load,
@@ -175,6 +176,66 @@ struct WorkoutProgressionTests {
         #expect(stepped.steppedWeight(direction: 1, start: 10) == 25)
         #expect(stepped.snapped(22) == 20)
         #expect(tracking(loads: nil, selected: nil).steppedWeight(direction: 1, start: 10) == 10)
+    }
+
+    // MARK: - w1 a first-time lift can be set light
+
+    /// A barbell garage — a bar, a rack and a bench, so its lifts are barbell lifts — with three pairs of
+    /// 45s and the smaller plates: far more than 48 totals, which is where the runner's window used to
+    /// sit in the middle of the ladder.
+    func plateRichGym() -> WorkoutLocation {
+        var gym = WorkoutLocation(name: "Barbell garage", ownedEquipment: [.barbell, .weightPlates, .weightBench, .squatRack])
+        var weights = WorkoutWeightInventory(unit: .lb)
+        weights.setBar(45)
+        for (count, plate) in [(3, 45.0), (1, 35.0), (1, 25.0), (2, 10.0), (1, 5.0), (1, 2.5)] {
+            weights.setPairs(count, of: plate)
+        }
+        gym.weights = weights
+        return gym
+    }
+
+    @Test func aFirstTimeLiftsPickerStartsAtTheLightestLoadOwnedAndOpensUpward() throws {
+        let gym = plateRichGym()
+        let ladder = try #require(gym.weights.ladder(for: .barbell, in: .lb))
+        #expect(ladder.loads.count > LoadGuidance.maxRunnerLoads, "the fixture must overflow the runner's window")
+        let session = try plan(location: gym)
+        let lift = try #require(lifting(session).first { $0.guidance?.equipment == .barbell })
+        #expect(lift.guidance?.prescription == nil, "no history, so no suggestion")
+        let loads = try #require(lift.guidance?.loads)
+        #expect(loads.count == LoadGuidance.maxRunnerLoads)
+        #expect(loads.first == 45, "the window starts at the empty bar, not the middle of the ladder")
+        #expect(loads == Array(ladder.loads.prefix(LoadGuidance.maxRunnerLoads)))
+
+        // In the runner: nothing picked yet, the first tap either way lands on the empty bar…
+        var picker = try #require(GuidedRunLoadLog.tracking(for: lift))
+        #expect(picker.selected == nil)
+        let start = GuidedLoadFormat.startWeight(picker)
+        #expect(picker.steppedWeight(direction: 1, start: start) == 45)
+        #expect(picker.steppedWeight(direction: -1, start: start) == 45)
+        // …and from there it steps both ways through the loads owned.
+        picker.selected = 45
+        let heavier = try #require(picker.steppedWeight(direction: 1, start: start))
+        #expect(heavier == loads[1] && heavier > 45)
+        picker.selected = heavier
+        #expect(picker.steppedWeight(direction: -1, start: start) == 45)
+        picker.selected = 45
+        #expect(picker.steppedWeight(direction: -1, start: start) == 45, "nothing is lighter than the bar")
+
+        // The lightest dumbbell, not the 10 lb default start, when the pairs owned are known.
+        #expect(tracking(loads: [5, 12.5, 20, 35], selected: nil).steppedWeight(direction: 1, start: 10) == 5)
+    }
+
+    @Test func aLiftWithASuggestionStillCarriesTheLoadsAroundIt() throws {
+        let gym = plateRichGym()
+        let baseline = try plan(location: gym)
+        let name = try #require(lifting(baseline).first { $0.guidance?.equipment == .barbell }).name
+        let session = try plan(location: gym, history: [key(name): [session(28, 225, reps: 10, target: 10)]])
+        let lift = try #require(lifting(session).first { $0.name == name })
+        let suggested = try #require(lift.guidance?.prescription?.suggested)
+        let loads = try #require(lift.guidance?.loads)
+        #expect(loads.count == LoadGuidance.maxRunnerLoads)
+        #expect(try #require(loads.first) < suggested && suggested < (try #require(loads.last)))
+        #expect(try #require(loads.first) > 45, "a lift with history keeps its window around the suggestion")
     }
 
     @Test func aRunSavedBeforeOwnedLoadsStillDecodes() throws {
@@ -351,18 +412,11 @@ struct WorkoutProgressionTests {
         #expect(tokens == frozen)
     }
 
-    // MARK: - G11, G13 food and body weight in the trend story
+    // MARK: - G11 food in the trend story
 
     /// Protein logged at 0.8 g per kg a day on every day of the last two weeks: under the floor even
     /// allowing for under-logging.
     static let lowProtein = RecoverySummary(proteinGramsPerKg: 0.8, loggedDaysByWeek: [7, 7])
-
-    /// A morning weigh-in on each of the 28 days before `today`, from 80 kg down 1 % a week.
-    func falling(today: Int) -> [BodyWeightSample] {
-        (1...28).reversed().map { back in
-            BodyWeightSample(date: day(today - back), kilograms: 80 * pow(0.99, Double(28 - back) / 7))
-        }
-    }
 
     @Test func aStallUnderTheProteinFloorSaysSoOnlyWithFoodLogsOn() throws {
         let main = try #require(lifting(try plan(goal: .strength)).first).name
@@ -393,29 +447,18 @@ struct WorkoutProgressionTests {
         #expect(!notes.contains("eat more"))
     }
 
-    @Test func aFallingBodyWeightExplainsASizeStallAndBringsAGentleCheckIn() throws {
+    /// w10 (2026-11-10): the planner reads no body weight, so a note never mentions it — the context
+    /// that claimed to (G13) was never fed a weigh-in and is gone.
+    @Test func noNoteEverMentionsBodyWeight() throws {
         let main = try #require(lifting(try plan(goal: .strength)).first).name
-        let history = [key(main): climbThenFlat(flatWeeks: 9)]
-        let weights = falling(today: 104)
-        #expect(WorkoutBodyWeightTrend.isFalling(weights, today: day(104)))
-        let size = try plan(goal: .strength, history: history, today: 104, focus: .size, foodAware: true,
-                            bodyWeights: weights)
-        #expect(size.suggestion.notes.contains("Your logged body weight has been coming down over the last few weeks, and muscle size usually holds steady while it does"))
-        // Only for the Size focus, and only with the food-logs switch on.
-        let both = try plan(goal: .strength, history: history, today: 104, foodAware: true, bodyWeights: weights)
-        #expect(!both.suggestion.notes.contains("body weight"))
-        let off = try plan(goal: .strength, history: history, today: 104, focus: .size, bodyWeights: weights)
-        #expect(!off.suggestion.notes.contains("body weight"))
-
+        let stalled = try plan(goal: .strength, history: [key(main): climbThenFlat(flatWeeks: 9)], today: 104,
+                               focus: .size, recovery: Self.lowProtein, foodAware: true)
+        #expect(stalled.suggestion.notes.contains("\(main) has held steady for"))
+        #expect(!stalled.suggestion.notes.contains("body weight has been"))
         let wm = try #require(lifting(try plan(goal: .weightManagement)).first).name
-        let checkIn = try plan(goal: .weightManagement, history: [key(wm): easing()], today: 97, foodAware: true,
-                               bodyWeights: falling(today: 97))
-        let notes = checkIn.suggestion.notes
-        #expect(notes.contains("Your logged body weight has been coming down over the same weeks, and the two often happen together. How have you been feeling lately?"))
-        #expect(!notes.contains("eat more") && !notes.contains("Protein"))
-        // No weigh-ins, no word about weight.
-        let unlogged = try plan(goal: .weightManagement, history: [key(wm): easing()], today: 97, foodAware: true)
-        #expect(!unlogged.suggestion.notes.contains("body weight"))
+        let eased = try plan(goal: .weightManagement, history: [key(wm): easing()], today: 97, foodAware: true)
+        #expect(eased.suggestion.notes.contains("\(wm) has eased a little over recent weeks."))
+        #expect(!eased.suggestion.notes.contains("body weight"))
     }
 
     // MARK: - N3 the strength check's roomier day
@@ -430,5 +473,205 @@ struct WorkoutProgressionTests {
         let squeezed = lifting(short).contains { $0.guidance?.calibration != nil }
         #expect(!squeezed)
         #expect(short.suggestion.notes.contains("The monthly strength check moves to a day with more time"))
+    }
+}
+
+// MARK: - The 2026-11-10 fixes at the plan (w4, w5, w7, w8, w9) and the runner's window
+
+extension WorkoutProgressionTests {
+
+    /// Three main lifts, all upper body, so one history stalls them alike.
+    static let threeMains = WorkoutSessionTemplate(title: "Upper", kind: .strength, slots: [
+        WorkoutSlotSpec(label: "Press", role: .main, movement: .push, muscles: [.chest]),
+        WorkoutSlotSpec(label: "Pull", role: .main, movement: .pull, muscles: [.lats]),
+        WorkoutSlotSpec(label: "Overhead", role: .main, movement: .push, muscles: [.frontDelts]),
+    ])
+
+    /// w4: a plan built while a check is put off holds the normal sets and says nothing about a check.
+    @Test func aStrengthCheckPutOffIsNotPlannedAndThePlanSaysNothingAboutIt() throws {
+        let main = try #require(lifting(try plan(goal: .strength)).first).name
+        let history = [key(main): [21, 28].map { session($0, 135, reps: 10, target: 10) }]
+        let normal = try plan(goal: .strength, history: history)
+        let due = try plan(goal: .strength, history: history, calibration: CalibrationSettings())
+        #expect(lifting(due).contains { $0.guidance?.calibration == .test })
+
+        let putOff = try plan(goal: .strength, history: history, calibration: CalibrationSettings(askAgainFrom: day(35)))
+        #expect(!lifting(putOff).contains { $0.guidance?.calibration != nil })
+        #expect(lifting(putOff).map(\.line) == lifting(normal).map(\.line), "the normal sets")
+        #expect(!putOff.suggestion.notes.localizedCaseInsensitiveContains("strength check"))
+        // On the day it may be asked again, it is.
+        let again = try plan(goal: .strength, history: history, today: 35,
+                             calibration: CalibrationSettings(askAgainFrom: day(35)))
+        #expect(lifting(again).contains { $0.guidance?.calibration == .test })
+
+        // Every step of a planned check carries the lift's usual sets, for "Not now" in the runner.
+        let usualLift = try #require(lifting(normal).first { $0.name == main })
+        let checkSteps = lifting(due).filter { $0.name == main }
+        #expect(!checkSteps.isEmpty)
+        for step in checkSteps {
+            let usual = try #require(step.guidance?.usual)
+            #expect((usual.sets, usual.reps) == (usualLift.sets, Int(usualLift.reps)))
+            #expect(usual.prescription == usualLift.guidance?.prescription)
+            #expect(usual.restSeconds > 0)
+        }
+        #expect(lifting(normal).allSatisfy { $0.guidance?.usual == nil })
+    }
+
+    @Test func aCheckIsNeverDueWhilePutOffNorWithinAWeekOfTheLast() {
+        func due(_ settings: CalibrationSettings, _ intensity: WorkoutIntensity = .moderate) -> Bool {
+            WorkoutCalibration.isDue(settings, intensity: intensity, today: day(100))
+        }
+        #expect(due(CalibrationSettings()))
+        #expect(!due(CalibrationSettings(askAgainFrom: day(101))))
+        #expect(due(CalibrationSettings(askAgainFrom: day(100))), "on the day itself the check is back")
+        #expect(due(CalibrationSettings(lastCalibration: day(72))))
+        #expect(!due(CalibrationSettings(lastCalibration: day(73))))
+        #expect(!due(CalibrationSettings(lastCalibration: day(60), askAgainFrom: day(110))))
+        #expect(!due(CalibrationSettings(lastCalibration: day(95))), "never two checks in one week")
+        #expect(WorkoutCalibration.minimumGapDays == 7)
+        #expect(!due(CalibrationSettings(), .light) && !due(CalibrationSettings(hasCoach: true)))
+    }
+
+    /// w4: the app's builder hands the device's "Not now" to the planner as a day.
+    @Test func theContextCarriesAPutOffCheckAsADay() {
+        let todayKey = FernletDate.dayKey(for: day(100))
+        func context(_ again: Date?) -> WorkoutLoadContext {
+            WorkoutLoadContextBuilder.build(days: [:], today: FernletDay(date: todayKey), todayKey: todayKey,
+                                            settings: FernletSettings(), strengthCheckAskAgainFrom: again)
+        }
+        #expect(context(nil).calibration.askAgainFrom == nil)
+        let evening = Calendar.current.startOfDay(for: day(105)).addingTimeInterval(18 * 3_600)
+        #expect(context(evening).calibration.askAgainFrom == Calendar.current.startOfDay(for: day(105)))
+    }
+
+    /// w5 (W6): a marked deload week was only a calendar label — "add weight now" could appear in it.
+    @Test func aMarkedDeloadWeekLightensThePlanItself() throws {
+        let main = try #require(lifting(try plan(goal: .strength)).first).name
+        let history = [key(main): [26, 28].map { session($0, 135, reps: 5, target: 5) }]
+        let normal = try plan(goal: .strength, history: history)
+        let normalLift = try #require(lifting(normal).first { $0.name == main })
+        #expect(normalLift.guidance?.prescription?.suggested == 140)
+        #expect(normal.suggestion.notes.contains("\(main): up to 140 lb today."))
+
+        let deload = try plan(goal: .strength, history: history, deloadWeek: true)
+        let lift = try #require(lifting(deload).first { $0.name == main })
+        #expect(lift.guidance?.prescription?.suggested == 135, "the same weight as last time")
+        #expect(lift.reps == "5")
+        #expect(lift.sets == WorkoutLoadEngine.deloadWeekSets(normalLift.sets))
+        #expect(lift.sets < normalLift.sets)
+        #expect(lift.guidance?.easierSession == true, "so it never becomes next week's starting point")
+        let notes = deload.suggestion.notes
+        #expect(notes.contains("Deload week: the same weights as last time and about half the sets."))
+        #expect(!notes.contains("up to 140") && !notes.contains("add weight"))
+        // Lifts with nothing logged lighten too.
+        let others = zip(lifting(normal), lifting(deload)).filter { $0.0.name != main }
+        #expect(!others.isEmpty)
+        #expect(others.allSatisfy { $0.0.name == $0.1.name && $0.1.sets == WorkoutLoadEngine.deloadWeekSets($0.0.sets) })
+        // No strength check in a deload week, due or not.
+        let ready = [key(main): [21, 28].map { session($0, 135, reps: 5, target: 5) }]
+        let checked = try plan(goal: .strength, history: ready, calibration: CalibrationSettings(), deloadWeek: true)
+        #expect(!lifting(checked).contains { $0.guidance?.calibration != nil })
+        #expect(!checked.suggestion.notes.localizedCaseInsensitiveContains("strength check"))
+    }
+
+    /// w5: the builder reads the Bodybuilding calendar's marked week, only while that goal is on.
+    @Test func theContextKnowsAMarkedDeloadWeek() throws {
+        let calendar = BodybuildingWeeks.calendar()
+        let todayKey = FernletDate.dayKey(for: day(100))
+        let week = try #require(BodybuildingWeeks.weekStartKey(forDayKey: todayKey, calendar: calendar))
+        var settings = FernletSettings()
+        settings.selectedGoal = .bodybuilding
+        #expect(!WorkoutLoadContextBuilder.isDeloadWeek(todayKey: todayKey, settings: settings))
+        settings.bodybuildingCalendar.setDeload(weekStart: week, true)
+        #expect(WorkoutLoadContextBuilder.isDeloadWeek(todayKey: todayKey, settings: settings))
+        let context = WorkoutLoadContextBuilder.build(days: [:], today: FernletDay(date: todayKey), todayKey: todayKey,
+                                                      settings: settings)
+        #expect(context.deloadWeek)
+        let nextWeek = try #require(BodybuildingWeeks.dayKey(todayKey, addingDays: 7, calendar: calendar))
+        #expect(!WorkoutLoadContextBuilder.isDeloadWeek(todayKey: nextWeek, settings: settings))
+        settings.selectedGoal = .strength
+        #expect(!WorkoutLoadContextBuilder.isDeloadWeek(todayKey: todayKey, settings: settings),
+                "the mark is only read while the calendar that shows it is on")
+    }
+
+    /// w7 (W13): at the heaviest pair, one extra set — then the harder variation, not the line again.
+    @Test func atTheHeaviestLoadOneExtraSetThenTheHarderVariationIsNamed() throws {
+        func planned(_ days: [Int]) throws -> WorkoutProgram.SessionSuggestion {
+            try plan(template: Self.squatOnly, location: garage(),
+                     history: [key("Goblet squat"): days.map { session($0, 25, reps: 15, target: 15) }])
+        }
+        let extraSet = try planned([28])
+        #expect(extraSet.suggestion.notes.contains("Goblet squat: one more set today — 25 lb is your heaviest dumbbell."))
+        let toppedOut = try planned([26, 28])
+        let lift = try #require(lifting(toppedOut).first)
+        #expect(lift.sets == (try #require(lifting(extraSet).first)).sets, "the one extra set is kept, never a second")
+        #expect(lift.guidance?.harderVariation == "Dumbbell front squat")
+        let notes = toppedOut.suggestion.notes
+        #expect(notes.contains("Goblet squat: this is as far as reps and sets go here. Dumbbell front squat is the next step up"))
+        #expect(!notes.contains("one more set today"))
+        #expect(!notes.contains("Otherwise more reps, then a set"))
+        let held = try planned([24, 26, 28])
+        #expect(!held.suggestion.notes.contains("Goblet squat"), "said once; after that it holds quietly")
+        #expect(lifting(held).first?.guidance?.harderVariation == "Dumbbell front squat", "the swap is still offered in the editor")
+        #expect(lifting(held).first?.sets == lift.sets)
+    }
+
+    /// w8 (W14): the advanced pace stays 28 days, and the note says until when.
+    @Test func aLongTrainedLiftersHoldSaysUntilWhen() throws {
+        let main = try #require(lifting(try plan()).first).name
+        let history = [key(main): [20, 24, 28].map { session($0, 135, reps: 9, target: 9) }]
+        let held = try plan(history: history, experience: .advanced)
+        let lift = try #require(lifting(held).first { $0.name == main })
+        #expect(lift.reps == "9")
+        #expect(lift.guidance?.prescription?.suggested == 135)
+        let until = day(48).formatted(.dateTime.month(.wide).day())
+        #expect(held.suggestion.notes.contains("\(main): holding this block until \(until)."))
+    }
+
+    /// w9 (W10): a second stalled lift changed silently.
+    @Test func everyLiftTheTrendChangedIsNamedUpToTwoThenCounted() throws {
+        let names = lifting(try plan(goal: .strength, template: Self.threeMains)).map(\.name)
+        try #require(names.count == 3 && Set(names).count == 3)
+        let stalled = Dictionary(uniqueKeysWithValues: names.map { (key($0), climbThenFlat(flatWeeks: 9)) })
+        let all = try plan(goal: .strength, template: Self.threeMains, history: stalled, today: 104).suggestion.notes
+        #expect(all.contains("\(names[0]) has held steady for"))
+        #expect(all.contains("Today \(names[0]) goes first, with at least 3 minutes' rest between sets — a fair retest."))
+        #expect(all.contains("\(names[1]) also gets at least 3 minutes' rest between sets — a fair retest."))
+        #expect(all.contains("And 1 more changed today."))
+        #expect(!all.contains("\(names[2]) also gets"), "two lifts are named; the rest are counted")
+
+        let two = Dictionary(uniqueKeysWithValues: names.prefix(2).map { (key($0), climbThenFlat(flatWeeks: 9)) })
+        let pair = try plan(goal: .strength, template: Self.threeMains, history: two, today: 104).suggestion.notes
+        #expect(pair.contains("\(names[1]) also gets at least 3 minutes' rest between sets — a fair retest."))
+        #expect(!pair.contains("more changed today"))
+        let one = try plan(goal: .strength, template: Self.threeMains, history: [key(names[0]): climbThenFlat(flatWeeks: 9)],
+                           today: 104).suggestion.notes
+        #expect(one.contains("Today \(names[0]) goes first") && !one.contains("also gets") && !one.contains("more changed today"))
+    }
+
+    /// B1's follow-up: with no history the run carries the 48 lightest loads, and "Heavier" stopped at
+    /// the 48th.
+    @Test func steppingPastTheCarriedWindowGoesOnByTheStep() {
+        #expect(GuidedWorkoutRunState.Tracking.carriedWindow == LoadGuidance.maxRunnerLoads)
+        let window = (0..<LoadGuidance.maxRunnerLoads).map { 45 + 5 * Double($0) }   // 45 … 280
+        var first = tracking(loads: window, selected: 280)
+        first.suggested = nil
+        first.rangeLow = nil
+        first.rangeHigh = nil
+        #expect(first.steppedWeight(direction: 1, start: 45) == 285, "a strong first-timer is not capped at the 48th load")
+        #expect(first.snapped(285) == 285, "and the pick is not pulled back into the window")
+        first.selected = 290
+        #expect(first.steppedWeight(direction: 1, start: 45) == 295)
+        #expect(first.steppedWeight(direction: -1, start: 45) == 280, "back down, it rejoins the loads owned")
+        first.selected = 45
+        #expect(first.steppedWeight(direction: -1, start: 45) == 45, "nothing is lighter than the lightest load owned")
+        #expect(first.snapped(20) == 45)
+        // A window taken around a suggestion may be cut at either end.
+        let around = tracking(loads: window, selected: 45)
+        #expect(around.steppedWeight(direction: -1, start: 45) == 40)
+        #expect(around.snapped(40) == 40)
+        // A short list is everything the location owns: its ends are real.
+        #expect(tracking(loads: [5, 12.5, 20, 35], selected: 35).steppedWeight(direction: 1, start: 10) == 35)
+        #expect(tracking(loads: [5, 12.5, 20, 35], selected: 35).snapped(60) == 35)
     }
 }

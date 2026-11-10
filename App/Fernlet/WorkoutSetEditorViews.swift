@@ -351,3 +351,65 @@ struct SetOverrideReasonChips: View {
         }
     }
 }
+
+// MARK: - "Is that weight right?" (w2)
+
+extension SetWeightQuestion {
+    /// The typed weight with its unit, in the person's number format ("500 lb").
+    var weightText: String {
+        GuidedLoadFormat.weight(weight, unit: unit == .kg ? .kilograms : .pounds)
+    }
+
+    /// The question itself: "500 lb? Last time was 50." or "500 lb? Your next heaviest set is 50."
+    var titleText: String {
+        let usualText = SetRowDraft.text(for: usual)
+        switch reference {
+        case .lastTime:
+            return String(localized: "\(weightText)? Last time was \(usualText).",
+                          comment: "Alert title before saving a typed set weight far above last time's. Arguments: the typed weight with its unit ('500 lb'), then last time's weight as a bare number ('50').")
+        case .otherSets:
+            return String(localized: "\(weightText)? Your next heaviest set is \(usualText).",
+                          comment: "Alert title before saving a typed set weight far above the lift's other sets. Arguments: the typed weight with its unit ('500 lb'), then the next heaviest set's weight as a bare number ('50').")
+        }
+    }
+
+    /// "Keep 500" — saves the weight as typed.
+    var keepText: String {
+        String(localized: "Keep \(SetRowDraft.text(for: weight))",
+               comment: "Alert button that saves a typed set weight as it is. Argument: the weight as a bare number ('Keep 500').")
+    }
+}
+
+extension View {
+    /// The one calm question before a typed set weight far above the rest is saved (w2,
+    /// ``SetWeightCheck``): "Keep 500" runs `onKeep` — the save the question interrupted — and
+    /// "Fix it" goes back to the rows. Never a block: either answer leaves the person in charge.
+    ///
+    /// An `alert`, like every confirmation here (see `discardConfirmation`): on iOS 26 a confirmation
+    /// dialog can hide its cancel button. The caller marks the value settled when it raises the
+    /// question, so the same value is never asked about twice.
+    func setWeightQuestion(_ question: Binding<SetWeightQuestion?>, onKeep: @escaping () -> Void) -> some View {
+        alert(
+            Text(verbatim: question.wrappedValue?.titleText ?? ""),
+            isPresented: Binding(get: { question.wrappedValue != nil }, set: { if !$0 { question.wrappedValue = nil } }),
+            presenting: question.wrappedValue
+        ) { asked in
+            Button(role: .cancel) {} label: {
+                Text("Fix it", comment: "Alert button that goes back to the set rows so a mistyped weight can be corrected.")
+            }
+            .accessibilityIdentifier("workout.sets.weightQuestion.fix")
+            Button(action: onKeep) { Text(verbatim: asked.keepText) }
+                .accessibilityIdentifier("workout.sets.weightQuestion.keep")
+        }
+    }
+}
+
+extension FernletStore {
+    /// The weight `lift` was last logged at, read in `unit` — what a typed set weight is measured
+    /// against before it is saved (w2). Nil for a lift never logged with a weight. One history rollup,
+    /// so call it on Save, not while typing.
+    func lastLoggedWeight(for lift: String, in unit: LoadUnit) -> Double? {
+        let entry = exerciseHistoryEntry(named: lift)
+        return SetWeightCheck.weight(entry?.lastWeight, unitToken: entry?.weightUnit, in: unit)
+    }
+}

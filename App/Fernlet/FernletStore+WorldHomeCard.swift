@@ -67,6 +67,8 @@ extension FernletStore {
 
     /// Prepares "Suggest a room workout" at a hotel: the room space (no equipment) becomes the active one,
     /// added the first time with nothing to set up, so Move's suggestion is built from bodyweight alone.
+    /// A plan already committed today for another space is rebuilt for the room where it has not
+    /// started (the owner's fix e4), so the sheet never shows gym lifts under "No equipment".
     /// Nothing in a decoy (a decoy has no hotel).
     func prepareRoomWorkout() {
         guard !duressSessionActive else { return }

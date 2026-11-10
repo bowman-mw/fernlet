@@ -28,7 +28,25 @@ protocol WorkoutPlanningContext: AnyObject {
     /// The travel days of the planner's lookback, as day keys only (World-Airports-Spec §13.4): a session on
     /// one is forgiven. The composition root's per-day yes/no; never a flight, an airport, a time or a place.
     var workoutTravelDayKeys: Set<String> { get }
+    /// The moment a put-off strength check may be offered again, nil when none is put off (w4,
+    /// `WorkoutCalibrationDeferral`): the plan offers no check before that day.
+    var strengthCheckAskAgainFrom: Date? { get }
+    /// Today's committed plan, nil when there is none — the other sessions an adjusted or edited
+    /// session may not repeat a lift of.
+    var currentGuidedWorkoutPlan: WorkoutProgram.DayPlan? { get }
+    /// The intensity, "Anything else?" and chosen length today's committed plan was built with, nil
+    /// without a plan: the finishing pass after an adjustment or an edit honours today's note (its
+    /// today-only easing and its shorter session) exactly as the plan's own build did.
+    var committedGuidedPlanInputs: (intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength?)? { get }
 }
+
+/// The model call behind "Adjust with AI", as the service makes it: the payload, the numbered
+/// candidates, the session's current lines and the gate, answered with picks or the reason there are
+/// none. Production is the walled on-device stage; a test hands in a double, since the Foundation
+/// model never runs in the simulator.
+typealias WorkoutAdjuster = @MainActor (
+    WorkoutAdjustmentPayload, [WorkoutAdjustmentCandidate], [String], FernletAIGate
+) async throws -> WorkoutAdjustmentReply
 
 /// Workout split recommendation + day-plan generation + AI day-plan adjustment,
 /// extracted from ``FernletStore`` (plan §5d).
@@ -38,8 +56,10 @@ protocol WorkoutPlanningContext: AnyObject {
 /// unchanged. `@MainActor` like its host, which it holds `unowned` — the store owns the service,
 /// never the reverse. Generation is deterministic (split rotation by the last logged split day,
 /// equipment/injury filtering, logged progression); only ``adjustWorkoutDayPlan(_:request:)``
-/// touches AI, and it degrades to the unchanged plan on an empty request, AI-off, or any model
-/// failure.
+/// touches AI, and when it changes nothing — an empty request, AI off, a model failure, a reply
+/// that asks for nothing new or would leave too few lifts — it says which
+/// (``WorkoutAdjustmentOutcome``). An adjusted session and a session edited by hand both leave
+/// through the one finishing pass (`WorkoutPlanFinisher`, ``finishContext()``).
 @MainActor
 final class WorkoutPlanningService {
     /// The read-side seam into app state — `unowned` because the host (``FernletStore``) owns this
@@ -50,6 +70,12 @@ final class WorkoutPlanningService {
     ///   because the host owns this service.
     init(host: any WorkoutPlanningContext) {
         self.host = host
+    }
+
+    /// Who "Adjust with AI" asks. Production is the walled on-device stage; internal-settable ONLY
+    /// so a test can hand in a double.
+    var adjuster: WorkoutAdjuster = { payload, candidates, currentLines, gate in
+        try await FoundationWorkoutAdjustmentModel.adjust(payload, candidates: candidates, currentLines: currentLines, gate: gate)
     }
 
     /// How consistently the user has trained over the last 4 weeks — a recommendation input.
@@ -112,7 +138,9 @@ final class WorkoutPlanningService {
     /// them. Each session is shaped by Workout setup's session options — the warm-up and cool-down
     /// switches and the time budget it is fitted into — with `sessionLength`, when given, standing in
     /// for the setup's length for this plan only. Hidden exercises are never suggested and saved
-    /// alternates are preferred where they fit (``WorkoutExercisePreferences``).
+    /// alternates are preferred where they fit (``WorkoutExercisePreferences``). `context` is the
+    /// sheet's "Anything else?", read for this plan only (``WorkoutDayNote``): a time phrase in it
+    /// may shorten the session only when no `sessionLength` was chosen on the sheet.
     func workoutDayPlan(
         intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
     ) -> WorkoutProgram.DayPlan {
@@ -120,12 +148,12 @@ final class WorkoutPlanningService {
         var options = host.settings.workoutSessionOptions
         if let sessionLength { options.length = sessionLength }
         let split = activeWorkoutSplit(history: history)
-        let rotation = WorkoutProgram.nextDayIndex(
-            in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
-        )
+        let recentNames = recentWorkoutNamesByDay(history: history)
+        let rotation = WorkoutProgram.nextDayIndex(in: split, recentSessionNames: recentNames)
         let load = WorkoutLoadContextBuilder.build(
             days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
-            body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys
+            body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys,
+            strengthCheckAskAgainFrom: host.strengthCheckAskAgainFrom
         )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,
@@ -139,7 +167,9 @@ final class WorkoutPlanningService {
             load: load,
             recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey),
             options: options,
-            preferences: host.settings.workoutExercisePreferences
+            preferences: host.settings.workoutExercisePreferences,
+            cardioSeed: WorkoutProgram.cardioSessionsLogged(in: split, recentSessionNames: recentNames),
+            noteMayShorten: sessionLength == nil
         )
     }
 
@@ -161,6 +191,10 @@ final class WorkoutPlanningService {
     /// logged duration is parsed from its descriptor (`WorkoutProgram.descriptorMinutes(in:)`).
     nonisolated static let restDayMovementLine = "Gentle stretching or an easy walk - 10 min"
 
+    /// The rest-day line when a walk must not be offered (a severe ankle, knee or hip,
+    /// `InjuryLimits.barsWalking`): the same optional gentle stretch, seated, and no walk in its words.
+    nonisolated static let restDaySeatedLine = "\(WorkoutTimedSessions.seatedGentleHead) - 10 min"
+
     /// The plan for a day whose readiness is `"needs rest"` (spec §6a: marking today unwell forces
     /// it): no split session, no sets, nothing to guide — one gentle movement line, framed as
     /// optional.
@@ -172,17 +206,21 @@ final class WorkoutPlanningService {
     /// frozen English, like every generated plan's (a logged row is saved under the name, and the line
     /// is parsed for its minutes); screens draw them through `WorkoutSessionNames`,
     /// `WorkoutProgram.DayPlan.displayedSplitName` and `WorkoutPlanLine`. The note is localized.
-    nonisolated static func restDayPlan(locationName: String) -> WorkoutProgram.DayPlan {
+    ///
+    /// `limits` are the person's limits today: when they rule a walk out, the line offers seated
+    /// stretching instead (``restDaySeatedLine``), as the Travel-day reset does.
+    nonisolated static func restDayPlan(locationName: String, limits: InjuryLimits = .empty) -> WorkoutProgram.DayPlan {
+        let line = limits.barsWalking ? restDaySeatedLine : restDayMovementLine
         let suggestion = WorkoutSuggestion(
             name: "Gentle movement",
-            exercises: restDayMovementLine,
+            exercises: line,
             notes: WorkoutPlannerCopy.restDayNote
         )
         let session = WorkoutProgram.SessionSuggestion(
             title: "Rest",
             timeLabel: "",
             kind: .mobility,
-            exercises: [PrescribedExercise(name: restDayMovementLine, sets: 0, reps: "", role: .accessory, fromCatalog: false)],
+            exercises: [PrescribedExercise(name: line, sets: 0, reps: "", role: .accessory, fromCatalog: false)],
             suggestion: suggestion
         )
         return WorkoutProgram.DayPlan(
@@ -191,65 +229,155 @@ final class WorkoutPlanningService {
         )
     }
 
-    /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
-    /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
-    /// AI is off/unavailable or the request is empty.
-    ///
-    /// An adjusted session's lifting block is loaded again (``WorkoutAdjustedLoad``): suggested
-    /// weights from each lift's history, the fatigue context, and the warm-up ramp before the first
-    /// heavy main lift. The time budget is not applied again.
-    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutProgram.DayPlan {
-        let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false, host.settings.aiStatus != .off else { return plan }
-        let location = host.settings.activeWorkoutLocation
-        let profile = host.settings.workoutProfile
-        let load = WorkoutLoadContextBuilder.build(
-            days: host.loadDays(), today: host.day, todayKey: host.todayKey, settings: host.settings,
-            travelDays: host.workoutTravelDayKeys
-        )
-        let intensity = host.committedGuidedIntensity
-        // Hidden exercises ("Don't suggest this") never reach the model's candidate list.
-        let preferences = host.settings.workoutExercisePreferences
-        // User-invoked adjustment (the person typed a request and tapped): routes through the store's
-        // AI gate at `standard` tier so the sleepy/resting budget + one-call-per-dispatch charge apply.
-        let gate = host.aiGate
+    // MARK: - The finishing pass, after an adjustment or an edit
 
+    /// What the finishing pass needs to know about today (`WorkoutPlanFinisher.Context`), built from
+    /// the same inputs today's plan was: the split and the day the rotation is on, the lifts' history,
+    /// the 48-hour window, Workout setup's session options with the length chosen for this plan, and
+    /// today's "Anything else?" — so an adjusted or edited session is eased, trimmed and fitted by the
+    /// very rules its plan was built with.
+    func finishContext() -> WorkoutPlanFinisher.Context {
+        let history = host.loadDays()
+        let inputs = host.committedGuidedPlanInputs
+        var options = host.settings.workoutSessionOptions
+        if let length = inputs?.sessionLength { options.length = length }
+        let split = activeWorkoutSplit(history: history)
+        let rotation = WorkoutProgram.nextDayIndex(in: split, recentSessionNames: recentWorkoutNamesByDay(history: history))
+        let load = WorkoutLoadContextBuilder.build(
+            days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
+            body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys,
+            strengthCheckAskAgainFrom: host.strengthCheckAskAgainFrom
+        )
+        return WorkoutPlanFinisher.context(
+            goal: host.settings.selectedGoal, intensity: inputs?.intensity ?? host.committedGuidedIntensity,
+            profile: host.settings.workoutProfile, location: host.settings.activeWorkoutLocation,
+            note: inputs?.context ?? "", split: split, rotationIndex: rotation, load: load,
+            recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey),
+            options: options, noteMayShorten: inputs?.sessionLength == nil
+        )
+    }
+
+    /// `context` for one session of `plan`: only the plan's first session carries today's "Anything
+    /// else?" lines, so only its note is rebuilt with them.
+    private func context(
+        _ context: WorkoutPlanFinisher.Context, for session: WorkoutProgram.SessionSuggestion, in plan: WorkoutProgram.DayPlan?
+    ) -> WorkoutPlanFinisher.Context {
+        guard plan?.sessions.first?.id != session.id else { return context }
+        var other = context
+        other.todaysLines = []
+        return other
+    }
+
+    /// A session edited in the plan editor (a swap, an added exercise, a typed number), finished: a
+    /// timed movement gets its countdown, a lift swapped in or added is eased for a mild area, loaded
+    /// from its history and given a set fewer when its muscles are tired, and the note is rebuilt
+    /// from what was done — the time budget's line included, which says how long the session now
+    /// runs. The rows are the person's: none is dropped, and no number they kept or typed is changed.
+    func finishedSession(
+        _ edited: WorkoutProgram.SessionSuggestion, previous: WorkoutProgram.SessionSuggestion
+    ) -> WorkoutProgram.SessionSuggestion {
+        let plan = host.currentGuidedWorkoutPlan
+        let others = (plan?.sessions ?? []).filter { $0.id != previous.id }
+        return WorkoutPlanFinisher.finish(edited, previous: previous, others: others, origin: .handEdit,
+                                          context: context(finishContext(), for: previous, in: plan))
+    }
+
+    // MARK: - Adjust with AI
+
+    /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
+    /// Models, constrained to the equipment/injury-filtered catalog — and says what happened
+    /// (``WorkoutAdjustmentOutcome``): the adjusted plan, or the reason nothing changed.
+    ///
+    /// Every adjusted session goes through the finishing pass (`WorkoutPlanFinisher`): what the
+    /// request rules out ("no barbell") is enforced in code, a lift that loads a mild area is eased,
+    /// tired muscles keep their lighter sets, the session is fitted to its time again, holds get a
+    /// countdown, the note is rebuilt, and a reply that would leave too few lifts is refused.
+    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutAdjustmentOutcome {
+        let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return .unchanged(.nothingNeeded) }
+        guard host.settings.aiStatus != .off else { return .unchanged(.aiOff) }
+        let finish = finishContext()
         var sessions = plan.sessions
-        for index in sessions.indices {
+        var reasons: [WorkoutAdjustmentOutcome.Reason] = []
+        var changed = false
+        for index in sessions.indices.prefix(WorkoutAdjustmentOutcome.maximumSessions)
+        where WorkoutPlanFinisher.isLifting(sessions[index]) {
             let session = sessions[index]
-            guard session.kind == .strength || session.kind == .fullBody || session.kind == .sport else { continue }
-            let currentNames = session.catalogExerciseNames
-            let candidates = WorkoutAdjustmentCandidateBuilder.candidates(
-                currentNames: currentNames, request: trimmed, location: location, profile: profile,
-                preferences: preferences
-            )
-            guard candidates.isEmpty == false else { continue }
-            let payload = WorkoutAdjustmentPayload(
-                request: trimmed, currentExercises: currentNames, candidateCount: candidates.count,
-                promptLanguage: AIPromptLanguage.forApp()
-            )
-            do {
-                if let adjusted = try await FoundationWorkoutAdjustmentModel.adjust(
-                    payload, candidates: candidates,
-                    currentLines: session.exercises.filter { $0.block == .lifting }.map(\.line), gate: gate
-                ) {
-                    sessions[index] = WorkoutAdjustedLoad.reload(
-                        WorkoutProgram.applyAdjustment(to: session, exercises: adjusted), original: session,
-                        location: location, load: load, intensity: intensity
-                    )
-                }
-            } catch {
-                // Degrade, don't fail: this session keeps its generated exercises. Named so a plan
-                // that "adjusted" into nothing leaves a trace instead of a silent no-op.
-                FernletAuditLog.log("workout.adjust.modelFailed", context: [
-                    "session": session.kind.rawValue,
-                    "error": String(describing: type(of: error)),
-                ])
+            let others = sessions.filter { $0.id != session.id }
+            switch await adjusted(session, others: others, request: trimmed, context: context(finish, for: session, in: plan)) {
+            case .changed(let finished):
+                sessions[index] = finished
+                changed = true
+            case .unchanged(let reason):
+                reasons.append(reason)
             }
         }
-        return WorkoutProgram.DayPlan(
+        guard changed else { return .unchanged(WorkoutAdjustmentOutcome.Reason.strongest(of: reasons)) }
+        return .changed(WorkoutProgram.DayPlan(
             splitName: plan.splitName, dayTitle: plan.dayTitle, sessions: sessions,
             droppedSlots: plan.droppedSlots, locationName: plan.locationName, recovery: plan.recovery
+        ))
+    }
+
+    /// What one session's adjustment came to.
+    private enum SessionAdjustment {
+        case changed(WorkoutProgram.SessionSuggestion)
+        case unchanged(WorkoutAdjustmentOutcome.Reason)
+    }
+
+    /// One session's adjustment: the filtered candidates (today's limits, the space's gear, nothing
+    /// hidden, nothing the request rules out), the model's reply, and the finishing pass over it.
+    private func adjusted(
+        _ session: WorkoutProgram.SessionSuggestion, others: [WorkoutProgram.SessionSuggestion], request: String,
+        context: WorkoutPlanFinisher.Context
+    ) async -> SessionAdjustment {
+        let currentNames = session.catalogExerciseNames
+        // Hidden exercises ("Don't suggest this") never reach the model's candidate list.
+        let candidates = WorkoutAdjustmentCandidateBuilder.candidates(
+            currentNames: currentNames, request: request, location: context.location,
+            profile: host.settings.workoutProfile, preferences: host.settings.workoutExercisePreferences,
+            limits: context.limits
         )
+        guard candidates.isEmpty == false else { return .unchanged(.nothingNeeded) }
+        let payload = WorkoutAdjustmentPayload(
+            request: request, currentExercises: currentNames, candidateCount: candidates.count,
+            promptLanguage: AIPromptLanguage.forApp()
+        )
+        let lines = session.exercises.filter { $0.block == .lifting }.map(\.line)
+        do {
+            // User-invoked adjustment (the person typed a request and tapped): routes through the
+            // store's AI gate at `standard` tier so the sleepy/resting budget + one-call charge apply.
+            switch try await adjuster(payload, candidates, lines, host.aiGate) {
+            case .aiOff: return .unchanged(.aiOff)
+            case .notNow: return .unchanged(.couldNot)
+            case .picks(let picks):
+                return finished(session, picks: picks, candidates: candidates, others: others, request: request, context: context)
+            }
+        } catch {
+            // Degrade, don't fail: this session keeps its exercises, and the plan pane says so.
+            FernletAuditLog.log("workout.adjust.modelFailed", context: [
+                "session": session.kind.rawValue,
+                "error": String(describing: type(of: error)),
+            ])
+            return .unchanged(.couldNot)
+        }
+    }
+
+    /// The model's picks through the finishing pass, as this session's outcome.
+    private func finished(
+        _ session: WorkoutProgram.SessionSuggestion, picks: [PrescribedExercise], candidates: [WorkoutAdjustmentCandidate],
+        others: [WorkoutProgram.SessionSuggestion], request: String, context: WorkoutPlanFinisher.Context
+    ) -> SessionAdjustment {
+        let outcome = WorkoutPlanFinisher.adjusted(
+            session, picks: picks, request: WorkoutAdjustmentRequest.read(request),
+            pool: candidates.map(\.exercise), others: others, context: context
+        )
+        switch outcome {
+        case .changed(let finished): return .changed(finished)
+        case .unchanged: return .unchanged(.nothingNeeded)
+        case .tooFewLifts:
+            FernletAuditLog.log("workout.adjust.refusedTooFewLifts", context: ["session": session.kind.rawValue])
+            return .unchanged(.tooFewLifts)
+        }
     }
 }

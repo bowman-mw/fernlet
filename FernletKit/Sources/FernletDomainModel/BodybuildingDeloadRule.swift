@@ -11,8 +11,9 @@ import Foundation
 /// **Weeks.** A week runs Monday to Sunday (``BodybuildingWeeks``) and is named by its Monday key. The
 /// *current week* is the one holding today; *next week* is the calendar week straight after it.
 ///
-/// **A hard week** has at least ``hardWeekWorkouts`` (3) logged workouts and is not a marked deload
-/// week.
+/// **A hard week** has at least ``hardWeekWorkouts`` (3) logged lifting sessions and is not a marked
+/// deload week. Only lifting counts (w5, 2026-11-10; ``isLifting(_:)``): a walk, a run, a stretch or a
+/// Health import of a swim is training, but it is not what a deload week rests from.
 ///
 /// **The run** is the number of hard weeks in a row that end now:
 /// - if the current week is a deload week, the run is 0 (a deload resets it);
@@ -58,14 +59,29 @@ public nonisolated enum BodybuildingDeloadRule {
         }
     }
 
-    /// Logged workouts per week, keyed by Monday key, from the day records.
+    /// Logged lifting sessions per week, keyed by Monday key, from the day records (w5: only lifting
+    /// counts toward a hard week).
     public static func workoutsByWeek(_ days: [String: FernletDay], calendar: Calendar) -> [String: Int] {
         var counts: [String: Int] = [:]
         for (key, day) in days where !day.workouts.isEmpty {
-            guard let week = BodybuildingWeeks.weekStartKey(forDayKey: key, calendar: calendar) else { continue }
-            counts[week, default: 0] += day.workouts.count
+            let lifting = day.workouts.filter(isLifting).count
+            guard lifting > 0, let week = BodybuildingWeeks.weekStartKey(forDayKey: key, calendar: calendar) else { continue }
+            counts[week, default: 0] += lifting
         }
         return counts
+    }
+
+    /// Whether a logged workout is a lifting session: a strength-training row that is not cardio, or
+    /// an activity whose kind is strength training (how a Health import of one arrives). Walks, runs,
+    /// classes, sports, stretching and every other activity are not.
+    public static func isLifting(_ workout: Workout) -> Bool {
+        switch workout.mode {
+        case .strengthTraining:
+            return workout.type != .cardio
+        case .activity:
+            return workout.activityType == .traditionalStrengthTraining
+                || workout.activityType == .functionalStrengthTraining
+        }
     }
 
     /// Whether the week starting `week` is hard.

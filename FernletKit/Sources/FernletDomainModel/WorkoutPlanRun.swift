@@ -10,7 +10,8 @@
 //
 // Nothing is filtered or dropped: a coach's plan passed its review at import, and the person's own
 // lines run as entered. The load engine only fills in what the line left out — a weight for a catalog
-// lift whose line named none. A weight the line names is preselected as written.
+// lift whose line named none, on the weights the space owns and at the person's training age for the
+// lift. A weight the line names is preselected as written.
 
 import Foundation
 
@@ -123,7 +124,8 @@ public nonisolated enum WorkoutPlanRun {
                                                     target: target, location: location, load: load)
                 asWritten = true
             } else if let target {
-                exercise.guidance = engineGuidance(for: target, reps: parsed.reps, sets: sets, location: location, load: load)
+                exercise.guidance = engineGuidance(for: target, reps: parsed.reps, sets: sets, location: location,
+                                                   load: load, inventory: location.weights)
             }
         }
         return Step(exercise: exercise, line: line, writtenLine: writtenLine(line, parsed: parsed), weightAsWritten: asWritten)
@@ -164,8 +166,12 @@ public nonisolated enum WorkoutPlanRun {
     /// app's own sessions use, reading the lift's history, but for the sets and reps as written: only the
     /// weight (and, for a written range like "8-12", where in it to aim) comes from the engine. Nil for a
     /// timed exercise, a cardio or stretch row, and reps the engine cannot read ("AMRAP"). `inventory`
-    /// snaps the weight onto loads the location has (the re-run after "Adjust with AI" passes the
-    /// location's weights; a planned line's run passes none, as before).
+    /// snaps the weight onto loads the location has; a planned line's run and the finishing pass after
+    /// an edit or "Adjust with AI" both pass the location's weights. The lift is planned at the
+    /// person's training age for it (``WorkoutLoadContext/trainingAge(for:)``), as the planner's own
+    /// sessions are, so a lift the planner holds between steps is not stepped here (w6, 2026-11-10:
+    /// this path used to plan every lift as a beginner's, on no particular weights), and an assisted
+    /// lift's weight is read as help.
     static func engineGuidance(
         for target: ExerciseTarget, reps: String, sets: Int, location: WorkoutLocation, load: WorkoutLoadContext,
         inventory: WorkoutWeightInventory? = nil
@@ -180,7 +186,9 @@ public nonisolated enum WorkoutPlanRun {
         let plan = WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
             scheme: scheme, baseSets: sets, exposures: history, equipment: equipment,
             isLowerBody: WorkoutLoadEngine.isLowerBody(target.movementPattern),
-            defaultUnit: load.defaultUnit, today: load.today, inventory: inventory
+            defaultUnit: load.defaultUnit, today: load.today, inventory: inventory,
+            tier: load.trainingAge(for: target.name)?.tier ?? .beginner,
+            assisted: WorkoutAssistedLifts.contains(target.name)
         ))
         return LoadGuidance(
             targetReps: plan.reps, prescription: plan.prescription, equipment: equipment, unit: plan.unit,

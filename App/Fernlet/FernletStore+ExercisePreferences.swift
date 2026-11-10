@@ -17,8 +17,10 @@ extension FernletStore {
 
     // MARK: Never suggest
 
-    /// Leaves `name` out of every plan from now on ("Don't suggest this"). Returns false when the
-    /// name is unusable or the hidden list is full.
+    /// Leaves `name` out of every plan from now on ("Don't suggest this"), today's included: a
+    /// session of today's plan that holds it and has not started is built again without it (the
+    /// `settings` write does that, e4). Returns false when the name is unusable or the hidden list
+    /// is full.
     @discardableResult
     func hideExercise(_ name: String) -> Bool {
         var preferences = settings.workoutExercisePreferences
@@ -74,6 +76,10 @@ extension FernletStore {
             FernletAuditLog.log("workout.preferences.refused", context: ["count": String(refused)])
         }
         guard preferences != settings.workoutExercisePreferences else { return }
+        // The editor's Save: the session it has just written is what the person wants today, marks
+        // and all, so today's plan takes these marks as already known and is not rebuilt over the
+        // edit (e4). Hiding from anywhere else rebuilds the sessions that hold the exercise.
+        guidedPlanMemo.basis?.hidden = preferences.hiddenKeys.sorted()
         settings.workoutExercisePreferences = preferences
     }
 

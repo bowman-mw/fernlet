@@ -398,7 +398,8 @@ struct GuidedWorkoutSheet: View {
             if let exercise = run.currentExercise {
                 exerciseCard(run, exercise)
                 GuidedPreviousLiftFix(store: store, run: run)
-                GuidedLoadPanel(store: store, exercise: exercise, isLastSet: run.currentSet >= run.totalSetsForCurrent)
+                GuidedLoadPanel(store: store, exercise: exercise, isLastSet: run.currentSet >= run.totalSetsForCurrent,
+                                onPutOffStrengthCheck: { announcingTransition(store.guidedPutOffStrengthCheck, cue: .skip) })
 
                 // A warm-up set is one set: its card says "Warm-up set 1 of 3", so no strip of one.
                 if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) && !exercise.isRampSet {

@@ -7,7 +7,9 @@
 // and about once a month the main lift becomes a calibration (``WorkoutCalibration``). The session
 // note says what changed and why, in plain words. Where the location has its weights set
 // (``WorkoutLocation/weights``), every weight here — the prescription, the heavier block, the
-// deload's kept load and the calibration's sets — is a load it has.
+// deload's kept load and the calibration's sets — is a load it has. In a week the person marked as a
+// deload (``WorkoutLoadContext/deloadWeek``, w5) the pass does one thing instead: last time's weights at
+// about half the sets, with no step, no plateau response and no strength check.
 //
 // The note sentences are String Catalog keys in ``WorkoutPlannerCopy`` (2026-10-20, idea 16), composed
 // in the device's language when the plan is built; the plan TEXT (exercise names, sets and reps) stays
@@ -16,8 +18,8 @@
 import Foundation
 
 /// Everything the planner needs to prescribe loads: each lift's logged sessions (with their sleep and
-/// readiness flags), today, the unit to fall back on, recent protein and logged body weight, and the
-/// calibration state. Built by the app from the day history.
+/// readiness flags), today, the unit to fall back on, recent protein, the calibration state, and
+/// whether this is a marked deload week. Built by the app from the day history.
 public nonisolated struct WorkoutLoadContext: Sendable {
     /// Sessions per lift, keyed by ``WorkoutExerciseCatalog/normalizedName(_:)``, oldest first.
     public var exposures: [String: [LiftExposure]]
@@ -41,13 +43,16 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     /// The lifting focus (G6): Strength, Size, or Both — the default, which keeps the goal's mix.
     public var focus: WorkoutStrengthFocus
     /// Workout setup's "Use food logs in workout notes" switch (G13), resolved by the app (on unless
-    /// switched off). Off by default here, so a context built without saying so mentions no food or
-    /// body weight. On, the notes still say nothing until the logs are good enough to read
-    /// (``RecoverySummary/loggingIsGood``, ``WorkoutBodyWeightTrend/isFalling(_:today:)``).
+    /// switched off). Off by default here, so a context built without saying so mentions no food.
+    /// On, the notes still say nothing until the logs are good enough to read
+    /// (``RecoverySummary/loggingIsGood``).
     public var foodAware: Bool
-    /// The weigh-ins the person logged, oldest first (G13); empty when they don't log their weight,
-    /// and then the notes never mention it.
-    public var bodyWeights: [BodyWeightSample]
+    /// Today falls in a week the person marked as a deload (w5, 2026-11-10; the Bodybuilding
+    /// calendar's ``BodybuildingCalendarSettings/deloadWeekStarts``, resolved by the app). The load
+    /// pass then keeps last time's weights at about half the sets, never steps a lift up, runs no
+    /// plateau response or strength check, and flags every lift with a history as an easier session so
+    /// the week never becomes the next one's starting point. Off by default.
+    public var deloadWeek: Bool
     /// The user's term of address (``BiologicalSex/termOfAddress`` of the effective body profile),
     /// which the session notes that describe the user agree with ("welcome back" and the max test's
     /// "if you're sore" are gendered in Spanish). The notes are composed here, at plan time, and
@@ -62,7 +67,7 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
         warmUpSets: Bool = false, traits: LifterTraits = .unknown, experience: ExperienceLevel? = nil,
         liftWeeks: [String: Double] = [:], focus: WorkoutStrengthFocus = .both, foodAware: Bool = false,
-        bodyWeights: [BodyWeightSample] = [], address: TermOfAddress = .masculine
+        address: TermOfAddress = .masculine, deloadWeek: Bool = false
     ) {
         self.exposures = exposures
         self.today = today
@@ -75,8 +80,8 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         self.liftWeeks = liftWeeks
         self.focus = focus
         self.foodAware = foodAware
-        self.bodyWeights = bodyWeights
         self.address = address
+        self.deloadWeek = deloadWeek
     }
 
     /// One lift's training age (G8): the setup answer as a floor — six months for "6 months to 2
@@ -139,7 +144,8 @@ extension WorkoutProgram {
         _ picks: [SlotPick], inputs: SlotInputs, load: WorkoutLoadContext,
         used: inout Set<String>, calibrationOpen: inout Bool
     ) -> LoadPass {
-        let tracking = PlateauTracking.forGoal(inputs.goal)
+        // A marked deload week (w5) reads no trend: nothing in it responds to a stall or a dip.
+        let tracking = load.deloadWeek ? PlateauTracking.off : PlateauTracking.forGoal(inputs.goal)
         var loaded = picks.map { pick in
             LoadedPick(exercise: pick.exercise, target: pick.target, slot: pick.slot,
                        plateau: plateauStatus(of: pick.target, role: pick.slot.role, tracking: tracking, load: load))
@@ -149,11 +155,12 @@ extension WorkoutProgram {
         applyPlateauLoad(&loaded, inputs: inputs, load: load)
         let plateauNotes = plateauStory(loaded, inputs: inputs) ?? []
         var notes = progressNotes(loaded, addressing: load.address)
+        if load.deloadWeek { notes.insert(WorkoutPlannerCopy.deloadWeek, at: 0) }
         if let week = loaded.lazy.compactMap(\.block).first {
             notes.insert(blockNote(week, energy: inputs.intensity), at: 0)
         }
         if let harder = offerHarderVariations(&loaded, inputs: inputs, used: used) { notes.append(harder) }
-        if calibrationOpen {
+        if calibrationOpen, !load.deloadWeek {
             var trial = loaded
             if let calibration = expandCalibration(&trial, inputs: inputs, load: load) {
                 if calibrationFits(trial, inputs: inputs) {
@@ -182,6 +189,8 @@ extension WorkoutProgram {
                   in: loaded.map(\.exercise), patterns: loaded.map { Optional($0.target.movementPattern) }
               ) else { return }
         let pick = loaded[index]
+        // On an assisted machine a fraction of the weight is LESS help — a harder set, not a warm-up.
+        guard !WorkoutAssistedLifts.contains(pick.target.name) else { return }
         let ladder = pick.exercise.guidance.flatMap { loadLadder(for: $0, at: inputs.location) }
         let steps = WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern, ladder: ladder)
         let warmUps = steps.map { step in
@@ -265,18 +274,23 @@ extension WorkoutProgram {
             )
             first.loads = runnerLoads(for: first, at: inputs.location)
             pick.exercise.guidance = first
+            // A deload week lightens a lift with nothing logged too: about half its sets (w5).
+            if load.deloadWeek { pick.exercise.sets = WorkoutLoadEngine.deloadWeekSets(pick.exercise.sets) }
             return
         }
         let plan = WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
             scheme: scheme, baseSets: sets, exposures: history, equipment: equipment,
             isLowerBody: WorkoutLoadEngine.isLowerBody(pick.target.movementPattern),
-            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights, tier: tier
+            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights, tier: tier,
+            assisted: WorkoutAssistedLifts.contains(pick.target.name), deloadWeek: load.deloadWeek
         ))
         pick.exercise.sets = plan.sets
         pick.exercise.reps = "\(plan.reps)"
         var guidance = LoadGuidance(
             targetReps: plan.reps, prescription: plan.prescription, equipment: equipment, unit: plan.unit,
-            askReasonOnOverride: plan.askReasonOnOverride
+            askReasonOnOverride: plan.askReasonOnOverride,
+            // A deload week's session is never the next one's starting point, nor trend evidence (w5).
+            easierSession: load.deloadWeek
         )
         guidance.loads = runnerLoads(for: guidance, at: inputs.location)
         pick.exercise.guidance = guidance
@@ -284,11 +298,14 @@ extension WorkoutProgram {
     }
 
     /// The owned loads a guided run steps through for this lift (R6): those around its suggestion,
-    /// or around the middle of what the location has when there is no suggestion yet.
+    /// or — with no suggestion yet, a lift with no history (w1) — the lightest the location owns, so the
+    /// runner's picker starts at the empty bar or the lightest dumbbell and opens upward from there.
     static func runnerLoads(for guidance: LoadGuidance, at location: WorkoutLocation) -> [Double]? {
         guard let ladder = loadLadder(for: guidance, at: location) else { return nil }
-        let middle = ladder.loads[ladder.loads.count / 2]
-        return ladder.window(around: guidance.prescription?.suggested ?? middle, count: LoadGuidance.maxRunnerLoads)
+        guard let suggested = guidance.prescription?.suggested else {
+            return Array(ladder.loads.prefix(LoadGuidance.maxRunnerLoads))
+        }
+        return ladder.window(around: suggested, count: LoadGuidance.maxRunnerLoads)
     }
 
     /// Counts the compound lifts ahead of each pick — the fatigue context a result records.
@@ -414,7 +431,8 @@ extension WorkoutProgram {
     }
 
     /// The dip's deload: half the sets (rounded up) with the load kept — the last working weight, on
-    /// the location's nearest load when that is within ``WorkoutPlateau/deloadMaxDecrease`` of it — and
+    /// the location's nearest load when that is within ``WorkoutPlateau/deloadMaxDecrease`` of it (and
+    /// never a jump up past the light-load guard: ``WorkoutLoadEngine/placed(_:on:assisted:)``) — and
     /// flagged as an easier session, so it never anchors the next one or reads as the trend.
     static func deload(_ pick: inout LoadedPick, location: WorkoutLocation) {
         pick.exercise.sets = max(1, (pick.exercise.sets + 1) / 2)
@@ -423,7 +441,10 @@ extension WorkoutProgram {
         if let current = guidance.prescription, let kept = pick.plan?.previousWeight, kept > 0 {
             let ladder = loadLadder(for: guidance, at: location)
             let step = guidance.equipment.flatMap { WorkoutLoadEngine.step(for: $0, unit: current.unit) } ?? current.step
-            let placed = ladder?.nearest(to: kept) ?? WorkoutLoadEngine.rounded(kept, toStep: step)
+            // Placed like the engine's own base (w6): never a jump up past the light-load guard.
+            let assisted = pick.plan?.assisted == true
+            let placed = ladder.map { WorkoutLoadEngine.placed(kept, on: $0, assisted: assisted) }
+                ?? WorkoutLoadEngine.rounded(kept, toStep: step)
             let weight = placed >= kept * (1 - WorkoutPlateau.deloadMaxDecrease) ? placed : current.suggested
             guidance.prescription = WorkoutLoadEngine.prescription(
                 suggested: max(step, weight), confidence: current.confidence, step: step, unit: current.unit, ladder: ladder
@@ -434,26 +455,56 @@ extension WorkoutProgram {
 
     // MARK: A harder variation (N7)
 
-    /// N7 (2026-10-20): while a lift sits at the heaviest load this location has, the planner offers
-    /// a harder variation of it — the plan editor's first swap (``LoadGuidance/harderVariation``) —
-    /// and the session note says so once. More reps, then a set, stays the plan.
+    /// N7 (2026-10-20): while a lift sits at the heaviest load this location has (or, on an assisted
+    /// machine, the least help), the planner offers a harder variation of it — the plan editor's first
+    /// swap (``LoadGuidance/harderVariation``) — and the session note says so once. More reps, then a
+    /// set, stays the plan.
+    ///
+    /// w7 (2026-11-10): the set is one set, and then the lift has topped out — as has a bodyweight
+    /// lift at the top of its range after its own extra set. That session's note names the next
+    /// harder variation instead of "one more set" again, or says plainly that there is none; after it
+    /// the lift holds with nothing more said, the swap still offered in the editor.
     static func offerHarderVariations(_ loaded: inout [LoadedPick], inputs: SlotInputs, used: Set<String>) -> String? {
         var note: String?
-        for index in loaded.indices where loaded[index].variantOf == nil && atHeaviest(loaded[index].plan) {
+        for index in loaded.indices where loaded[index].variantOf == nil {
+            guard let plan = loaded[index].plan, atHeaviest(plan) || hasToppedOut(plan) else { continue }
             let lift = loaded[index].target
-            guard let harder = harderVariation(for: lift, inputs: inputs, excluding: used) else { continue }
-            loaded[index].exercise.guidance?.harderVariation = harder.name
-            guard note == nil else { continue }
-            note = WorkoutPlannerCopy.harderVariation(ExerciseHowToCatalog.displayName(for: harder.name),
-                                                      lift: ExerciseHowToCatalog.displayName(for: lift.name))
+            let harder = harderVariation(for: lift, inputs: inputs, excluding: used)
+            if let harder { loaded[index].exercise.guidance?.harderVariation = harder.name }
+            if note == nil { note = harderNote(lift: lift, harder: harder, change: plan.change) }
         }
         return note
     }
 
-    /// Whether the plan holds a lift at the heaviest load the location has (``LoadCap/heaviest(top:)``).
+    /// What the note says about a lift with nothing heavier to move to: still climbing reps or its one
+    /// extra set, N7's offer when a harder variation exists; topped out (w7), the next step up by
+    /// name, or the plain line that there is none; held after that, nothing.
+    static func harderNote(lift: ExerciseTarget, harder: ExerciseTarget?, change: LoadChange) -> String? {
+        let name = ExerciseHowToCatalog.displayName(for: lift.name)
+        let variant = harder.map { ExerciseHowToCatalog.displayName(for: $0.name) }
+        switch change {
+        case .heldAtTop:
+            return nil
+        case .toppedOut:
+            guard let variant else { return WorkoutPlannerCopy.toppedOut(name) }
+            return WorkoutPlannerCopy.toppedOutVariation(variant, lift: name)
+        default:
+            return variant.map { WorkoutPlannerCopy.harderVariation($0, lift: name) }
+        }
+    }
+
+    /// Whether the plan holds a lift at the heaviest load the location has (``LoadCap/heaviest(top:)``)
+    /// or, on an assisted machine, at the least help (``LoadCap/leastHelp(bottom:)``).
     static func atHeaviest(_ plan: LiftPlan?) -> Bool {
-        guard case .heaviest(_)? = plan?.cap else { return false }
-        return true
+        switch plan?.cap {
+        case .heaviest?, .leastHelp?: return true
+        case .bigStep?, nil: return false
+        }
+    }
+
+    /// Whether the lift has had its one extra set and has nothing more to add here (w7).
+    static func hasToppedOut(_ plan: LiftPlan) -> Bool {
+        plan.change == .toppedOut || plan.change == .heldAtTop
     }
 
     /// The harder variation offered for `target`: an exercise the planner may suggest here, not in the
@@ -495,6 +546,7 @@ extension WorkoutProgram {
               let index = loaded.firstIndex(where: {
                   $0.slot.role == .main && $0.exercise.guidance?.isLoadable == true
                       && $0.exercise.guidance?.easierSession != true && $0.variantOf == nil
+                      && !WorkoutAssistedLifts.contains($0.target.name)
               }),
               let guidance = loaded[index].exercise.guidance, let equipment = guidance.equipment,
               let step = WorkoutLoadEngine.step(for: equipment, unit: guidance.unit) else { return nil }
@@ -512,14 +564,28 @@ extension WorkoutProgram {
         guard !sets.isEmpty else { return nil }
         let pick = loaded[index]
         let runnerStep = ladder?.runnerStep(default: step) ?? step
-        let steps = sets.map {
-            calibrationPick(pick, set: $0, guidance: guidance, step: runnerStep, confidence: estimate.confidence)
+        let usual = usualSets(of: pick, guidance: guidance, goal: inputs.goal)
+        let steps = sets.map { set -> LoadedPick in
+            var checkStep = calibrationPick(pick, set: set, guidance: guidance, step: runnerStep, confidence: estimate.confidence)
+            checkStep.exercise.guidance?.usual = usual
+            return checkStep
         }
         loaded.replaceSubrange(index...index, with: steps)
         for other in loaded.indices where loaded[other].slot.role == .accessory {
             loaded[other].exercise.sets = max(1, loaded[other].exercise.sets - 1)
         }
         return calibrationNote(kind: kind, lift: pick.target.name, sets: sets, unit: guidance.unit, addressing: load.address)
+    }
+
+    /// The lift's usual working sets, as planned before the check replaced them — what "Not now" in
+    /// the runner falls back to, so the lift is still trained that day (w4, 2026-11-10).
+    static func usualSets(of pick: LoadedPick, guidance: LoadGuidance, goal: GoalType) -> LoadGuidance.UsualSets {
+        let rest = pick.exercise.restSecondsOverride ?? WorkoutRestGuidance.restSeconds(
+            demand: WorkoutRestGuidance.demand(role: pick.slot.role, movementPattern: pick.target.movementPattern),
+            goal: goal
+        )
+        return LoadGuidance.UsualSets(sets: max(1, pick.exercise.sets), reps: guidance.targetReps,
+                                      prescription: guidance.prescription, restSeconds: rest)
     }
 
     /// The shortest session budget a strength check runs in: its ramp and its long rests need it.

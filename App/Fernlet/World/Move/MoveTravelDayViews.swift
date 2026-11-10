@@ -33,6 +33,11 @@ enum MoveTravelDayCopy {
         "\(moves) moves · ~\(minutes) min · outdoors in daylight if you can"
     }
 
+    /// "6 moves · ~25 min": the line when the session has no walk (a limit or a hidden walk took it out).
+    static func sessionMetaIndoors(moves: Int, minutes: Int) -> LocalizedStringResource {
+        "\(moves) moves · ~\(minutes) min"
+    }
+
     /// "2 of 2 sessions": the week's done planned sessions of those that count.
     static func weekSessions(_ done: Int, of total: Int) -> LocalizedStringResource {
         "\(done) of \(total) sessions"
@@ -47,12 +52,43 @@ enum MoveTravelDayCopy {
     static func figure(for name: String) -> LocalizedStringResource {
         switch name {
         case "Easy walk": "20–30 min"
-        case "Standing calf raise": "2 × 15"
+        case "Calf raise", "Standing calf raise": "2 × 15"
         case "Glute bridge": "2 × 12"
         case "Cat-cow": "8 slow"
         case "Thread the needle": "5 each side"
         default: "30 s each side"
         }
+    }
+
+    /// The approved moves, whose figures are the approved words.
+    static let approvedMoves = Set(WorkoutPlanner.travelDayMoveNames + ["Standing calf raise"])
+
+    /// The step of `session` a card row stands for: the catalog move of that name, or the walk or
+    /// seated-mobility line with that label.
+    static func step(named name: String, in session: WorkoutProgram.SessionSuggestion) -> PrescribedExercise? {
+        session.exercises.first { step in
+            (step.fromCatalog ? step.name : WorkoutTimedSessions.label(of: step.name)) == name
+        }
+    }
+
+    /// A move's name on the card: the exercise in the person's language; the seated-mobility line as
+    /// the plan draws it, with its minutes.
+    static func moveName(_ name: String, in session: WorkoutProgram.SessionSuggestion) -> String {
+        guard name == WorkoutProgram.seatedMobilityHead, let line = step(named: name, in: session) else {
+            return ExerciseHowToCatalog.displayName(for: name)
+        }
+        return WorkoutPlanLine.displayed(line.name)
+    }
+
+    /// A move's figure on the card: the approved words for an approved move; for a move swapped in for
+    /// one the person's limits or hidden list took out, its own hold or sets and reps (numbers and
+    /// unit symbols, the same in every language); nothing beside the seated-mobility line, whose name
+    /// carries its minutes.
+    static func figure(for name: String, in session: WorkoutProgram.SessionSuggestion) -> Text {
+        if name == WorkoutProgram.seatedMobilityHead { return Text(verbatim: "") }
+        guard !approvedMoves.contains(name), let step = step(named: name, in: session) else { return Text(figure(for: name)) }
+        guard let hold = step.holdSeconds else { return Text(verbatim: "\(step.sets) × \(step.reps)") }
+        return step.side == nil ? Text(verbatim: PrescribedExercise.holdText(seconds: hold)) : Text(figure(for: name))
     }
 }
 
@@ -75,8 +111,7 @@ struct TravelDaySessionCard: View {
                     .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
                     .foregroundStyle(look?.text ?? Color.bark)
                     .accessibilityAddTraits(.isHeader)
-                Text(MoveTravelDayCopy.sessionMeta(moves: WorkoutPlanner.travelDayMoveNames.count,
-                                                   minutes: WorkoutPlanner.travelDayMinutes))
+                Text(sessionMeta)
                     .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
                     .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
@@ -89,12 +124,28 @@ struct TravelDaySessionCard: View {
         }
     }
 
-    /// The eight moves, a dotted rule above each.
+    /// The session's own moves: the approved eight, or what the person's limits and hidden exercises
+    /// left of them (a swapped stretch, seated mobility in the walk's place).
+    private var moveNames: [String] { WorkoutPlanner.travelDayMoveNames(in: session) }
+
+    /// The line under the name: the approved one while the session has its walk, else moves and minutes.
+    private var sessionMeta: LocalizedStringResource {
+        let names = moveNames
+        guard names.contains("Easy walk") else {
+            let minutes = WorkoutPlanner.travelDayMinutes - WorkoutPlanner.travelDayWalkMinutes
+                + (names.contains(WorkoutProgram.seatedMobilityHead) ? WorkoutPlanner.travelDaySeatedMinutes : 0)
+            return MoveTravelDayCopy.sessionMetaIndoors(moves: names.count, minutes: minutes)
+        }
+        return MoveTravelDayCopy.sessionMeta(moves: names.count, minutes: WorkoutPlanner.travelDayMinutes)
+    }
+
+    /// The session's moves, a dotted rule above each.
     private var moveRows: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(WorkoutPlanner.travelDayMoveNames, id: \.self) { name in
+            ForEach(moveNames, id: \.self) { name in
                 FernletDottedRule().padding(.vertical, 4)
-                TravelDayMoveRow(name: name) { onHowTo(name) }
+                TravelDayMoveRow(name: name, drawnName: MoveTravelDayCopy.moveName(name, in: session),
+                                 figure: MoveTravelDayCopy.figure(for: name, in: session)) { onHowTo(name) }
                     .frame(minHeight: 36)
             }
         }
@@ -123,6 +174,8 @@ struct TravelDaySessionCard: View {
 /// side") and its how-to button. At accessibility sizes the figure goes under the name.
 private struct TravelDayMoveRow: View {
     let name: String
+    let drawnName: String
+    let figure: Text
     let onHowTo: () -> Void
     @Environment(\.fernletFramedLook) private var look
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -130,18 +183,21 @@ private struct TravelDayMoveRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             AdaptiveStack(spacing: dynamicTypeSize.isAccessibilitySize ? 2 : 10, horizontalAlignment: .leading) {
-                Text(verbatim: ExerciseHowToCatalog.displayName(for: name))
+                Text(verbatim: drawnName)
                     .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
                     .foregroundStyle(look?.text ?? Color.bark)
                     .fernletWrappingText()
                 if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
-                Text(MoveTravelDayCopy.figure(for: name))
+                figure
                     .font(look == nil ? .fernlet(.labelSmall) : MoveFont.body)
                     .foregroundStyle(look?.text ?? Color.slate)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            ExerciseHowToButton(exerciseName: name, action: onHowTo)
+            // The seated-mobility line is a session of stretches, not one exercise with a how-to.
+            if ExerciseHowToCatalog.entry(for: name) != nil {
+                ExerciseHowToButton(exerciseName: name, action: onHowTo)
+            }
         }
     }
 }

@@ -9,6 +9,11 @@
 // test shrinks to one "strength check" set. A true one-rep max is opt-in, for intermediate and
 // advanced lifters only, and is never treated as more authoritative than the submaximal estimate.
 //
+// A check can be put off (w4, 2026-11-10): "Not now" in the runner, a run finished with its test set
+// skipped, or the due lift logged by hand each write a moment two weeks ahead (the app's
+// `WorkoutCalibrationDeferral`), which arrives here as ``CalibrationSettings/askAgainFrom``. No check
+// is planned before it, and none ever within ``WorkoutCalibration/minimumGapDays`` of the last one.
+//
 // Deterministic: the same estimate, profile and day always build the same sets.
 
 import Foundation
@@ -18,10 +23,14 @@ public nonisolated struct CalibrationSettings: Equatable, Sendable {
     /// Coach plans own their own testing: no automatic calibration while coach exchange is on.
     public var hasCoach: Bool
     public var lastCalibration: Date?
+    /// The day from which a check may be offered again after a "Not now" (w4); nil when none was put
+    /// off. Device-local in the app, and read as a day: on that day the check is back.
+    public var askAgainFrom: Date?
 
-    public init(hasCoach: Bool = false, lastCalibration: Date? = nil) {
+    public init(hasCoach: Bool = false, lastCalibration: Date? = nil, askAgainFrom: Date? = nil) {
         self.hasCoach = hasCoach
         self.lastCalibration = lastCalibration
+        self.askAgainFrom = askAgainFrom
     }
 }
 
@@ -57,6 +66,9 @@ public nonisolated enum WorkoutCalibration {
 
     /// Days between calibrations.
     public static let intervalDays = 28
+    /// Never more than one check a week (owner, 2026-11-10): no check is planned within this many
+    /// days of the last one, whatever else says it is due.
+    public static let minimumGapDays = 7
     /// Regular weighted sessions a lift needs before its first calibration.
     public static let minimumSessions = 2
     /// The submaximal test's target reps.
@@ -71,12 +83,16 @@ public nonisolated enum WorkoutCalibration {
     public static let testRestSeconds = 180
     public static let attemptRestSeconds = 240
 
-    /// Due when there is no coach plan, today isn't a light day, and four weeks have passed since the
-    /// last calibration (or there has never been one).
+    /// Due when there is no coach plan, today isn't a light day, no "Not now" is still putting it off
+    /// (``CalibrationSettings/askAgainFrom``, w4), and four weeks have passed since the last
+    /// calibration (or there has never been one) — and never within ``minimumGapDays`` of the last
+    /// one.
     public static func isDue(_ settings: CalibrationSettings, intensity: WorkoutIntensity, today: Date) -> Bool {
         guard !settings.hasCoach, intensity != .light else { return false }
+        if let again = settings.askAgainFrom, today < again { return false }
         guard let last = settings.lastCalibration else { return true }
-        return WorkoutLoadEngine.days(from: last, to: today) >= intervalDays
+        let since = WorkoutLoadEngine.days(from: last, to: today)
+        return since >= minimumGapDays && since >= intervalDays
     }
 
     /// A lift can be calibrated once it has two regular weighted sessions to ramp from.

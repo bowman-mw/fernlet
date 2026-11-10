@@ -14,8 +14,21 @@
     "plane": "horizontal",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
-    ]
+      "weightBench",
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "heavy bar pressed from the chest",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "heavy bar pressed through bent-back wrists",
+      "lowerBack": "back arches on the bench under a heavy bar"
+    }
   },
   {
     "name": "Incline bench press",
@@ -32,8 +45,19 @@
     "plane": "horizontal",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
-    ]
+      "weightBench",
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard"
+    },
+    "areaLoadNotes": {
+      "shoulder": "heavy bar pressed on an incline",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "heavy bar pressed through bent-back wrists"
+    }
   },
   {
     "name": "Overhead press",
@@ -49,7 +73,28 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "bar pressed overhead past the neck",
+      "shoulder": "heavy bar pressed overhead",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "heavy bar pressed through bent-back wrists",
+      "upperBack": "upper back holds the bar overhead",
+      "lowerBack": "standing under an overhead bar",
+      "ankleFoot": "standing under a heavy load"
+    }
   },
   {
     "name": "Dumbbell bench press",
@@ -67,7 +112,17 @@
     "difficulty": 1,
     "requiredGear": [
       "weightBench"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "dumbbells pressed from the chest",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Push-up",
@@ -83,7 +138,23 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "body weight pressed from the floor",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "body weight on bent-back wrists",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "toes bear the plank"
+    }
   },
   {
     "name": "Dip",
@@ -98,7 +169,20 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 3
+    "difficulty": 3,
+    "requiredGear": [
+      "dipBars"
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard"
+    },
+    "areaLoadNotes": {
+      "shoulder": "body weight on deeply bent shoulders",
+      "elbow": "body weight pressed through the elbows",
+      "wristHand": "body weight on the hands"
+    }
   },
   {
     "name": "Cable fly",
@@ -111,7 +195,17 @@
     "equipment": "cable",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms sweep in against the cable",
+      "elbow": "elbows hold the load",
+      "wristHand": "cable handle gripped"
+    }
   },
   {
     "name": "Lateral raise",
@@ -124,7 +218,19 @@
     "equipment": "dumbbell",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "upper traps help lift the weights",
+      "shoulder": "direct shoulder work with light dumbbells",
+      "elbow": "elbows hold the load",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Front raise",
@@ -135,7 +241,17 @@
     "equipment": "dumbbell",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "direct shoulder work with light dumbbells",
+      "elbow": "elbows hold the load",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Triceps pushdown",
@@ -146,7 +262,15 @@
     "equipment": "cable",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows straighten against the cable",
+      "wristHand": "cable handle gripped"
+    }
   },
   {
     "name": "Skullcrusher",
@@ -159,8 +283,19 @@
     "inputKind": "strength",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
-    ]
+      "weightBench",
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "hard",
+      "wristHand": "hard"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms held up under the bar",
+      "elbow": "heavy bar lowered by the elbows alone",
+      "wristHand": "bar held over bent wrists"
+    }
   },
   {
     "name": "Close-grip bench",
@@ -177,8 +312,21 @@
     "plane": "horizontal",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
-    ]
+      "weightBench",
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "heavy bar pressed from the chest",
+      "elbow": "heavy bar pressed mostly by the elbows",
+      "wristHand": "narrow grip bends the wrists under a heavy bar",
+      "lowerBack": "back arches on the bench under a heavy bar"
+    }
   },
   {
     "name": "Pull-up",
@@ -197,7 +345,21 @@
     "difficulty": 3,
     "requiredGear": [
       "pullUpBar"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard",
+      "upperBack": "hard"
+    },
+    "areaLoadNotes": {
+      "neck": "chin strains up to the bar",
+      "shoulder": "hanging from the shoulders",
+      "elbow": "body weight pulled through the elbows",
+      "wristHand": "hanging by the grip",
+      "upperBack": "body weight pulled by the upper back"
+    }
   },
   {
     "name": "Chin-up",
@@ -216,7 +378,21 @@
     "difficulty": 3,
     "requiredGear": [
       "pullUpBar"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard",
+      "upperBack": "hard"
+    },
+    "areaLoadNotes": {
+      "neck": "chin strains up to the bar",
+      "shoulder": "hanging from the shoulders",
+      "elbow": "body weight pulled through the elbows",
+      "wristHand": "hanging by the grip",
+      "upperBack": "body weight pulled by the upper back"
+    }
   },
   {
     "name": "Lat pulldown",
@@ -231,7 +407,19 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms pull down from overhead, guided",
+      "elbow": "elbows bend under the load",
+      "wristHand": "bar gripped under load",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Barbell row",
@@ -247,7 +435,30 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head held up while bent over",
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "hard grip on a heavy bar",
+      "upperBack": "heavy bar rowed by the upper back",
+      "lowerBack": "bent over, unsupported, under a heavy bar",
+      "hip": "hips hold the bent-over position",
+      "ankleFoot": "standing under a heavy load"
+    }
   },
   {
     "name": "Dumbbell row",
@@ -263,7 +474,21 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "dumbbell gripped, other hand props on the bench",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "bent over with a hand on the bench"
+    }
   },
   {
     "name": "Cable row",
@@ -279,7 +504,21 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "sits upright against the pull, no back rest"
+    }
   },
   {
     "name": "Face pull",
@@ -294,7 +533,21 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "upper traps help pull",
+      "shoulder": "direct rear-shoulder work on a cable",
+      "elbow": "elbows bend under the load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Biceps curl",
@@ -307,7 +560,15 @@
     "equipment": "dumbbell",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows curl the dumbbells",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Hammer curl",
@@ -319,7 +580,15 @@
     "equipment": "dumbbell",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows curl the dumbbells",
+      "wristHand": "forearms work to hold the dumbbells upright"
+    }
   },
   {
     "name": "Preacher curl",
@@ -332,7 +601,18 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "preacherCurl"
+    ],
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows curl on the pad",
+      "wristHand": "machine handles gripped"
+    }
   },
   {
     "name": "Rear delt fly",
@@ -345,7 +625,23 @@
     "equipment": "dumbbell",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "direct rear-shoulder work with light dumbbells",
+      "elbow": "elbows hold the load",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "bent over, unsupported, with light dumbbells",
+      "hip": "hips hold the bent-over position"
+    }
   },
   {
     "name": "Shrug",
@@ -358,7 +654,25 @@
     "equipment": "dumbbell",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy load hangs from the upper traps",
+      "shoulder": "heavy dumbbells hang from the shoulders",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on heavy dumbbells",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "standing under a heavy held load",
+      "ankleFoot": "standing under a heavy load"
+    }
   },
   {
     "name": "Back squat",
@@ -375,8 +689,31 @@
     "inputKind": "strength",
     "difficulty": 2,
     "requiredGear": [
-      "squatRack"
-    ]
+      "squatRack",
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "bar rests across the neck and shoulders",
+      "shoulder": "arms reach back to hold the bar",
+      "elbow": "elbows bent back under the bar",
+      "wristHand": "hands steady the bar",
+      "upperBack": "bar sits on the upper back",
+      "lowerBack": "bar loads the spine",
+      "hip": "deep squat under a heavy bar",
+      "knee": "deep squat under a heavy bar",
+      "ankleFoot": "deep ankle bend under the bar"
+    }
   },
   {
     "name": "Front squat",
@@ -393,8 +730,31 @@
     "inputKind": "strength",
     "difficulty": 3,
     "requiredGear": [
-      "squatRack"
-    ]
+      "squatRack",
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "bar racked against the throat and collarbones",
+      "shoulder": "elbows held high in the rack",
+      "elbow": "elbows fully bent in the rack",
+      "wristHand": "bar racked on bent-back wrists",
+      "upperBack": "upper back holds the bar upright",
+      "lowerBack": "bar loads the spine",
+      "hip": "deep squat under a heavy bar",
+      "knee": "deep squat under a heavy bar",
+      "ankleFoot": "deep ankle bend under the bar"
+    }
   },
   {
     "name": "Goblet squat",
@@ -411,7 +771,27 @@
     "difficulty": 1,
     "alternativeEquipment": [
       "dumbbell"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "weight held at the chest",
+      "elbow": "elbows hold the load",
+      "wristHand": "weight held in the hands",
+      "upperBack": "upper back holds the weight upright",
+      "lowerBack": "weight carried in front of the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Leg press",
@@ -425,7 +805,20 @@
     "equipment": "machine",
     "movementPattern": "squat",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "legPress"
+    ],
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under the sled, back supported",
+      "ankleFoot": "feet push the plate"
+    }
   },
   {
     "name": "Hack squat",
@@ -439,7 +832,28 @@
     "equipment": "machine",
     "movementPattern": "squat",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "hackSquat"
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pads press down on the shoulders",
+      "shoulder": "pads press down on the shoulders",
+      "upperBack": "pads press down on the shoulders",
+      "lowerBack": "load rides on the shoulders through the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet push the platform"
+    }
   },
   {
     "name": "Bulgarian split squat",
@@ -454,7 +868,25 @@
     "equipment": "dumbbell",
     "movementPattern": "lunge",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "held weights hang from the upper traps",
+      "shoulder": "dumbbells hang from the shoulders",
+      "wristHand": "dumbbells held in the hands",
+      "lowerBack": "held weights carried through the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "balance on one foot"
+    }
   },
   {
     "name": "Lunge",
@@ -469,7 +901,25 @@
     "equipment": "dumbbell",
     "movementPattern": "lunge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "held weights hang from the upper traps",
+      "shoulder": "dumbbells hang from the shoulders",
+      "wristHand": "dumbbells held in the hands",
+      "lowerBack": "held weights carried through the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Step-up",
@@ -484,7 +934,17 @@
     "equipment": "bench",
     "movementPattern": "lunge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under body weight",
+      "ankleFoot": "one foot lifts the body"
+    }
   },
   {
     "name": "Leg extension",
@@ -495,7 +955,18 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "legExtension"
+    ],
+    "areaLoads": {
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "knee": "knee straightens against the pad",
+      "ankleFoot": "pad presses just above the ankle"
+    }
   },
   {
     "name": "Deadlift",
@@ -511,7 +982,32 @@
     "equipment": "barbell",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy bar hangs from the neck and traps",
+      "shoulder": "arms hang under a heavy bar",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on a heavy bar",
+      "upperBack": "upper back holds a heavy bar",
+      "lowerBack": "heavy bar lifted by the back and hips",
+      "hip": "heavy bar lifted by the hips",
+      "knee": "heavy bar lifted through the legs",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Romanian deadlift",
@@ -526,7 +1022,32 @@
     "equipment": "barbell",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy bar hangs from the neck and traps",
+      "shoulder": "arms hang under a heavy bar",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on a heavy bar",
+      "upperBack": "upper back holds a heavy bar",
+      "lowerBack": "heavy bar lowered by the back and hips",
+      "hip": "heavy bar lowered by the hips",
+      "knee": "hamstrings loaded hard across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Hip thrust",
@@ -540,7 +1061,26 @@
     "equipment": "barbell",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "neck and shoulders braced on the bench under a bar",
+      "upperBack": "upper back braced on the bench under a bar",
+      "lowerBack": "heavy bar lifted by the hips, back bridged",
+      "hip": "heavy bar lifted by the hips",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet press into the floor"
+    }
   },
   {
     "name": "Glute bridge",
@@ -554,7 +1094,19 @@
     "equipment": "bodyweight",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "hips lift from the floor",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet press into the floor"
+    }
   },
   {
     "name": "Good morning",
@@ -568,7 +1120,32 @@
     "equipment": "barbell",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 3
+    "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "bar rests across the neck and shoulders",
+      "shoulder": "arms reach back to hold the bar",
+      "elbow": "elbows bent back under the bar",
+      "wristHand": "hands steady the bar",
+      "upperBack": "bar sits on the upper back",
+      "lowerBack": "bent over under a bar",
+      "hip": "bar lowered by the hips",
+      "knee": "hamstrings loaded hard across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Hyperextension",
@@ -582,7 +1159,21 @@
     "equipment": "bench",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "upperBack": "whole back lifts the trunk",
+      "lowerBack": "direct lower-back work on the pad",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "heels hooked under the pads"
+    }
   },
   {
     "name": "Leg curl",
@@ -595,7 +1186,18 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "legCurl"
+    ],
+    "areaLoads": {
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "knee": "knees curl against the pad",
+      "ankleFoot": "pad pulls just above the heels"
+    }
   },
   {
     "name": "Plank",
@@ -610,7 +1212,23 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders prop the body",
+      "elbow": "body weight rests on the elbows",
+      "wristHand": "forearms and hands press into the floor",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "toes bear the plank"
+    }
   },
   {
     "name": "Side plank",
@@ -625,7 +1243,23 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "one shoulder props the body",
+      "elbow": "body weight rests on one elbow",
+      "wristHand": "forearms and hands press into the floor",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "side of the foot bears the plank"
+    }
   },
   {
     "name": "Hanging leg raise",
@@ -642,7 +1276,23 @@
     "difficulty": 3,
     "requiredGear": [
       "pullUpBar"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "hanging from the shoulders",
+      "elbow": "arms hang under body weight",
+      "wristHand": "hanging by the grip",
+      "upperBack": "hanging from the shoulder blades",
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Ab wheel",
@@ -656,7 +1306,28 @@
     "equipment": "none",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 3
+    "difficulty": 3,
+    "requiredGear": [
+      "abWheel"
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms reach overhead under body weight",
+      "elbow": "arms prop the body",
+      "wristHand": "body weight on the gripped wheel",
+      "upperBack": "lats pull the wheel back",
+      "lowerBack": "long reach pulls the lower back into an arch",
+      "hip": "hips work through the move",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Cable crunch",
@@ -669,7 +1340,23 @@
     "equipment": "cable",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "rope held beside the head",
+      "shoulder": "arms hold the rope by the head",
+      "elbow": "elbows hold the load",
+      "wristHand": "cable handle gripped",
+      "lowerBack": "spine curls against the cable",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Russian twist",
@@ -682,7 +1369,17 @@
     "equipment": "bodyweight",
     "movementPattern": "twist",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "upperBack": "upper back twists",
+      "lowerBack": "leaning back and twisting, unsupported",
+      "hip": "hip flexors hold the lean"
+    }
   },
   {
     "name": "Pallof press",
@@ -696,7 +1393,19 @@
     "equipment": "cable",
     "movementPattern": "twist",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms press out against a sideways pull",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "cable handle gripped",
+      "lowerBack": "trunk resists a twist"
+    }
   },
   {
     "name": "Standing calf raise",
@@ -707,7 +1416,26 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "standingCalfRaise"
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pads press down on the shoulders",
+      "shoulder": "pads press down on the shoulders",
+      "upperBack": "pads press down on the shoulders",
+      "lowerBack": "load rides on the shoulders through the spine",
+      "knee": "knees locked under the load",
+      "ankleFoot": "loaded calf raise on a guided machine"
+    }
   },
   {
     "name": "Seated calf raise",
@@ -718,7 +1446,18 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "seatedCalfRaise"
+    ],
+    "areaLoads": {
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "knee": "pad rests just above the bent knees",
+      "ankleFoot": "seated calf raise, load on the thighs"
+    }
   },
   {
     "name": "Treadmill walk",
@@ -737,7 +1476,17 @@
     "difficulty": 1,
     "requiredGear": [
       "treadmill"
-    ]
+    ],
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "walking",
+      "knee": "walking",
+      "ankleFoot": "walking"
+    }
   },
   {
     "name": "Treadmill run",
@@ -756,7 +1505,19 @@
     "difficulty": 2,
     "requiredGear": [
       "treadmill"
-    ]
+    ],
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "each stride jars the spine",
+      "hip": "running impact",
+      "knee": "running impact, stride after stride",
+      "ankleFoot": "running impact, stride after stride"
+    }
   },
   {
     "name": "Burpee",
@@ -772,7 +1533,25 @@
     "movementPattern": "locomotion",
     "inputKind": "strength",
     "modality": "cardio",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "shoulder": "drops onto the hands and presses up",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "drops onto the hands",
+      "lowerBack": "fast fold, plank and jump",
+      "hip": "hips work through the move",
+      "knee": "jump and landing",
+      "ankleFoot": "jump and landing"
+    }
   },
   {
     "name": "Kettlebell swing",
@@ -787,7 +1566,29 @@
     "equipment": "kettlebell",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "swinging weight hangs from the upper traps",
+      "shoulder": "arms swing the bell to chest height",
+      "elbow": "arms hang under a swinging load",
+      "wristHand": "hard grip on a swinging bell",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "fast loaded hinge",
+      "hip": "explosive hip snap",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Clean",
@@ -803,7 +1604,32 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "modality": "power",
-    "difficulty": 3
+    "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy bar pulled and caught at the neck",
+      "shoulder": "bar caught on the shoulders",
+      "elbow": "elbows whip under the bar",
+      "wristHand": "bar caught on bent-back wrists",
+      "upperBack": "upper back pulls a heavy bar",
+      "lowerBack": "heavy bar pulled fast from the floor",
+      "hip": "explosive hip drive under a bar",
+      "knee": "jump and catch in a squat",
+      "ankleFoot": "jump and landing under a bar"
+    }
   },
   {
     "name": "Snatch",
@@ -819,7 +1645,32 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "modality": "power",
-    "difficulty": 3
+    "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy bar pulled past the neck and held overhead",
+      "shoulder": "bar caught overhead",
+      "elbow": "elbows lock out under a falling bar",
+      "wristHand": "bar caught overhead on bent-back wrists",
+      "upperBack": "upper back pulls a heavy bar",
+      "lowerBack": "heavy bar pulled fast from the floor",
+      "hip": "explosive hip drive under a bar",
+      "knee": "jump and catch in a squat",
+      "ankleFoot": "jump and landing under a bar"
+    }
   },
   {
     "name": "Thruster",
@@ -836,7 +1687,32 @@
     "inputKind": "strength",
     "plane": "vertical",
     "modality": "power",
-    "difficulty": 3
+    "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "hard",
+      "elbow": "hard",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "bar racked at the neck, then pressed overhead",
+      "shoulder": "heavy bar driven overhead",
+      "elbow": "elbows drive the bar overhead",
+      "wristHand": "bar racked and pressed on bent-back wrists",
+      "upperBack": "upper back holds the bar upright",
+      "lowerBack": "squat and overhead press under a bar",
+      "hip": "deep squat under a heavy bar",
+      "knee": "deep squat under a heavy bar",
+      "ankleFoot": "deep ankle bend under the bar"
+    }
   },
   {
     "name": "Turkish get-up",
@@ -851,7 +1727,29 @@
     "equipment": "kettlebell",
     "movementPattern": "carry",
     "inputKind": "strength",
-    "difficulty": 3
+    "difficulty": 3,
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "weight held overhead through the whole move",
+      "shoulder": "weight held overhead through the whole move",
+      "elbow": "arm locked out under the weight",
+      "wristHand": "body weight on one hand, weight in the other",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "trunk lifts and turns under an overhead weight",
+      "hip": "hips work through the move",
+      "knee": "lunges up from the floor",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Bodyweight squat",
@@ -863,7 +1761,17 @@
     "equipment": "bodyweight",
     "movementPattern": "squat",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under body weight",
+      "ankleFoot": "ankles bend under body weight"
+    }
   },
   {
     "name": "Reverse lunge",
@@ -877,7 +1785,17 @@
     "equipment": "bodyweight",
     "movementPattern": "lunge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under body weight",
+      "ankleFoot": "ankles bend under body weight"
+    }
   },
   {
     "name": "Pike push-up",
@@ -892,7 +1810,23 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pressing head-down toward the floor",
+      "shoulder": "body weight pressed overhead",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "body weight on bent-back wrists",
+      "hip": "hips fold deep in the pike",
+      "ankleFoot": "toes bear the pike"
+    }
   },
   {
     "name": "Inverted row",
@@ -907,7 +1841,26 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 2
+    "difficulty": 2,
+    "requiredGear": [
+      "lowBar"
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "hanging by the grip under the bar",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "body held rigid under the bar",
+      "hip": "hips held level"
+    }
   },
   {
     "name": "Calf raise",
@@ -918,7 +1871,13 @@
     "equipment": "bodyweight",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "ankleFoot": "calf raise at body weight"
+    }
   },
   {
     "name": "Hollow hold",
@@ -930,7 +1889,17 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 2,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "neck": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head held off the floor",
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Nordic curl",
@@ -943,7 +1912,25 @@
     "equipment": "bodyweight",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 3
+    "difficulty": 3,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "hands catch the fall",
+      "elbow": "arms catch the fall",
+      "wristHand": "hands catch the fall",
+      "lowerBack": "trunk held rigid",
+      "hip": "hips work through the move",
+      "knee": "body weight lowered by the hamstrings at the knee",
+      "ankleFoot": "ankles pinned under a pad"
+    }
   },
   {
     "name": "Single-leg glute bridge",
@@ -956,7 +1943,19 @@
     "equipment": "bodyweight",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "hips lift from the floor",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet press into the floor"
+    }
   },
   {
     "name": "Bird dog",
@@ -970,7 +1969,23 @@
     "equipment": "bodyweight",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "one arm props the body",
+      "elbow": "arms prop the body",
+      "wristHand": "part of the body's weight on the hands",
+      "lowerBack": "gentle lower-back work on all fours",
+      "hip": "hips work through the move",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Superman",
@@ -983,7 +1998,21 @@
     "equipment": "bodyweight",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head lifts with the chest",
+      "shoulder": "arms lift overhead",
+      "upperBack": "upper back lifts the chest",
+      "lowerBack": "direct lower-back work on the floor",
+      "hip": "hips work through the move"
+    }
   },
   {
     "name": "Mountain climber",
@@ -997,7 +2026,25 @@
     "movementPattern": "locomotion",
     "inputKind": "none",
     "modality": "cardio",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders prop the body",
+      "elbow": "arms prop the body",
+      "wristHand": "body weight on bent-back wrists",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hip flexors drive the knees",
+      "knee": "knees drive in fast",
+      "ankleFoot": "feet hop in the plank"
+    }
   },
   {
     "name": "Band chest press",
@@ -1012,7 +2059,17 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "pressed against a light band",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "band held in the hands"
+    }
   },
   {
     "name": "Band overhead press",
@@ -1027,7 +2084,21 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pressing overhead works the upper traps",
+      "shoulder": "pressed overhead against a light band",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "band held in the hands",
+      "lowerBack": "standing under an overhead push"
+    }
   },
   {
     "name": "Band row",
@@ -1042,7 +2113,21 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "band held in the hands",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "upright against the pull"
+    }
   },
   {
     "name": "Band lat pulldown",
@@ -1056,7 +2141,19 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms pull down from overhead against a band",
+      "elbow": "elbows bend under the load",
+      "wristHand": "band held in the hands",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Band pull-apart",
@@ -1069,7 +2166,19 @@
     "equipment": "band",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "direct rear-shoulder work with a band",
+      "elbow": "straight arms pull against the band",
+      "wristHand": "band held in the hands",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Band biceps curl",
@@ -1080,7 +2189,15 @@
     "equipment": "band",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows curl against the band",
+      "wristHand": "band held in the hands"
+    }
   },
   {
     "name": "Band triceps pushdown",
@@ -1091,7 +2208,15 @@
     "equipment": "band",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows straighten against the band",
+      "wristHand": "band held in the hands"
+    }
   },
   {
     "name": "Band lateral raise",
@@ -1102,7 +2227,19 @@
     "equipment": "band",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "upper traps help lift",
+      "shoulder": "direct shoulder work with a band",
+      "elbow": "elbows hold the load",
+      "wristHand": "band held in the hands"
+    }
   },
   {
     "name": "Band good morning",
@@ -1116,7 +2253,23 @@
     "equipment": "band",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "band looped over the upper back",
+      "upperBack": "band looped over the upper back",
+      "lowerBack": "bent over against a band",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Band squat",
@@ -1128,7 +2281,27 @@
     "equipment": "band",
     "movementPattern": "squat",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "band pulls down on the shoulders",
+      "shoulder": "band held at the shoulders",
+      "elbow": "elbows hold the band at the shoulders",
+      "wristHand": "band held in the hands",
+      "lowerBack": "band pulls down through the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Dumbbell shoulder press",
@@ -1143,7 +2316,23 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pressing overhead works the upper traps",
+      "shoulder": "dumbbells pressed overhead",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back steadies the weights overhead",
+      "lowerBack": "overhead load through the spine"
+    }
   },
   {
     "name": "Arnold press",
@@ -1158,7 +2347,23 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pressing overhead works the upper traps",
+      "shoulder": "dumbbells turned and pressed overhead",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back steadies the weights overhead",
+      "lowerBack": "overhead load through the spine"
+    }
   },
   {
     "name": "Incline dumbbell press",
@@ -1176,7 +2381,17 @@
     "difficulty": 1,
     "requiredGear": [
       "weightBench"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "dumbbells pressed on an incline",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Dumbbell Romanian deadlift",
@@ -1190,7 +2405,27 @@
     "equipment": "dumbbell",
     "movementPattern": "hinge",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "held weights hang from the upper traps",
+      "shoulder": "dumbbells hang from the shoulders",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "bent over holding dumbbells",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Dumbbell pullover",
@@ -1206,7 +2441,19 @@
     "difficulty": 2,
     "requiredGear": [
       "weightBench"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "weight lowered behind the head",
+      "elbow": "elbows held bent under the weight",
+      "wristHand": "dumbbell held in both hands",
+      "upperBack": "lats and upper back stretch under the weight"
+    }
   },
   {
     "name": "Box jump",
@@ -1221,7 +2468,19 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "modality": "power",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "landing jars the spine",
+      "hip": "explosive jump",
+      "knee": "jump and landing",
+      "ankleFoot": "jump and landing"
+    }
   },
   {
     "name": "Broad jump",
@@ -1236,7 +2495,19 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "modality": "power",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "landing jars the spine",
+      "hip": "explosive jump",
+      "knee": "jump and landing",
+      "ankleFoot": "jump and landing"
+    }
   },
   {
     "name": "Lateral bound",
@@ -1251,7 +2522,19 @@
     "movementPattern": "lunge",
     "inputKind": "strength",
     "modality": "power",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "landing jars the spine",
+      "hip": "explosive sideways jump",
+      "knee": "sideways jump and one-leg landing",
+      "ankleFoot": "sideways jump and one-leg landing"
+    }
   },
   {
     "name": "Jump rope",
@@ -1265,7 +2548,21 @@
     "movementPattern": "locomotion",
     "inputKind": "none",
     "modality": "cardio",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "wristHand": "wrists turn the rope",
+      "lowerBack": "landing jars the spine",
+      "hip": "small repeated hops",
+      "knee": "small repeated hops",
+      "ankleFoot": "repeated hops on the balls of the feet"
+    }
   },
   {
     "name": "Sprint",
@@ -1281,7 +2578,19 @@
     "movementPattern": "locomotion",
     "inputKind": "none",
     "modality": "cardio",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "each stride jars the spine",
+      "hip": "all-out stride",
+      "knee": "all-out running impact",
+      "ankleFoot": "all-out running impact"
+    }
   },
   {
     "name": "High knees",
@@ -1295,7 +2604,19 @@
     "movementPattern": "locomotion",
     "inputKind": "none",
     "modality": "cardio",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "landing jars the spine",
+      "hip": "hip flexors drive the knees",
+      "knee": "running on the spot, knees driven high",
+      "ankleFoot": "running on the spot"
+    }
   },
   {
     "name": "Medicine ball slam",
@@ -1313,7 +2634,27 @@
     "difficulty": 1,
     "requiredGear": [
       "medicineBall"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "ball thrown down from overhead",
+      "elbow": "elbows snap the ball down",
+      "wristHand": "ball gripped and thrown",
+      "upperBack": "upper back throws the ball down",
+      "lowerBack": "fast fold under load",
+      "hip": "hips fold with the throw",
+      "knee": "squat to pick the ball up",
+      "ankleFoot": "rises onto the toes"
+    }
   },
   {
     "name": "Farmer's carry",
@@ -1332,7 +2673,29 @@
     "measure": "seconds",
     "alternativeEquipment": [
       "kettlebell"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy load hangs from the upper traps",
+      "shoulder": "heavy load hangs from the shoulders",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on a heavy load",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "heavy load carried through the spine",
+      "hip": "walking under load",
+      "knee": "walking under load",
+      "ankleFoot": "walking under load"
+    }
   },
   {
     "name": "Suitcase carry",
@@ -1351,7 +2714,29 @@
     "measure": "seconds",
     "alternativeEquipment": [
       "kettlebell"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy load hangs from one side of the neck",
+      "shoulder": "heavy load hangs from one shoulder",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on a heavy load",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "one-sided load carried through the spine",
+      "hip": "walking under load",
+      "knee": "walking under load",
+      "ankleFoot": "walking under load"
+    }
   },
   {
     "name": "Dead bug",
@@ -1364,7 +2749,13 @@
     "equipment": "bodyweight",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips move the legs, unloaded"
+    }
   },
   {
     "name": "Dumbbell floor press",
@@ -1379,7 +2770,17 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "dumbbells pressed from the floor, short range",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Incline push-up",
@@ -1395,7 +2796,23 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "part of the body's weight pressed",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "part of the body's weight on the hands",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "toes bear the plank"
+    }
   },
   {
     "name": "Kettlebell deadlift",
@@ -1413,7 +2830,27 @@
     "difficulty": 1,
     "alternativeEquipment": [
       "dumbbell"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "held weights hang from the upper traps",
+      "shoulder": "arms hang under the kettlebell",
+      "wristHand": "kettlebell gripped",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "kettlebell lifted by the back and hips",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Dumbbell fly",
@@ -1429,7 +2866,17 @@
     "difficulty": 1,
     "requiredGear": [
       "weightBench"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms open wide under free weights",
+      "elbow": "elbows hold the load",
+      "wristHand": "dumbbells held in the hands"
+    }
   },
   {
     "name": "Standing forward fold",
@@ -1445,7 +2892,19 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "gentle stretch, folding forward",
+      "hip": "stretches the hip",
+      "knee": "stretches across the knee",
+      "ankleFoot": "stretches the calves"
+    }
   },
   {
     "name": "Low lunge stretch",
@@ -1461,7 +2920,19 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "lower back arches as the hips sink",
+      "hip": "stretches the hip",
+      "knee": "back knee rests on the floor",
+      "ankleFoot": "ankle bends under body weight"
+    }
   },
   {
     "name": "Side lunge stretch",
@@ -1477,7 +2948,17 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "stretches the hip",
+      "knee": "one knee bends deep to the side",
+      "ankleFoot": "ankle bends under body weight"
+    }
   },
   {
     "name": "Lying hamstring stretch",
@@ -1493,7 +2974,17 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "stretches the hip",
+      "knee": "stretches across the knee",
+      "ankleFoot": "stretches the calf"
+    }
   },
   {
     "name": "Butterfly stretch",
@@ -1508,7 +2999,15 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "stretches the hip",
+      "knee": "knees fall open"
+    }
   },
   {
     "name": "Cat-cow",
@@ -1524,7 +3023,27 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "neck moves with the spine",
+      "shoulder": "shoulders prop the body",
+      "elbow": "arms prop the body",
+      "wristHand": "part of the body's weight on the hands",
+      "upperBack": "gentle upper-back movement",
+      "lowerBack": "gentle lower-back movement",
+      "hip": "hips bear weight on all fours",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Downward dog",
@@ -1541,7 +3060,25 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms overhead bear body weight",
+      "elbow": "arms prop the body",
+      "wristHand": "body weight on bent-back wrists",
+      "upperBack": "stretches the upper back",
+      "hip": "stretches the hip",
+      "knee": "stretches across the knee",
+      "ankleFoot": "deep calf and ankle stretch"
+    }
   },
   {
     "name": "Child's pose",
@@ -1557,7 +3094,23 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "shoulder": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms rest stretched overhead",
+      "upperBack": "stretches the upper back",
+      "lowerBack": "gentle lower-back stretch",
+      "hip": "stretches the hip",
+      "knee": "knees fully bent under the body",
+      "ankleFoot": "tops of the feet under the body"
+    }
   },
   {
     "name": "Standing quad stretch",
@@ -1573,7 +3126,17 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "stretches the hip",
+      "knee": "knee fully bent",
+      "ankleFoot": "balance on one foot"
+    }
   },
   {
     "name": "Wide-leg forward fold",
@@ -1589,7 +3152,17 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "gentle stretch, folding forward",
+      "hip": "stretches the hip",
+      "knee": "stretches across the knee"
+    }
   },
   {
     "name": "Cross-body shoulder stretch",
@@ -1605,7 +3178,15 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "gentle shoulder stretch",
+      "upperBack": "stretches between the shoulder blades"
+    }
   },
   {
     "name": "Overhead triceps stretch",
@@ -1621,7 +3202,15 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arm reaches overhead",
+      "elbow": "elbow fully bent"
+    }
   },
   {
     "name": "Figure-four stretch",
@@ -1637,7 +3226,15 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "stretches the hip",
+      "knee": "knee turned out"
+    }
   },
   {
     "name": "Doorway chest stretch",
@@ -1652,7 +3249,13 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "shoulder": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "gentle stretch across the front of the shoulder"
+    }
   },
   {
     "name": "Calf stretch",
@@ -1666,7 +3269,13 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "ankleFoot": "gentle calf and ankle stretch"
+    }
   },
   {
     "name": "Thread the needle",
@@ -1683,7 +3292,23 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head rests turned on the floor",
+      "shoulder": "gentle rear-shoulder stretch",
+      "wristHand": "part of the body's weight on the hands",
+      "upperBack": "gentle upper-back twist",
+      "hip": "hips bear weight on all fours",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Supine twist",
@@ -1700,7 +3325,17 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "upperBack": "gentle twist through the back",
+      "lowerBack": "gentle lower-back twist",
+      "hip": "stretches the hip"
+    }
   },
   {
     "name": "Single-leg stance",
@@ -1717,7 +3352,17 @@
     "modality": "balance",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "one hip holds the body level",
+      "knee": "one knee holds the body",
+      "ankleFoot": "balance on one foot"
+    }
   },
   {
     "name": "Squat jump",
@@ -1732,7 +3377,19 @@
     "movementPattern": "squat",
     "inputKind": "none",
     "modality": "power",
-    "difficulty": 2
+    "difficulty": 2,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "landing jars the spine",
+      "hip": "explosive jump",
+      "knee": "jump and landing",
+      "ankleFoot": "jump and landing"
+    }
   },
   {
     "name": "Lateral band walk",
@@ -1744,7 +3401,17 @@
     "equipment": "band",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips push out against the band",
+      "knee": "band pulls at the knees",
+      "ankleFoot": "side steps against the band"
+    }
   },
   {
     "name": "Clamshell",
@@ -1758,7 +3425,13 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hip opens against gravity, lying down"
+    }
   },
   {
     "name": "Dumbbell overhead triceps extension",
@@ -1770,7 +3443,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "weight lowered behind the head",
+      "elbow": "elbows straighten the weight overhead",
+      "wristHand": "dumbbells held in the hands",
+      "lowerBack": "overhead load arches the lower back"
+    }
   },
   {
     "name": "Dumbbell kickback",
@@ -1782,7 +3467,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "upper arm held back",
+      "elbow": "elbow straightens a light dumbbell",
+      "wristHand": "dumbbells held in the hands",
+      "lowerBack": "bent over with a hand on the bench"
+    }
   },
   {
     "name": "Cable overhead triceps extension",
@@ -1794,7 +3491,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms overhead against an adjustable cable",
+      "elbow": "elbows straighten against the cable",
+      "wristHand": "cable handle gripped",
+      "lowerBack": "overhead load arches the lower back"
+    }
   },
   {
     "name": "Band overhead triceps extension",
@@ -1806,7 +3515,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms overhead against a light band",
+      "elbow": "elbows straighten against the band",
+      "wristHand": "band held in the hands",
+      "lowerBack": "overhead load arches the lower back"
+    }
   },
   {
     "name": "Knee push-up",
@@ -1822,7 +3543,23 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "part of the body's weight pressed",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "part of the body's weight on the hands",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Wall push-up",
@@ -1837,7 +3574,17 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "leaning weight pressed from a wall",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "leaning weight on the hands"
+    }
   },
   {
     "name": "Close-grip push-up",
@@ -1853,7 +3600,23 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "body weight pressed from the floor",
+      "elbow": "body weight pressed mostly by the elbows",
+      "wristHand": "body weight on bent-back wrists",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "toes bear the plank"
+    }
   },
   {
     "name": "Decline push-up",
@@ -1870,7 +3633,23 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 3,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "feet raised, more weight on the shoulders",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "body weight on bent-back wrists",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "toes bear the plank"
+    }
   },
   {
     "name": "Chest press machine",
@@ -1888,7 +3667,17 @@
     "difficulty": 1,
     "requiredGear": [
       "chestPress"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "pressed on a guided machine",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "machine handles gripped"
+    }
   },
   {
     "name": "Machine shoulder press",
@@ -1903,7 +3692,22 @@
     "movementPattern": "push",
     "inputKind": "strength",
     "plane": "vertical",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "shoulderPressMachine"
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "pressing overhead works the upper traps",
+      "shoulder": "pressed overhead on a guided machine",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "machine handles gripped"
+    }
   },
   {
     "name": "Assisted dip",
@@ -1919,7 +3723,20 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 1,
-    "variation": true
+    "requiredGear": [
+      "assistedPullUpDip"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "dip with the machine taking part of the weight",
+      "elbow": "elbows straighten under the load",
+      "wristHand": "hands bear part of the body's weight"
+    }
   },
   {
     "name": "Pec deck",
@@ -1932,7 +3749,20 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "pecDeck"
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms sweep in on a guided machine",
+      "elbow": "elbows hold the load",
+      "wristHand": "machine handles gripped"
+    }
   },
   {
     "name": "Cable lateral raise",
@@ -1944,7 +3774,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "upper traps help lift",
+      "shoulder": "direct shoulder work on a cable",
+      "elbow": "elbows hold the load",
+      "wristHand": "cable handle gripped"
+    }
   },
   {
     "name": "Chest-supported dumbbell row",
@@ -1964,7 +3806,19 @@
     "requiredGear": [
       "weightBench"
     ],
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Seated row machine",
@@ -1980,7 +3834,22 @@
     "movementPattern": "pull",
     "inputKind": "strength",
     "plane": "horizontal",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "seatedRowMachine"
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "machine handles gripped",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Assisted pull-up",
@@ -1996,7 +3865,24 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 2,
-    "variation": true
+    "requiredGear": [
+      "assistedPullUpDip"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "chin strains up to the bar",
+      "shoulder": "hanging pull with the machine taking part of the weight",
+      "elbow": "elbows bend under the load",
+      "wristHand": "hanging grip with part of the weight taken",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Band-assisted pull-up",
@@ -2015,7 +3901,21 @@
     "requiredGear": [
       "pullUpBar"
     ],
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "chin strains up to the bar",
+      "shoulder": "hanging from a bar",
+      "elbow": "elbows bend under the load",
+      "wristHand": "hanging by the grip from a bar",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Band face pull",
@@ -2031,7 +3931,21 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "upper traps help pull",
+      "shoulder": "direct rear-shoulder work with a band",
+      "elbow": "elbows bend under the load",
+      "wristHand": "band held in the hands",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Reverse pec deck",
@@ -2044,7 +3958,22 @@
     "equipment": "machine",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1
+    "difficulty": 1,
+    "requiredGear": [
+      "pecDeck"
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "direct rear-shoulder work on a guided machine",
+      "elbow": "elbows hold the load",
+      "wristHand": "machine handles gripped",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Band external rotation",
@@ -2056,7 +3985,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "gentle rotation against a light band",
+      "wristHand": "band held in the hands"
+    }
   },
   {
     "name": "Barbell curl",
@@ -2070,7 +4007,20 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "elbow": "hard",
+      "wristHand": "hard",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "heavy bar curled by the elbows",
+      "wristHand": "straight bar curled through the wrists",
+      "lowerBack": "standing with a heavy bar held in front"
+    }
   },
   {
     "name": "Box squat",
@@ -2083,7 +4033,17 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under body weight",
+      "ankleFoot": "ankles bend under body weight"
+    }
   },
   {
     "name": "Wall sit",
@@ -2098,7 +4058,17 @@
     "inputKind": "strength",
     "difficulty": 1,
     "measure": "seconds",
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips hold the sit",
+      "knee": "knees hold a bent position",
+      "ankleFoot": "feet press into the floor"
+    }
   },
   {
     "name": "Dumbbell front squat",
@@ -2114,7 +4084,29 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "dumbbells rest on the shoulders",
+      "shoulder": "dumbbells rest on the shoulders",
+      "elbow": "elbows hold the load",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back holds the weights upright",
+      "lowerBack": "weights carried through the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Pistol squat to box",
@@ -2130,7 +4122,19 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "difficulty": 3,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "trunk leans forward on one leg",
+      "hip": "one hip lowers the whole body",
+      "knee": "one knee lowers the whole body",
+      "ankleFoot": "one ankle bends under the whole body"
+    }
   },
   {
     "name": "Smith machine squat",
@@ -2147,7 +4151,29 @@
     "difficulty": 1,
     "requiredGear": [
       "smithMachine"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "guided bar rests across the neck and shoulders",
+      "shoulder": "arms reach back to hold the bar",
+      "elbow": "elbows bent back under the bar",
+      "wristHand": "hands steady the bar",
+      "upperBack": "guided bar sits on the upper back",
+      "lowerBack": "guided bar loads the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Split squat",
@@ -2162,7 +4188,17 @@
     "movementPattern": "lunge",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under body weight",
+      "ankleFoot": "ankles bend under body weight"
+    }
   },
   {
     "name": "Side lunge",
@@ -2177,7 +4213,17 @@
     "movementPattern": "lunge",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "knees bend under body weight",
+      "ankleFoot": "ankles bend under body weight"
+    }
   },
   {
     "name": "Walking lunge",
@@ -2193,7 +4239,25 @@
     "movementPattern": "lunge",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "held weights hang from the upper traps",
+      "shoulder": "dumbbells hang from the shoulders",
+      "wristHand": "dumbbells held in the hands",
+      "lowerBack": "held weights carried through the spine",
+      "hip": "hips work through the move",
+      "knee": "knees bend and straighten under the load",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Dumbbell single-leg Romanian deadlift",
@@ -2208,7 +4272,27 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "held weights hang from the upper traps",
+      "shoulder": "dumbbells hang from the shoulders",
+      "wristHand": "dumbbells held in the hands",
+      "upperBack": "upper back holds the load",
+      "lowerBack": "bent over holding dumbbells",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "balance on one foot under load"
+    }
   },
   {
     "name": "Bodyweight single-leg deadlift",
@@ -2221,7 +4305,19 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "folds at the hips",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "balance on one foot"
+    }
   },
   {
     "name": "Bodyweight good morning",
@@ -2236,7 +4332,17 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "folds at the hips",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee"
+    }
   },
   {
     "name": "Dumbbell glute bridge",
@@ -2250,7 +4356,19 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "hips lift from the floor",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet press into the floor"
+    }
   },
   {
     "name": "Dumbbell hip thrust",
@@ -2268,7 +4386,21 @@
     "requiredGear": [
       "weightBench"
     ],
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "upperBack": "upper back braced on the bench",
+      "lowerBack": "hips lift from the floor",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet press into the floor"
+    }
   },
   {
     "name": "Band pull-through",
@@ -2281,7 +4413,23 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms hold the pull between the legs",
+      "wristHand": "band held in the hands",
+      "lowerBack": "bent over against a band",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Single-leg calf raise",
@@ -2293,7 +4441,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "knee": "light",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "knee": "one knee holds the body",
+      "ankleFoot": "whole body weight on one forefoot"
+    }
   },
   {
     "name": "Dumbbell single-leg calf raise",
@@ -2305,7 +4461,21 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "knee": "light",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "neck": "held weight hangs from the upper traps",
+      "shoulder": "dumbbell hangs from the shoulder",
+      "wristHand": "dumbbell held in one hand",
+      "knee": "one knee holds the body",
+      "ankleFoot": "body weight and a dumbbell on one forefoot"
+    }
   },
   {
     "name": "Crunch",
@@ -2317,7 +4487,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head and neck curl up off the floor",
+      "lowerBack": "spine curls off the floor"
+    }
   },
   {
     "name": "Curl-up",
@@ -2329,7 +4507,13 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head and neck curl up off the floor"
+    }
   },
   {
     "name": "Lying leg raise",
@@ -2341,7 +4525,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Hanging knee raise",
@@ -2359,7 +4551,23 @@
     "requiredGear": [
       "pullUpBar"
     ],
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "hanging from the shoulders",
+      "elbow": "arms hang under body weight",
+      "wristHand": "hanging by the grip",
+      "upperBack": "hanging from the shoulder blades",
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Knee plank",
@@ -2372,7 +4580,23 @@
     "inputKind": "strength",
     "difficulty": 1,
     "measure": "seconds",
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders prop the body",
+      "elbow": "body weight rests on the elbows",
+      "wristHand": "forearms and hands press into the floor",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "knee": "kneeling on the knees"
+    }
   },
   {
     "name": "Bent-knee side plank",
@@ -2385,7 +4609,23 @@
     "inputKind": "strength",
     "difficulty": 1,
     "measure": "seconds",
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "one shoulder props the body",
+      "elbow": "body weight rests on one elbow",
+      "wristHand": "forearms and hands press into the floor",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "knee": "lower knee bears the plank"
+    }
   },
   {
     "name": "Stationary bike",
@@ -2404,7 +4644,19 @@
     "difficulty": 1,
     "requiredGear": [
       "exerciseBike"
-    ]
+    ],
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "leaning forward to the bars",
+      "hip": "hips turn the pedals",
+      "knee": "knees turn the pedals",
+      "ankleFoot": "feet push the pedals"
+    }
   },
   {
     "name": "Recumbent bike",
@@ -2422,7 +4674,17 @@
     "difficulty": 1,
     "requiredGear": [
       "exerciseBike"
-    ]
+    ],
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips turn the pedals",
+      "knee": "knees turn the pedals",
+      "ankleFoot": "feet push the pedals"
+    }
   },
   {
     "name": "Elliptical",
@@ -2441,7 +4703,17 @@
     "difficulty": 1,
     "requiredGear": [
       "elliptical"
-    ]
+    ],
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips glide the pedals",
+      "knee": "knees glide the pedals",
+      "ankleFoot": "feet push the pedals"
+    }
   },
   {
     "name": "Rowing machine",
@@ -2462,7 +4734,27 @@
     "difficulty": 1,
     "requiredGear": [
       "rowingMachine"
-    ]
+    ],
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "hard",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "handle gripped stroke after stroke",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "lower back folds and pulls every stroke",
+      "hip": "hips work through the move",
+      "knee": "knees bend deep every stroke",
+      "ankleFoot": "feet push the footplate"
+    }
   },
   {
     "name": "Stair climber",
@@ -2481,7 +4773,17 @@
     "difficulty": 2,
     "requiredGear": [
       "stairClimber"
-    ]
+    ],
+    "areaLoads": {
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips work through the move",
+      "knee": "climbing loads the bent knee, step after step",
+      "ankleFoot": "feet climb the steps"
+    }
   },
   {
     "name": "Easy walk",
@@ -2497,7 +4799,17 @@
     "movementPattern": "locomotion",
     "inputKind": "timed",
     "modality": "cardio",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "walking",
+      "knee": "walking",
+      "ankleFoot": "walking"
+    }
   },
   {
     "name": "Marching on the spot",
@@ -2511,7 +4823,17 @@
     "movementPattern": "locomotion",
     "inputKind": "timed",
     "modality": "cardio",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hip flexors lift the knees",
+      "knee": "knees lift in turn",
+      "ankleFoot": "steps on the spot"
+    }
   },
   {
     "name": "Jumping jack",
@@ -2526,7 +4848,21 @@
     "movementPattern": "locomotion",
     "inputKind": "timed",
     "modality": "cardio",
-    "difficulty": 1
+    "difficulty": 1,
+    "areaLoads": {
+      "shoulder": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "hard"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms swing overhead",
+      "lowerBack": "landing jars the spine",
+      "hip": "small repeated hops",
+      "knee": "small repeated hops",
+      "ankleFoot": "repeated hops"
+    }
   },
   {
     "name": "Neck side stretch",
@@ -2540,7 +4876,13 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "neck": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "gentle neck stretch"
+    }
   },
   {
     "name": "Cobra stretch",
@@ -2555,7 +4897,23 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "neck": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head lifts with the chest",
+      "elbow": "arms press the chest up",
+      "wristHand": "hands press the chest up",
+      "upperBack": "upper back arches",
+      "lowerBack": "gentle lower-back arch",
+      "hip": "front of the hips stretches"
+    }
   },
   {
     "name": "Knee-to-chest stretch",
@@ -2570,7 +4928,17 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "gentle lower-back stretch",
+      "hip": "stretches the hip",
+      "knee": "knee pulled fully bent"
+    }
   },
   {
     "name": "Pigeon stretch",
@@ -2586,7 +4954,19 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "wristHand": "hands prop the torso",
+      "lowerBack": "folds forward over the front leg",
+      "hip": "stretches the hip",
+      "knee": "front knee turned out under body weight"
+    }
   },
   {
     "name": "Seated hamstring stretch",
@@ -2602,7 +4982,19 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "folds forward while seated",
+      "hip": "stretches the hip",
+      "knee": "stretches across the knee",
+      "ankleFoot": "stretches the calf"
+    }
   },
   {
     "name": "Wrist circles",
@@ -2615,7 +5007,13 @@
     "inputKind": "none",
     "modality": "mobility",
     "difficulty": 1,
-    "measure": "seconds"
+    "measure": "seconds",
+    "areaLoads": {
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "wristHand": "gentle wrist movement"
+    }
   },
   {
     "name": "Upper back foam roll",
@@ -2631,7 +5029,15 @@
     "measure": "seconds",
     "requiredGear": [
       "foamRoller"
-    ]
+    ],
+    "areaLoads": {
+      "neck": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head cradled in the hands",
+      "upperBack": "rolls along the upper back"
+    }
   },
   {
     "name": "Leg swings",
@@ -2648,7 +5054,19 @@
     "modality": "mobility",
     "difficulty": 1,
     "measure": "seconds",
-    "unilateral": true
+    "unilateral": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "lower back moves with the swing",
+      "hip": "hip swings through its range",
+      "knee": "stretches across the knee",
+      "ankleFoot": "standing on one foot"
+    }
   },
   {
     "name": "V-up",
@@ -2660,7 +5078,17 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head and neck curl up off the floor",
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Weighted V-up",
@@ -2672,7 +5100,21 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 3,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "wristHand": "light",
+      "lowerBack": "hard",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head and neck curl up off the floor",
+      "shoulder": "dumbbell held overhead",
+      "wristHand": "dumbbell held in both hands",
+      "lowerBack": "legs and a dumbbell lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Alternating knee tuck",
@@ -2684,7 +5126,17 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "wristHand": "leaning back on the hands",
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Tucked toe tap",
@@ -2696,7 +5148,13 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips lower the legs, knees bent"
+    }
   },
   {
     "name": "Reverse crunch",
@@ -2708,7 +5166,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "lower back curls off the floor",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Bicycle crunch",
@@ -2721,7 +5187,17 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head and neck curl up off the floor",
+      "lowerBack": "spine curls and twists",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Flutter kick",
@@ -2734,7 +5210,15 @@
     "inputKind": "strength",
     "difficulty": 1,
     "measure": "seconds",
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Heel tap",
@@ -2748,7 +5232,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head and neck curl up off the floor",
+      "lowerBack": "bends side to side with the shoulders lifted"
+    }
   },
   {
     "name": "Hollow rock",
@@ -2760,7 +5252,17 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "lowerBack": "light",
+      "hip": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head held off the floor",
+      "lowerBack": "legs lever on the lower back",
+      "hip": "hip flexors lift the legs"
+    }
   },
   {
     "name": "Plank shoulder tap",
@@ -2775,7 +5277,23 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 2,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "lowerBack": "light",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "one arm at a time holds the plank",
+      "elbow": "arms prop the body",
+      "wristHand": "body weight on one hand at a time",
+      "lowerBack": "trunk braced to stop the lower back sagging",
+      "hip": "hips held level",
+      "ankleFoot": "toes bear the plank"
+    }
   },
   {
     "name": "Cable woodchopper",
@@ -2789,7 +5307,27 @@
     "movementPattern": "twist",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms carry the cable across the body",
+      "elbow": "elbows hold the load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back twists",
+      "lowerBack": "loaded twist",
+      "hip": "hips turn with the twist",
+      "knee": "knees pivot with the twist",
+      "ankleFoot": "feet pivot with the twist"
+    }
   },
   {
     "name": "Cable lat pullover",
@@ -2803,7 +5341,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "straight arms sweep down from overhead",
+      "elbow": "elbows held nearly straight under load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Single-arm cable row",
@@ -2820,7 +5370,21 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back pulls the load in",
+      "lowerBack": "upright against a one-sided pull"
+    }
   },
   {
     "name": "Neutral-grip lat pulldown",
@@ -2836,7 +5400,19 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms pull down from overhead, guided",
+      "elbow": "elbows bend under the load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "T-bar row",
@@ -2854,10 +5430,30 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 2,
-    "alternativeEquipment": [
-      "machine"
+    "requiredGear": [
+      "weightPlates"
     ],
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "neck": "light",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "head held up while bent over",
+      "shoulder": "shoulders pull the load in",
+      "elbow": "elbows bend under the load",
+      "wristHand": "hard grip on a heavy bar",
+      "upperBack": "heavy bar rowed by the upper back",
+      "lowerBack": "bent over under a heavy bar",
+      "hip": "hips hold the bent-over position",
+      "ankleFoot": "standing under a heavy load"
+    }
   },
   {
     "name": "Single-arm lat pulldown",
@@ -2873,7 +5469,19 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arm pulls down from overhead, guided",
+      "elbow": "elbows bend under the load",
+      "wristHand": "cable handle gripped",
+      "upperBack": "upper back pulls the load in"
+    }
   },
   {
     "name": "Cable curl",
@@ -2887,7 +5495,15 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "elbow": "light",
+      "wristHand": "light"
+    },
+    "areaLoadNotes": {
+      "elbow": "elbows curl against the cable",
+      "wristHand": "cable handle gripped"
+    }
   },
   {
     "name": "Cable glute kickback",
@@ -2901,7 +5517,19 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "lower back tends to arch as the leg kicks back",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "cable strapped to the ankle"
+    }
   },
   {
     "name": "Hip abduction machine",
@@ -2914,7 +5542,18 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "requiredGear": [
+      "hipAbductionAdduction"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips push out on a guided machine",
+      "knee": "pads press at the knees"
+    }
   },
   {
     "name": "Hip adduction machine",
@@ -2926,7 +5565,18 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "requiredGear": [
+      "hipAbductionAdduction"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "hip": "hips squeeze in on a guided machine",
+      "knee": "pads press at the knees"
+    }
   },
   {
     "name": "Cable pull-through",
@@ -2939,7 +5589,23 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms hold the pull between the legs",
+      "wristHand": "cable handle gripped",
+      "lowerBack": "bent over against a cable",
+      "hip": "hips work through the move",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "feet and ankles bear the load"
+    }
   },
   {
     "name": "Donkey kick",
@@ -2953,6 +5619,22 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
-    "variation": true
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "shoulders prop the body",
+      "elbow": "arms prop the body",
+      "wristHand": "part of the body's weight on the hands",
+      "lowerBack": "lower back tends to arch as the leg lifts",
+      "hip": "hips work through the move",
+      "knee": "kneeling on the knees"
+    }
   }
 ]

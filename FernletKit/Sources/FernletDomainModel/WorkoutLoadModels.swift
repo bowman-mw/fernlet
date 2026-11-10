@@ -129,7 +129,8 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
     public var rangeLow: Double?
     public var rangeHigh: Double?
     public var suggestedWeight: Double?
-    /// The working weight: the one the lifter picked, or after a correction the heaviest set's.
+    /// The working weight: the one the lifter picked, or after a correction the weight most sets were
+    /// done at (``WorkoutLoadEngine/mostUsedWeight(_:)``).
     public var selectedWeight: Double?
     public var unitToken: String?
     public var equipmentToken: String?
@@ -294,10 +295,12 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
         return setWeights
     }
 
-    /// The session's working weight: the heaviest set's when the sets differed, else
-    /// ``selectedWeight``. What the load engine anchors the next prescription on.
+    /// The session's working weight: when the sets differed, the weight most of them were done at
+    /// (w2, 2026-11-10: ``WorkoutLoadEngine/mostUsedWeight(_:)``, a tie going to the heavier), else
+    /// ``selectedWeight``. What the load engine anchors the next prescription on — so one mistyped
+    /// or one deliberately heavier set never becomes the next suggestion.
     public var workingWeight: Double? {
-        alignedSetWeights?.max() ?? selectedWeight
+        alignedSetWeights.flatMap(WorkoutLoadEngine.mostUsedWeight) ?? selectedWeight
     }
 
     /// The line this result is logged as — `ExerciseLineParser` reads it back: "Bench press - 3 x 8 @
@@ -345,10 +348,13 @@ private nonisolated struct ResultParkedKey: CodingKey {
 /// guided run, or the Log sheet's set-by-set entry) or from a hand-logged line ("Squat 5x5 @225lb"),
 /// oldest-first per lift.
 ///
-/// When the sets were not all lifted at one weight (``setWeights``), `weight` is the heaviest set's
-/// and the session is judged at that weight: only the sets lifted at it count toward the best reps
-/// and the shortfall, and a set done lighter keeps the session from counting as completed — so a
-/// dropped last set repeats the load rather than progressing it.
+/// When the sets were not all lifted at one weight (``setWeights``), `weight` is the weight most of
+/// them were done at (w2, 2026-11-10: ``WorkoutLoadEngine/mostUsedWeight(_:)``) and the session is
+/// judged at that weight: only the sets lifted at it count toward the best reps and the shortfall, and
+/// a set done lighter keeps the session from counting as completed — so a dropped last set repeats the
+/// load rather than progressing it. A set done heavier (a top set before back-off sets, a last set
+/// taken up a step, a mistyped 500) is extra: it neither completes nor fails the session, and it never
+/// moves the weight the next plan starts from.
 public nonisolated struct LiftExposure: Equatable, Sendable {
     public var date: Date
     public var weight: Double?
@@ -376,13 +382,18 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
     /// ``ExerciseResult/unfueled``): its later sets' shortfall is held, and its trend score reads
     /// the top set alone.
     public var unfueled: Bool
+    /// The lift is done on an assisted machine, so ``weight`` is help, not load
+    /// (``WorkoutAssistedLifts``): less of it is stronger. Set where the session is read from its
+    /// name — never persisted, and the one flag the engine, the trend and the plateau check read.
+    public var assisted: Bool
 
     public init(
         date: Date, weight: Double?, unit: LoadUnit?, targetReps: Int, repsPerSet: [Int],
         effort: ExerciseEffort? = nil, rangeLow: Double? = nil, rangeHigh: Double? = nil,
         overrideReason: OverrideReason? = nil, calibration: CalibrationStep? = nil,
         easierSession: Bool = false, compoundsBefore: Int = 0, structured: Bool = false,
-        setWeights: [Double]? = nil, flag: WorkoutSessionFlag? = nil, unfueled: Bool = false
+        setWeights: [Double]? = nil, flag: WorkoutSessionFlag? = nil, unfueled: Bool = false,
+        assisted: Bool = false
     ) {
         self.date = date
         self.weight = weight
@@ -401,29 +412,35 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
         self.setWeights = aligned?.count == self.repsPerSet.count ? aligned : nil
         self.flag = flag
         self.unfueled = unfueled
+        self.assisted = assisted
     }
 
-    /// A structured result, dated by the day it was logged. Its working weight (the heaviest set's
-    /// when the sets differed) is the session's weight.
+    /// A structured result, dated by the day it was logged. Its working weight (the weight most sets
+    /// were done at when they differed) is the session's weight.
     public init(date: Date, result: ExerciseResult, flag: WorkoutSessionFlag? = nil) {
         self.init(
             date: date, weight: result.workingWeight, unit: result.unit, targetReps: result.targetReps,
             repsPerSet: result.repsPerSet, effort: result.effort, rangeLow: result.rangeLow,
             rangeHigh: result.rangeHigh, overrideReason: result.overrideReason, calibration: result.calibration,
             easierSession: result.easierSession == true, compoundsBefore: result.compoundsBefore,
-            structured: true, setWeights: result.alignedSetWeights, flag: flag, unfueled: result.unfueled == true
+            structured: true, setWeights: result.alignedSetWeights, flag: flag, unfueled: result.unfueled == true,
+            assisted: WorkoutAssistedLifts.contains(result.name)
         )
     }
 
-    /// The reps of the sets lifted at the session's weight: every set, unless some were lighter.
+    /// The reps of the sets lifted at the session's weight: every set, unless some were lighter or
+    /// heavier.
     public var workingSetReps: [Int] {
         guard let setWeights, let weight else { return repsPerSet }
-        let lowest = weight - WorkoutLoadEngine.weightTolerance
-        return zip(repsPerSet, setWeights).filter { $0.1 >= lowest }.map { $0.0 }
+        let tolerance = WorkoutLoadEngine.weightTolerance
+        return zip(repsPerSet, setWeights).filter { abs($0.1 - weight) <= tolerance }.map { $0.0 }
     }
 
     /// Sets done lighter than the session's weight — a dropped set, which is never a completion.
-    public var lighterSets: Int { repsPerSet.count - workingSetReps.count }
+    public var lighterSets: Int {
+        guard let setWeights, let weight else { return 0 }
+        return setWeights.filter { $0 < weight - WorkoutLoadEngine.weightTolerance }.count
+    }
 
     /// The most reps any set at the session's weight reached.
     public var bestReps: Int { workingSetReps.max() ?? 0 }
@@ -517,6 +534,28 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
     /// ``maxRunnerLoads`` around the suggestion (R6) — what the runner's lighter and heavier buttons
     /// step through. Nil when the location's weights say nothing about the gear.
     public var loads: [Double]?
+
+    /// On every step of a strength check: the lift's usual working sets, as planned before the check
+    /// replaced them (w4, 2026-11-10). "Not now" in the runner falls back to them, so the lift is
+    /// still trained that day. Plan-only; nil on every other step.
+    public var usual: UsualSets?
+
+    /// A lift's usual working sets behind a strength check (``usual``).
+    public struct UsualSets: Equatable, Sendable {
+        public var sets: Int
+        public var reps: Int
+        /// The weight range the sets would have been prescribed at; nil with nothing to go on.
+        public var prescription: WeightPrescription?
+        /// The lift's ordinary rest between sets, in seconds (the check's own rests are longer).
+        public var restSeconds: Int
+
+        public init(sets: Int, reps: Int, prescription: WeightPrescription?, restSeconds: Int) {
+            self.sets = max(1, sets)
+            self.reps = max(1, reps)
+            self.prescription = prescription
+            self.restSeconds = max(0, restSeconds)
+        }
+    }
 
     /// Owned loads a lift carries into a run at most: the nearest this many around the suggestion.
     public static let maxRunnerLoads = 48

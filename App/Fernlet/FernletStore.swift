@@ -98,6 +98,8 @@ final class FernletStore {
         set {
             diary.settings = newValue
             scheduleSnapshotSave()
+            // Today's committed plan follows the space, the limits and the hidden exercises (e4).
+            refreshTodaysGuidedPlanForChanges()
         }
     }
     /// The AI status actually in effect: the stored (synced) user intent in `settings.aiStatus`
@@ -744,6 +746,10 @@ final class FernletStore {
     /// Injectable so tests can isolate it from the shared `.standard` suite, like
     /// `webImageAttemptDefaults`; nothing reads it during init.
     @ObservationIgnored var recipePortionGramsDefaults: UserDefaults = .standard
+    /// Backing store for ``WorkoutCalibrationDeferral`` — the device-local "Not now" on a strength
+    /// check (w4): the moment a check may be offered again. Injectable so tests can isolate it from
+    /// the shared `.standard` suite, like `webImageAttemptDefaults`; nothing reads it during init.
+    @ObservationIgnored var calibrationDeferralDefaults: UserDefaults = .standard
     /// Backing store for ``FoodSearchCorrectionMemory`` — the device-local record of searches the
     /// user has corrected once (research §26 fix 1.10), republished into `foodCatalog` as a ranking
     /// input.
@@ -3327,6 +3333,11 @@ final class FernletStore {
     func addWorkout(_ workout: Workout, date: String) {
         assert(!date.isEmpty, "workout date required")
         diary.appendWorkout(workout, date: date)
+        // w4: logging by hand the lift today's plan had turned into a strength check counts as "not now".
+        if date == todayKey {
+            WorkoutCalibrationDeferral.noteHandLogged(workout, plan: currentGuidedWorkoutPlan, in: calibrationDeferralDefaults)
+        }
+        startInjuryEasingForLoggedWorkout(on: date)
         guard workout.healthKitUUID == nil else { return }
         let offer = offerWorkoutHealthAccessOnFirstUse()
         Task { [weak self] in
@@ -4740,26 +4751,35 @@ final class FernletStore {
 
     // MARK: - Workout profile, locations & suggestions
 
+    // Each of these can change what today's committed plan was built for — the limits, the active
+    // space, what the space owns — so each ends by bringing the plan up to date (e4,
+    // `FernletStore+GuidedPlanLifetime.swift`). Hidden exercises go through the `settings` setter.
+
     func setWorkoutProfile(_ profile: WorkoutProfile) {
         diary.setWorkoutProfile(profile)
+        refreshTodaysGuidedPlanForChanges()
     }
 
     func upsertWorkoutLocation(_ location: WorkoutLocation, makeActive: Bool = false) {
         diary.upsertWorkoutLocation(location, makeActive: makeActive)
+        refreshTodaysGuidedPlanForChanges()
     }
 
     func deleteWorkoutLocation(_ id: UUID) {
         diary.deleteWorkoutLocation(id)
         // World build: the space's place on the map goes with it.
         forgetWorkoutSpacePin(id)
+        refreshTodaysGuidedPlanForChanges()
     }
 
     func setActiveWorkoutLocation(_ id: UUID) {
         diary.setActiveWorkoutLocation(id)
+        refreshTodaysGuidedPlanForChanges()
     }
 
     func setWorkoutLocations(_ locations: [WorkoutLocation], activeID: UUID?) {
         diary.setWorkoutLocations(locations, activeID: activeID)
+        refreshTodaysGuidedPlanForChanges()
     }
 
     func setSelectedSplit(_ id: String?) {
@@ -4800,7 +4820,8 @@ final class FernletStore {
         intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
     ) -> WorkoutProgram.DayPlan {
         if needsRestToday {
-            return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name)
+            return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name,
+                                                      limits: settings.workoutProfile.injuryLimits)
         }
         return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
     }
@@ -4811,35 +4832,57 @@ final class FernletStore {
     }
 
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
-    /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
-    /// AI is off/unavailable or the request is empty.
-    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutProgram.DayPlan {
+    /// Models, constrained to the equipment/injury-filtered catalog, and says what happened: the
+    /// adjusted plan, or why nothing changed (``WorkoutAdjustmentOutcome``).
+    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutAdjustmentOutcome {
         await workoutPlanningService.adjustWorkoutDayPlan(plan, request: request)
     }
 
-    // MARK: Guided workout — shared session state (in-memory, session-scoped; NEVER persisted)
+    /// A session of today's plan edited in the plan editor, through the one finishing pass every
+    /// plan goes through (``WorkoutPlanningService/finishedSession(_:previous:)``).
+    func finishedGuidedSession(
+        _ edited: WorkoutProgram.SessionSuggestion, previous: WorkoutProgram.SessionSuggestion
+    ) -> WorkoutProgram.SessionSuggestion {
+        workoutPlanningService.finishedSession(edited, previous: previous)
+    }
+
+    // MARK: Guided workout — today's plan (kept on this device for the day; never synced)
 
     /// Today's committed guided-workout plan, shared by the Move-root "Start today's workout" card and
     /// the Suggest sheet. The domain mints a *fresh* `SessionSuggestion.id` on every generation, so a
     /// completed-id set is only meaningful against one plan instance — sharing that instance (not just
     /// the id set) is what lets a session guided to completion from either entry point be excluded from
-    /// re-running and "Mark done" in both. Not persisted: a fresh app run rebuilds it; a new day
-    /// discards it. Kept observable so both surfaces re-render the moment it's committed or replaced.
-    private var guidedPlanStorage: WorkoutProgram.DayPlan?
+    /// re-running and "Mark done" in both. Kept on this device until the day ends (e7: `guidedPlanFile`,
+    /// never in the synced snapshot), so iOS closing the app loses nothing; a new day discards it. Kept
+    /// observable so both surfaces re-render the moment it's committed or replaced.
+    ///
+    /// This and the four values below are internal, not private, for the plan's lifetime rules in
+    /// `FernletStore+GuidedPlanLifetime.swift` (rebuild, restore, wipe). Nothing else writes them.
+    var guidedPlanStorage: WorkoutProgram.DayPlan?
     /// The day `guidedPlanStorage` was generated for; a rollover makes the cached plan stale.
-    @ObservationIgnored private var guidedPlanDayKey: String?
+    @ObservationIgnored var guidedPlanDayKey: String?
+    /// What today's plan was built with and what has happened to it since (``GuidedPlanMemo``): the
+    /// rebuild's inputs, the sessions changed by hand or AI, and the "Updated for Home" line.
+    /// Observable for that line.
+    var guidedPlanMemo = GuidedPlanMemo()
+    /// Today's plan file (e7, `GuidedPlanFile.swift`). Nil keeps the plan in memory only, which is
+    /// what every store but the launch path's gets (`FernletStore.load` hands in the production
+    /// file); a test that wants the file sets one in its own directory.
+    @ObservationIgnored var guidedPlanFile: GuidedPlanFile?
+    /// Where that file stands: read yet, and whether a write is owed (``GuidedPlanDiskState``).
+    @ObservationIgnored var guidedPlanDisk = GuidedPlanDiskState()
     /// The intensity `guidedPlanStorage` was committed with. Recorded so EVERY logging site for the
     /// committed plan (the Move-root card's guided runner, the Suggest sheet's "Mark done", and the
     /// Suggest sheet's own guided runner) logs the intensity the plan was actually *built* with, rather
     /// than re-deriving from readiness at tap time — which drifts across the day, so a plan committed at
     /// `.hard` could be logged as `.moderate`/`.light`. Session-scoped like the plan; reads through as
     /// nil after a rollover.
-    @ObservationIgnored private var committedGuidedIntensityStorage: WorkoutIntensity?
+    @ObservationIgnored var committedGuidedIntensityStorage: WorkoutIntensity?
 
     /// Sessions already logged today through the guided runner *or* the retroactive "Mark done" path —
     /// both mean "this session's workout is now logged; don't log it again." Cleared when a fresh plan
     /// is committed (a new day). Observable so a completion updates the card and the sheet at once.
-    private(set) var guidedCompletedSessionIDs: Set<UUID> = []
+    var guidedCompletedSessionIDs: Set<UUID> = []
 
     /// The committed plan iff it belongs to today; a day rollover reads through as nil.
     var currentGuidedWorkoutPlan: WorkoutProgram.DayPlan? {
@@ -4909,10 +4952,17 @@ final class FernletStore {
     /// call reuses the committed instance so its session IDs and any completions survive; only a new
     /// day (re)generates and clears the completed-session set. `sessionLength` is the Suggest sheet's
     /// one-day length (nil: Workout setup's); like `context`, it shapes only the plan it builds.
+    ///
+    /// The committed instance is first brought up to date (e4): a plan kept from before the app was
+    /// closed is read back, and sessions not yet started are rebuilt when the space, the limits or
+    /// the hidden exercises changed since it was built — so the plan handed back is never one for
+    /// another space.
     @discardableResult
     func commitTodaysGuidedWorkoutPlan(
         intensity: WorkoutIntensity, context: String = "", sessionLength: WorkoutSessionLength? = nil
     ) -> WorkoutProgram.DayPlan {
+        restoreTodaysGuidedPlanIfNeeded()
+        refreshTodaysGuidedPlanForChanges()
         if let plan = currentGuidedWorkoutPlan { return plan }
         let plan = workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
         guidedPlanStorage = plan
@@ -4922,6 +4972,8 @@ final class FernletStore {
         // A freshly generated plan is not yet approved — the user reviews it in the Suggest sheet and
         // taps "Approve workout" (or starts it) to surface the Move-root card.
         guidedPlanApprovedDayKey = nil
+        noteGuidedPlanBuilt(context: context, sessionLength: sessionLength)
+        persistTodaysGuidedPlan()
         return plan
     }
 
@@ -4950,6 +5002,8 @@ final class FernletStore {
         committedGuidedIntensityStorage = nil
         guidedCompletedSessionIDs = []
         guidedPlanApprovedDayKey = nil
+        guidedPlanMemo = GuidedPlanMemo()
+        persistTodaysGuidedPlan()
         return true
     }
 
@@ -4965,7 +5019,10 @@ final class FernletStore {
         guard guidedPlanDayKey == todayKey else { return }
         guard let current = guidedPlanStorage,
               Set(current.sessions.map(\.id)) == baseSessionIDs else { return }
+        // A session that keeps its id and comes back changed is the person's own adjustment now.
+        noteGuidedSessionsChanged(from: current, to: plan)
         guidedPlanStorage = plan
+        persistTodaysGuidedPlan()
     }
 
     /// Logs a session of the committed guided plan as done from the guided RUNNER — the Move-root card's
@@ -5000,6 +5057,7 @@ final class FernletStore {
     /// from any further guided run or logging in either surface.
     func markGuidedSessionCompleted(_ id: UUID) {
         guidedCompletedSessionIDs.insert(id)
+        persistTodaysGuidedPlan()
     }
 
     // MARK: Guided workout — approval gate (the Move-root "Today's workout" card)
@@ -5009,7 +5067,7 @@ final class FernletStore {
     /// appears once the user explicitly approves it (or starts it) — so a plan the user generated to
     /// look at, then closed, doesn't silently become "today's workout". Observable so the card shows
     /// the moment approval lands; a rollover reads through as unapproved.
-    private(set) var guidedPlanApprovedDayKey: String?
+    var guidedPlanApprovedDayKey: String?
 
     /// Whether today's committed plan has been approved (or started) — the card's visibility gate.
     var isTodaysGuidedPlanApproved: Bool {
@@ -5021,6 +5079,7 @@ final class FernletStore {
     func approveTodaysGuidedPlan() {
         guard currentGuidedWorkoutPlan != nil else { return }
         guidedPlanApprovedDayKey = todayKey
+        persistTodaysGuidedPlan()
     }
 
     /// Replace one session of today's committed plan with an edited version from the in-app editor,
@@ -5032,6 +5091,8 @@ final class FernletStore {
               let index = plan.sessions.firstIndex(where: { $0.id == updated.id }) else { return false }
         plan.sessions[index] = updated
         guidedPlanStorage = plan
+        guidedPlanMemo.editedSessionIDs.insert(updated.id)
+        persistTodaysGuidedPlan()
         return true
     }
 
@@ -5200,13 +5261,15 @@ final class FernletStore {
     /// same data the runner's "Last time" pill reads, and none at all when no step shows them. A timed
     /// cardio or mobility line is walked as its countdown segments or stretches
     /// (``WorkoutTimedSessions/expand(_:feasible:)``), the stretches drawn from what this space and
-    /// these limits allow.
+    /// these limits allow, minus the ones the person hid.
     private func guidedRunExercises(for session: WorkoutProgram.SessionSuggestion) -> [GuidedWorkoutRunState.Exercise] {
         guard !session.exercises.isEmpty else { return [] }
         let goal = settings.selectedGoal
+        // The planner's own pool, so a hidden stretch stays hidden here too (e6).
         let stretches = WorkoutTimedSessions.needsStretches(session.exercises)
-            ? WorkoutSafetyFilter.feasibleExercises(in: WorkoutExerciseCatalog.allExercises,
-                                                    location: settings.activeWorkoutLocation, profile: settings.workoutProfile)
+            ? WorkoutProgram.suggestablePool(in: WorkoutExerciseCatalog.allExercises,
+                                             location: settings.activeWorkoutLocation, profile: settings.workoutProfile,
+                                             preferences: settings.workoutExercisePreferences)
             : []
         let steps = WorkoutTimedSessions.expand(session.exercises, feasible: stretches)
         let lastTimes = steps.contains(where: { GuidedRunLoadLog.showsLastTime($0) })
@@ -5280,6 +5343,16 @@ final class FernletStore {
     func guidedSkipWarmUpSets() {
         guard var state = guidedRunState, state.canSkipWarmUpSets else { return }
         state.skipWarmUpSets(now: Date())
+        applyGuidedTransition(state)
+    }
+
+    /// Put the current strength check off from the in-app sheet — the runner's "Not now" (w4): the
+    /// check may be offered again in two weeks (``WorkoutCalibrationDeferral``), and the run moves past
+    /// the check's remaining steps to what follows it, finishing (and logging) when nothing does.
+    func guidedPutOffStrengthCheck() {
+        guard var state = guidedRunState, state.canPutOffStrengthCheck else { return }
+        WorkoutCalibrationDeferral.putOff(in: calibrationDeferralDefaults)
+        state.putOffStrengthCheck(now: Date())
         applyGuidedTransition(state)
     }
 
@@ -5391,6 +5464,11 @@ final class FernletStore {
     /// adopted so the sheet/card resume it; a run the process merely outlived (untouched for hours) is
     /// retired. When there is no run at all, any activity still on screen is retired.
     func reconcileGuidedRunFromAppGroup() {
+        // Today's plan first (e7): read back once per launch, so a finish reconciled below marks its
+        // session in the restored plan; on later calls it writes again what a locked phone refused.
+        restoreTodaysGuidedPlanIfNeeded()
+        // ...and brought up to date with a space or limit another device changed meanwhile (e4).
+        refreshTodaysGuidedPlanForChanges()
         // A heart-rate session HealthKit kept alive across a crash is ended here, once per launch.
         guidedZones.retireRecoveredSessionIfNeeded()
         guard let fileState = guidedRunStateStore.read() else {
@@ -5433,6 +5511,8 @@ final class FernletStore {
     /// `logPlannedRun` finds when the finish is seen again.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
+        // A run that ends with its strength check's test set skipped counts as "Not now" (w4).
+        WorkoutCalibrationDeferral.noteFinished(state, in: calibrationDeferralDefaults)
         // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
         if logPlannedRun(state) { return }
         let dayKey = state.committedDayKey
@@ -7247,9 +7327,7 @@ final class FernletStore {
         }
         // This device's AI day summaries (device-local since 2026-10-15: the persisted score history
         // never carries them). `resetDiary` already emptied the in-memory rows; this is the file.
-        if !deviceDaySummaryStore.clearAll() {
-            incompleteStores.append("your day summaries")
-        }
+        if !deviceDaySummaryStore.clearAll() { incompleteStores.append("your day summaries") }
         // The World map's sealed location history (fog cells, its locked-phone buffer, the saved walk
         // lines, the workout-space pins, Where you've been's log and device side, and the solo photos'
         // places, one folder) and both of its device keys, plus its device-only settings. World build only.
@@ -7287,6 +7365,10 @@ final class FernletStore {
         // `fernlet.workoutCues.maxHeartRate`): a fact about their body, unlike the heart-rate switches
         // beside it, which are kept. Same plain `UserDefaults` removal, no failure signal.
         WorkoutZonePreferences.clearMaxHeartRate()
+        // "Not now" on a strength check (`fernlet.workoutCalibration.askAgainFrom`): when a check may
+        // be offered again — a trace of what the person did on a day, so it goes with the history it
+        // was about. Same plain `UserDefaults` removal, no failure signal.
+        WorkoutCalibrationDeferral.clear(in: calibrationDeferralDefaults)
         // Which recipes this device already spent its one automatic web-image download on — the
         // same class of device-local `UserDefaults` sidecar; clear it with the others so the
         // bookkeeping doesn't outlive the recipes it described.
@@ -7319,18 +7401,8 @@ final class FernletStore {
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
         meshFeatures.activities.clearAll()
-        // The guided-workout runner mirrors an in-flight run to an app-group file that a
-        // foreground/launch `reconcileGuidedRunFromAppGroup` re-reads — and a naturally-finished run
-        // re-LOGS a workout back into the store (`finishGuidedRunLogging` → `addWorkout`; the dedup
-        // guards are empty on a just-wiped store, and with sync on the resurrected day re-uploads to
-        // iCloud). It is a live writer like the widget queue, so a wipe must stop it. Clear the file
-        // UNCONDITIONALLY: a Live-Activity finish can leave the run only in the file with
-        // `guidedRunState` already nil, so `abandonGuidedRun`'s non-nil guard is too weak here.
-        guidedRunState = nil
-        // R7: a file that survives the wipe is re-adopted by the next reconcile — the very
-        // resurrection this leg exists to prevent — so name it with the other app-group files.
-        if !guidedRunStateStore.clear() { incompleteStores.append("widget data") }
-        syncActivity { await GuidedWorkoutActivityBridge.end() }
+        // The guided runner's in-flight run and today's workout plan, each with its file.
+        incompleteStores += clearGuidedWorkoutStateForWipe()
         // The cooking runner is the SAME class of live writer: an in-flight cook is mirrored to its own
         // app-group file that a foreground/launch `reconcileCookingRunFromAppGroup` re-reads and adopts
         // (resurrecting a "Cooking in progress" resume card on a supposedly-wiped device — and leaving the
@@ -7364,6 +7436,32 @@ final class FernletStore {
         // the standalone "Reset everything" too (same reasoning as `worryBoxResetHook`).
         if sealedStoreRebuildHook?() == false { incompleteStores.append("your sealed store") }
         return incompleteStores
+    }
+
+    /// The guided-workout leg of ``resetAll()``, split out of it for the 60-line rule (R4) when
+    /// today's plan joined the in-flight run here (e7, 2026-11-10). Registered as a wipe leg in
+    /// `PrivacyWipeCoverageTests`, so its body is scanned like `resetAll`'s own. Returns the names of
+    /// what could not be deleted.
+    private func clearGuidedWorkoutStateForWipe() -> [String] {
+        var incomplete: [String] = []
+        // The guided-workout runner mirrors an in-flight run to an app-group file that a
+        // foreground/launch `reconcileGuidedRunFromAppGroup` re-reads — and a naturally-finished run
+        // re-LOGS a workout back into the store (`finishGuidedRunLogging` → `addWorkout`; the dedup
+        // guards are empty on a just-wiped store, and with sync on the resurrected day re-uploads to
+        // iCloud). It is a live writer like the widget queue, so a wipe must stop it. Clear the file
+        // UNCONDITIONALLY: a Live-Activity finish can leave the run only in the file with
+        // `guidedRunState` already nil, so `abandonGuidedRun`'s non-nil guard is too weak here.
+        guidedRunState = nil
+        // R7: a file that survives the wipe is re-adopted by the next reconcile — the very
+        // resurrection this leg exists to prevent — so name it with the other app-group files.
+        if !guidedRunStateStore.clear() { incomplete.append("widget data") }
+        syncActivity { await GuidedWorkoutActivityBridge.end() }
+        // Today's workout plan (e7): the sessions, "Anything else?" as it was typed, and the limits
+        // the plan was built around. Memory first, so the session stops showing it whatever the disk
+        // says; then its device-only file, which the next launch would otherwise read back.
+        forgetTodaysGuidedPlanForWipe()
+        if guidedPlanFile?.clear() == false { incomplete.append("today's workout plan") }
+        return incomplete
     }
 
     private func rebuildDerivedSignals() {
@@ -8239,7 +8337,7 @@ extension FernletStore {
         await coinLedgerService.loadAsync()
         await milestoneLedgerService.loadAsync()
 
-        return FernletStore(
+        let store = FernletStore(
             snapshot: snapshot,
             todayKey: key,
             repository: activeRepository,
@@ -8254,6 +8352,10 @@ extension FernletStore {
             // This device's day summaries: the production file, likewise nil-means-production here only.
             deviceDaySummaryStore: deviceDaySummaryStore ?? FileDeviceDaySummaryStore.production
         )
+        // Today's workout plan file (e7): the production one on the real launch path only. A load
+        // handed its own repository or controller is a test's, and keeps the plan in memory.
+        if repository == nil, persistenceController == nil { store.guidedPlanFile = GuidedPlanFile.production }
+        return store
     }
 }
 

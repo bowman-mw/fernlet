@@ -51,6 +51,12 @@ enum EquipmentIconLibrary {
         .battleRopes: #"<path d="M8 16c4 4 8-4 11 0s7 4 11 0"/><path d="M8 22c4 4 8-4 11 0s7 4 11 0"/><rect x="30" y="12" width="6" height="4" rx="1"/><rect x="30" y="18" width="6" height="4" rx="1"/>"#,
         .yogaMat: #"<rect x="9" y="11" width="9" height="22" rx="4.5"/><path d="M13.5 11h14M13.5 33h14"/><path d="M27.5 11a4.5 11 0 0 1 0 22"/><ellipse cx="13.5" cy="22" rx="2.6" ry="6.5"/>"#,
         .foamRoller: #"<rect x="8" y="16" width="28" height="12" rx="6"/><path d="M30 16a6 6 0 0 1 0 12"/><path d="M14 16v12M20 16v12"/>"#,
+        // The three small pieces that gained a row on 2026-11-10 (fix e5). The itemized machines have
+        // no art yet: their cards fall back to the SF Symbol, and an exercise's placeholder tile to
+        // the seated-machine glyph.
+        .dipBars: #"<path d="M7 15h12M25 15h12"/><path d="M10 15v19M16 15v19M28 15v19M34 15v19"/><path d="M8 34h10M26 34h10"/>"#,
+        .lowBar: #"<path d="M8 20h28"/><path d="M12 13v21M32 13v21"/><path d="M8 34h8M28 34h8"/>"#,
+        .abWheel: #"<circle cx="22" cy="23" r="9"/><circle cx="22" cy="23" r="2.5"/><path d="M6 23h13.5M24.5 23h13.5"/>"#,
     ]
 
     /// Location-template glyphs, keyed by `LocationTemplate.id`. 40×40 viewBox.

@@ -60864,6 +60864,54 @@
         }
       }
     },
+    "gymEquipment.abWheel" : {
+      "comment" : "Gym equipment: an ab roller wheel",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ab wheel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rueda abdominal"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rueda abdominal"
+          }
+        }
+      }
+    },
+    "gymEquipment.assistedPullUpDip" : {
+      "comment" : "Gym equipment: a machine whose padded platform takes some body weight on pull-ups and dips",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Assisted pull-up and dip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de dominadas y fondos asistidos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de dominadas y fondos asistidos"
+          }
+        }
+      }
+    },
     "gymEquipment.barbell" : {
       "comment" : "Gym equipment: a barbell",
       "extractionState" : "extracted_with_value",
@@ -60956,6 +61004,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Máquina de press de pecho"
+          }
+        }
+      }
+    },
+    "gymEquipment.dipBars" : {
+      "comment" : "Gym equipment: parallel bars for dips",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dip bars"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barras paralelas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barras paralelas"
           }
         }
       }
@@ -61056,6 +61128,54 @@
         }
       }
     },
+    "gymEquipment.hackSquat" : {
+      "comment" : "Gym equipment: a hack squat machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hack squat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de sentadilla hack"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de sentadilla hack"
+          }
+        }
+      }
+    },
+    "gymEquipment.hipAbductionAdduction" : {
+      "comment" : "Gym equipment: a seated machine for pushing the knees apart or squeezing them together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hip abduction and adduction"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de abductores y aductores"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de abductores y aductores"
+          }
+        }
+      }
+    },
     "gymEquipment.kettlebells" : {
       "comment" : "Gym equipment: kettlebells",
       "extractionState" : "extracted_with_value",
@@ -61104,6 +61224,54 @@
         }
       }
     },
+    "gymEquipment.legCurl" : {
+      "comment" : "Gym equipment: a leg curl machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leg curl"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de curl femoral"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de curl femoral"
+          }
+        }
+      }
+    },
+    "gymEquipment.legExtension" : {
+      "comment" : "Gym equipment: a leg extension machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leg extension"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de extensión de piernas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de extensión de piernas"
+          }
+        }
+      }
+    },
     "gymEquipment.legPress" : {
       "comment" : "Gym equipment: a leg press machine",
       "extractionState" : "extracted_with_value",
@@ -61128,6 +61296,30 @@
         }
       }
     },
+    "gymEquipment.lowBar" : {
+      "comment" : "Gym equipment: a fixed bar at about waist height to hang under for inverted rows",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Low bar for rows"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barra baja para remos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barra baja para remos"
+          }
+        }
+      }
+    },
     "gymEquipment.medicineBall" : {
       "comment" : "Gym equipment: a medicine ball",
       "extractionState" : "extracted_with_value",
@@ -61148,6 +61340,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Balón medicinal"
+          }
+        }
+      }
+    },
+    "gymEquipment.pecDeck" : {
+      "comment" : "Gym equipment: a pec deck machine, also used facing in for the rear shoulders",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pec deck"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de aperturas (pec deck)"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de aperturas (pec deck)"
+          }
+        }
+      }
+    },
+    "gymEquipment.preacherCurl" : {
+      "comment" : "Gym equipment: a preacher curl machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Preacher curl"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de curl predicador"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de curl predicador"
           }
         }
       }
@@ -61224,6 +61464,78 @@
         }
       }
     },
+    "gymEquipment.seatedCalfRaise" : {
+      "comment" : "Gym equipment: a seated calf raise machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seated calf raise"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de gemelos sentado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de pantorrillas sentado"
+          }
+        }
+      }
+    },
+    "gymEquipment.seatedRowMachine" : {
+      "comment" : "Gym equipment: a seated row machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seated row machine"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de remo sentado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de remo sentado"
+          }
+        }
+      }
+    },
+    "gymEquipment.shoulderPressMachine" : {
+      "comment" : "Gym equipment: a shoulder press machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shoulder press machine"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de press de hombros"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de press de hombros"
+          }
+        }
+      }
+    },
     "gymEquipment.smithMachine" : {
       "comment" : "Gym equipment: a Smith machine, a barbell on guide rails",
       "extractionState" : "extracted_with_value",
@@ -61292,6 +61604,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escaladora"
+          }
+        }
+      }
+    },
+    "gymEquipment.standingCalfRaise" : {
+      "comment" : "Gym equipment: a standing calf raise machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Standing calf raise"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de gemelos de pie"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Máquina de pantorrillas de pie"
           }
         }
       }
@@ -67737,6 +68073,30 @@
         }
       }
     },
+    "workoutNote.cardio.seatedMobility" : {
+      "comment" : "Workout session note: a cardio session was replaced by stretches done sitting or lying down, because an ankle, knee or hip injury rules out walking and the cardio machines here",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seated mobility in place of cardio today, to work around your limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, movilidad sentada en lugar de cardio, respetando tus límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, movilidad sentada en lugar de cardio, respetando tus límites."
+          }
+        }
+      }
+    },
     "workoutNote.count.hours" : {
       "comment" : "Workout session note: a number of hours, e.g. '48 hours'. Placed inside other note sentences.",
       "localizations" : {
@@ -68032,6 +68392,174 @@
         }
       }
     },
+    "workoutNote.dayNote.alreadyLeftOut" : {
+      "comment" : "Workout session note: the person typed a body area in the plan sheet's 'Anything else?' field, and their saved limits already leave that area's exercises out entirely, so nothing more was needed. The argument is the area or areas in lowercase, e.g. 'knee'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Already leaving out work for your %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya dejamos fuera el trabajo de tu %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya dejamos fuera el trabajo de tu %@."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.easing" : {
+      "comment" : "Workout session note: the person typed that a body area is sore in the plan sheet's 'Anything else?' field, so today's plan trains around it (lighter, supported moves). The argument is the area or areas in lowercase, e.g. 'knee', 'knee and shoulder'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Going easy on your %@ today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy vamos con suavidad con tu %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy vamos con calma con tu %@."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.matched" : {
+      "comment" : "Workout session note: exercises in the plan whose names share a word with what the person typed in the plan sheet's 'Anything else?' field. The argument is a comma-separated list of exercise names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Picked to match your note: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elegido según tu nota: %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elegido según tu nota: %@."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.nothingApplied" : {
+      "comment" : "Workout session note: the planner could not apply anything the person typed in the plan sheet's 'Anything else?' field. 'Equipment & limits' is the name of the button on the same sheet that opens Workout setup; translate it exactly as that button is translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing in your note could be applied to this plan. Lasting limits and equipment are set in Equipment & limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido aplicar nada de tu nota a este plan. Los límites duraderos y el equipo se ajustan en Equipo y límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo aplicar nada de tu nota a este plan. Los límites duraderos y el equipo se ajustan en Equipo y límites."
+          }
+        }
+      }
+    },
+    "workoutNote.dayNote.shortened" : {
+      "comment" : "Workout session note: the person typed that they are short on time in the plan sheet's 'Anything else?' field, so the session was fitted into a shorter length. The argument is that length in minutes (20, 30, 45 or 60).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept to about %lld minutes, as you asked."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ajustado a unos %lld minutos, como pediste."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ajustado a unos %lld minutos, como pediste."
+          }
+        }
+      }
+    },
+    "workoutNote.fill.around" : {
+      "comment" : "Workout session note: too few of this session's own lifts were safe for an injured body area, so safe lifts for other body areas fill it. Arguments: the session's name (e.g. 'Arms'), then the injured area or two areas in lowercase (e.g. 'elbow', 'elbow and wrist or hand').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ day, worked around your %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día de %1$@, cuidando tu %2$@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día de %1$@, cuidando tu %2$@."
+          }
+        }
+      }
+    },
+    "workoutNote.fill.space" : {
+      "comment" : "Workout session note: too few of this session's own lifts could be done with the equipment here (or the person hid them), so lifts for other body areas fill it. The argument is the session's name (e.g. 'Arms').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ day, filled in with other lifts this space allows."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día de %@, completado con otros ejercicios que permite este espacio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día de %@, completado con otros ejercicios que permite este espacio."
+          }
+        }
+      }
+    },
     "workoutNote.ladder.backTo" : {
       "comment" : "Workout session note: the reps reset to the bottom of the range and the weight goes up a little. The argument is a number of reps (e.g. '8 reps').",
       "extractionState" : "extracted_with_value",
@@ -68176,6 +68704,174 @@
         }
       }
     },
+    "workoutNote.load.assisted.afterBreak" : {
+      "comment" : "Workout session note about a lift on an assisted machine after a break from training, where the weight on the stack HELPS the person: start with a little more help. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: welcome back — a little more help to start."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: ^[bienvenido](inflect: true) de nuevo — un poco más de ayuda para empezar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: ^[bienvenido](inflect: true) de nuevo — un poco más de ayuda para empezar."
+          }
+        }
+      }
+    },
+    "workoutNote.load.assisted.lessHelp" : {
+      "comment" : "Workout session note about a lift on an assisted machine (assisted pull-up, assisted dip), where the weight on the stack HELPS the person: after a good session the machine helps a little less today. Arguments: the exercise name, then the help as a weight with its unit (e.g. '35 lb').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: a little less help today (%2$@)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: hoy un poco menos de ayuda (%2$@)."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: hoy un poco menos de ayuda (%2$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.load.assisted.lessHelpBackToBottom" : {
+      "comment" : "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the reps reset to the bottom of the range because it is time for less help. Arguments: the exercise name, a number of reps (e.g. '8 reps'), then the help as a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: back to %2$@ — a little less help now (%3$@)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: de vuelta a %2$@; ahora un poco menos de ayuda (%3$@)."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: de vuelta a %2$@; ahora un poco menos de ayuda (%3$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.load.assisted.moreHelp" : {
+      "comment" : "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the reps fell short the last two times, so the machine helps a little more today. Arguments: the exercise name, then the help as a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: a little more help today (%2$@) to get the reps back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: hoy un poco más de ayuda (%2$@) para recuperar las repeticiones."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: hoy un poco más de ayuda (%2$@) para recuperar las repeticiones."
+          }
+        }
+      }
+    },
+    "workoutNote.load.assisted.moreHelpFewerSets" : {
+      "comment" : "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: more help and a shorter day after several hard sessions. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: more help and one set fewer today — a reset, not a step back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: hoy más ayuda y una serie menos; un reinicio, no un paso atrás."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: hoy más ayuda y una serie menos; un reinicio, no un paso atrás."
+          }
+        }
+      }
+    },
+    "workoutNote.load.assisted.repsFirstLeastHelp" : {
+      "comment" : "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the machine is already at its smallest help, so reps go up instead. Arguments: the exercise name, the help as a weight with its unit, and today's number of reps.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ is the least help here, so more reps instead — %3$lld today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: %2$@ es la ayuda mínima aquí, así que mejor más repeticiones: %3$lld hoy."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: %2$@ es la ayuda mínima aquí, así que mejor más repeticiones: %3$lld hoy."
+          }
+        }
+      }
+    },
+    "workoutNote.load.assisted.setFirstLeastHelp" : {
+      "comment" : "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the machine is already at its smallest help, so today adds a set. Arguments: the exercise name, then the help as a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: one more set today — %2$@ is the least help here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: hoy una serie más; %2$@ es la ayuda mínima aquí."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: hoy una serie más; %2$@ es la ayuda mínima aquí."
+          }
+        }
+      }
+    },
     "workoutNote.load.backToBottom" : {
       "comment" : "Workout session note about one lift: the reps reset to the bottom of the range because it is time to add weight. Arguments: the exercise name, then a number of reps (e.g. '8 reps').",
       "extractionState" : "extracted_with_value",
@@ -68224,6 +68920,30 @@
         }
       }
     },
+    "workoutNote.load.blockHold" : {
+      "comment" : "Workout session note about one lift for someone who has lifted for more than two years: progress comes once per four-week block, so the weight and reps stay the same until the date given. Arguments: the exercise name, then a date already formatted for the reader's language (e.g. 'November 24').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: holding this block until %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: este bloque se mantiene hasta el %2$@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: este bloque se mantiene hasta el %2$@."
+          }
+        }
+      }
+    },
     "workoutNote.load.confirming" : {
       "comment" : "Workout session note about one lift for someone past their first months of lifting: progress comes after two good sessions in a row, so today repeats the last one. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
@@ -68244,6 +68964,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@: hoy, lo mismo otra vez — una sesión más como la anterior y pasará al siguiente paso."
+          }
+        }
+      }
+    },
+    "workoutNote.load.deloadWeek" : {
+      "comment" : "Workout session note in a week the person marked as a deload (a planned lighter week): what the plan does this week. Calm; a lighter week is training too.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deload week: the same weights as last time and about half the sets. Nothing steps up this week, and next week picks up from where you were."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana de descarga: los mismos pesos que la última vez y más o menos la mitad de las series. Esta semana no sube nada, y la próxima sigue desde donde estabas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana de descarga: los mismos pesos que la última vez y más o menos la mitad de las series. Esta semana no sube nada, y la próxima sigue desde donde estabas."
           }
         }
       }
@@ -68896,74 +69640,122 @@
         }
       }
     },
-    "workoutNote.noted" : {
-      "comment" : "Workout session note: echoes the note the person typed when asking for a plan. The argument is their own text.",
+    "workoutNote.load.toppedOut" : {
+      "comment" : "Workout session note: a lift has reached the most reps and sets the plan adds and there is no harder version of it to suggest, so it stays as it is. Calm, no pressure. The argument is the lift.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Noted: %@"
+            "value" : "%@: this is as far as reps and sets go here, and there's no harder version to offer at this place. It holds steady from now on, which is a fine place to be."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anotado: %@"
+            "state" : "needs_review",
+            "value" : "%@: hasta aquí llegan las repeticiones y las series, y en este espacio no hay una versión más difícil. Desde ahora se mantiene, y está bien así."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anotado: %@"
+            "state" : "needs_review",
+            "value" : "%@: hasta aquí llegan las repeticiones y las series, y en este espacio no hay una versión más difícil. Desde ahora se mantiene, y está bien así."
           }
         }
       }
     },
-    "workoutNote.plateau.bodyWeightCheckIn" : {
-      "comment" : "Workout session note for someone whose goal is weight management and who logs their weight: strength has eased a little while weight came down. A gentle check-in, never advice about eating.",
+    "workoutNote.load.toppedOutVariation" : {
+      "comment" : "Workout session note: a lift has reached the most reps and sets the plan adds (and, where it takes weight, the heaviest weight this place has), so a harder version of it is suggested, never required. Arguments: the lift, then the harder exercise.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Your logged body weight has been coming down over the same weeks, and the two often happen together. How have you been feeling lately?"
+            "value" : "%1$@: this is as far as reps and sets go here. %2$@ is the next step up — it's the first swap when you edit the plan."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu peso registrado ha ido bajando en esas mismas semanas, y las dos cosas suelen ir juntas. ¿Cómo te has sentido últimamente?"
+            "state" : "needs_review",
+            "value" : "%1$@: hasta aquí llegan las repeticiones y las series. %2$@ es el siguiente paso; es el primer cambio al editar el plan."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu peso registrado ha ido bajando en esas mismas semanas, y las dos cosas suelen ir juntas. ¿Cómo te has sentido últimamente?"
+            "state" : "needs_review",
+            "value" : "%1$@: hasta aquí llegan las repeticiones y las series. %2$@ es el siguiente paso; es el primer cambio al editar el plan."
           }
         }
       }
     },
-    "workoutNote.plateau.bodyWeightSize" : {
-      "comment" : "Workout session note in the plateau story for someone training for muscle size who logs their weight: their weight has been falling, which explains a stall. Calm and factual; never advice to eat more.",
+    "workoutNote.offer.mobility" : {
+      "comment" : "Workout session note: fewer than three lifts were safe or possible for this session, so it offers stretching in place of lifting (the person asked not to be suggested walks). The argument is the session's name (e.g. 'Arms').",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Your logged body weight has been coming down over the last few weeks, and muscle size usually holds steady while it does — this stretch may simply be that."
+            "value" : "Not enough lifts fit %@ day today, so here is a mobility flow instead."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu peso registrado ha ido bajando en las últimas semanas, y mientras eso pasa el tamaño muscular suele mantenerse — esta etapa puede ser simplemente eso."
+            "state" : "needs_review",
+            "value" : "Hoy no hay suficientes ejercicios para el día de %@: aquí tienes una rutina de movilidad."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu peso registrado ha ido bajando en las últimas semanas, y mientras eso pasa el tamaño muscular suele mantenerse — esta etapa puede ser simplemente eso."
+            "state" : "needs_review",
+            "value" : "Hoy no hay suficientes ejercicios para el día de %@: aquí tienes una rutina de movilidad."
+          }
+        }
+      }
+    },
+    "workoutNote.offer.mobilityAndWalk" : {
+      "comment" : "Workout session note: fewer than three lifts were safe or possible for this session, so it offers stretching and a walk in place of lifting. The argument is the session's name (e.g. 'Arms').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not enough lifts fit %@ day today, so here is a mobility flow and an easy walk instead."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy no hay suficientes ejercicios para el día de %@: aquí tienes movilidad y un paseo suave."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy no hay suficientes ejercicios para el día de %@: aquí tienes movilidad y una caminata suave."
+          }
+        }
+      }
+    },
+    "workoutNote.offer.seatedMobility" : {
+      "comment" : "Workout session note: fewer than three lifts were safe for this session and a walk is ruled out by an ankle, knee or hip injury, so it offers stretches done sitting or lying down. The argument is the session's name (e.g. 'Legs').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not enough lifts fit %@ day today, so here is some seated mobility instead."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy no hay suficientes ejercicios para el día de %@: aquí tienes movilidad sentada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy no hay suficientes ejercicios para el día de %@: aquí tienes movilidad sentada."
           }
         }
       }
@@ -69280,6 +70072,54 @@
         }
       }
     },
+    "workoutNote.plateau.moreLiftsChanged" : {
+      "comment" : "Workout session note closing the list of lifts whose plan changed today, after two were named: how many more lifts changed. The argument is a count of lifts, 1 or more (e.g. 'And 1 more changed today.').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "And %lld more changed today."
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Y hoy cambió %lld más."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Y hoy cambiaron %lld más."
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Y hoy cambió %lld más."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Y hoy cambiaron %lld más."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "workoutNote.plateau.proteinFloor" : {
       "comment" : "Workout session note in the plateau story, said only when meals have been logged most days for two weeks and protein ran under the floor. Arguments: grams of protein per kilogram of body weight a day, as decimals — the floor (e.g. '1.2'), then the amount that covers it (e.g. '1.6').",
       "extractionState" : "extracted_with_value",
@@ -69324,6 +70164,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hoy %@ va primero, con al menos 3 minutos de descanso entre series — para volver a probarlo en condiciones."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.retestAlso" : {
+      "comment" : "Workout session note for a second lift that has held steady, after the same note about another lift: it too gets longer rest between sets today, to give it a fair try. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ also gets at least 3 minutes' rest between sets — a fair retest."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ también tiene al menos 3 minutos de descanso entre series: una prueba justa."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ también tiene al menos 3 minutos de descanso entre series: una prueba justa."
           }
         }
       }
@@ -69936,6 +70800,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estiramientos suaves o una caminata tranquila - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.restDaySeated" : {
+      "comment" : "A line of a workout plan on a day the person marked themselves unwell, when an injured ankle, knee or hip rules out a walk: optional gentle stretches done sitting or lying down. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle stretching, seated - %lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estiramientos suaves en posición sentada - %lld min"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estiramientos suaves en posición sentada - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.seatedMobility" : {
+      "comment" : "A line of a workout plan: stretches done sitting or lying down, offered when an injury rules out a walk. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seated mobility - %lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Movilidad sentada - %lld min"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Movilidad sentada - %lld min"
           }
         }
       }

@@ -212,7 +212,12 @@ struct PrivacyPolicyParityTests {
         "to notice a trip starting",
         "so your trips map properly",
         // Car signals (2026-11-09): what the car book keeps of the Bluetooth devices seen on drives.
-        "scrambled tag for each"
+        "scrambled tag for each",
+        // Road trip mode (2026-11-10, owner-approved word for word): what a trip shares, with whom, and the map's one
+        // exception to "never shared with friends".
+        "the road you drove together and the photos you took on the trip",
+        "Each person gets only the stretch they were there for",
+        "(apart from a road trip's road, below)"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

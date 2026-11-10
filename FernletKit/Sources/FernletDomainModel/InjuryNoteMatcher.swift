@@ -45,6 +45,13 @@ public nonisolated enum InjuryNoteMatcher {
         "shoulder": .shoulder, "rotator": .shoulder, "delt": .shoulder, "deltoid": .shoulder,
         "elbow": .elbow,
         "wrist": .wristHand, "carpal": .wristHand, "thumb": .wristHand, "finger": .wristHand,
+        "hand": .wristHand,
+        // No area of their own (2026-11-10, e8.6), so each maps to the nearest one: the biceps
+        // crosses the elbow, the quads the knee, the shin sits over the ankle, and a hernia is
+        // guarded like the lower back (no heavy bracing, bending or carrying).
+        "bicep": .elbow, "biceps": .elbow,
+        "quad": .knee, "quadricep": .knee, "quadriceps": .knee,
+        "shin": .ankleFoot, "hernia": .lowerBack,
         "thoracic": .upperBack, "rhomboid": .upperBack,
         "spine": .lowerBack, "spinal": .lowerBack, "disc": .lowerBack, "disk": .lowerBack,
         "lumbar": .lowerBack, "sciatica": .lowerBack, "sciatic": .lowerBack,
@@ -118,7 +125,8 @@ public nonisolated enum InjuryNoteMatcher {
 
     /// Phrases where a body word means something else: "hip hop", "neck and neck", "neck of the
     /// woods", "knee-deep", "elbow grease", "disc golf", "cold shoulder", "off my chest", a height
-    /// ("six feet", "5 foot"), "on foot" and "on my feet".
+    /// ("six feet", "5 foot"), "on foot" and "on my feet", "on the other hand", a "quad bike" and
+    /// "shin guards".
     static func isIdiom(at index: Int, in words: [String]) -> Bool {
         let next = word(after: index, in: words)
         let previous = word(before: index, in: words)
@@ -131,6 +139,9 @@ public nonisolated enum InjuryNoteMatcher {
         case "shoulder": return previous == "cold" || next == "season"
         case "chest": return previous == "my" && word(before: index - 1, in: words) == "off"
         case "foot", "feet": return isFootIdiom(at: index, in: words)
+        case "hand", "hands": return isHandIdiom(at: index, in: words)
+        case "quad", "quads": return next == "bike" || next == "core"
+        case "shin", "shins": return next == "guard" || next == "guards"
         default: return false
         }
     }
@@ -141,6 +152,30 @@ public nonisolated enum InjuryNoteMatcher {
         let neckAndNeckSecond = word(before: index, in: words) == "and" && word(before: index - 1, in: words) == "neck"
         let woods = word(after: index, in: words) == "of" && word(after: index + 2, in: words) == "woods"
         return neckAndNeckFirst || neckAndNeckSecond || woods
+    }
+
+    /// Words before "hand" that make it the body part: a possessive, a side, or a description.
+    static let handBodyBefore: Set<String> = [
+        "my", "his", "her", "your", "their", "our", "left", "right", "bad", "sore", "stiff", "weak", "injured",
+        "hurt", "broken", "broke", "sprained", "strained", "swollen", "numb", "painful", "arthritic",
+    ]
+
+    /// Words after "hand" that make it the body part: what is wrong with it.
+    static let handBodyAfter: Set<String> = [
+        "pain", "pains", "injury", "injuries", "issue", "issues", "problem", "problems", "surgery", "hurts",
+        "hurt", "ache", "aches", "arthritis", "numbness", "sprain", "strain", "fracture", "tendonitis",
+        "is", "are", "was",
+    ]
+
+    /// "Hand" is a body part only with a sign that it is: "my hand", "left hand", "hand pain". On its
+    /// own it is far more often something else ("on the other hand", "hand weights", "second hand",
+    /// "give me a hand"), and an unsure "hand" must not leave out every grip — so, unlike "back", a
+    /// bare "hand" names nothing.
+    static func isHandIdiom(at index: Int, in words: [String]) -> Bool {
+        let previous = word(before: index, in: words)
+        let next = word(after: index, in: words)
+        if previous == "other" || previous == "second" { return true }
+        return !handBodyBefore.contains(previous) && !handBodyAfter.contains(next)
     }
 
     /// Number words that make "foot" / "feet" a length.

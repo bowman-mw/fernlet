@@ -239,6 +239,98 @@ struct WorkoutSetEditingTests {
         #expect((plan.reps, plan.prescription?.suggested) == (8, 100))
     }
 
+    // MARK: - w2 the question before a weight far above the rest is saved
+
+    @Test func aSetMoreThanOneAndAHalfTimesLastTimeOrTheOtherSetsAsksOnce() throws {
+        func ask(_ weights: [Double?], last: Double? = nil, settled: Set<String> = []) -> SetWeightQuestion? {
+            SetWeightCheck.question(lift: "Bench press", weights: weights, lastTime: last, unit: .lb, settled: settled)
+        }
+        // Last time: exactly 1.5 times saves quietly, a hair over asks.
+        #expect(ask([75, 75, 75], last: 50) == nil)
+        let overLast = try #require(ask([50, 50, 500], last: 50))
+        #expect((overLast.weight, overLast.usual, overLast.reference) == (500, 50, .lastTime))
+        #expect(ask([75.5], last: 50)?.reference == .lastTime)
+        // The session's other sets, when there is no last time (or it does not stand out against it).
+        let overOthers = try #require(ask([50, 50, 500]))
+        #expect((overOthers.weight, overOthers.usual, overOthers.reference) == (500, 50, .otherSets))
+        #expect(ask([100, 100, 150]) == nil, "exactly 1.5 times the other sets")
+        #expect(ask([100, 100, 155])?.usual == 100)
+        #expect(ask([135, 185, 225, 275], last: 250) == nil, "a pyramid climbs in steps under 1.5 times")
+        #expect(ask([500, 500, 50], last: 450) == nil, "only the heaviest is ever asked about, never a lighter set")
+        // Nothing to compare against, blanks and zeros.
+        #expect(ask([500]) == nil)
+        #expect(ask([nil, 0, nil], last: 50) == nil)
+        #expect(ask([], last: 50) == nil)
+        // Never twice for the same value; a different value asks again.
+        let asked = SetWeightCheck.key(lift: "bench press", weight: 500)
+        #expect(overLast.key == asked, "the key reads the lift by its normalized name")
+        #expect(ask([50, 50, 500], last: 50, settled: [asked]) == nil)
+        #expect(ask([50, 50, 5000], last: 50, settled: [asked])?.weight == 5000)
+        #expect(SetWeightCheck.key(lift: "Squat", weight: 500) != asked, "another lift's 500 is its own question")
+        // Last time in the other unit is converted before it is compared.
+        #expect(SetWeightCheck.weight(100, unitToken: "kg", in: .lb).map { ($0 * 10).rounded() / 10 } == 220.5)
+        #expect(SetWeightCheck.weight(100, unitToken: nil, in: .kg) == 100)
+        #expect(SetWeightCheck.weight(0, unitToken: "lb", in: .lb) == nil && SetWeightCheck.weight(nil, unitToken: "lb", in: .lb) == nil)
+    }
+
+    @Test func theEditSheetAsksOnlyAboutAChangedLiftsNewWeight() throws {
+        let workout = guidedWorkout(guidedBench(selected: 50))
+        let original = WorkoutSetEditing.drafts(for: workout, defaultUnit: .lb)
+        func ask(_ drafts: [ExerciseSetsDraft], settled: Set<String> = [], last: Double? = 50) -> SetWeightQuestion? {
+            WorkoutSetEditing.weightQuestion(in: drafts, original: original, settled: settled) { _, _ in last }
+        }
+        #expect(ask(original) == nil, "an untouched lift is never asked about")
+        var typo = original
+        typo[0].rows[2].weight = "500"
+        let asked = try #require(ask(typo))
+        #expect((asked.lift, asked.weight, asked.usual, asked.unit) == ("Bench press", 500, 50, .lb))
+        #expect(ask(typo, settled: [asked.key]) == nil, "Keep 500 or Fix it: the same value is not asked about again")
+        // Only the reps changed: the weights the sheet opened with were saved once already.
+        var heavyAlready = WorkoutSetEditing.drafts(for: guidedWorkout(guidedBench(selected: 500)), defaultUnit: .lb)
+        let openedHeavy = heavyAlready
+        heavyAlready[0].rows[0].reps = 6
+        let question = WorkoutSetEditing.weightQuestion(in: heavyAlready, original: openedHeavy, settled: []) { _, _ in 50 }
+        #expect(question == nil)
+        // A blank row repeats the set above it, as it will be saved.
+        var blank = original
+        blank[0].rows[0].weight = "500"
+        blank[0].rows[1].weight = ""
+        blank[0].rows[2].weight = ""
+        #expect(blank[0].filledWeights == [500, 500, 500])
+        #expect(ask(blank)?.reference == .lastTime)
+        #expect(ask(blank, last: nil) == nil, "every set at one weight and no last time: nothing to compare")
+    }
+
+    @Test func theRunnersRepsEditorAsksAboutATypedWeightFarAboveLastTime() throws {
+        let weight = WeightPrescription(low: 45, high: 55, suggested: 50, step: 5, unit: .lb, confidence: .low)
+        let step = PrescribedExercise(
+            name: "Bench press", sets: 3, reps: "8", role: .main, fromCatalog: true,
+            guidance: LoadGuidance(targetReps: 8, prescription: weight, equipment: .barbell, unit: .lb)
+        )
+        let tracking = try #require(GuidedRunLoadLog.tracking(for: step))
+        let last = GuidedWorkoutRunState.LastTime(sets: 3, reps: "8", weight: 50, unitRaw: "lb")
+        var rows = GuidedRepsRow.rows(for: tracking, sets: 3)
+        let opened = SetWeightCheck.keys(lift: step.name, weights: GuidedRepsRow.filledWeights(rows))
+        #expect(GuidedRepsRow.weightQuestion(for: rows, lift: step.name, tracking: tracking, lastTime: last, settled: opened) == nil)
+        rows[2].weight = "500"
+        let asked = try #require(
+            GuidedRepsRow.weightQuestion(for: rows, lift: step.name, tracking: tracking, lastTime: last, settled: opened)
+        )
+        #expect((asked.weight, asked.usual, asked.reference) == (500, 50, .lastTime))
+        #expect(asked.titleText == "500 lb? Last time was 50." && asked.keepText == "Keep 500")
+        var others = asked
+        others.reference = .otherSets
+        #expect(others.titleText == "500 lb? Your next heaviest set is 50.")
+        let settled = opened.union([asked.key])
+        #expect(GuidedRepsRow.weightQuestion(for: rows, lift: step.name, tracking: tracking, lastTime: last, settled: settled) == nil)
+        // Last time logged in kilograms is read in the lift's pounds: 30 kg is about 66 lb, so 90 lb is under 1.5 times.
+        let metric = GuidedWorkoutRunState.LastTime(sets: 3, reps: "8", weight: 30, unitRaw: "kg")
+        rows[2].weight = "90"
+        rows[0].weight = "90"
+        rows[1].weight = "90"
+        #expect(GuidedRepsRow.weightQuestion(for: rows, lift: step.name, tracking: tracking, lastTime: metric, settled: opened) == nil)
+    }
+
     // MARK: - Set-by-set entry records what a guided run records
 
     @Test func aLiftEnteredSetBySetIsRecordedAsTheRunnerRecordsIt() throws {
@@ -371,5 +463,49 @@ struct WorkoutSetEditingTests {
         let plain = handWorkout("Squat 5x5 @225lb")
         let encoded = try #require(String(data: JSONEncoder().encode(plain), encoding: .utf8))
         #expect(!encoded.contains("exerciseResults") && !encoded.contains("setWeights"))
+    }
+}
+
+// MARK: - w6 (W11) a unit change converts the stored range
+
+extension WorkoutSetEditingTests {
+
+    /// 100 lb in a 95–110 lb range, corrected to 45 kg in the Edit sheet: the range stayed in pounds,
+    /// so 45 read as far under it — a lighter override, dropped from the trend.
+    @Test func changingTheUnitConvertsTheStoredRange() throws {
+        let workout = guidedWorkout(guidedBench())
+        let saved = try edited(workout) { draft in
+            draft.unit = .kg
+            draft.rows = rows([(8, "45"), (8, "45"), (8, "45")])
+        }
+        let result = try #require(saved.exerciseResults?.first)
+        #expect((result.unit, result.selectedWeight) == (.kg, 45))
+        let low = try #require(result.rangeLow)
+        let high = try #require(result.rangeHigh)
+        let suggested = try #require(result.suggestedWeight)
+        #expect(abs(low - 95 / LoadUnit.poundsPerKilogram) < 0.001)
+        #expect(abs(high - 110 / LoadUnit.poundsPerKilogram) < 0.001)
+        #expect(abs(suggested - 100 / LoadUnit.poundsPerKilogram) < 0.001)
+        let exposure = LiftExposure(date: day(20), result: result)
+        #expect(exposure.overrideDirection == nil, "45 kg is inside what was 95–110 lb")
+        #expect(WorkoutTrend.isEvidence(exposure))
+        #expect(result.loggedLine == "Bench press - 3 x 8 @ 45 kg")
+        // The same unit changes nothing, and an unloaded record has no range to convert.
+        var same = guidedBench()
+        same.record([LoggedSet(reps: 8, weight: 105), LoggedSet(reps: 8, weight: 105), LoggedSet(reps: 8, weight: 105)], unit: .lb)
+        #expect((same.rangeLow, same.rangeHigh, same.suggestedWeight) == (95, 110, 100))
+        // The next plan reads last time in kilograms, inside its range.
+        let next = nextBench(after: [saved])
+        #expect(next.unit == .kg)
+        #expect(next.previousWeight == 45)
+    }
+
+    /// w2: of several hand-written lines of one lift on one day, the one with the most sets is the
+    /// session — a single heavier line no longer becomes next time's weight.
+    @Test func severalHandWrittenLinesKeepTheOneWithTheMostSets() {
+        let plan = nextBench(after: [handWorkout("Bench press 3x8 @ 100 lb\nBench press 1x8 @ 300 lb")])
+        #expect(plan.previousWeight == 100)
+        let tie = nextBench(after: [handWorkout("Bench press 3x8 @ 100 lb\nBench press 3x8 @ 110 lb")])
+        #expect(tie.previousWeight == 110, "a tie keeps the heavier")
     }
 }

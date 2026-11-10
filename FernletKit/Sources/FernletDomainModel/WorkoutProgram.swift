@@ -117,9 +117,17 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
     /// Area → severity pairs this build can't read — a newer build's area, or a newer severity for
     /// a known area — parked and re-encoded so a save here can't strip a newer device's limit.
     public var unknownInjuryAreaTokens: [String: String] = [:]
+    /// The "No longer an issue" switch (``InjuryEasing``, the owner's fix s5): area token →
+    /// ``InjuryEasing/pendingToken`` or the day key its two weeks of Mild treatment started on.
+    /// Optional and additive: empty for every profile saved before 2026-11-10, written only when a
+    /// token exists, and carried verbatim so a newer build's area or value survives a save here.
+    /// FROZEN tokens. Like the injury areas, not one of this struct's `CodingKeys`:
+    /// ``FernletSettings`` writes it at its top level (`workoutInjuryEasing`). Read through
+    /// ``injuryEasing``; changed through ``setInjuryEasing(_:)`` and ``startInjuryEasing(onDayKey:)``.
+    public internal(set) var injuryEasingTokens: [String: String] = [:]
 
-    /// This struct's own wire keys — every stored property except the injury-area tokens, which
-    /// ``FernletSettings`` carries at its top level. The names are the property names the encoding
+    /// This struct's own wire keys — every stored property except the injury-area and "No longer
+    /// an issue" tokens, which ``FernletSettings`` carries at its top level. The names are the property names the encoding
     /// was synthesized with before, so the nested shape is unchanged.
     private enum CodingKeys: String, CodingKey {
         case avoidedMuscles, unknownAvoidedMuscleTokens, avoidedMovements, unknownAvoidedMovementTokens
@@ -250,12 +258,40 @@ public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable, S
 
 /// Specific pieces of equipment the user checks off per location. Each maps down to a coarse
 /// `Equipment` capability that the planning engine / safety filter actually reasons about.
+///
+/// Each exercise needs its own gear (the owner's fix e5, 2026-11-10): the coarse capability only
+/// says which KIND of tool a space has, and an exercise that needs one particular piece names it
+/// in its catalog `requiredGear` — every machine exercise names its machine, a free barbell lift
+/// names the plates (and the rack where it needs one), and Dip, Inverted row and Ab wheel name
+/// ``dipBars``, ``lowBar`` and ``abWheel``. FROZEN tokens: a location persists them and the
+/// catalog names them. The 22 pieces before that fix are ``originalPieces``; the machines added
+/// by it are ``itemizedMachines``.
 public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiable, Sendable {
     case treadmill, exerciseBike, rowingMachine, elliptical, stairClimber
     case dumbbells, barbell, kettlebells, weightPlates, weightBench
     case cableMachine, latPulldown, legPress, smithMachine, chestPress
     case pullUpBar, squatRack, resistanceBands, medicineBall, battleRopes
     case yogaMat, foamRoller
+    // Added 2026-11-10 (e5). Appended, so `allCases` keeps the older pieces' order.
+    case legExtension, legCurl, hackSquat, standingCalfRaise, seatedCalfRaise
+    case shoulderPressMachine, seatedRowMachine, pecDeck, preacherCurl
+    case assistedPullUpDip, hipAbductionAdduction
+    case dipBars, lowBar, abWheel
+
+    /// The machines that gained a row of their own on 2026-11-10 (e5). Before that one leg press
+    /// or chest press stood for all of them (``WorkoutLocation/legacyGearGrant(for:)``).
+    public static let itemizedMachines: Set<GymEquipment> = [
+        .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise,
+        .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl,
+        .assistedPullUpDip, .hipAbductionAdduction,
+    ]
+
+    /// The three small pieces that gained a row on 2026-11-10 (e5).
+    public static let itemizedSmallPieces: Set<GymEquipment> = [.dipBars, .lowBar, .abWheel]
+
+    /// The 22 pieces a location could tick before 2026-11-10.
+    public static let originalPieces: Set<GymEquipment> =
+        Set(allCases).subtracting(itemizedMachines).subtracting(itemizedSmallPieces)
 
     public var id: String { rawValue }
 
@@ -264,7 +300,11 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .treadmill, .exerciseBike, .rowingMachine, .elliptical, .stairClimber: .cardio
         case .dumbbells, .barbell, .kettlebells, .weightPlates, .weightBench: .freeWeights
         case .cableMachine, .latPulldown, .legPress, .smithMachine, .chestPress: .machines
+        case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: .machines
+        case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: .machines
+        case .assistedPullUpDip, .hipAbductionAdduction: .machines
         case .pullUpBar, .squatRack, .resistanceBands, .medicineBall, .battleRopes: .functional
+        case .dipBars, .lowBar, .abWheel: .functional
         case .yogaMat, .foamRoller: .recovery
         }
     }
@@ -296,6 +336,29 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .battleRopes: String(localized: "gymEquipment.battleRopes", defaultValue: "Battle ropes", bundle: .module, comment: "Gym equipment: heavy battle ropes")
         case .yogaMat: String(localized: "gymEquipment.yogaMat", defaultValue: "Yoga mat", bundle: .module, comment: "Gym equipment: a yoga mat")
         case .foamRoller: String(localized: "gymEquipment.foamRoller", defaultValue: "Foam roller", bundle: .module, comment: "Gym equipment: a foam roller")
+        default: itemizedDisplayName
+        }
+    }
+
+    /// ``displayName`` for the pieces added on 2026-11-10 (e5); an older piece falls back to its
+    /// token, which ``displayName`` never asks for.
+    private var itemizedDisplayName: String {
+        switch self {
+        case .legExtension: String(localized: "gymEquipment.legExtension", defaultValue: "Leg extension", bundle: .module, comment: "Gym equipment: a leg extension machine")
+        case .legCurl: String(localized: "gymEquipment.legCurl", defaultValue: "Leg curl", bundle: .module, comment: "Gym equipment: a leg curl machine")
+        case .hackSquat: String(localized: "gymEquipment.hackSquat", defaultValue: "Hack squat", bundle: .module, comment: "Gym equipment: a hack squat machine")
+        case .standingCalfRaise: String(localized: "gymEquipment.standingCalfRaise", defaultValue: "Standing calf raise", bundle: .module, comment: "Gym equipment: a standing calf raise machine")
+        case .seatedCalfRaise: String(localized: "gymEquipment.seatedCalfRaise", defaultValue: "Seated calf raise", bundle: .module, comment: "Gym equipment: a seated calf raise machine")
+        case .shoulderPressMachine: String(localized: "gymEquipment.shoulderPressMachine", defaultValue: "Shoulder press machine", bundle: .module, comment: "Gym equipment: a shoulder press machine")
+        case .seatedRowMachine: String(localized: "gymEquipment.seatedRowMachine", defaultValue: "Seated row machine", bundle: .module, comment: "Gym equipment: a seated row machine")
+        case .pecDeck: String(localized: "gymEquipment.pecDeck", defaultValue: "Pec deck", bundle: .module, comment: "Gym equipment: a pec deck machine, also used facing in for the rear shoulders")
+        case .preacherCurl: String(localized: "gymEquipment.preacherCurl", defaultValue: "Preacher curl", bundle: .module, comment: "Gym equipment: a preacher curl machine")
+        case .assistedPullUpDip: String(localized: "gymEquipment.assistedPullUpDip", defaultValue: "Assisted pull-up and dip", bundle: .module, comment: "Gym equipment: a machine whose padded platform takes some body weight on pull-ups and dips")
+        case .hipAbductionAdduction: String(localized: "gymEquipment.hipAbductionAdduction", defaultValue: "Hip abduction and adduction", bundle: .module, comment: "Gym equipment: a seated machine for pushing the knees apart or squeezing them together")
+        case .dipBars: String(localized: "gymEquipment.dipBars", defaultValue: "Dip bars", bundle: .module, comment: "Gym equipment: parallel bars for dips")
+        case .lowBar: String(localized: "gymEquipment.lowBar", defaultValue: "Low bar for rows", bundle: .module, comment: "Gym equipment: a fixed bar at about waist height to hang under for inverted rows")
+        case .abWheel: String(localized: "gymEquipment.abWheel", defaultValue: "Ab wheel", bundle: .module, comment: "Gym equipment: an ab roller wheel")
+        default: rawValue
         }
     }
 
@@ -324,21 +387,37 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .battleRopes: "waveform.path"
         case .yogaMat: "figure.yoga"
         case .foamRoller: "capsule.fill"
+        case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: "figure.strengthtraining.traditional"
+        case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: "figure.strengthtraining.traditional"
+        case .assistedPullUpDip, .hipAbductionAdduction: "figure.strengthtraining.traditional"
+        case .dipBars: "pause"
+        case .lowBar: "minus"
+        case .abWheel: "circle.circle"
         }
     }
 
     /// The coarse capability this unlocks for the planning engine.
+    ///
+    /// Only the barbell itself is a barbell (e5): plates, a rack or a Smith machine alone used to
+    /// unlock every free barbell lift. A Smith machine is a machine, as is each itemized machine —
+    /// and since every bundled machine exercise names its own machine in `requiredGear`, owning one
+    /// machine unlocks only that machine's exercises. Plates, a rack and the small pieces are no
+    /// tool by themselves: they count only where an exercise names them.
     public var capability: Equipment {
         switch self {
         case .treadmill, .exerciseBike, .rowingMachine, .elliptical, .stairClimber, .battleRopes: .cardio
         case .dumbbells: .dumbbell
-        case .barbell, .weightPlates, .squatRack, .smithMachine: .barbell
+        case .barbell: .barbell
         case .kettlebells: .kettlebell
         case .weightBench: .bench
         case .cableMachine, .latPulldown: .cable
-        case .legPress, .chestPress: .machine
+        case .legPress, .chestPress, .smithMachine: .machine
+        case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: .machine
+        case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: .machine
+        case .assistedPullUpDip, .hipAbductionAdduction: .machine
         case .resistanceBands: .band
         case .pullUpBar, .medicineBall, .yogaMat, .foamRoller: .bodyweight
+        case .weightPlates, .squatRack, .dipBars, .lowBar, .abWheel: .bodyweight
         }
     }
 }
@@ -376,6 +455,11 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
         WorkoutLocation(name: name, ownedEquipment: equipment)
     }
 
+    /// The presets, and what each ticks on the machine checklist (fix e5): Full gym ticks every
+    /// piece; Hotel gym only its cable machine; Apartment gym its cable machine and leg press — and
+    /// so no longer a calf-raise machine; Home setup none. Only Full gym ticks the dip bars, the low
+    /// bar and the ab wheel. A preset names what such a place reliably has: a piece it leaves
+    /// unticked is one tap for its owner, while a piece it ticked wrongly plans lifts they cannot do.
     public static let all: [LocationTemplate] = [
         LocationTemplate(id: "full-gym", name: "Full gym", subtitle: "Commercial or studio",
                          systemImage: "dumbbell.fill", equipment: Set(GymEquipment.allCases)),
@@ -402,10 +486,20 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
 /// back — so a re-save here no longer drops a newer device's equipment or fields. The location's
 /// ``weights`` are NOT part of this encoding: ``FernletSettings`` carries them at its top level
 /// (`workoutLocationWeights`), because builds before this one drop unknown nested keys on a re-save.
+///
+/// Each machine has its own row since 2026-11-10 (e5), and ``equipmentListVersion`` says whether a
+/// saved location was ticked against that list. One saved before it is read once through
+/// ``legacyGearGrant(for:)`` as it decodes, so a space that said it had machines keeps the exercises
+/// its owner has been doing, with those machines shown ticked for the owner to correct.
 public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     public var id: UUID
     public var name: String
     public var ownedEquipment: Set<GymEquipment>
+    /// Which equipment list ``ownedEquipment`` was ticked against: ``itemizedListVersion`` (2) once
+    /// each machine has its own row; a location saved before that carries no such key and is
+    /// migrated as it decodes. Optional and additive on the wire (`equipmentListVersion`); a newer
+    /// build's higher number is kept and written back.
+    public var equipmentListVersion = WorkoutLocation.itemizedListVersion
     /// Equipment a newer build ticked that this one does not know, kept and written back under
     /// `unknownOwnedEquipmentTokens` (deduplicated, bounded). Never shown or toggled here.
     public var unknownEquipmentTokens: [String] = []
@@ -439,8 +533,14 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         let raws = Self.tokens(c, .ownedEquipment)
         let parked = Self.tokens(c, .unknownOwnedEquipmentTokens)
         let split = EnumDecodeCompat.splitRawTokens(raws + parked, as: GymEquipment.self)
-        ownedEquipment = Set(split.known)
         unknownEquipmentTokens = split.unknown
+        // A location saved before each machine had its own row carries no version: read it once
+        // through the legacy grant, so its owner keeps the machine exercises they have been doing.
+        let savedVersion = Self.listVersion(c)
+        ownedEquipment = savedVersion == nil
+            ? Set(split.known).union(Self.legacyGearGrant(for: Set(split.known)))
+            : Set(split.known)
+        equipmentListVersion = max(savedVersion ?? Self.itemizedListVersion, Self.itemizedListVersion)
         parkedUnknownKeys = try Self.parkedKeys(from: decoder)
     }
 
@@ -453,6 +553,7 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         if !unknownEquipmentTokens.isEmpty {
             try c.encode(unknownEquipmentTokens, forKey: .unknownOwnedEquipmentTokens)
         }
+        try c.encode(equipmentListVersion, forKey: .equipmentListVersion)
         guard !parkedUnknownKeys.isEmpty else { return }
         let known = Set(CodingKeys.allCases.map(\.stringValue))
         var parked = encoder.container(keyedBy: LocationParkedKey.self)
@@ -466,7 +567,20 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     /// `ownedEquipment` is written as sorted raw values (see `encode(to:)`) so output is deterministic.
     /// `CaseIterable` so the decoder can tell which keys to park; renaming a case is a wire break.
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, name, ownedEquipment, unknownOwnedEquipmentTokens
+        case id, name, ownedEquipment, unknownOwnedEquipmentTokens, equipmentListVersion
+    }
+
+    /// The saved ``equipmentListVersion``, or nil for a location saved before 2026-11-10. A key that
+    /// holds something other than a number is named in the log and read as the current list: the
+    /// location then keeps exactly what is ticked, and is never granted gear it did not name.
+    private static func listVersion(_ c: KeyedDecodingContainer<CodingKeys>) -> Int? {
+        do {
+            return try c.decodeIfPresent(Int.self, forKey: .equipmentListVersion)
+        } catch {
+            FernletAuditLog.log("workout.location.equipmentListVersion.decodeFailed",
+                                context: ["error": error.localizedDescription])
+            return itemizedListVersion
+        }
     }
 
     /// The strings of one token-array key; empty, with the failure logged, when the key holds
@@ -1348,8 +1462,9 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
 /// `dayPlan` picks the rotation day, filters the catalog through ``WorkoutSafetyFilter``, fills
 /// each slot with the best-scoring feasible exercise (deterministic tie-breaks on name/id),
 /// applies double progression from per-exercise completion counts, and honestly reports slots it
-/// had to drop. The AI adjuster's output re-enters via `applyAdjustment` and must run back through
-/// the safety filter, never around it.
+/// had to drop. Every session leaves through the finishing pass (``WorkoutPlanFinisher``): the 48-hour
+/// trim and the time budget run there for the planner's own sessions, and the AI adjuster's output
+/// and the plan editor's rows re-enter through it — never around the safety filter or the pass.
 public nonisolated enum WorkoutProgram {
     /// One rendered session: its prescribed exercises plus the displayable ``WorkoutSuggestion``.
     ///
@@ -1362,6 +1477,10 @@ public nonisolated enum WorkoutProgram {
         public var kind: SessionKind
         public var exercises: [PrescribedExercise] = []
         public var suggestion: WorkoutSuggestion
+        /// The note as its parts (``WorkoutNotePart``), when the planner or the finishing pass
+        /// composed it: `suggestion.notes` is their text. Nil on a session built any other way and
+        /// on one read back from today's plan file — the pass then rebuilds the note from nothing.
+        public var noteParts: [WorkoutNotePart]?
 
         public init(id: UUID = UUID(), title: String, timeLabel: String, kind: SessionKind, exercises: [PrescribedExercise] = [], suggestion: WorkoutSuggestion) {
             self.id = id
@@ -1483,6 +1602,19 @@ public nonisolated enum WorkoutProgram {
     /// slot only hidden exercises could fill is dropped with its own note; a saved alternate replaces
     /// the planner's pick only when it passes everything the pick did
     /// (``preferredAlternate(for:slot:block:inputs:used:)``). The default changes nothing.
+    ///
+    /// `cardioSeed` picks among the location's cardio machines; the app passes
+    /// ``cardioSessionsLogged(in:recentSessionNames:)`` so they alternate from one cardio day to the
+    /// next. Nil falls back to the rotation index.
+    ///
+    /// A lifting session never falls back to an unfiltered circuit (the owner's fix s3): one left
+    /// short of ``minimumLifts`` is filled with safe lifts for other body areas, and one still short
+    /// offers mobility and a walk instead (WorkoutProgram+Fill.swift).
+    ///
+    /// `context` is the plan sheet's "Anything else?", read for this plan only (``WorkoutDayNote``,
+    /// the owner's fix e3): a body area it names is trained around today on top of the saved
+    /// limits, a time phrase picks a shorter session unless `noteMayShorten` is false (the person
+    /// chose a length for this plan themselves), and the first session's note says what was applied.
     public static func dayPlan(
         goal: GoalType,
         intensity: WorkoutIntensity,
@@ -1496,24 +1628,32 @@ public nonisolated enum WorkoutProgram {
         recent: WorkoutRecoveryGuard.RecentTraining? = nil,
         options: WorkoutSessionOptions = WorkoutSessionOptions(),
         preferences: WorkoutExercisePreferences = WorkoutExercisePreferences(),
-        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
+        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises,
+        cardioSeed: Int? = nil,
+        noteMayShorten: Bool = true
     ) -> DayPlan {
+        // Today's note over the saved limits and the session length (WorkoutDayNote.swift).
+        let today = WorkoutDayNote.Applied(context: context, saved: profile.injuryLimits, options: options,
+                                           mayShorten: noteMayShorten)
+        let limits = today.limits
         // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
         // `max(count, 1)` made that trap on `days[0]` instead of degrading. Fall back to the same
         // "just move" session the empty-render path below produces.
         guard !split.days.isEmpty else {
             return DayPlan(splitName: split.name, dayTitle: "Move",
-                           sessions: [Self.fallbackSession], droppedSlots: [],
+                           sessions: [fallbackSession(limits: limits)], droppedSlots: [],
                            locationName: location.name)
         }
         let dayCount = split.days.count
-        let decision = recent.map { WorkoutRecoveryGuard.decide(split: split, dueIndex: rotationIndex, recent: $0) }
-        let day = split.days[decision?.dayIndex ?? ((rotationIndex % dayCount) + dayCount) % dayCount]
+        // Yesterday's accessory work on the split's own previous day is not "hard" for today (e8.2).
+        let counted = recent.map { WorkoutRecoveryGuard.counted($0, split: split, dueIndex: rotationIndex) }
+        let decision = counted.map { WorkoutRecoveryGuard.decide(split: split, dueIndex: rotationIndex, recent: $0) }
+        let dayIndex = decision?.dayIndex ?? ((rotationIndex % dayCount) + dayCount) % dayCount
+        let day = split.days[dayIndex]
         let style = WorkoutGoalStyle.style(for: goal, energy: intensity, sport: profile.sport)
-        let limits = profile.injuryLimits
-        let pool = splitHidden(catalog.filter { WorkoutSafetyFilter.feasible($0, location: location, limits: limits) },
-                               preferences: preferences)
-        let biasTokens = selectionTokens(profile: profile, context: context)
+        let equipped = catalog.filter { WorkoutSafetyFilter.hasEquipment(for: $0, at: location) }
+        let pool = splitHidden(equipped.filter(limits.allows), preferences: preferences)
+        let biasTokens = selectionTokens(profile: profile, note: today.note)
 
         var dayUsed: Set<String> = []
         var dropped: [String] = []
@@ -1526,33 +1666,49 @@ public nonisolated enum WorkoutProgram {
             let inputs = SlotInputs(
                 goal: goal, intensity: intensity, style: style, feasible: pool.shown, biasTokens: biasTokens,
                 profile: profile, location: location, progression: progression, load: load,
-                limits: limits, recentHard: recent?.hardMuscles ?? [], options: options,
-                hiddenFeasible: pool.hidden, alternates: preferences.alternateKeys, cardioSeed: rotationIndex
+                limits: limits, recentHard: counted?.hardMuscles ?? [], options: today.options,
+                hiddenFeasible: pool.hidden, alternates: preferences.alternateKeys,
+                cardioSeed: cardioSeed ?? rotationIndex,
+                blocked: limits.isEmpty ? [] : equipped.filter { !limits.allows($0) },
+                upcomingMuscles: upcomingMuscles(in: split, after: dayIndex),
+                limitsAreTodaysOnly: today.saved.isEmpty
             )
-            let rendered = render(
-                session: session, inputs: inputs, context: context, used: &dayUsed,
-                isMultiSession: day.sessions.count > 1, calibrationOpen: &calibrationOpen
-            )
+            let rendered = render(session: session, inputs: inputs, used: &dayUsed, calibrationOpen: &calibrationOpen)
             dropped.append(contentsOf: rendered.dropped)
             sessions.append(rendered.session)
         }
 
         if sessions.isEmpty {
-            sessions = [Self.fallbackSession]
+            sessions = [fallbackSession(limits: limits)]
         }
         if let decision, let from = decision.movedFrom {
             prependNote(WorkoutRecoveryGuard.movedNote(to: day, from: split.days[from]), to: &sessions)
         }
+        let matched = today.matchedLifts(in: sessions)
+        appendNotes(today.lines(matched: matched), to: &sessions, matched: matched)
 
         return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped,
                        locationName: location.name, recovery: decision)
     }
 
-    /// Puts `note` first in the first session's note.
+    /// Puts `note` first in the first session's note (and in its parts, as a line about the session).
     static func prependNote(_ note: String, to sessions: inout [SessionSuggestion]) {
         guard !sessions.isEmpty else { return }
         let existing = sessions[0].suggestion.notes
         sessions[0].suggestion.notes = existing.isEmpty ? note : "\(note) · \(existing)"
+        sessions[0].noteParts?.insert(WorkoutNotePart(.session, note), at: 0)
+    }
+
+    /// Adds `notes` to the end of the first session's note, a part each. `matched` are the lifts the
+    /// last of them names (today's note's matched lifts), when it names any: that line is about them.
+    static func appendNotes(_ notes: [String], to sessions: inout [SessionSuggestion], matched: [String] = []) {
+        guard !sessions.isEmpty, !notes.isEmpty else { return }
+        let existing = sessions[0].suggestion.notes
+        sessions[0].suggestion.notes = ([existing] + notes).filter { !$0.isEmpty }.joined(separator: " · ")
+        for (index, note) in notes.enumerated() {
+            let namesLifts = !matched.isEmpty && index == notes.count - 1
+            sessions[0].noteParts?.append(namesLifts ? WorkoutNotePart(.lifts, note, lifts: matched) : WorkoutNotePart(.session, note))
+        }
     }
 
     /// How many past training days ``nextDayIndex(in:recentSessionNames:)`` looks through.
@@ -1575,44 +1731,109 @@ public nonisolated enum WorkoutProgram {
     ///   keeps a repeated day (Upper twice in Upper/Lower) alternating correctly.
     public static func nextDayIndex(in split: TrainingSplit, recentSessionNames: [[String]]) -> Int {
         guard !split.days.isEmpty else { return 0 }
-        for logged in recentSessionNames.prefix(rotationLookbackDays) {
-            if let matched = matchedDayIndex(in: split, names: logged) { return (matched + 1) % split.days.count }
+        let history = Array(recentSessionNames.prefix(rotationLookbackDays))
+        for (offset, logged) in history.enumerated() {
+            let match = dayMatch(in: split, names: logged)
+            guard let first = match.indices.first else { continue }
+            var matched = first
+            // Only part of a two-session day was logged and it fits several split days ("Morning ·
+            // Easy cardio" is on days 1 and 3): the day that carries the rotation on from the day
+            // logged before it, not the earliest — which sent the rotation back (e8.3, 2026-11-10).
+            if match.indices.count > 1, match.overlap < split.days[first].sessions.count {
+                matched = continuing(match.indices, after: history.dropFirst(offset + 1), in: split) ?? first
+            }
+            return (matched + 1) % split.days.count
         }
         return 0
+    }
+
+    /// Among `candidates` (split days one partly-logged day fits equally), the one the rotation
+    /// reaches first from the day after the most recent `older` day that belongs to the split; nil
+    /// when nothing older does. Bounded by the lookback.
+    static func continuing(_ candidates: [Int], after older: ArraySlice<[String]>, in split: TrainingSplit) -> Int? {
+        let count = split.days.count
+        for logged in older.prefix(rotationLookbackDays) {
+            guard let previous = matchedDayIndex(in: split, names: logged) else { continue }
+            let expected = (previous + 1) % count
+            return candidates.min { lhs, rhs in
+                (lhs - expected + count) % count < (rhs - expected + count) % count
+            }
+        }
+        return nil
     }
 
     /// The split day that one past day's logged workout names belong to: the day sharing the most
     /// session display names with them, ties to the earlier day; nil when none shares a name.
     public static func matchedDayIndex(in split: TrainingSplit, names logged: [String]) -> Int? {
+        dayMatch(in: split, names: logged).indices.first
+    }
+
+    /// Every split day sharing the most session display names with one past day's logged names, in
+    /// split order, and how many they share. Empty when none shares a name.
+    static func dayMatch(in split: TrainingSplit, names logged: [String]) -> (indices: [Int], overlap: Int) {
         let names = Set(logged.prefix(rotationNamesPerDay))
-        guard !names.isEmpty else { return nil }
-        var best: (index: Int, overlap: Int)?
+        guard !names.isEmpty else { return ([], 0) }
+        var best: (indices: [Int], overlap: Int) = ([], 0)
         for (index, day) in split.days.enumerated() {
             let dayNames = Set(day.sessions.map { sessionDisplayName($0, timeLabel: $0.time.label) })
             let overlap = dayNames.intersection(names).count
-            if overlap > 0, overlap > (best?.overlap ?? 0) { best = (index, overlap) }
+            guard overlap > 0, overlap >= best.overlap else { continue }
+            best = overlap > best.overlap ? ([index], overlap) : (best.indices + [index], overlap)
         }
-        return best?.index
+        return best
     }
 
-    /// The "there is always something to do" session used when a split renders nothing at all. Its
-    /// name and plan line are frozen English (screens draw them through ``WorkoutSessionNames`` and
-    /// ``WorkoutPlanLine``); its note is localized.
-    private static var fallbackSession: SessionSuggestion {
-        SessionSuggestion(
-            title: "Move", timeLabel: "", kind: .fullBody,
+    /// The "there is always something to do" session used when a split renders nothing at all: a
+    /// mobility flow and an easy walk, or seated mobility alone when a severe ankle, knee or hip rules
+    /// the walk out (``InjuryLimits/barsWalking``). Never a circuit of exercises nothing has checked
+    /// against the person's limits (the owner's fix s3). Its name and plan lines are frozen English
+    /// (screens draw them through ``WorkoutSessionNames`` and ``WorkoutPlanLine``); its note is localized.
+    private static func fallbackSession(limits: InjuryLimits) -> SessionSuggestion {
+        let steps = limits.barsWalking
+            ? [offerStep("\(seatedMobilityHead) - \(offerMobilityMinutes) min")]
+            : [offerStep("\(mobilityFlowHead) - \(offerMobilityMinutes) min"),
+               offerStep("\(easyWalkName) - \(offerWalkMinutes) min", block: .cardio)]
+        return SessionSuggestion(
+            title: "Move", timeLabel: "", kind: .mobility, exercises: steps,
             suggestion: WorkoutSuggestion(name: "Easy full body",
-                                          exercises: "Full-body bodyweight circuit - 3 rounds",
+                                          exercises: WorkoutSessionBlocks.planText(for: steps),
                                           notes: WorkoutPlannerCopy.simpleOption)
         )
+    }
+
+    /// The muscles the split trains hard on the day after `dayIndex` — inside the 48-hour window of
+    /// today's session — which a short session's fill takes last (WorkoutProgram+Fill.swift). Empty
+    /// for a one-day split.
+    static func upcomingMuscles(in split: TrainingSplit, after dayIndex: Int) -> Set<MuscleGroup> {
+        let count = split.days.count
+        guard count > 1 else { return [] }
+        return WorkoutRecoveryGuard.hardMuscles(of: split.days[(dayIndex + 1) % count])
+    }
+
+    /// How many of the past days in `recentSessionNames` (most recent first, the rotation's own
+    /// input) logged one of the split's cardio sessions — what picks among the location's cardio
+    /// machines, so two cardio days in a row alternate wherever they sit in the split.
+    ///
+    /// The rotation index alone could not alternate (e8.4, 2026-11-10): a split's cardio day always
+    /// has the same index (Daily Movement's is always day 2), so a gym with a bike and a rower named
+    /// the same one every time. Bounded by ``rotationLookbackDays``.
+    public static func cardioSessionsLogged(in split: TrainingSplit, recentSessionNames: [[String]]) -> Int {
+        var cardioNames: Set<String> = []
+        for day in split.days {
+            for session in day.sessions where session.kind == .cardio {
+                cardioNames.insert(sessionDisplayName(session, timeLabel: session.time.label))
+            }
+        }
+        guard !cardioNames.isEmpty else { return 0 }
+        return recentSessionNames.prefix(rotationLookbackDays).filter { logged in
+            !cardioNames.isDisjoint(with: logged.prefix(rotationNamesPerDay))
+        }.count
     }
 
     private static func render(
         session: WorkoutSessionTemplate,
         inputs: SlotInputs,
-        context: String,
         used: inout Set<String>,
-        isMultiSession: Bool,
         calibrationOpen: inout Bool
     ) -> (session: SessionSuggestion, dropped: [String]) {
         let timeLabel = session.time.label
@@ -1624,26 +1845,40 @@ public nonisolated enum WorkoutProgram {
             let capped = WorkoutSessionBudget.capped(session.conditioning ?? inputs.style.conditioningLabel,
                                                      length: inputs.options.length)
             // The machine the location has, named after the cap so the cap never drops "easy".
-            let detail = WorkoutCardioMachines.named(capped.text, feasible: inputs.feasible, seed: inputs.cardioSeed)
+            let machine = WorkoutCardioMachines.named(capped.text, feasible: inputs.feasible, seed: inputs.cardioSeed)
+            // No machine the person may use, and a walk ruled out: seated mobility, said plainly.
+            let seated = machine == capped.text ? seatedInsteadOfCardio(machine, inputs: inputs) : nil
+            let detail = seated?.text ?? machine
             let exercises = [PrescribedExercise(name: detail, sets: 0, reps: "", role: .accessory, fromCatalog: false)]
             let suggestion = WorkoutSuggestion(
                 name: name, exercises: detail,
-                notes: notes(inputs: inputs, context: context, dropped: [], includeContext: !isMultiSession,
-                             progressNotes: capped.note.map { [$0] } ?? [])
+                notes: notes(inputs: inputs, dropped: [],
+                             progressNotes: (capped.note.map { [$0] } ?? []) + (seated.map { [$0.note] } ?? []))
             )
             return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: exercises, suggestion: suggestion), [])
 
         case .strength, .fullBody, .sport:
             let built = buildBlocks(session: session, inputs: inputs, used: &used, calibrationOpen: &calibrationOpen)
+            // A slot only hidden exercises could fill always says so: that is how the person gets it
+            // back. A slot nothing safe could fill is named too — unless a fill pick stands in for it
+            // and the fill's own note already names the injured area, or the session is the offer,
+            // whose note says why there is no lifting at all.
             let hiddenDrops = hiddenOnlyDrops(built.dropped, slots: session.slots, inputs: inputs)
+            let covered = built.isOffer || built.namesLimits
+            let unsafe = built.dropped.filter { !hiddenDrops.contains($0) && !(covered && built.replaced.contains($0)) }
+            let parts = noteParts(inputs: inputs, dropped: unsafe, progress: built.noteParts,
+                                  hiddenDropped: hiddenDrops, namesLimits: built.namesLimits)
             let suggestion = WorkoutSuggestion(
                 name: name,
                 exercises: WorkoutSessionBlocks.planText(for: built.exercises),
-                notes: notes(inputs: inputs, context: context, dropped: built.dropped.filter { !hiddenDrops.contains($0) },
-                             includeContext: !isMultiSession, progressNotes: built.progressNotes,
-                             hiddenDropped: hiddenDrops)
+                notes: WorkoutNotePart.text(of: parts)
             )
-            return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: built.exercises, suggestion: suggestion), built.dropped)
+            // The mobility offer is a stretch session: it logs as one, under the day's own name, so
+            // the rotation still moves on.
+            let kind: SessionKind = built.isOffer ? .mobility : session.kind
+            var rendered = SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: kind, exercises: built.exercises, suggestion: suggestion)
+            rendered.noteParts = parts
+            return (rendered, built.dropped)
         }
     }
 
@@ -1673,9 +1908,18 @@ public nonisolated enum WorkoutProgram {
         /// Saved alternates (``WorkoutExercisePreferences/alternateKeys``): the original's comparison
         /// key → the alternate's frozen name.
         var alternates: [String: String] = [:]
-        /// The split's rotation index, which picks among the location's cardio machines
-        /// (``WorkoutCardioMachines/named(_:feasible:seed:)``) so they alternate from day to day.
+        /// What picks among the location's cardio machines
+        /// (``WorkoutCardioMachines/named(_:feasible:seed:)``) so they alternate from one cardio day
+        /// to the next (``cardioSeed(rotationIndex:load:)``).
         var cardioSeed = 0
+        /// The exercises the location could run but the injury limits leave out: never picked, only
+        /// read to name the area that emptied a slot (``blockingAreas(for:inputs:)``).
+        var blocked: [ExerciseTarget] = []
+        /// The muscles the split trains hard on its next day, which a short session's fill takes last.
+        var upcomingMuscles: Set<MuscleGroup> = []
+        /// True when every limit comes from today's "Anything else?" (``WorkoutDayNote``): its own
+        /// line names the area, so the general "worked around your noted limits" line stays out.
+        var limitsAreTodaysOnly = false
     }
 
     /// The safety-filtered pool split into what the planner may suggest and what the user hid.
@@ -1710,23 +1954,51 @@ public nonisolated enum WorkoutProgram {
         label: "Core", role: .core, muscles: [.abs, .obliques], region: .core
     )
 
+    /// One lifting session as built: its movements in run order, the slots nothing in the pool could
+    /// fill, and what its note says.
+    struct BuiltSession {
+        var exercises: [PrescribedExercise]
+        /// Every template slot nothing could fill, by its frozen label (the day plan's `droppedSlots`).
+        var dropped: [String]
+        /// What the note says about progression, time and recovery, as parts (``WorkoutNotePart``):
+        /// the fill's line, the budget's and the 48-hour guard's slots, then the load pass's lines.
+        var noteParts: [WorkoutNotePart]
+        /// The dropped labels a fill pick stands in for: not named as skipped.
+        var replaced: [String] = []
+        /// True when the session is the mobility offer rather than lifting.
+        var isOffer = false
+        /// True when a note already names the injured area, so the general "worked around your noted
+        /// limits" line would only repeat it.
+        var namesLimits = false
+    }
+
     /// A lifting session's movements in run order — warm-up, activation, lifting, cardio,
     /// cool-down — plus the slots it dropped and what its note says about progression and time.
     ///
     /// The template's core slot moves into the activation block, ahead of the lifting, and is
     /// prescribed light; a session without one gets a light core pick there anyway. The lifting
-    /// block is ``liftingBlock(_:inputs:used:dropped:calibrationOpen:)``; the stretch blocks and the
-    /// time budget are ``sessionBlocks(activation:lifting:cardio:mainLabels:inputs:)``.
+    /// block is ``liftingBlock(_:inputs:used:dropped:calibrationOpen:)``, which fills a short session
+    /// from other body areas; one still short of ``minimumLifts(for:)`` becomes the mobility offer
+    /// (WorkoutProgram+Fill.swift) — never an unfiltered circuit. The stretch blocks and the time
+    /// budget are ``sessionBlocks(activation:lifting:cardio:mainLabels:inputs:)``.
     private static func buildBlocks(
         session: WorkoutSessionTemplate, inputs: SlotInputs, used: inout Set<String>, calibrationOpen: inout Bool
-    ) -> (exercises: [PrescribedExercise], dropped: [String], progressNotes: [String]) {
+    ) -> BuiltSession {
         let slots = Array(session.slots.prefix(inputs.profile.experience.maxSlotsPerDay))
         let liftSlots = slots.filter { $0.role != .core }
         let coreSlots = slots.filter { $0.role == .core }
         var dropped: [String] = []
         let core = fill(coreSlots.isEmpty ? [activationCoreSlot] : coreSlots, block: .activation,
                         inputs: inputs, used: &used, dropped: &dropped, reportDrops: !coreSlots.isEmpty)
-        var lifting = liftingBlock(liftSlots, inputs: inputs, used: &used, dropped: &dropped, calibrationOpen: &calibrationOpen)
+        var calibration = calibrationOpen
+        let lifting = liftingBlock(liftSlots, inputs: inputs, used: &used, dropped: &dropped, calibrationOpen: &calibration)
+        guard lifting.targets.count >= minimumLifts(for: liftSlots) else {
+            // Too few lifts even after the fill: mobility and a walk, not a padded session.
+            let offer = mobilityOffer(sessionTitle: session.title, inputs: inputs)
+            return BuiltSession(exercises: offer.steps, dropped: dropped,
+                                noteParts: [WorkoutNotePart(.session, offer.note)], replaced: dropped, isOffer: true)
+        }
+        calibrationOpen = calibration
         let legPatterns: Set<MovementPattern> = [.squat, .hinge, .lunge]
         let trainsLegs = liftSlots.contains { $0.movement.map(legPatterns.contains) ?? false }
         let activation = core.map(\.exercise) + WorkoutSessionBlocks.balanceAndJumps(
@@ -1734,50 +2006,69 @@ public nonisolated enum WorkoutProgram {
             intensity: inputs.intensity, trainsLegs: trainsLegs
         )
         var cardio: [PrescribedExercise] = []
-        if session.kind == .sport { cardio.append(descriptorStep(inputs.style.conditioningLabel)) }
+        // Sport drills are running and jumping: left out when a walk is (the note says limits applied).
+        if session.kind == .sport, !inputs.limits.barsWalking { cardio.append(descriptorStep(inputs.style.conditioningLabel)) }
         if let extra = session.conditioning { cardio.append(descriptorStep(extra)) }
-        if lifting.steps.isEmpty && cardio.isEmpty {
-            lifting.steps = [descriptorStep("Full-body bodyweight circuit - 3 rounds", block: .lifting)]
-        }
-        let mainLabels = Set(liftSlots.filter { $0.role == .main }.map(\.label))
-        let fitted = sessionBlocks(activation: activation, lifting: lifting, cardio: cardio,
-                                   mainLabels: mainLabels, inputs: inputs)
-        return (fitted.exercises, dropped, (fitted.note.map { [$0] } ?? []) + lifting.notes)
+        let mainLabels = Set(liftSlots.filter { $0.role == .main }.map(\.label)).union(lifting.fillMainLabels)
+        // The finishing pass (WorkoutPlanFinisher.swift): the 48-hour guard's lighter sets, then the
+        // time budget. Nothing else trims a session, here or after an edit.
+        let settled = WorkoutPlanFinisher.settle(
+            sessionBlocks(activation: activation, lifting: lifting, cardio: cardio, mainLabels: mainLabels, inputs: inputs),
+            goal: inputs.goal, recentHard: inputs.recentHard, budgetMinutes: inputs.options.length.minutes
+        )
+        let fill = lifting.replaced.isEmpty ? nil : fillNote(
+            sessionTitle: session.title, dropped: liftSlots.filter { lifting.replaced.contains($0.label) }, inputs: inputs
+        )
+        var liftNames: [String] = []
+        for step in lifting.steps where step.fromCatalog && !liftNames.contains(step.name) { liftNames.append(step.name) }
+        let parts = (fill.map { [WorkoutNotePart(.session, $0.text)] } ?? [])
+            + [WorkoutNotePart(.budget, settled.budget?.note ?? ""), WorkoutPlanFinisher.recoveryPart(settled.lightened)]
+            + lifting.notes.map { WorkoutNotePart(.lifts, $0, lifts: liftNames) }
+        return BuiltSession(exercises: settled.blocks.exercises, dropped: dropped, noteParts: parts,
+                            replaced: lifting.replaced, namesLimits: fill?.namesArea ?? false)
     }
 
     /// A session's lifting block on its way to the plan: its steps, with the catalog rows and the
-    /// slots behind them (parallel, until the fallback circuit stands in for an empty block), and
-    /// what the session note says about progression.
+    /// slots behind them (parallel), and what the session note says about progression.
     struct LiftingBlock {
         var steps: [PrescribedExercise]
         var targets: [ExerciseTarget]
         var slots: [WorkoutSlotSpec]
         var notes: [String]
+        /// The labels of the template slots a fill pick stands in for (``filled(_:slots:inputs:used:)``).
+        var replaced: [String] = []
+        /// The labels of the fill picks standing in main slots, which the time budget keeps.
+        var fillMainLabels: Set<String> = []
     }
 
-    /// The lifting slots filled, through the load pass when there is one
-    /// (``applyLoad(_:inputs:load:used:calibrationOpen:)``), then the 48-hour guard's lighter sets.
+    /// The lifting slots filled — a session left short of ``minimumLifts(for:)`` taking safe lifts
+    /// for other body areas in its empty slots (``filled(_:slots:inputs:used:)``) — then through the
+    /// load pass when there is one (``applyLoad(_:inputs:load:used:calibrationOpen:)``). The 48-hour
+    /// guard's lighter sets come after, in the finishing pass (``WorkoutPlanFinisher``).
     static func liftingBlock(
         _ slots: [WorkoutSlotSpec], inputs: SlotInputs, used: inout Set<String>, dropped: inout [String],
         calibrationOpen: inout Bool
     ) -> LiftingBlock {
-        let picks = fill(slots, block: .lifting, inputs: inputs, used: &used, dropped: &dropped, reportDrops: true)
+        let own = slotPicks(slots, block: .lifting, inputs: inputs, used: &used)
+        dropped += slots.indices.filter { own[$0] == nil }.map { slots[$0].label }
+        let fill = filled(own, slots: slots, inputs: inputs, used: &used)
+        let picks = fill.picks
         var block = LiftingBlock(steps: picks.map(\.exercise), targets: picks.map(\.target),
                                  slots: picks.map(\.slot), notes: ladderNote(picks, style: inputs.style))
-        if let load = inputs.load {
+        if let load = inputs.load, picks.count >= minimumLifts(for: slots) {
             let pass = applyLoad(picks, inputs: inputs, load: load, used: &used, calibrationOpen: &calibrationOpen)
             block = LiftingBlock(steps: pass.steps, targets: pass.targets, slots: pass.slots, notes: pass.notes)
         }
-        let recovery = lightened(block.steps, targets: block.targets, recentHard: inputs.recentHard)
-        block.steps = recovery.steps
-        if let note = recovery.note { block.notes.insert(note, at: 0) }
+        block.replaced = fill.replaced
+        block.fillMainLabels = fill.mainLabels
         return block
     }
 
     /// The session in run order with the stretch blocks the options ask for — the owner's warm-up
     /// flow in full, the short day-aware version (``WorkoutSessionBlocks/shortWarmUpSeconds``) or
-    /// none; the cool-down for the worked muscles or none — fitted to the time budget when one is
-    /// set (``WorkoutSessionBudget``), with the budget's note.
+    /// none; the cool-down for the worked muscles or none — as the finishing pass's draft
+    /// (``WorkoutPlanFinisher``), which takes the 48-hour guard's sets off and fits the time budget
+    /// when one is set (``WorkoutSessionBudget``).
     ///
     /// A lifting step is a main lift when its slot is one of the template's main slots
     /// (`mainLabels`), so a main lift eased to accessory work for a mild injury is still never
@@ -1785,7 +2076,7 @@ public nonisolated enum WorkoutProgram {
     static func sessionBlocks(
         activation: [PrescribedExercise], lifting: LiftingBlock, cardio: [PrescribedExercise],
         mainLabels: Set<String>, inputs: SlotInputs
-    ) -> (exercises: [PrescribedExercise], note: String?) {
+    ) -> WorkoutPlanFinisher.Draft {
         let options = inputs.options
         let worked = lifting.targets.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.primaryMuscles) }
         let budget = options.length.minutes
@@ -1806,11 +2097,8 @@ public nonisolated enum WorkoutProgram {
             warmUp: warmUp, activation: activation, lifting: lifting.steps, mainLift: mainLift,
             cardio: cardio, coolDown: coolDown
         )
-        guard let budget else { return (blocks.exercises, nil) }
-        let outcome = WorkoutSessionBudget.fit(
-            blocks, budgetMinutes: budget, goal: inputs.goal, shortWarmUp: options.warmUp == .full ? short : nil
-        )
-        return (outcome.blocks.exercises, outcome.note)
+        return WorkoutPlanFinisher.Draft(blocks: blocks, targets: lifting.targets.map(Optional.some),
+                                         shortWarmUp: options.warmUp == .full ? short : nil)
     }
 
     /// Fills slots in order with their best eligible pick, prescribing each for its block, and
@@ -1819,26 +2107,40 @@ public nonisolated enum WorkoutProgram {
         _ slots: [WorkoutSlotSpec], block: SessionBlock, inputs: SlotInputs,
         used: inout Set<String>, dropped: inout [String], reportDrops: Bool
     ) -> [SlotPick] {
-        var picks: [SlotPick] = []
+        let picks = slotPicks(slots, block: block, inputs: inputs, used: &used)
+        if reportDrops { dropped += slots.indices.filter { picks[$0] == nil }.map { slots[$0].label } }
+        return picks.compactMap { $0 }
+    }
+
+    /// Each slot's pick in order, parallel to `slots`: nil where nothing in the pool could fill it.
+    static func slotPicks(
+        _ slots: [WorkoutSlotSpec], block: SessionBlock, inputs: SlotInputs, used: inout Set<String>
+    ) -> [SlotPick?] {
+        var picks: [SlotPick?] = []
         for slot in slots {
-            let best = bestExercise(
-                for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
-                experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
-            )
-            guard let best else {
-                if reportDrops { dropped.append(slot.label) }
-                continue
-            }
-            let pick = preferredAlternate(for: best, slot: slot, block: block, inputs: inputs, used: used) ?? best
-            used.insert(pick.name)
-            let completions = block == .lifting ? inputs.progression[pick.name] ?? 0 : 0
-            let prescribed = easedSlot(slot, for: pick, limits: inputs.limits)
-            picks.append(SlotPick(
-                exercise: prescribe(pick, role: prescribed.role, block: block, completions: completions, inputs: inputs),
-                target: pick, completions: completions, slot: prescribed
-            ))
+            picks.append(slotPick(for: slot, block: block, inputs: inputs, used: &used))
         }
         return picks
+    }
+
+    /// One slot's best eligible pick (or the person's saved alternate for it), prescribed for its
+    /// block and marked used; nil when nothing in the pool can fill the slot.
+    static func slotPick(
+        for slot: WorkoutSlotSpec, block: SessionBlock, inputs: SlotInputs, used: inout Set<String>
+    ) -> SlotPick? {
+        let best = bestExercise(
+            for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
+            experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
+        )
+        guard let best else { return nil }
+        let pick = preferredAlternate(for: best, slot: slot, block: block, inputs: inputs, used: used) ?? best
+        used.insert(pick.name)
+        let completions = block == .lifting ? inputs.progression[pick.name] ?? 0 : 0
+        let prescribed = easedSlot(slot, for: pick, limits: inputs.limits)
+        return SlotPick(
+            exercise: prescribe(pick, role: prescribed.role, block: block, completions: completions, inputs: inputs),
+            target: pick, completions: completions, slot: prescribed
+        )
     }
 
     /// The slot a pick is prescribed from. A main lift that loads an area being trained around (a
@@ -1897,25 +2199,6 @@ public nonisolated enum WorkoutProgram {
         }
     }
 
-    /// Takes a set off every lifting step whose primary muscles worked hard inside the 48-hour
-    /// window, and names those lifts in the note (``WorkoutRecoveryGuard``). Steps and targets are
-    /// parallel; a timed hold or a single-set step simply keeps its one set.
-    static func lightened(
-        _ steps: [PrescribedExercise], targets: [ExerciseTarget], recentHard: Set<MuscleGroup>
-    ) -> (steps: [PrescribedExercise], note: String?) {
-        guard !recentHard.isEmpty, steps.count == targets.count else { return (steps, nil) }
-        var result = steps
-        var names: [String] = []
-        for index in result.indices where result[index].fromCatalog && result[index].block == .lifting {
-            guard !targets[index].primaryMuscles.isDisjoint(with: recentHard) else { continue }
-            let fewer = WorkoutRecoveryGuard.lightenedSets(result[index].sets)
-            guard fewer < result[index].sets else { continue }
-            result[index].sets = fewer
-            if !names.contains(result[index].name) { names.append(result[index].name) }
-        }
-        return (result, names.isEmpty ? nil : WorkoutRecoveryGuard.lightenedNote(lifts: names))
-    }
-
     /// Sets and reps (or a hold) for one pick. Lifting picks follow the goal and the day's energy,
     /// with double progression on rep-counted work; activation picks are deliberately light — two
     /// easy sets — so the trunk is awake, not tired, when the heavy lifting starts.
@@ -1940,7 +2223,7 @@ public nonisolated enum WorkoutProgram {
         return PrescribedExercise(name: pick.name, sets: progressed.sets, reps: progressed.reps, role: role, fromCatalog: true)
     }
 
-    /// A non-catalog descriptor line (a conditioning finisher, the fallback circuit).
+    /// A non-catalog descriptor line (a conditioning finisher).
     private static func descriptorStep(_ text: String, block: SessionBlock = .cardio) -> PrescribedExercise {
         PrescribedExercise(name: text, sets: 0, reps: "", role: .accessory, fromCatalog: false, block: block)
     }
@@ -1966,7 +2249,9 @@ public nonisolated enum WorkoutProgram {
     }
 
     /// Replaces a session's lifting block with an AI-adjusted set, rebuilding its display + note.
-    /// The warm-up, activation, cardio and cool-down blocks around it are kept as they were.
+    /// The warm-up, activation, cardio and cool-down blocks around it are kept as they were. This is
+    /// only the first half of an adjustment: the finishing pass takes the result from here
+    /// (``WorkoutPlanFinisher/adjusted(_:picks:request:pool:others:context:)``) and rewrites the note.
     public static func applyAdjustment(to session: SessionSuggestion, exercises: [PrescribedExercise]) -> SessionSuggestion {
         guard exercises.isEmpty == false else { return session }
         var updated = session
@@ -2142,39 +2427,46 @@ public nonisolated enum WorkoutProgram {
         }
     }
 
-    private static func selectionTokens(profile: WorkoutProfile, context: String) -> Set<String> {
+    /// The words that nudge a pick toward an exercise whose name shares one: the profile's
+    /// interests and sport, and the words of today's note that may (``WorkoutDayNote/nudgeWords`` —
+    /// never a word that names a body part, and none from a note that reads as a complaint).
+    private static func selectionTokens(profile: WorkoutProfile, note: WorkoutDayNote) -> Set<String> {
         var tokens: Set<String> = []
         for interest in profile.interests { tokens.formUnion(interest.lowercased().split(separator: " ").map(String.init)) }
         tokens.formUnion(profile.sport.lowercased().split(separator: " ").map(String.init))
-        tokens.formUnion(context.lowercased().split(separator: " ").map(String.init))
-        return tokens.filter { $0.count >= 3 }
+        return tokens.filter { $0.count >= 3 }.union(note.nudgeWords)
     }
 
-    private static func notes(
+    /// A cardio or mobility session's note: the space, then `progressNotes`, then the limits line.
+    private static func notes(inputs: SlotInputs, dropped: [String], progressNotes: [String]) -> String {
+        WorkoutNotePart.text(of: noteParts(inputs: inputs, dropped: dropped,
+                                           progress: progressNotes.map { WorkoutNotePart(.session, $0) }))
+    }
+
+    /// A session's note as its parts (``WorkoutNotePart``), in the order it reads: the space,
+    /// `progress`, the saved limits, the slots nothing safe could fill, the slots only hidden
+    /// exercises could.
+    private static func noteParts(
         inputs: SlotInputs,
-        context: String,
         dropped: [String],
-        includeContext: Bool,
-        progressNotes: [String],
-        hiddenDropped: [String] = []
-    ) -> String {
+        progress: [WorkoutNotePart],
+        hiddenDropped: [String] = [],
+        namesLimits: Bool = false
+    ) -> [WorkoutNotePart] {
         // The note is display text composed now, in the device's language: the location reads by its
         // drawn name and the dropped slots by theirs. `dropped` itself stays the frozen labels.
-        var parts: [String] = [inputs.location.displayedName]
-        parts += progressNotes
-        if includeContext, context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            parts.append(WorkoutPlannerCopy.noted(context.trimmingCharacters(in: .whitespacesAndNewlines)))
-        }
-        if !inputs.limits.isEmpty {
-            parts.append(WorkoutPlannerCopy.workedAroundLimits)
+        var parts = [WorkoutNotePart(.session, inputs.location.displayedName)]
+        parts += progress
+        if !inputs.limits.isEmpty, !namesLimits, !inputs.limitsAreTodaysOnly {
+            parts.append(WorkoutNotePart(.session, WorkoutPlannerCopy.workedAroundLimits))
         }
         if dropped.isEmpty == false {
-            parts.append(WorkoutPlannerCopy.skippedNoSafeOption(WorkoutSlotNames.drawnList(dropped)))
+            parts.append(WorkoutNotePart(.session, WorkoutPlannerCopy.skippedNoSafeOption(WorkoutSlotNames.drawnList(dropped))))
         }
         if hiddenDropped.isEmpty == false {
-            parts.append(hiddenDropNote(hiddenDropped))
+            parts.append(WorkoutNotePart(.session, hiddenDropNote(hiddenDropped)))
         }
-        return parts.joined(separator: " · ")
+        return parts
     }
 
     /// The note for slots that only hidden exercises could fill. `labels` are the frozen slot labels;

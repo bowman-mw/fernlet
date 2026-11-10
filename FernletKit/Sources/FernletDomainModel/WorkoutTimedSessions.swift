@@ -68,7 +68,8 @@ public nonisolated enum TimedDescriptor: Equatable, Sendable {
 
 /// Turns a plan's untimed descriptor lines into steps the guided runner can time: steady and interval
 /// cardio as countdown segments, a Mobility day's "Mobility flow - 15 min" as a stretch session in the
-/// owner's warm-up order, and the rest day's "Gentle stretching" as a short, optional floor stretch.
+/// owner's warm-up order, "Seated mobility - 15 min" as sitting and lying stretches only, and the rest
+/// day's "Gentle stretching" as a short, optional floor stretch.
 ///
 /// The plan keeps its descriptor lines (the planner's time budget caps them as text, and that text is
 /// the source of truth); the runner expands them when a run starts (``expand(_:feasible:)``). Parsing is
@@ -114,6 +115,23 @@ public nonisolated enum WorkoutTimedSessions {
         "Figure-four stretch", "Thread the needle", "Supine twist", "Calf stretch", "Doorway chest stretch",
         "Pigeon stretch", "Cobra stretch", "Knee-to-chest stretch", "Seated hamstring stretch", "Neck side stretch",
     ]
+    /// The lowercase label of the seated stretch line ("Seated mobility - 15 min"), which is timed as a
+    /// stretch session built by ``seatedMobility(minutes:feasible:)``.
+    static let seatedMobilityLabel = WorkoutProgram.seatedMobilityHead.lowercased()
+    /// The FROZEN head of the rest day's line when a walk is ruled out (a severe ankle, knee or hip):
+    /// "Gentle stretching, seated - 10 min". Still the optional gentle stretch (it starts as that line
+    /// does), but it offers no walk and is built from the seated stretches.
+    public static let seatedGentleHead = "Gentle stretching, seated"
+    /// The seated session's stretches, in order: sitting first, then lying — nothing standing, nothing
+    /// kneeling, nothing to balance on. What the planner offers in a walk's place when a severe ankle,
+    /// knee or hip rules the walk out.
+    static let seatedMoves = [
+        "Neck side stretch", "Cross-body shoulder stretch", "Overhead triceps stretch", "Wrist circles",
+        "Seated hamstring stretch", "Butterfly stretch", "Figure-four stretch", "Knee-to-chest stretch",
+        "Supine twist", "Lying hamstring stretch",
+    ]
+    /// The most times the seated list is walked to fill its minutes.
+    static let seatedRounds = 3
     /// The rest day's gentle sequence: kneeling, lying and seated stretches only — nothing to balance on
     /// and no deep lunge — from child's pose down to the floor and back up to sitting.
     static let gentleMoves = [
@@ -132,7 +150,7 @@ public nonisolated enum WorkoutTimedSessions {
         }
         let label = parts.label.lowercased()
         if label.hasPrefix("gentle stretching") { return .gentleStretch }
-        if label.contains("mobility flow") { return .mobilityFlow(minutes: minutes) }
+        if label.contains("mobility flow") || label == seatedMobilityLabel { return .mobilityFlow(minutes: minutes) }
         if untimedWords.contains(where: { label.contains($0) }) { return nil }
         // Only a line that names cardio is timed as cardio: "Foam roll - 5 min" stays text.
         guard cardioWords.contains(where: { label.contains($0) }) else { return nil }
@@ -275,6 +293,27 @@ public nonisolated enum WorkoutTimedSessions {
         return steps
     }
 
+    /// A seated stretch session of about `minutes`: ``seatedMoves`` that are in `feasible` (so the
+    /// injured area's own stretches are already out), one-sided stretches done both sides, held
+    /// 30–45 s, the list walked again (at most ``seatedRounds`` times) when once through runs short.
+    /// Empty when the filter left none of them.
+    public static func seatedMobility(minutes: Int, feasible: [ExerciseTarget]) -> [PrescribedExercise] {
+        guard minutes > 0 else { return [] }
+        let stretches = mobilityRows(feasible)
+        var once: [WorkoutSessionBlocks.FlowStep] = []
+        for name in seatedMoves {
+            guard let stretch = stretches[name] else { continue }
+            once += sides(of: stretch).map { WorkoutSessionBlocks.FlowStep(name: stretch.name, seconds: 0, side: $0) }
+        }
+        guard !once.isEmpty else { return [] }
+        let target = min(minutes, maximumMinutes) * 60
+        let longest = mobilityHoldRange.upperBound + stretchLeadInSeconds
+        let rounds = min(seatedRounds, max(1, target / (once.count * longest)))
+        let steps = Array(repeating: once, count: rounds).flatMap { $0 }
+        let hold = holdSeconds(steps: steps.count, target: target)
+        return steps.map { WorkoutSessionBlocks.timedStep(name: $0.name, seconds: hold, side: $0.side, block: .mobility) }
+    }
+
     /// The feasible stretch rows by name.
     static func mobilityRows(_ feasible: [ExerciseTarget]) -> [String: ExerciseTarget] {
         Dictionary(feasible.filter { $0.modality == .mobility }.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
@@ -369,9 +408,14 @@ public nonisolated enum WorkoutTimedSessions {
             let title = label(of: step.name)
             built = segments(for: timed, descriptor: step.name).map { segmentStep(label: title, segment: $0) }
         case .mobilityFlow(let minutes):
-            built = mobilityFlow(minutes: minutes, feasible: feasible)
+            built = label(of: step.name).lowercased() == seatedMobilityLabel
+                ? seatedMobility(minutes: minutes, feasible: feasible)
+                : mobilityFlow(minutes: minutes, feasible: feasible)
         case .gentleStretch:
-            built = gentleStretch(feasible: feasible)
+            // The rest day's line when a walk is ruled out: the seated stretches, for its minutes.
+            built = label(of: step.name) == seatedGentleHead
+                ? seatedMobility(minutes: WorkoutProgram.descriptorMinutes(in: step.name) ?? 0, feasible: feasible)
+                : gentleStretch(feasible: feasible)
         }
         return built.isEmpty ? nil : built
     }

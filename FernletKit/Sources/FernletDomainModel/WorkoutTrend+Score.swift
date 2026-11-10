@@ -6,7 +6,9 @@
 // third. A set qualifies when its reps plus reps in reserve stay at 12 or fewer (10 or fewer
 // preferred: the equations drift above that) and it was not stopped with four or more in reserve. A
 // true single (one rep, nothing left) is its own max — Epley would inflate it 3.3 %. A lift with no
-// load scores the average reps of its two best sets instead.
+// load scores the average reps of its two best sets instead. A lift on an assisted machine scores on
+// the load actually moved — body weight less the help (``WorkoutAssistedLifts``, w3) — so less help
+// reads as stronger.
 //
 // The trend restarts when the rep scheme moves (a goal change from 8–12 to 5s shifts every estimate
 // with no change in strength) and after a break of four weeks or more.
@@ -34,13 +36,16 @@ extension WorkoutTrend {
 
     /// The lift's trend points, oldest first: its scored sessions since the rep scheme last moved and
     /// since its last long break, all of one kind (loaded, or reps only, as the newest session is).
-    public static func points(from exposures: [LiftExposure], unit: LoadUnit) -> [TrendPoint] {
+    /// `bodyWeightKg` is the person's body weight when known: an assisted machine's sessions score
+    /// on body weight less the help (``WorkoutAssistedLifts/effectiveLoad(help:unit:bodyWeightKg:)``).
+    public static func points(from exposures: [LiftExposure], unit: LoadUnit, bodyWeightKg: Double? = nil) -> [TrendPoint] {
         let evidence = exposures.filter(isEvidence).suffix(WorkoutLoadEngine.maxExposuresPerLift)
         guard let latest = evidence.last else { return [] }
         let loaded = latest.weight != nil
         let segment = currentSegment(evidence.filter { ($0.weight != nil) == loaded }, loaded: loaded)
         return segment.compactMap { exposure in
-            sessionScore(of: exposure, in: unit).map { TrendPoint(date: exposure.date, score: $0, flag: exposure.flag) }
+            sessionScore(of: exposure, in: unit, bodyWeightKg: bodyWeightKg)
+                .map { TrendPoint(date: exposure.date, score: $0, flag: exposure.flag) }
         }
     }
 
@@ -87,14 +92,14 @@ extension WorkoutTrend {
 
     /// One session's score in `unit`: the average estimated max of its top ``topSets`` qualifying sets
     /// (reps for a lift with no load), or nil when no set qualifies.
-    public static func sessionScore(of exposure: LiftExposure, in unit: LoadUnit) -> Double? {
+    public static func sessionScore(of exposure: LiftExposure, in unit: LoadUnit, bodyWeightKg: Double? = nil) -> Double? {
         guard isEvidence(exposure) else { return nil }
         guard exposure.weight != nil else {
             let reps = exposure.repsPerSet.filter { $0 > 0 }.sorted(by: >).prefix(topSets)
             guard !reps.isEmpty else { return nil }
             return Double(reps.reduce(0, +)) / Double(reps.count)
         }
-        let estimates = setEstimates(of: exposure, in: unit)
+        let estimates = setEstimates(of: exposure, in: unit, bodyWeightKg: bodyWeightKg)
         let preferred = estimates.filter { $0.effortReps <= preferredEffortReps }
         // With nothing eaten for a while (G12), the later sets say little about the max: the top one alone.
         let take = exposure.unfueled ? 1 : topSets
@@ -103,13 +108,20 @@ extension WorkoutTrend {
         return pool.reduce(0, +) / Double(pool.count)
     }
 
-    /// Each qualifying set's estimated max in `unit`, with its reps plus reps in reserve.
-    static func setEstimates(of exposure: LiftExposure, in unit: LoadUnit) -> [(estimate: Double, effortReps: Double)] {
+    /// Each qualifying set's estimated max in `unit`, with its reps plus reps in reserve. On an
+    /// assisted machine the set's weight is help, so the estimate is of the load actually moved: body
+    /// weight less the help (w3) — less help, a higher score.
+    static func setEstimates(
+        of exposure: LiftExposure, in unit: LoadUnit, bodyWeightKg: Double? = nil
+    ) -> [(estimate: Double, effortReps: Double)] {
         guard let working = exposure.weight else { return [] }
         let weights = exposure.setWeights ?? Array(repeating: working, count: exposure.repsPerSet.count)
         var estimates: [(estimate: Double, effortReps: Double)] = []
         for (reps, setWeight) in zip(exposure.repsPerSet, weights) {
-            let weight = unit.converted(setWeight, from: exposure.unit ?? unit)
+            let logged = unit.converted(setWeight, from: exposure.unit ?? unit)
+            let weight = exposure.assisted
+                ? WorkoutAssistedLifts.effectiveLoad(help: logged, unit: unit, bodyWeightKg: bodyWeightKg)
+                : logged
             let reserve = repsInReserve(reps: reps, of: exposure)
             let effortReps = Double(reps) + reserve
             guard reps >= 1, weight > 0, weight.isFinite, reserve < excludedRepsInReserve,

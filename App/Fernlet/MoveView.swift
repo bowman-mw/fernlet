@@ -1026,6 +1026,11 @@ struct WorkoutSheet: View {
     @State private var editingRowID: UUID?
     /// "Last time" for the open page's exercise, read once per pick.
     @State private var liftLastTime: String?
+    /// The question a typed set weight raised (w2), while its alert is up; the values already asked
+    /// about, never asked about again; and whether it interrupted Save (else the page's Add to workout).
+    @State private var weightQuestion: SetWeightQuestion?
+    @State private var settledWeights: Set<String> = []
+    @State private var weightQuestionOnSave = false
     @Environment(\.fernletFramedLook) private var look
 
     var intensity: WorkoutIntensity {
@@ -1282,8 +1287,25 @@ struct WorkoutSheet: View {
         liftPath = [.lift]
     }
 
+    /// Whether the open set-by-set lift's typed weights raise a question before they are kept (w2,
+    /// ``SetWeightCheck``) — raised here, once per value, with what it interrupted remembered.
+    private func asksAboutWeight(onSave: Bool) -> Bool {
+        guard logsBySet, logMode == .strengthTraining, let exercise = draft.exercise,
+              exercise.inputKind == .strength, let sets = setsDraft,
+              let asked = SetWeightCheck.question(
+                  lift: exercise.name, weights: sets.filledWeights,
+                  lastTime: store.lastLoggedWeight(for: exercise.name, in: sets.unit),
+                  unit: sets.unit, settled: settledWeights
+              ) else { return false }
+        settledWeights.insert(asked.key)
+        weightQuestionOnSave = onSave
+        weightQuestion = asked
+        return true
+    }
+
     /// The page's button: the exercise joins the list, or replaces the row it was opened from.
     private func commitLift() {
+        guard !asksAboutWeight(onSave: false) else { return }
         let before = exerciseRows.count
         addDraftExercise()
         guard exerciseRows.count > before else { return }
@@ -1504,6 +1526,7 @@ struct WorkoutSheet: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: WorkoutLiftRoute.self) { _ in page }
         }
+        .setWeightQuestion($weightQuestion) { weightQuestionOnSave ? saveWorkout() : commitLift() }
         .onChange(of: liftPath) { _, path in
             // Back from an exercise's page drops what it held; Add to workout already took it.
             guard path.isEmpty else { return }
@@ -1574,7 +1597,9 @@ struct WorkoutSheet: View {
         // states its precondition rather than trusting the button.
         guard !saveDisabled else { return }
         // A typed-but-not-yet-added exercise draft would otherwise be silently dropped on Save —
-        // fold it into the rows first (guarded by the same validity addDraftExercise uses).
+        // fold it into the rows first (guarded by the same validity addDraftExercise uses), after
+        // the one question a weight far above the rest raises (w2).
+        if logMode == .strengthTraining, draft.hasExercise, asksAboutWeight(onSave: true) { return }
         if logMode == .strengthTraining, draft.hasExercise {
             addDraftExercise()
         }
@@ -1967,6 +1992,9 @@ struct WorkoutSuggestionSheet: View {
     @State private var showDiscardConfirm = false
     @State private var adjustRequest = ""
     @State private var isAdjusting = false
+    /// Why the last "Adjust with AI" changed nothing (s2); nil once the plan changed or the request
+    /// was reworded.
+    @State private var adjustNotice: WorkoutAdjustmentOutcome.Reason?
     @State private var didApplyReadiness = false
     // True while a plan is being generated after the user taps "Suggest" — drives the loading state.
     @State private var isSuggesting = false
@@ -2057,8 +2085,9 @@ struct WorkoutSuggestionSheet: View {
 
     /// The "Equipment & limits" entry — the only app-wide way into `WorkoutSetupSheet` (split,
     /// frequency, experience, injuries). Kept on the committed-plan branch, so the full setup stays
-    /// reachable once a plan is pinned (change it here, then "Rework today's plan" to regenerate
-    /// against the new setup); the configurator now states the space inline instead (MOVE-34).
+    /// reachable once a plan is pinned: a change to the space, the limits or the hidden exercises
+    /// made there rebuilds the sessions not yet started by itself (e4), and "Rework today's plan"
+    /// is for everything else; the configurator now states the space inline instead (MOVE-34).
     @ViewBuilder private var equipmentLimitsButton: some View {
         if suggestLook != nil {
             // World build: the framed link card the Move pages use (`b2-move-root`'s history link).
@@ -2384,7 +2413,9 @@ struct WorkoutSuggestionSheet: View {
         // never build a harder plan on it.
         let intensity = store.needsRestToday ? .light : energy
         let requestContext = context
-        let length = sessionLength
+        // A length passed on is one the person chose here: left as Workout setup's, it goes as nil,
+        // so "short on time" in the note may still shorten the session (e3).
+        let length: WorkoutSessionLength? = sessionLength == store.settings.workoutSessionLength ? nil : sessionLength
         Task {
             await Task.yield()
             do {
@@ -2620,7 +2651,24 @@ struct WorkoutSuggestionSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isAdjusting || adjustRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                adjustNoticeLine
             }
+        }
+        // A reworded request is a new one: the line about the last one goes.
+        .onChange(of: adjustRequest) { _, _ in
+            if !isAdjusting { adjustNotice = nil }
+        }
+    }
+
+    /// "Couldn't adjust just now. Try again." — why the last adjustment changed nothing (s2), in the
+    /// plan pane's notice style, under the field that still holds the request.
+    @ViewBuilder private var adjustNoticeLine: some View {
+        if let adjustNotice {
+            Text(verbatim: adjustNotice.message)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(suggestLook?.dim ?? Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("workout.adjust.notice")
         }
     }
 
@@ -2628,10 +2676,24 @@ struct WorkoutSuggestionSheet: View {
     /// then adjust / equipment / rework. The split eyebrow lives in the pinned header, not here,
     /// and no controls compete with the bottom bar's single green (MOVE-17) — Start now lives there.
     @ViewBuilder private func committedPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        planUpdatedLine
         if WorkoutPlanner.isTravelDayPlan(dayPlan) {
             travelPlanContent(dayPlan)
         } else {
             regularPlanContent(dayPlan)
+        }
+    }
+
+    /// "Updated for Home." — shown once the plan's not-yet-started sessions were rebuilt because the
+    /// space, the limits or the hidden exercises changed (e4), with a second sentence when that
+    /// replaced the person's own changes to a session.
+    @ViewBuilder private var planUpdatedLine: some View {
+        if let notice = store.todaysGuidedPlanNotice {
+            Text(verbatim: GuidedPlanNoticeCopy.line(notice))
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(suggestLook?.dim ?? Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("workout.plan.updated")
         }
     }
 
@@ -2686,9 +2748,11 @@ struct WorkoutSuggestionSheet: View {
 
     /// "Full gym · built for a hard day" — where and at what intensity the plan was built.
     /// `displayWord` is the localized half of the intensity's token/display fork — never
-    /// interpolate the frozen `rawValue` into display copy.
+    /// interpolate the frozen `rawValue` into display copy. The space is the one the PLAN was built
+    /// for (its own `locationName`), never simply the active one (e4).
     private var committedContextLine: some View {
-        let locationName = store.settings.activeWorkoutLocation.displayedName
+        let builtFor = dayPlan?.locationName ?? store.settings.activeWorkoutLocation.name
+        let locationName = WorkoutLocationNames.displayed(builtFor) ?? builtFor
         let intensity = (store.committedGuidedIntensity ?? energy).displayWord
         return Text("\(locationName) · built for a \(intensity) day")
             .font(.fernlet(.labelSmall))
@@ -2898,8 +2962,8 @@ struct WorkoutSuggestionSheet: View {
                             // One presenter for every row's info button, regular or travel-day, on
                             // the plan rather than on each card, so two sessions never bind two
                             // sheets to the same state. The store lets the sheet offer "Don't suggest
-                            // this" (N6); today's committed plan keeps the exercise, later plans
-                            // leave it out.
+                            // this" (N6): a session of today's plan that holds the exercise and has
+                            // not started is rebuilt without it (e4), and later plans leave it out.
                             .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)
                     } else {
                         configuratorContent
@@ -2956,12 +3020,22 @@ struct WorkoutSuggestionSheet: View {
         // plan (fresh ids) meanwhile, in which case `replaceGuidedWorkoutPlan` refuses the stale write.
         let baseSessionIDs = Set(plan.sessions.map(\.id))
         isAdjusting = true
+        adjustNotice = nil
         Task {
-            let adjusted = await store.adjustWorkoutDayPlan(plan, request: request)
+            let outcome = await store.adjustWorkoutDayPlan(plan, request: request)
             // An adjustment keeps each session's id, so completions stay valid — replace in place, but
             // only if the committed plan is still the one we started from.
-            store.replaceGuidedWorkoutPlan(adjusted, replacing: baseSessionIDs)
-            adjustRequest = ""
+            if case .changed(let adjusted) = outcome {
+                store.replaceGuidedWorkoutPlan(adjusted, replacing: baseSessionIDs)
+            }
+            // The request is cleared only when the plan changed; otherwise it stays, with the reason
+            // under it, and VoiceOver hears the reason (s2).
+            let field = WorkoutAdjustField.after(outcome, request: request)
+            adjustRequest = field.request
+            adjustNotice = field.notice
+            if let notice = field.notice {
+                FernletAnnouncer.system.announce(.status, resolved: notice.message)
+            }
             isAdjusting = false
         }
     }
@@ -3234,6 +3308,10 @@ struct EditWorkoutSheet: View {
     /// when the sheet opened — the save writes back only the lifts that changed.
     @State private var setDrafts: [ExerciseSetsDraft]
     private let originalSetDrafts: [ExerciseSetsDraft]
+    /// The question a typed set weight raised on Save (w2), while its alert is up, and the values
+    /// already asked about, which are never asked about again.
+    @State private var weightQuestion: SetWeightQuestion?
+    @State private var settledWeights: Set<String> = []
     @State private var showHealthRefusalAlert = false
     @State private var showDiscardConfirm = false
     /// The sheet's stack: the lift whose sets are open on their own page (`b3-workout-edit` draft 2).
@@ -3380,6 +3458,20 @@ struct EditWorkoutSheet: View {
         }
     }
 
+    /// Save: asks first when a corrected set's weight stands far above last time's or the lift's other
+    /// sets (``WorkoutSetEditing/weightQuestion(in:original:settled:lastTime:)``), once per value.
+    private func saveTapped() {
+        if let asked = WorkoutSetEditing.weightQuestion(
+            in: setDrafts, original: originalSetDrafts, settled: settledWeights,
+            lastTime: { store.lastLoggedWeight(for: $0, in: $1) }
+        ) {
+            settledWeights.insert(asked.key)
+            weightQuestion = asked
+            return
+        }
+        saveEdits()
+    }
+
     /// Writes the edited fields back through the store.
     ///
     /// Consumes the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet open
@@ -3416,6 +3508,7 @@ struct EditWorkoutSheet: View {
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
+        .setWeightQuestion($weightQuestion, onKeep: saveEdits)
         .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -3465,7 +3558,7 @@ struct EditWorkoutSheet: View {
                 .padding(.bottom, 10)
             }
 
-            SheetSaveBar(disabled: trimmedName.isEmpty) { saveEdits() }
+            SheetSaveBar(disabled: trimmedName.isEmpty) { saveTapped() }
         }
         .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .safeAreaInset(edge: .top, spacing: 0) {
