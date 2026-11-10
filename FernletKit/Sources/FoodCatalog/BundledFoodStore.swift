@@ -148,6 +148,11 @@ public nonisolated protocol BundledFoodSource: Sendable {
     /// The words this source's search index knows, with their food counts, for the offered spelling
     /// suggestion (``FoodSearchVocabulary``). At most `limit` words; empty when the index cannot say.
     func searchVocabulary(limit: Int) -> [FoodSearchTerm]
+    /// Rows whose index states `letters` as an exact, adjacent run of single-character words and passes
+    /// the gate for `productQuery` (which may be empty) — the typed surface's single-letter-brand route
+    /// (``FoodBrandInitialism``; "m&m's" is stored as the words "m m s"). A candidate pool: ``FoodCatalog``
+    /// checks that the NAME states the letters. Bounded by `limit`.
+    func initialismCandidates(letters: [String], productQuery: String, limit: Int) -> [FoodItem]
     var count: Int { get }
 }
 
@@ -175,6 +180,15 @@ public extension BundledFoodSource {
 
     /// No index to read: no vocabulary, so no suggestion.
     func searchVocabulary(limit: Int) -> [FoodSearchTerm] { [] }
+
+    /// The array-backed form: the product candidates whose names state the letters as whole words.
+    func initialismCandidates(letters: [String], productQuery: String, limit: Int) -> [FoodItem] {
+        guard limit > 0, letters.count >= 2 else { return [] }
+        let matching = candidates(forQuery: productQuery, stripsStopwords: false).filter { item in
+            FoodBrandAgreement.states(letters, in: FoodItemSearch.normalized(item.name))
+        }
+        return Array(matching.prefix(limit))
+    }
 }
 
 // MARK: - SQLite-backed source
@@ -333,16 +347,24 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             .joined(separator: " AND ")
     }
 
+    /// The most gate rows one brand-field query may read through its `LIKE`. A broad product word
+    /// ("cheese" passes 35,000 branded rows) is filtered row by row, so the scan is bounded rather
+    /// than left to the size of the catalog; a brand's rows past it are not offered for that word.
+    static let brandFieldScanLimit = 20_000
+
     /// The product words' FTS gate, narrowed to rows whose `brand_source` has a word starting with
-    /// `brandWord` (a `LIKE` over the rows the gate already chose, so no full-table scan). `brandWord` is
-    /// a normalized search token — letters and digits only — so it carries no `LIKE` wildcard.
+    /// `brandWord` (a `LIKE` over the rows the gate already chose, so no full-table scan, and at most
+    /// ``brandFieldScanLimit`` of them). `brandWord` is a normalized search token — letters and digits
+    /// only — so it carries no `LIKE` wildcard. A hyphen in the brand field reads as a space, as it
+    /// does in a normalized query, so "cola" reaches "Coca-Cola".
     public func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
         guard limit > 0, !brandWord.isEmpty,
               let match = Self.matchExpression(for: productQuery, stripsStopwords: stripsStopwords) else { return [] }
+        let brand = "replace(lower(brand_source), '-', ' ')"
         let sql = """
         SELECT \(selectColumns) FROM food \
-        WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ?) \
-        AND (lower(brand_source) LIKE ? OR lower(brand_source) LIKE ?) \
+        WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ? LIMIT \(Self.brandFieldScanLimit)) \
+        AND (\(brand) LIKE ? OR \(brand) LIKE ?) \
         LIMIT \(min(limit, candidateCap));
         """
         return fetchRows(sql) { stmt in
@@ -350,6 +372,23 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             sqliteBindText(stmt, 2, brandWord + "%")
             sqliteBindText(stmt, 3, "% " + brandWord + "%")
         }
+    }
+
+    /// The FTS5 PHRASE for `letters` ("m m"), AND-ed with the product words' gate when there are any.
+    /// A one-character word can never be a prefix term (`m*` is half the catalog) but is an exact
+    /// token of the index, so the phrase is precise. `letters` are normalized single characters —
+    /// letters and digits — so nothing inside the quotes is FTS syntax; anything else is refused.
+    public func initialismCandidates(letters: [String], productQuery: String, limit: Int) -> [FoodItem] {
+        guard limit > 0, letters.count >= 2,
+              letters.allSatisfy({ $0.count == 1 && $0.allSatisfy { $0.isLetter || $0.isNumber } }) else { return [] }
+        var match = "\"" + letters.joined(separator: " ") + "\""
+        if let product = Self.matchExpression(for: productQuery, stripsStopwords: false) { match += " AND " + product }
+        let sql = """
+        SELECT \(selectColumns) FROM food \
+        WHERE food_id IN (SELECT rowid FROM food_fts WHERE food_fts MATCH ?) \
+        LIMIT \(min(limit, candidateCap));
+        """
+        return fetchRows(sql) { stmt in sqliteBindText(stmt, 1, match) }
     }
 
     /// The index's own word list through an `fts5vocab` table in the connection's TEMP schema (writable

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "reviewStatus": "draft — labels written 2026-11-09 for the food-search review's failure classes; owner review pending",
+  "matching": "Same rules as brand-panel.json. This panel holds the cases the 64-query panel lacks: a generic first word that sits in a maker's brand field, a brand whose products rarely name it, a brand typed without its apostrophe, single-letter brands, and plurals of singular-named products.",
+  "entries": [
+    {"id": "turkey-burger", "query": "turkey burger", "split": "tuning", "intent": "generic", "category": "generic-word-in-brand", "accept": {"nameAll": ["turkey", "burger"]}, "notes": "'turkey' is in the brand field of Jennie-O Turkey Store. A generic query: the six should not all be one maker's, and a logged burger stays first (warm)."},
+    {"id": "turkey-breast", "query": "turkey breast", "split": "heldout", "intent": "generic", "category": "generic-word-in-brand", "accept": {"nameAll": ["turkey", "breast"]}},
+    {"id": "candy-corn", "query": "candy corn", "split": "tuning", "intent": "generic", "category": "generic-word-in-brand", "accept": {"nameAll": ["candy corn"]}, "notes": "'candy' is in 18 makers' brand fields (Ferrara Candy Company and others)."},
+    {"id": "jelly-beans", "query": "jelly beans", "split": "heldout", "intent": "generic", "category": "generic-word-in-brand", "accept": {"nameAll": ["jelly", "bean"]}},
+    {"id": "chobani-strawberry-yogurt", "query": "chobani strawberry yogurt", "split": "tuning", "intent": "brand", "category": "brand-field-beside-name", "accept": {"brand": ["chobani"], "nameAll": ["strawberr"]}, "notes": "Few rows name Chobani; most Chobani strawberry yogurts say it only in the brand field."},
+    {"id": "quest-chips", "query": "quest chips", "split": "heldout", "intent": "brand", "category": "brand-field-beside-name", "accept": {"brand": ["quest nutrition", "quest"], "nameAny": ["chip", "crisp"]}},
+    {"id": "sargento-string-cheese", "query": "sargento string cheese", "split": "tuning", "intent": "brand", "category": "brand-field-beside-name", "accept": {"brand": ["sargento"], "nameAll": ["string", "cheese"]}},
+    {"id": "amys-burrito", "query": "amys burrito", "split": "tuning", "intent": "brand", "category": "possessive-typed-plain", "accept": {"brand": ["amys kitchen", "amys"], "nameAll": ["burrito"]}},
+    {"id": "amys-apostrophe-burrito", "query": "amy's burrito", "split": "heldout", "intent": "brand", "category": "possessive-typed-plain", "accept": {"brand": ["amys kitchen", "amys"], "nameAll": ["burrito"]}},
+    {"id": "kelloggs-corn-flakes", "query": "kelloggs corn flakes", "split": "tuning", "intent": "brand", "category": "possessive-typed-plain", "accept": {"brand": ["kellogg company us", "kellogg", "kelloggs"], "nameAll": ["corn", "flake"]}},
+    {"id": "bobs-red-mill-oats", "query": "bobs red mill oats", "split": "heldout", "intent": "brand", "category": "possessive-typed-plain", "accept": {"brand": ["bobs red mill"], "nameAll": ["oat"]}},
+    {"id": "m-and-ms-apostrophe", "query": "m&m's", "split": "tuning", "intent": "brandOnly", "category": "single-letter-brand", "accept": {"nameAll": ["m m"]}, "notes": "Canonical text drops the apostrophe, so the name reads 'm ms …'; the term matches as a phrase prefix."},
+    {"id": "m-and-ms-plain", "query": "m&ms", "split": "heldout", "intent": "brandOnly", "category": "single-letter-brand", "accept": {"nameAll": ["m m"]}},
+    {"id": "m-and-m-peanut", "query": "m&m peanut", "split": "tuning", "intent": "brand", "category": "single-letter-brand", "accept": {"nameAll": ["m m", "peanut"]}},
+    {"id": "a-and-w-root-beer", "query": "a&w root beer", "split": "heldout", "intent": "brand", "category": "single-letter-brand", "accept": {"nameAll": ["a w", "root beer"]}},
+    {"id": "protein-cookies", "query": "protein cookies", "split": "tuning", "intent": "generic", "category": "plural", "accept": {"nameAll": ["protein", "cookie"]}},
+    {"id": "turkey-sandwiches", "query": "turkey sandwiches", "split": "heldout", "intent": "generic", "category": "plural", "accept": {"nameAll": ["turkey", "sandwich"]}},
+    {"id": "olive-oil-control", "query": "olive oil", "split": "tuning", "intent": "generic", "category": "control", "accept": {"nameAll": ["oil", "olive"]}, "notes": "Control: must not change."},
+    {"id": "greek-yogurt-control", "query": "greek yogurt", "split": "heldout", "intent": "generic", "category": "control", "accept": {"nameAll": ["greek", "yogurt"]}, "notes": "Control: must not change."}
+  ]
+}

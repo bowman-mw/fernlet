@@ -348,19 +348,28 @@ once logged cannot outrank the brand they typed.
 What counts as a brand:
 - **A restaurant chain from ``FoodBrandLexicon``.** It agrees with a row whose name or brand field
   says it.
-- **A leading or trailing run of the query's words.** It agrees with a row whose BRAND FIELD states
-  the run as whole words. The run is only a brand when at least two matched rows, and a fifth of
-  them, carry it there, so a generic word that happens to sit in a few brand names ("olive") is not
-  one.
+- **A leading run of the query's words.** It agrees with a row whose BRAND FIELD states the run as
+  whole words, a possessive apart ("amys" states "Amy's Kitchen"). A reference row and a person's own
+  food have no brand of their own, so their NAME speaks for them. The run is only a brand when at
+  least two rows say it and 60 % of the rows that have a brand of their own carry it in the brand
+  field (2026-11-09; it was a fifth of all rows, which read "turkey" in "turkey burger" as Jennie-O
+  Turkey Store). The count includes the brand's products fetched by brand field
+  (``FoodItemSearch/BrandFieldPool``), which then join the list.
 
-The key is set only when a caller passes `brandAware` (``FoodItemSearch/results(for:in:limit:stripsStopwords:history:now:ranking:brandAware:)``,
+The key is set only when a caller passes `brandAware`
+(``FoodItemSearch/results(for:in:limit:stripsStopwords:history:now:ranking:brandAware:brandFieldPools:)``,
 the typed surface). Everywhere else it stays false and the order is unchanged.
+
+``FoodBrandInitialism`` reads a query that opens with a brand spelt in single letters ("m&m's",
+"a&w root beer"). The tokenizer drops one-character words, so the catalog finds those rows by exact
+phrase instead.
 
 ``FoodSearchVocabulary`` turns the catalog index's words (``FoodSearchTerm``) into an OFFERED
 spelling suggestion ("chobanni" → "chobani", "chickfila" → "chick fil a"), never a silent rewrite.
 
 - ``FoodItemSearch``
 - ``FoodBrandAgreement``
+- ``FoodBrandInitialism``
 - ``FoodSearchVocabulary``
 - ``FoodSearchTerm``
 - ``FoodSearchRanking``
