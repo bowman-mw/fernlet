@@ -43,6 +43,11 @@ import WorldMapStore
 /// ``currentCorner(home:now:)``, hears every lift (its gap closings included) so a corner walked into goes at
 /// once, shows none in a decoy, and goes with every wipe through ``clearAll()``.
 ///
+/// **A road trip** (owner-approved 2026-11-10, World-RoadTrip-Spec PR 1). ``roadTrip`` keeps the trip on now and its
+/// timed line: every reading this keeper accepts also joins the line while this iPhone maps (``handle(_:saveNow:thinLine:)``,
+/// the store's readings and the locked launch's alike), under the buffer key, so it grows with the phone locked. It
+/// follows the decoy (``setDecoy(_:)``), writes with ``flush()`` and goes with every wipe through ``clearAll()``.
+///
 /// **A locked phone.** The store's key works only while the phone is unlocked, so readings that
 /// arrive while it is locked (a walk with the screen off, Always mode's visits) go into the
 /// locked-phone buffer and are merged on the next ``load()``.
@@ -80,6 +85,9 @@ final class WorldFogKeeper {
     @ObservationIgnored let atlas: WorldAtlasKeeper
     /// The weekly new corner (round 7, spec §5), sealed in the vault; Home asks ``currentCorner(home:now:)``.
     @ObservationIgnored let cornerNudge: WorldCornerNudgeKeeper
+    /// The road trip on now and the line this iPhone records while it maps (owner-approved 2026-11-10), sealed in the
+    /// vault under the buffer key.
+    @ObservationIgnored let roadTrip: RoadTripKeeper
     @ObservationIgnored private let store: FogCellStore
     /// The cells only driven past (owner 2026-11-09), beside the fog store, which still holds every lifted cell.
     @ObservationIgnored private let driven: DrivenFogStore
@@ -108,6 +116,7 @@ final class WorldFogKeeper {
                                       openLandmarks: WorldAtlasKeeper.bundledLandmarks(),
                                       openShore: WorldAtlasKeeper.bundledShore())
         self.cornerNudge = WorldCornerNudgeKeeper(vault: vault)
+        self.roadTrip = RoadTripKeeper(vault: vault)
         self.defaults = defaults
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
         self.widgetMap = WorldWidgetMapFile()
@@ -121,6 +130,8 @@ final class WorldFogKeeper {
     /// and merges the buffer. Cells lifted under a panel are therefore never thrown back to the disk copy
     /// (location keeps running under panels, W-09), and Home coming to the front decrypts nothing.
     func load() {
+        // The road trip's book is under the buffer key, so it reads with the phone locked too (never in a decoy).
+        roadTrip.load()
         guard !isDecoy, isProtectedDataAvailable() else { return }
         guard !store.isLoaded else {
             mergeWhileLoaded()
@@ -160,18 +171,20 @@ final class WorldFogKeeper {
     /// (a reading delivered while the app isn't active: background mapping, a walk with Maps in front) new
     /// cells are written at once rather than at the next 40, since iOS may end a suspended app first (W-09 B2).
     /// With `thinLine` (driving, `nf-car`) the drive's lane lifts: ``driveRadius`` around the reading, joined
-    /// to the drive's last reading.
+    /// to the drive's last reading. An accepted reading also joins a road trip's line while this iPhone maps
+    /// (``roadTrip``), written at once with `saveNow`.
     @discardableResult
     func handle(_ fix: WorldFix, saveNow: Bool = false, thinLine: Bool = false) -> Int {
         let added: Int
+        let accepted = accepts(fix)
         if thinLine {
-            let accepted = accepts(fix)
             added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point), driving: true)
             if accepted { laneFrom = fix.point }
         } else {
             laneFrom = nil
             added = lift(fix, cells: MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius), driving: false)
         }
+        if accepted { roadTrip.record(fix, saveNow: saveNow) }
         if saveNow, added > 0 { flush() }
         return added
     }
@@ -234,9 +247,10 @@ final class WorldFogKeeper {
         return decoyCells.count - before
     }
 
-    /// Writes unsaved cells (the app leaving the foreground, or a walk ending).
+    /// Writes unsaved cells and a road trip's unsaved points (the app leaving the foreground, or a walk ending).
     func flush() {
         guard !isDecoy else { return }
+        roadTrip.flush()
         do {
             try store.save()
             try driven.save()
@@ -258,17 +272,19 @@ final class WorldFogKeeper {
         isDecoy = on
         atlas.setDecoy(on)
         cornerNudge.setDecoy(on)
+        roadTrip.setDecoy(on)
         decoyCells = []
         decoyDriven = []
         visibleCells = on ? [] : store.cells
         drivenCells = on ? [] : driven.cells
     }
 
-    /// The wipe: forgets the cells and deletes every World map file and key, and the map widget's picture.
-    /// Whether it all went.
+    /// The wipe: forgets the cells and the road trips and deletes every World map file and key, and the map widget's
+    /// picture. Whether it all went.
     func clearAll() -> Bool {
         store.forget()
         driven.forget()
+        roadTrip.forget()
         decoyCells = []
         decoyDriven = []
         visibleCells = []

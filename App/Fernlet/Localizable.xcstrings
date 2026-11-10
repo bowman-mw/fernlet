@@ -81761,6 +81761,402 @@
         }
       }
     },
+    "roadTrip.catchUpNow" : {
+      "comment" : "Trip info: swaps the road and photos with another member nearby with Fernlet open",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Catch up now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponerse al día ahora"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponerse al día ahora"
+          }
+        }
+      }
+    },
+    "roadTrip.chip" : {
+      "comment" : "World Home: the chip under the status plate during a road trip; how many people are on it, you included",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip · %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en coche · %lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en carro · %lld"
+          }
+        }
+      }
+    },
+    "roadTrip.defaultName" : {
+      "comment" : "Trip info's title for a road trip given no name: 'Road trip' and the day it started, e.g. 'Nov 10'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en coche · %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en carro · %@"
+          }
+        }
+      }
+    },
+    "roadTrip.end" : {
+      "comment" : "Trip info: destructive button; ends the road trip for everyone at their next catch-up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End the road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar el viaje en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar el viaje en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.end.message" : {
+      "comment" : "Trip info: the end confirmation's message; the other members' phones end it when they next catch up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It ends for everyone at their next catch-up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminará para todos en su próxima puesta al día."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminará para todos en su próxima puesta al día."
+          }
+        }
+      }
+    },
+    "roadTrip.end.title" : {
+      "comment" : "Trip info: the confirmation before ending the road trip",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End the road trip?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Terminar el viaje en coche?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Terminar el viaje en carro?"
+          }
+        }
+      }
+    },
+    "roadTrip.info.caughtUp" : {
+      "comment" : "Trip info: when this iPhone last caught up with the others (the start, before any stop); a time, or a day and time",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last caught up %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Última puesta al día: %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Última puesta al día: %@"
+          }
+        }
+      }
+    },
+    "roadTrip.info.mapping" : {
+      "comment" : "Trip info: whose iPhone maps the road now; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mapping: %@'s iPhone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapeando: el iPhone de %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapeando: el iPhone de %@"
+          }
+        }
+      }
+    },
+    "roadTrip.info.photos" : {
+      "comment" : "Trip info: the photos taken on the road trip so far. Plural on the number",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld photo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld photos"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld foto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fotos"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld foto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld fotos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "roadTrip.leave" : {
+      "comment" : "Trip info: destructive button; this person leaves the road trip, and the map and photos so far stay",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leave the road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salir del viaje en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salir del viaje en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.leave.message" : {
+      "comment" : "Trip info: the leave confirmation's message; what was uncovered and the trip photos stay on this iPhone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The map and photos so far stay."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El mapa y las fotos que ya tienes se quedan."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El mapa y las fotos que ya tienes se quedan."
+          }
+        }
+      }
+    },
+    "roadTrip.leave.title" : {
+      "comment" : "Trip info: the confirmation before leaving the road trip",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leave the road trip?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Salir del viaje en coche?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Salir del viaje en carro?"
+          }
+        }
+      }
+    },
+    "roadTrip.mapFromHere" : {
+      "comment" : "Trip info: this iPhone takes over mapping the road",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Map from this iPhone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapear desde este iPhone"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapear desde este iPhone"
+          }
+        }
+      }
+    },
+    "roadTrip.title" : {
+      "comment" : "World Home: a road trip with friends; the chip's VoiceOver label with no other names, and Voice Control's short name for it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.with" : {
+      "comment" : "World Home, VoiceOver: the road trip chip; the other people's first names joined, e.g. 'Rae and Sam'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip with %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en coche con %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en carro con %@"
+          }
+        }
+      }
+    },
     "scan.itemName.default" : {
       "comment" : "Pre-filled name of a food or recipe read from a nutrition label. The person can edit it.",
       "extractionState" : "extracted_with_value",

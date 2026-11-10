@@ -16,7 +16,8 @@ import WorldMapStore
 /// - **What runs:** a ``WorldLocationSource`` with its flight gate and car and bike detection, and a ``WorldFogKeeper``
 ///   that is never loaded, so every lift goes into the locked-phone buffer, written under the buffer key the phone
 ///   allows after its first unlock, and merges at the store's next load. Motion is read when allowed. The car book
-///   learns nothing (it may have read nothing).
+///   learns nothing (it may have read nothing). A road trip's book is read (the buffer key): a passenger traces no
+///   drive, and the iPhone that maps keeps appending its line (``RoadTripKeeper``).
 /// - **What waits:** visits for Where you've been, bike-ride logging, flights and the passport, which all need the
 ///   store (the motion history's catch-up still finds the rides; the airport gate re-hands a missed find).
 /// - **Hand-over:** the store's own location source is this one (``handOver()``), wired to everything once the phone
@@ -62,6 +63,11 @@ final class WorldLockedMappingHolder {
         started.rides.usesMotion = started.rides.motion.permission == .allowed
         started.cars.isDecoy = true
         started.flights.attach(vault: mapVault)
+        // A road trip's book and line are under the buffer key: a passenger traces no drive, and the iPhone that maps
+        // keeps its line through the fog keeper (owner-approved 2026-11-10).
+        keeper.roadTrip.load()
+        keeper.roadTrip.onPassengerChanged = { [weak started] passenger in started?.setRoadTripPassenger(passenger) }
+        started.setRoadTripPassenger(keeper.roadTrip.isPassenger)
         fog = keeper
         source = started
         FernletAuditLog.log("worldMap.lockedLaunch.started")
@@ -69,9 +75,11 @@ final class WorldLockedMappingHolder {
     }
 
     /// Hands the running source to the store, which wires it to everything and lets its car book learn again; the
-    /// buffering fog keeper goes (what it buffered merges at the store's next load). Nil when none was started.
+    /// buffering fog keeper goes (what it buffered merges at the store's next load), after writing a road trip's
+    /// unsaved points for the store's keeper to read. Nil when none was started.
     func handOver() -> WorldLocationSource? {
         guard let handed = source else { return nil }
+        fog?.roadTrip.flush()
         source = nil
         fog = nil
         FernletAuditLog.log("worldMap.lockedLaunch.handedOver")
