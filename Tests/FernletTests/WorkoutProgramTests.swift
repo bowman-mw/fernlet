@@ -195,8 +195,10 @@ struct WorkoutProgramTests {
     }
 
     @Test func granularEquipmentMapsToEngineCapabilities() {
-        // 22 items across 5 categories.
-        #expect(GymEquipment.allCases.count == 22)
+        // 36 items across 5 categories: the 22 older pieces, then each machine and the three small
+        // pieces that gained a row of their own (fix e5).
+        #expect(GymEquipment.allCases.count == 36)
+        #expect(GymEquipment.originalPieces.count == 22 && GymEquipment.itemizedMachines.count == 11)
         for category in EquipmentCategory.allCases {
             #expect(GymEquipment.allCases.contains { $0.category == category })
         }
@@ -205,6 +207,9 @@ struct WorkoutProgramTests {
         #expect(dumbbellOnly.has(.dumbbell))
         #expect(dumbbellOnly.has(.bodyweight))
         #expect(dumbbellOnly.has(.barbell) == false)
+        // Only the barbell itself is a barbell; plates, a rack and a Smith machine are not (fix e5).
+        #expect(WorkoutLocation(name: "Rack", ownedEquipment: [.weightPlates, .squatRack, .smithMachine]).has(.barbell) == false)
+        #expect(WorkoutLocation(name: "Bar", ownedEquipment: [.barbell]).has(.barbell))
         // Full gym covers every coarse capability the catalog can require.
         let fullCaps = WorkoutLocation.fullGym.capabilities
         for capability in Equipment.allCases {

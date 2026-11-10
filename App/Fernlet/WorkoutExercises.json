@@ -14,7 +14,8 @@
     "plane": "horizontal",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
+      "weightBench",
+      "weightPlates"
     ],
     "areaLoads": {
       "shoulder": "hard",
@@ -44,7 +45,8 @@
     "plane": "horizontal",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
+      "weightBench",
+      "weightPlates"
     ],
     "areaLoads": {
       "shoulder": "hard",
@@ -72,6 +74,9 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "light",
       "shoulder": "hard",
@@ -165,6 +170,9 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 3,
+    "requiredGear": [
+      "dipBars"
+    ],
     "areaLoads": {
       "shoulder": "hard",
       "elbow": "hard",
@@ -275,7 +283,8 @@
     "inputKind": "strength",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
+      "weightBench",
+      "weightPlates"
     ],
     "areaLoads": {
       "shoulder": "light",
@@ -303,7 +312,8 @@
     "plane": "horizontal",
     "difficulty": 2,
     "requiredGear": [
-      "weightBench"
+      "weightBench",
+      "weightPlates"
     ],
     "areaLoads": {
       "shoulder": "hard",
@@ -426,6 +436,9 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "light",
       "shoulder": "light",
@@ -589,6 +602,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "preacherCurl"
+    ],
     "areaLoads": {
       "elbow": "light",
       "wristHand": "light"
@@ -673,7 +689,8 @@
     "inputKind": "strength",
     "difficulty": 2,
     "requiredGear": [
-      "squatRack"
+      "squatRack",
+      "weightPlates"
     ],
     "areaLoads": {
       "neck": "hard",
@@ -713,7 +730,8 @@
     "inputKind": "strength",
     "difficulty": 3,
     "requiredGear": [
-      "squatRack"
+      "squatRack",
+      "weightPlates"
     ],
     "areaLoads": {
       "neck": "hard",
@@ -788,6 +806,9 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "legPress"
+    ],
     "areaLoads": {
       "hip": "light",
       "knee": "light",
@@ -812,6 +833,9 @@
     "movementPattern": "squat",
     "inputKind": "strength",
     "difficulty": 2,
+    "requiredGear": [
+      "hackSquat"
+    ],
     "areaLoads": {
       "neck": "light",
       "shoulder": "light",
@@ -932,6 +956,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "legExtension"
+    ],
     "areaLoads": {
       "knee": "light",
       "ankleFoot": "light"
@@ -956,6 +983,9 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "shoulder": "light",
@@ -993,6 +1023,9 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "shoulder": "light",
@@ -1029,6 +1062,9 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "upperBack": "hard",
@@ -1085,6 +1121,9 @@
     "movementPattern": "hinge",
     "inputKind": "strength",
     "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "shoulder": "light",
@@ -1148,6 +1187,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "legCurl"
+    ],
     "areaLoads": {
       "knee": "light",
       "ankleFoot": "light"
@@ -1265,6 +1307,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 3,
+    "requiredGear": [
+      "abWheel"
+    ],
     "areaLoads": {
       "shoulder": "hard",
       "elbow": "light",
@@ -1372,6 +1417,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "standingCalfRaise"
+    ],
     "areaLoads": {
       "neck": "light",
       "shoulder": "light",
@@ -1399,6 +1447,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "seatedCalfRaise"
+    ],
     "areaLoads": {
       "knee": "light",
       "ankleFoot": "light"
@@ -1554,6 +1605,9 @@
     "inputKind": "strength",
     "modality": "power",
     "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "shoulder": "hard",
@@ -1592,6 +1646,9 @@
     "inputKind": "strength",
     "modality": "power",
     "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "shoulder": "hard",
@@ -1631,6 +1688,9 @@
     "plane": "vertical",
     "modality": "power",
     "difficulty": 3,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "areaLoads": {
       "neck": "hard",
       "shoulder": "hard",
@@ -1782,6 +1842,9 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 2,
+    "requiredGear": [
+      "lowBar"
+    ],
     "areaLoads": {
       "shoulder": "light",
       "elbow": "light",
@@ -3630,6 +3693,9 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 1,
+    "requiredGear": [
+      "shoulderPressMachine"
+    ],
     "areaLoads": {
       "neck": "light",
       "shoulder": "light",
@@ -3657,6 +3723,9 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 1,
+    "requiredGear": [
+      "assistedPullUpDip"
+    ],
     "variation": true,
     "areaLoads": {
       "shoulder": "light",
@@ -3681,6 +3750,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "pecDeck"
+    ],
     "areaLoads": {
       "shoulder": "light",
       "elbow": "light",
@@ -3763,6 +3835,9 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 1,
+    "requiredGear": [
+      "seatedRowMachine"
+    ],
     "areaLoads": {
       "shoulder": "light",
       "elbow": "light",
@@ -3790,6 +3865,9 @@
     "inputKind": "strength",
     "plane": "vertical",
     "difficulty": 2,
+    "requiredGear": [
+      "assistedPullUpDip"
+    ],
     "variation": true,
     "areaLoads": {
       "neck": "light",
@@ -3881,6 +3959,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "pecDeck"
+    ],
     "areaLoads": {
       "shoulder": "light",
       "elbow": "light",
@@ -3926,6 +4007,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "weightPlates"
+    ],
     "variation": true,
     "areaLoads": {
       "elbow": "hard",
@@ -5346,8 +5430,8 @@
     "inputKind": "strength",
     "plane": "horizontal",
     "difficulty": 2,
-    "alternativeEquipment": [
-      "machine"
+    "requiredGear": [
+      "weightPlates"
     ],
     "variation": true,
     "areaLoads": {
@@ -5458,6 +5542,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "hipAbductionAdduction"
+    ],
     "variation": true,
     "areaLoads": {
       "hip": "light",
@@ -5478,6 +5565,9 @@
     "movementPattern": "isolation",
     "inputKind": "strength",
     "difficulty": 1,
+    "requiredGear": [
+      "hipAbductionAdduction"
+    ],
     "variation": true,
     "areaLoads": {
       "hip": "light",

@@ -312,7 +312,8 @@ struct WorkoutWeightInventoryTests {
         let top = try object(decoded)
         #expect(top["workoutLocationWeights"] == nil, "no weights, no key: the old blob's shape")
         let locations = try #require(top["workoutLocations"] as? [[String: Any]])
-        #expect(locations.first?.keys.sorted() == ["id", "name", "ownedEquipment"])
+        // The one key added since: which equipment list the ticks were made against (fix e5).
+        #expect(locations.first?.keys.sorted() == ["equipmentListVersion", "id", "name", "ownedEquipment"])
         let fresh = try object(FernletSettings())
         #expect(!fresh.keys.contains("workoutLocationWeights"))
     }
@@ -332,7 +333,7 @@ struct WorkoutWeightInventoryTests {
         #expect(entry["barWeight"] as? Double == 45)
         #expect(entry["platePairs"] as? [Double] == [45, 45])
         let nested = try #require((top["workoutLocations"] as? [[String: Any]])?.first)
-        #expect(nested.keys.sorted() == ["id", "name", "ownedEquipment"], "the weights are not nested")
+        #expect(nested.keys.sorted() == ["equipmentListVersion", "id", "name", "ownedEquipment"], "the weights are not nested")
 
         let again = try JSONDecoder().decode(FernletSettings.self, from: JSONEncoder().encode(original))
         #expect(again.workoutLocations == original.workoutLocations)

@@ -96,7 +96,16 @@ public nonisolated enum CoachExerciseTraits {
         ("treadmill", .treadmill), (" bike ", .exerciseBike), ("rowing machine", .rowingMachine),
         ("elliptical", .elliptical), ("stair climber", .stairClimber), ("medicine ball", .medicineBall),
         ("med ball", .medicineBall), ("battle rope", .battleRopes), ("foam roll", .foamRoller),
-        ("rack pull", .squatRack),
+        ("rack pull", .squatRack), ("ab wheel", .abWheel), ("ab roller", .abWheel), ("inverted row", .lowBar),
+    ]
+
+    /// The machine a machine exercise's name asks for (the owner's fix e5: each machine has its own
+    /// row). Read only for a definition whose tool is a machine, so a "Band leg curl" asks for none.
+    static let machineWords: [(word: String, gear: GymEquipment)] = [
+        ("leg extension", .legExtension), ("leg curl", .legCurl), ("hack squat", .hackSquat),
+        ("chest press", .chestPress), ("shoulder press", .shoulderPressMachine), ("pec deck", .pecDeck),
+        ("seated row", .seatedRowMachine), ("standing calf", .standingCalfRaise), ("seated calf", .seatedCalfRaise),
+        ("hip abduction", .hipAbductionAdduction), ("hip adduction", .hipAbductionAdduction),
     ]
 
     /// The specific gear the movement cannot be done without: a weight bench for a bench exercise,
@@ -108,6 +117,10 @@ public nonisolated enum CoachExerciseTraits {
         for entry in gearWords where name.contains(entry.word) && !gear.contains(entry.gear) {
             let needsLoad = entry.word == "incline" || entry.word == "decline"
             if needsLoad && !loaded.contains(target.equipment) { continue }
+            gear.append(entry.gear)
+        }
+        guard target.equipment == .machine else { return gear }
+        for entry in machineWords where name.contains(entry.word) && !gear.contains(entry.gear) {
             gear.append(entry.gear)
         }
         return gear

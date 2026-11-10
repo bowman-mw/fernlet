@@ -549,7 +549,17 @@ adding variations fills gaps without moving the plans people already follow. The
 by ("ab roller" for the Ab wheel); an alias only adds results after the direct matches, so a lookup
 that takes the first result resolves as before.
 ``WorkoutSafetyFilter`` gates equipment on the exercise's tool or any alternative plus every piece of
-required gear (a pull-up bar, a bench). The split advances by the last logged split day
+required gear (a pull-up bar, a bench). Each exercise needs its own gear (the owner's fix e5,
+2026-11-10): every bundled machine exercise names its machine, a free barbell lift names the plates
+(and the rack where it needs one), and Dip, Inverted row and Ab wheel name ``GymEquipment/dipBars``,
+``GymEquipment/lowBar`` and ``GymEquipment/abWheel`` — so one leg press unlocks only Leg press, and
+only the barbell itself is a barbell (``GymEquipment/capability``; a Smith machine, plates or a rack
+alone no longer unlock a free barbell lift, and Smith machine squat needs only the Smith machine). A
+``WorkoutLocation`` saved before each machine had its own row carries no `equipmentListVersion` and is
+read once, as it decodes, through ``WorkoutLocation/legacyGearGrant(for:)``: a space that ticked a leg
+press or chest press keeps every machine (ticked, for its owner to correct), a ticked barbell keeps
+its plates, and the default Full gym with all 22 older pieces gets the whole list. The corrections
+that make a space safer are not granted back. The split advances by the last logged split day
 (`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.
 
 A lifting session runs in ``SessionBlock`` order — the owner's layout (2026-10-19): the warm-up
@@ -874,7 +884,8 @@ estimate — so the same history always builds the same plan.
   lift adds reps up to three past the range, then a set, then takes the jump (``LoadCap``,
   ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
   level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
-  itself now parks a newer build's equipment tokens and keys.
+  itself now parks a newer build's equipment tokens and keys, and writes `equipmentListVersion`
+  (optional and additive: a location without it is one saved before 2026-11-10).
 - **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets in front of the session's
   FIRST heavy main lift — a compound main lift on a barbell or dumbbells — when it has a suggested
   weight; when that lift can't ramp, no later lift does. A barbell ramp is the empty bar × 8, then

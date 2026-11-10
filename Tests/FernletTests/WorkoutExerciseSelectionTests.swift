@@ -85,15 +85,21 @@ struct WorkoutExerciseSelectionTests {
     }
 
     /// With nothing but bodyweight, the arm slots drop honestly instead of taking an ab wheel and
-    /// a bird dog, and the vertical pull drops instead of offering a pull-up with no bar.
+    /// a bird dog, and both pulls drop instead of offering a pull-up or an inverted row with no bar
+    /// (fix e5: an inverted row needs a low bar). That leaves Upper day two pushes, so the short
+    /// session is filled from the lifts the bare room does allow (fix s3).
     @Test func bodyweightOnlyDropsSlotsItCannotFill() {
         let upper = names(WorkoutSessions.upper, at: Self.park, experience: .intermediate)
         #expect(upper.dropped.contains("Biceps"))
         #expect(upper.dropped.contains("Triceps"))
         #expect(upper.dropped.contains("Vertical pull"))
+        #expect(upper.dropped.contains("Horizontal pull"))
         #expect(!upper.picked.contains("Ab wheel") && !upper.picked.contains("Bird dog"))
         #expect(upper.picked.contains("Push-up"))
-        #expect(upper.picked.contains("Inverted row"))
+        #expect(!upper.picked.contains("Inverted row") && !upper.picked.contains("Dip"))
+        #expect(upper.picked.count >= WorkoutProgram.minimumLifts && upper.picked.contains("Bodyweight squat"))
+        let withBar = names(WorkoutSessions.upper, at: WorkoutLocation(name: "Park bars", ownedEquipment: [.lowBar]), experience: .intermediate)
+        #expect(withBar.picked.contains("Inverted row"))
     }
 
     /// Core slots no longer all go to "Medicine ball slam": it is a power move that needs a
@@ -348,6 +354,14 @@ struct WorkoutExerciseSelectionTests {
         #expect(!WorkoutProgram.isEligible(stretch, for: WorkoutSessions.legs.slots[0]), "a stretch fills no lifting slot")
         #expect(traits("Tuck jump", [.quads], .bodyweight, .squat).modality == .power)
         #expect(traits("Assisted pull-up", [.lats], .machine, .pull).difficulty == .foundational)
+
+        // Each machine has its own row (e5): a coach's machine exercise asks for its machine, so one
+        // leg press does not unlock it; the same words on another tool ask for nothing.
+        let extension_ = traits("Single-leg leg extension", [.quads], .machine, .isolation)
+        #expect(extension_.requiredGear == [.legExtension])
+        #expect(!WorkoutSafetyFilter.hasEquipment(for: extension_, at: WorkoutLocation(name: "Room", ownedEquipment: [.legPress])))
+        #expect(traits("Band leg curl", [.hamstrings], .band, .isolation).requiredGear.isEmpty)
+        #expect(traits("Ab wheel rollout", [.abs], .bodyweight, .isolation).requiredGear == [.abWheel])
 
         let plain = traits("Hammer curl", [.biceps], .dumbbell, .isolation)
         #expect(plain.plane == nil && plain.modality == .strength && plain.difficulty == .standard && plain.requiredGear.isEmpty)

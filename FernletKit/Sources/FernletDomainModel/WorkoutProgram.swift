@@ -258,12 +258,40 @@ public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable, S
 
 /// Specific pieces of equipment the user checks off per location. Each maps down to a coarse
 /// `Equipment` capability that the planning engine / safety filter actually reasons about.
+///
+/// Each exercise needs its own gear (the owner's fix e5, 2026-11-10): the coarse capability only
+/// says which KIND of tool a space has, and an exercise that needs one particular piece names it
+/// in its catalog `requiredGear` — every machine exercise names its machine, a free barbell lift
+/// names the plates (and the rack where it needs one), and Dip, Inverted row and Ab wheel name
+/// ``dipBars``, ``lowBar`` and ``abWheel``. FROZEN tokens: a location persists them and the
+/// catalog names them. The 22 pieces before that fix are ``originalPieces``; the machines added
+/// by it are ``itemizedMachines``.
 public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiable, Sendable {
     case treadmill, exerciseBike, rowingMachine, elliptical, stairClimber
     case dumbbells, barbell, kettlebells, weightPlates, weightBench
     case cableMachine, latPulldown, legPress, smithMachine, chestPress
     case pullUpBar, squatRack, resistanceBands, medicineBall, battleRopes
     case yogaMat, foamRoller
+    // Added 2026-11-10 (e5). Appended, so `allCases` keeps the older pieces' order.
+    case legExtension, legCurl, hackSquat, standingCalfRaise, seatedCalfRaise
+    case shoulderPressMachine, seatedRowMachine, pecDeck, preacherCurl
+    case assistedPullUpDip, hipAbductionAdduction
+    case dipBars, lowBar, abWheel
+
+    /// The machines that gained a row of their own on 2026-11-10 (e5). Before that one leg press
+    /// or chest press stood for all of them (``WorkoutLocation/legacyGearGrant(for:)``).
+    public static let itemizedMachines: Set<GymEquipment> = [
+        .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise,
+        .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl,
+        .assistedPullUpDip, .hipAbductionAdduction,
+    ]
+
+    /// The three small pieces that gained a row on 2026-11-10 (e5).
+    public static let itemizedSmallPieces: Set<GymEquipment> = [.dipBars, .lowBar, .abWheel]
+
+    /// The 22 pieces a location could tick before 2026-11-10.
+    public static let originalPieces: Set<GymEquipment> =
+        Set(allCases).subtracting(itemizedMachines).subtracting(itemizedSmallPieces)
 
     public var id: String { rawValue }
 
@@ -272,7 +300,11 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .treadmill, .exerciseBike, .rowingMachine, .elliptical, .stairClimber: .cardio
         case .dumbbells, .barbell, .kettlebells, .weightPlates, .weightBench: .freeWeights
         case .cableMachine, .latPulldown, .legPress, .smithMachine, .chestPress: .machines
+        case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: .machines
+        case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: .machines
+        case .assistedPullUpDip, .hipAbductionAdduction: .machines
         case .pullUpBar, .squatRack, .resistanceBands, .medicineBall, .battleRopes: .functional
+        case .dipBars, .lowBar, .abWheel: .functional
         case .yogaMat, .foamRoller: .recovery
         }
     }
@@ -304,6 +336,29 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .battleRopes: String(localized: "gymEquipment.battleRopes", defaultValue: "Battle ropes", bundle: .module, comment: "Gym equipment: heavy battle ropes")
         case .yogaMat: String(localized: "gymEquipment.yogaMat", defaultValue: "Yoga mat", bundle: .module, comment: "Gym equipment: a yoga mat")
         case .foamRoller: String(localized: "gymEquipment.foamRoller", defaultValue: "Foam roller", bundle: .module, comment: "Gym equipment: a foam roller")
+        default: itemizedDisplayName
+        }
+    }
+
+    /// ``displayName`` for the pieces added on 2026-11-10 (e5); an older piece falls back to its
+    /// token, which ``displayName`` never asks for.
+    private var itemizedDisplayName: String {
+        switch self {
+        case .legExtension: String(localized: "gymEquipment.legExtension", defaultValue: "Leg extension", bundle: .module, comment: "Gym equipment: a leg extension machine")
+        case .legCurl: String(localized: "gymEquipment.legCurl", defaultValue: "Leg curl", bundle: .module, comment: "Gym equipment: a leg curl machine")
+        case .hackSquat: String(localized: "gymEquipment.hackSquat", defaultValue: "Hack squat", bundle: .module, comment: "Gym equipment: a hack squat machine")
+        case .standingCalfRaise: String(localized: "gymEquipment.standingCalfRaise", defaultValue: "Standing calf raise", bundle: .module, comment: "Gym equipment: a standing calf raise machine")
+        case .seatedCalfRaise: String(localized: "gymEquipment.seatedCalfRaise", defaultValue: "Seated calf raise", bundle: .module, comment: "Gym equipment: a seated calf raise machine")
+        case .shoulderPressMachine: String(localized: "gymEquipment.shoulderPressMachine", defaultValue: "Shoulder press machine", bundle: .module, comment: "Gym equipment: a shoulder press machine")
+        case .seatedRowMachine: String(localized: "gymEquipment.seatedRowMachine", defaultValue: "Seated row machine", bundle: .module, comment: "Gym equipment: a seated row machine")
+        case .pecDeck: String(localized: "gymEquipment.pecDeck", defaultValue: "Pec deck", bundle: .module, comment: "Gym equipment: a pec deck machine, also used facing in for the rear shoulders")
+        case .preacherCurl: String(localized: "gymEquipment.preacherCurl", defaultValue: "Preacher curl", bundle: .module, comment: "Gym equipment: a preacher curl machine")
+        case .assistedPullUpDip: String(localized: "gymEquipment.assistedPullUpDip", defaultValue: "Assisted pull-up and dip", bundle: .module, comment: "Gym equipment: a machine whose padded platform takes some body weight on pull-ups and dips")
+        case .hipAbductionAdduction: String(localized: "gymEquipment.hipAbductionAdduction", defaultValue: "Hip abduction and adduction", bundle: .module, comment: "Gym equipment: a seated machine for pushing the knees apart or squeezing them together")
+        case .dipBars: String(localized: "gymEquipment.dipBars", defaultValue: "Dip bars", bundle: .module, comment: "Gym equipment: parallel bars for dips")
+        case .lowBar: String(localized: "gymEquipment.lowBar", defaultValue: "Low bar for rows", bundle: .module, comment: "Gym equipment: a fixed bar at about waist height to hang under for inverted rows")
+        case .abWheel: String(localized: "gymEquipment.abWheel", defaultValue: "Ab wheel", bundle: .module, comment: "Gym equipment: an ab roller wheel")
+        default: rawValue
         }
     }
 
@@ -332,21 +387,37 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .battleRopes: "waveform.path"
         case .yogaMat: "figure.yoga"
         case .foamRoller: "capsule.fill"
+        case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: "figure.strengthtraining.traditional"
+        case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: "figure.strengthtraining.traditional"
+        case .assistedPullUpDip, .hipAbductionAdduction: "figure.strengthtraining.traditional"
+        case .dipBars: "pause"
+        case .lowBar: "minus"
+        case .abWheel: "circle.circle"
         }
     }
 
     /// The coarse capability this unlocks for the planning engine.
+    ///
+    /// Only the barbell itself is a barbell (e5): plates, a rack or a Smith machine alone used to
+    /// unlock every free barbell lift. A Smith machine is a machine, as is each itemized machine —
+    /// and since every bundled machine exercise names its own machine in `requiredGear`, owning one
+    /// machine unlocks only that machine's exercises. Plates, a rack and the small pieces are no
+    /// tool by themselves: they count only where an exercise names them.
     public var capability: Equipment {
         switch self {
         case .treadmill, .exerciseBike, .rowingMachine, .elliptical, .stairClimber, .battleRopes: .cardio
         case .dumbbells: .dumbbell
-        case .barbell, .weightPlates, .squatRack, .smithMachine: .barbell
+        case .barbell: .barbell
         case .kettlebells: .kettlebell
         case .weightBench: .bench
         case .cableMachine, .latPulldown: .cable
-        case .legPress, .chestPress: .machine
+        case .legPress, .chestPress, .smithMachine: .machine
+        case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: .machine
+        case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: .machine
+        case .assistedPullUpDip, .hipAbductionAdduction: .machine
         case .resistanceBands: .band
         case .pullUpBar, .medicineBall, .yogaMat, .foamRoller: .bodyweight
+        case .weightPlates, .squatRack, .dipBars, .lowBar, .abWheel: .bodyweight
         }
     }
 }
@@ -384,6 +455,11 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
         WorkoutLocation(name: name, ownedEquipment: equipment)
     }
 
+    /// The presets, and what each ticks on the machine checklist (fix e5): Full gym ticks every
+    /// piece; Hotel gym only its cable machine; Apartment gym its cable machine and leg press — and
+    /// so no longer a calf-raise machine; Home setup none. Only Full gym ticks the dip bars, the low
+    /// bar and the ab wheel. A preset names what such a place reliably has: a piece it leaves
+    /// unticked is one tap for its owner, while a piece it ticked wrongly plans lifts they cannot do.
     public static let all: [LocationTemplate] = [
         LocationTemplate(id: "full-gym", name: "Full gym", subtitle: "Commercial or studio",
                          systemImage: "dumbbell.fill", equipment: Set(GymEquipment.allCases)),
@@ -410,10 +486,20 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
 /// back — so a re-save here no longer drops a newer device's equipment or fields. The location's
 /// ``weights`` are NOT part of this encoding: ``FernletSettings`` carries them at its top level
 /// (`workoutLocationWeights`), because builds before this one drop unknown nested keys on a re-save.
+///
+/// Each machine has its own row since 2026-11-10 (e5), and ``equipmentListVersion`` says whether a
+/// saved location was ticked against that list. One saved before it is read once through
+/// ``legacyGearGrant(for:)`` as it decodes, so a space that said it had machines keeps the exercises
+/// its owner has been doing, with those machines shown ticked for the owner to correct.
 public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     public var id: UUID
     public var name: String
     public var ownedEquipment: Set<GymEquipment>
+    /// Which equipment list ``ownedEquipment`` was ticked against: ``itemizedListVersion`` (2) once
+    /// each machine has its own row; a location saved before that carries no such key and is
+    /// migrated as it decodes. Optional and additive on the wire (`equipmentListVersion`); a newer
+    /// build's higher number is kept and written back.
+    public var equipmentListVersion = WorkoutLocation.itemizedListVersion
     /// Equipment a newer build ticked that this one does not know, kept and written back under
     /// `unknownOwnedEquipmentTokens` (deduplicated, bounded). Never shown or toggled here.
     public var unknownEquipmentTokens: [String] = []
@@ -447,8 +533,14 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         let raws = Self.tokens(c, .ownedEquipment)
         let parked = Self.tokens(c, .unknownOwnedEquipmentTokens)
         let split = EnumDecodeCompat.splitRawTokens(raws + parked, as: GymEquipment.self)
-        ownedEquipment = Set(split.known)
         unknownEquipmentTokens = split.unknown
+        // A location saved before each machine had its own row carries no version: read it once
+        // through the legacy grant, so its owner keeps the machine exercises they have been doing.
+        let savedVersion = Self.listVersion(c)
+        ownedEquipment = savedVersion == nil
+            ? Set(split.known).union(Self.legacyGearGrant(for: Set(split.known)))
+            : Set(split.known)
+        equipmentListVersion = max(savedVersion ?? Self.itemizedListVersion, Self.itemizedListVersion)
         parkedUnknownKeys = try Self.parkedKeys(from: decoder)
     }
 
@@ -461,6 +553,7 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         if !unknownEquipmentTokens.isEmpty {
             try c.encode(unknownEquipmentTokens, forKey: .unknownOwnedEquipmentTokens)
         }
+        try c.encode(equipmentListVersion, forKey: .equipmentListVersion)
         guard !parkedUnknownKeys.isEmpty else { return }
         let known = Set(CodingKeys.allCases.map(\.stringValue))
         var parked = encoder.container(keyedBy: LocationParkedKey.self)
@@ -474,7 +567,20 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     /// `ownedEquipment` is written as sorted raw values (see `encode(to:)`) so output is deterministic.
     /// `CaseIterable` so the decoder can tell which keys to park; renaming a case is a wire break.
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, name, ownedEquipment, unknownOwnedEquipmentTokens
+        case id, name, ownedEquipment, unknownOwnedEquipmentTokens, equipmentListVersion
+    }
+
+    /// The saved ``equipmentListVersion``, or nil for a location saved before 2026-11-10. A key that
+    /// holds something other than a number is named in the log and read as the current list: the
+    /// location then keeps exactly what is ticked, and is never granted gear it did not name.
+    private static func listVersion(_ c: KeyedDecodingContainer<CodingKeys>) -> Int? {
+        do {
+            return try c.decodeIfPresent(Int.self, forKey: .equipmentListVersion)
+        } catch {
+            FernletAuditLog.log("workout.location.equipmentListVersion.decodeFailed",
+                                context: ["error": error.localizedDescription])
+            return itemizedListVersion
+        }
     }
 
     /// The strings of one token-array key; empty, with the failure logged, when the key holds
