@@ -656,7 +656,7 @@
     "inputKind": "strength",
     "difficulty": 1,
     "areaLoads": {
-      "neck": "hard",
+      "neck": "light",
       "shoulder": "light",
       "elbow": "light",
       "wristHand": "hard",
@@ -1066,7 +1066,7 @@
       "weightPlates"
     ],
     "areaLoads": {
-      "neck": "hard",
+      "neck": "light",
       "upperBack": "hard",
       "lowerBack": "hard",
       "hip": "hard",
@@ -2675,7 +2675,7 @@
       "kettlebell"
     ],
     "areaLoads": {
-      "neck": "hard",
+      "neck": "light",
       "shoulder": "light",
       "elbow": "light",
       "wristHand": "hard",
@@ -2716,7 +2716,7 @@
       "kettlebell"
     ],
     "areaLoads": {
-      "neck": "hard",
+      "neck": "light",
       "shoulder": "light",
       "elbow": "light",
       "wristHand": "hard",

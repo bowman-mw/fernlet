@@ -80,21 +80,40 @@ struct ExerciseAreaLoadTests {
         #expect(record.load(on: .knee) == .light && record.load(on: .neck) == nil)
     }
 
+    /// Where the owner's spot-check (2026-11-10) set a record lighter than the older rules would:
+    /// the one place the record is allowed to say less than the floor. Hip thrust is a barbell hinge,
+    /// which the spine rule reads as loading the neck; the bar sits on the hips.
+    static let ownerLighterThanTheFloor: [String: Set<BodyArea>] = ["Hip thrust": [.neck]]
+
     /// The record only adds to the older rules: whatever the muscle tags, patterns and the spine
     /// rule already count as loading an area is recorded, and their heavy end is recorded hard. So
     /// the record is the whole answer for a bundled exercise, and the owner's listing explains
-    /// every removal.
+    /// every removal. The owner's own lighter calls are listed, never silent.
     @Test func theRecordNeverSaysLessThanTheFloor() throws {
         for row in try Self.rows() {
             let record = try #require(WorkoutExerciseCatalog.areaLoads(for: row), "\(row.name)")
+            let lighter = Self.ownerLighterThanTheFloor[row.name] ?? []
             for area in BodyArea.allCases {
                 if area.isLoaded(by: row, primaryOnly: false) {
                     #expect(record.load(on: area) != nil, "\(row.name) loads the \(area.rawValue) by its tags")
                 }
-                if InjuryLimits.isHeavyLoading(row), area.isLoaded(by: row, primaryOnly: true) {
+                if InjuryLimits.isHeavyLoading(row), area.isLoaded(by: row, primaryOnly: true), !lighter.contains(area) {
                     #expect(record.load(on: area) == .hard, "\(row.name) is the heavy end for the \(area.rawValue)")
                 }
             }
+        }
+    }
+
+    /// The owner's four Neck moves from the spot-check: loaded lightly, so a Mild neck keeps them
+    /// and a Severe neck leaves them out.
+    @Test func theOwnersNeckMovesAreKeptForMildAndLeftOutForSevere() throws {
+        let moved: Set<String> = ["Farmer's carry", "Hip thrust", "Shrug", "Suitcase carry"]
+        let rows = try Self.rows().filter { moved.contains($0.name) }
+        #expect(rows.count == moved.count)
+        for row in rows {
+            #expect(WorkoutExerciseCatalog.areaLoads(for: row)?.load(on: .neck) == .light, "\(row.name)")
+            #expect(Self.mild(.neck).allows(row), "mild neck keeps \(row.name)")
+            #expect(!Self.severe(.neck).allows(row), "severe neck leaves out \(row.name)")
         }
     }
 

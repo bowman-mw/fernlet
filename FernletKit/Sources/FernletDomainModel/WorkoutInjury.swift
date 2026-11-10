@@ -241,19 +241,25 @@ public nonisolated struct InjuryLimits: Equatable, Sendable {
         }
     }
 
-    /// The mild areas `exercise` loads too hard to keep: the heavy end of an area's own work
-    /// (``isHeavyLoading(_:)`` on a lift ``eases(_:)`` would ease), or an area its reviewed record
-    /// marks ``AreaLoad/hard``. A mild area the record marks ``AreaLoad/light`` keeps the exercise.
+    /// The mild areas `exercise` loads too hard to keep. For an exercise with a reviewed record the
+    /// record is the answer: an area it marks ``AreaLoad/hard`` leaves the exercise out, and an area
+    /// it marks ``AreaLoad/light`` (or does not name) keeps it. For an exercise with no record (a
+    /// custom one) it is the older rule: the heavy end of an area's own work (``isHeavyLoading(_:)``
+    /// on a lift ``eases(_:)`` would ease).
+    ///
+    /// The record decides alone because the owner reviewed it (2026-11-10) and moved Hip thrust to
+    /// light for the neck: the bar sits on the hips, and the older spine rule, which reads any
+    /// barbell hinge as loading the neck, was wrong for it. `ExerciseAreaLoadTests` pins that the
+    /// record still says hard everywhere else the older rule does.
     public func mildAreas(loadedHardBy exercise: ExerciseTarget) -> Set<BodyArea> {
         mildAreas(loadedHardBy: exercise, loads: record(for: exercise))
     }
 
     /// ``mildAreas(loadedHardBy:)`` with the reviewed record passed in.
     public func mildAreas(loadedHardBy exercise: ExerciseTarget, loads: ExerciseAreaLoads?) -> Set<BodyArea> {
+        if let loads { return mildAreas.filter { loads.load(on: $0) == .hard } }
         let heavy = Self.isHeavyLoading(exercise)
-        return mildAreas.filter { area in
-            (heavy && area.isLoaded(by: exercise, primaryOnly: true)) || loads?.load(on: area) == .hard
-        }
+        return mildAreas.filter { heavy && $0.isLoaded(by: exercise, primaryOnly: true) }
     }
 
     /// The reviewed record the area checks read for `exercise` — not looked up at all when no area

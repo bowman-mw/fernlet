@@ -269,6 +269,13 @@ private struct NoLongerAnIssueRow: View {
             .toggleStyle(FernletFramedToggleStyle())
             .accessibilityLabel(Text("\(area.displayName): no longer an issue",
                                      comment: "Spoken and Voice Control name of the 'No longer an issue' switch for one body area; the argument is the area, e.g. Knee"))
+            // Voice Control: the drawn words first, then the name with its area, which tells two
+            // switches on screen apart ("Knee: no longer an issue").
+            .accessibilityInputLabels([
+                Text("No longer an issue", comment: "Switch under an injured body area in Workout setup: the injury has cleared"),
+                Text("\(area.displayName): no longer an issue",
+                     comment: "Spoken and Voice Control name of the 'No longer an issue' switch for one body area; the argument is the area, e.g. Knee")
+            ])
             .accessibilityIdentifier("workout.setup.injury.\(area.rawValue).noLongerAnIssue")
             if isOn {
                 Text("Fernlet goes easy on it for 2 weeks from your next workout: lighter, supported moves and no strength checks. Then it's back to normal.",
