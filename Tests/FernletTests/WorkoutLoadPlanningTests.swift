@@ -309,15 +309,17 @@ struct WorkoutLoadPlanningTests {
         state.markSetDone(now: day(0))
         #expect(state.isFinishedNaturally)
         let log = try #require(GuidedRunLoadLog.log(for: state))
-        #expect(log.text.contains("Bench press - 3 x 8 @ 110 lb (did 8 @ 100, 8 @ 100, 8 @ 110)"))
+        // w2 (2026-11-10): the working weight is the one most sets were done at — 100, not the last set's 110.
+        #expect(log.text.contains("Bench press - 3 x 8 @ 100 lb (did 8 @ 100, 8 @ 100, 8 @ 110)"))
         let result = try #require(log.results.first)
         let perSet: [Double] = [100, 100, 110]
         #expect(result.setWeights == perSet)
-        #expect(result.selectedWeight == 110 && result.actualReps == nil)
+        #expect(result.selectedWeight == 100 && result.actualReps == nil)
         #expect(result.loggedSets == perSet.map { LoggedSet(reps: 8, weight: $0) })
-        // Two sets at 100 never read as a session completed at 110, so 110 is repeated, not built on.
+        // The session reads as completed at 100, with the heavier last set as extra: the next plan
+        // builds on 100, never on a weight only one set was done at.
         let exposure = LiftExposure(date: day(0), result: result)
-        #expect((exposure.weight, exposure.lighterSets, exposure.completed) == (110, 2, false))
+        #expect((exposure.weight, exposure.lighterSets, exposure.completed) == (100, 0, true))
     }
 
     @Test func aSetDroppedInTheRunnerRepeatsTheLoadAndAnUntouchedLiftLogsAsBefore() throws {
@@ -449,7 +451,9 @@ struct WorkoutLoadPlanningTests {
             todayKey: todayKey, settings: FernletSettings(), locale: Locale(identifier: "en_US")
         )
         let bench = context.history(for: "Bench press")
-        #expect(bench.map(\.weight) == [100, 145, 125])
+        // w2 (2026-11-10): of two hand-written lines on one day the one with the most sets is the
+        // session — 3 × 8 at 135, not the single heavier set at 145.
+        #expect(bench.map(\.weight) == [100, 135, 125])
         #expect(bench.map(\.structured) == [true, false, true])
         #expect(context.calibration.lastCalibration == FernletDate.date(fromDayKey: FernletDate.dayKey(for: day(25))))
         #expect(context.defaultUnit == .lb)
@@ -507,9 +511,8 @@ struct WorkoutLoadPlanningTests {
         let perKilogram = try #require(context.recovery.proteinGramsPerKg)
         #expect(abs(perKilogram - 0.8) < 0.001)
         #expect(context.recovery.proteinUnderFloor)
-        // The food-logs switch reads as on until switched off, and nothing reads a weigh-in yet.
+        // The food-logs switch reads as on until switched off.
         #expect(context.foodAware)
-        #expect(context.bodyWeights.isEmpty)
         var off = FernletSettings()
         off.workoutFoodAware = false
         let quiet = WorkoutLoadContextBuilder.build(days: [:], today: FernletDay(date: "2026-10-20"),

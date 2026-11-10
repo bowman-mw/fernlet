@@ -3305,6 +3305,10 @@ final class FernletStore {
     func addWorkout(_ workout: Workout, date: String) {
         assert(!date.isEmpty, "workout date required")
         diary.appendWorkout(workout, date: date)
+        // w4: logging by hand the lift today's plan had turned into a strength check counts as "not now".
+        if date == todayKey {
+            WorkoutCalibrationDeferral.noteHandLogged(workout, plan: currentGuidedWorkoutPlan, in: calibrationDeferralDefaults)
+        }
         guard workout.healthKitUUID == nil else { return }
         let offer = offerWorkoutHealthAccessOnFirstUse()
         Task { [weak self] in

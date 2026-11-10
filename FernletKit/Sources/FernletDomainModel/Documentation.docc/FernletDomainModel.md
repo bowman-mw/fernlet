@@ -705,20 +705,25 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 
 The owner's spec of 2026-10-19, with round 2's trend and ladder (2026-10-20). Given a
 ``WorkoutLoadContext`` (each lift's logged sessions as ``LiftExposure``s with their sleep and
-readiness flags, recent protein and logged weigh-ins, the calibration state), `WorkoutProgram.dayPlan` runs
+readiness flags, recent protein, the calibration state, whether this is a marked deload week), `WorkoutProgram.dayPlan` runs
 its lifting picks through a load pass. Everything is derived from the history each time — no stored
 estimate — so the same history always builds the same plan.
 
 - **Estimate and range.** ``WorkoutLoadEngine`` estimates a one-rep max by Epley with the reps left in
   the tank added back (sets of 12 or fewer, three sessions in eight weeks weighted 3:2:1) and sets a
   ``WeightPrescription`` whose width follows ``EstimateConfidence``: ±10 % low, ±5 % medium, one step
-  at high, on the equipment's steps.
+  at high, on the equipment's steps. A true single — one rep with nothing left — is its own max, not
+  Epley's 3.3 % more (w6, 2026-11-10). A session's working weight is the weight most of its sets were
+  done at (`WorkoutLoadEngine.mostUsedWeight`, w2; a tie goes to the heavier): one mistyped or one
+  deliberately heavier set never becomes the next suggestion, a set done lighter still keeps the
+  session from counting as completed, and a top set before back-off sets reads at the back-off weight.
+  Of several hand-written lines of one lift on one day, the one with the most sets is the session.
 - **Next session.** Completed → one more rep, or at the top of the range a fixed step heavier and back
   to the bottom ("add weight now"; G4: one equipment step on an upper-body lift, one or two on a
   lower-body one, landing on the location's own weights) — as often as the lift's training age allows
   (G3, ``TrainingTier``: after every successful session in the first six months, after two in a row
   from six months to two years (`LoadChange.confirming`), once per four-week block past that
-  (`LoadChange.blockHold`)). The training age is Workout setup's "How long have you lifted
+  (`LoadChange.blockHold`, whose note says the day the block is up — ``LiftPlan/holdUntil``, w8)). The training age is Workout setup's "How long have you lifted
   regularly?" — the existing ``ExperienceLevel``, nothing new stored — raised per lift by how long that
   lift has been logged (``WorkoutLoadContext/trainingAge(for:)``); "under 6 months" keeps the trend's
   age inferred. Tough or a miss → repeat; a second miss in a row on days with no sleep or
@@ -751,7 +756,24 @@ estimate — so the same history always builds the same plan.
   goal-appropriate options. A dip gets a deload instead: half the sets at the kept load, once. The old
   helper-muscle support step is gone; the old ladder's tokens resolve to the nearest new step
   (``PlateauStage/resolve(token:parkedToken:)``). The session note gives at most two context lines and
-  always a plain training option.
+  always a plain training option, and names every lift the trend changed today: the first with its
+  story, a second with what changes on it, the rest as a count (w9, 2026-11-10).
+- **Assisted machines (w3, 2026-11-10).** On an assisted pull-up or assisted dip the number is help.
+  ``WorkoutAssistedLifts`` is the one list (frozen catalogue names, held to the catalogue by
+  `WorkoutAssistedLiftTests`); its answer travels as a flag (``LiftExposure/assisted``,
+  ``LiftPlan/assisted``). For such a lift a good session takes one step of help away and misses give
+  one back (two after a third miss or a long break), with no light-load guard; the least help the
+  machine gives is the cap (``LoadCap/leastHelp(bottom:)``); the notes say "less help" and "more
+  help"; the engine keeps no one-rep-max estimate (so no strength check, heavier block or warm-up
+  ramp); and the trend scores body weight less the help
+  (``WorkoutAssistedLifts/effectiveLoad(help:unit:bodyWeightKg:)``), so less help reads as stronger.
+- **A marked deload week (w5, 2026-11-10).** When the person has marked this week as a deload on the
+  Bodybuilding calendar (``WorkoutLoadContext/deloadWeek``, read by the app only while Bodybuilding is
+  the goal), every lift repeats last time's weight and reps at about half the sets
+  (`WorkoutLoadEngine.deloadWeekSets`, `LoadChange.deloadWeek`), nothing steps up, no plateau response
+  or strength check runs, and each lift with a history is flagged an easier session, so the week
+  never anchors the next one or reads as the trend. ``BodybuildingDeloadRule`` counts only lifting
+  sessions toward a hard week (``BodybuildingDeloadRule/isLifting(_:)``).
 - **What each goal hears (G7, 2026-10-20).** ``PlateauTracking``: wellness, mental health, recovery
   and exploring get no plateau notes and no monthly strength test — they track minutes and sessions;
   weight management hears only a quiet "strength held" check
@@ -764,11 +786,10 @@ estimate — so the same history always builds the same plan.
   progress, and missing logs say nothing. Protein (``RecoverySummary``) is read against a fixed floor
   of about 1.2 g per kg a day, allowing for self-logged intake running about a fifth low, only with
   meals on five or more days in each of the last two weeks, beside a stall, a dip or a slowing, never
-  to weight management, with a doctor caveat for older lifters and kidney concerns. Logged weigh-ins
-  (``WorkoutBodyWeightTrend``: at least 0.5 % a week down over two to four weeks, 1.645 standard
-  errors clear of flat, on three weigh-ins in a row — 3 % of steady weights called falling over eight
-  weeks in its simulation) explain a Size lifter's stall, and beside weight management's strength-held
-  check bring a gentle check-in. Before a long, high-volume session the runner may ask one optional
+  to weight management, with a doctor caveat for older lifters and kidney concerns. Body weight is
+  not read: the planner keeps no weigh-in log, and the body-weight trend that once claimed to feed the
+  notes (G13) was never given a weigh-in and was removed (w10, 2026-11-10; ``BodyWeightSample`` stays
+  for the Bodybuilding calendar). Before a long, high-volume session the runner may ask one optional
   "Eaten in the last few hours?" (``WorkoutFuelCheck``); a "no" holds a shortfall in the later sets
   rather than counting it (`LoadChange.heldUnfueled`, ``ExerciseResult/unfueled``) and the trend
   scores the top set alone.
@@ -786,18 +807,29 @@ estimate — so the same history always builds the same plan.
   weeks for people without a coach plan, a one-set strength check when the estimate is already
   trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max. On a
   day whose time budget can't hold it (under 30 minutes, or the block with the check's rests over the
-  budget), the check waits for a roomier day and the note says so (N3).
+  budget), the check waits for a roomier day and the note says so (N3). A check can be put off (w4,
+  2026-11-10): ``CalibrationSettings/askAgainFrom`` — the app's device-local "Not now", written by the
+  runner's button, a run finished with its test skipped, or the due lift logged by hand — keeps
+  `WorkoutCalibration.isDue` false until that day, and no check is ever planned within
+  `WorkoutCalibration.minimumGapDays` (7) of the last. Every step of a planned check carries the
+  lift's usual working sets (``LoadGuidance/usual``), which "Not now" in the runner falls back to, so
+  the lift is still trained that day.
 - **At the heaviest weight (N7).** While a lift sits at the heaviest load its location has, the plan
   offers a harder variation — the same work one difficulty step up, a squat may step to a split
   squat (``LoadGuidance/harderVariation``) — as the plan editor's first swap; more reps, then a set,
-  stays the plan. The guided runner's lighter and heavier buttons step through the loads the location
+  stays the plan. The set is one set (w7, 2026-11-10): the session after it the lift has topped out
+  (`LoadChange.toppedOut`) and the note names the next harder variation instead of "one more set"
+  again — or says plainly that there is none — and after that it holds with nothing more said
+  (`LoadChange.heldAtTop`). A bodyweight lift at the top of its range does the same. The guided runner's lighter and heavier buttons step through the loads the location
   owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6): those around the
   suggestion, or for a lift with no history the lightest it owns, so a first-time lift starts at the
   empty bar or the lightest dumbbell and opens upward (w1, 2026-11-10).
 - **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
   plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
   the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
-  load it can make (``LoadLadder``). The light-load guard holds with or without them: when the next
+  load it can make (``LoadLadder``). Last time's weight from another space is placed on the nearest
+  load, but never up past the guard: it rounds down instead (30 lb onto 10, 20 and 35 is 20; w6,
+  `WorkoutLoadEngine.placed`). The light-load guard holds with or without them: when the next
   load is more than `WorkoutLoadEngine.lightLoadGuardRatio` (10 %) heavier, or there is none, the
   lift adds reps up to three past the range, then a set, then takes the jump (``LoadCap``,
   ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
@@ -885,7 +917,7 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutStrengthFocus``
 - ``PlateauTracking``
 - ``WorkoutFuelCheck``
-- ``WorkoutBodyWeightTrend``
+- ``WorkoutAssistedLifts``
 - ``BodyWeightSample``
 - ``BarbellPlateSet``
 - ``PlateLoadout``

@@ -10,7 +10,8 @@ import FernletFoundation
 ///   the Edit sheet) — first-class;
 /// - a hand-logged row's other lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb") — what the
 ///   person wrote is what they did, so it counts as completed. Several lines of one lift on one day
-///   keep the heaviest, and a lift the row's own structured record covers is read from the record.
+///   keep the one with the most sets (w2: the weight most sets were done at; a tie keeps the heavier),
+///   and a lift the row's own structured record covers is read from the record.
 ///
 /// A guided row WITHOUT results is skipped: it records the plan that was suggested, not what was
 /// lifted (every guided log before load tracking, and the "Mark done" path), so reading it would make
@@ -22,8 +23,10 @@ import FernletFoundation
 /// travel day (World-Airports-Spec §13.4: `travelDays` is day keys only, the composition root's per-day
 /// yes/no from `FernletStore+WorldTravelDay`; no flight, airport, time or place ever reaches the planner).
 /// Protein over the last two weeks is context for the trend story when Workout setup's food-logs
-/// switch is on (G11, G13); the newest calibration test dates the next one; the warm-up-sets setting
-/// and the lifter's level say whether heavy lifts get warm-up sets. Pure over its inputs.
+/// switch is on (G11); the newest calibration test dates the next one, and a "Not now" the caller
+/// passes in puts it off (w4, `WorkoutCalibrationDeferral`); the warm-up-sets setting and the lifter's
+/// level say whether heavy lifts get warm-up sets; and a week the person marked as a deload on the
+/// Bodybuilding calendar makes today's plan a deload (w5). Pure over its inputs.
 enum WorkoutLoadContextBuilder {
     /// How far back sessions are read (the plateau's lookback).
     static let lookbackDays = WorkoutPlateau.lookbackDays
@@ -38,9 +41,13 @@ enum WorkoutLoadContextBuilder {
     /// The context for today. `body` is the body profile in effect on this device (the typed one with
     /// this device's Health import laid over it, `effectiveUserProfile`); nil reads the synced one.
     /// `travelDays` are the travel days' day keys: a session on one is flagged, and forgiven (§13.4).
+    /// `strengthCheckAskAgainFrom` is the moment a put-off strength check may be offered again
+    /// (`WorkoutCalibrationDeferral.askAgainFrom`, w4); it is read as a day, so on that day the
+    /// check is back.
     static func build(
         days: [String: FernletDay], today: FernletDay, todayKey: String, settings: FernletSettings,
-        body: UserNutritionProfile? = nil, locale: Locale = .current, travelDays: Set<String> = []
+        body: UserNutritionProfile? = nil, locale: Locale = .current, travelDays: Set<String> = [],
+        strengthCheckAskAgainFrom: Date? = nil
     ) -> WorkoutLoadContext {
         let unit = defaultUnit(for: locale)
         let profile = body ?? settings.userProfile
@@ -63,7 +70,10 @@ enum WorkoutLoadContextBuilder {
         return WorkoutLoadContext(
             exposures: sessions.byLift, today: todayDate, defaultUnit: unit,
             recovery: recovery(window, todayDate: todayDate, bodyKilograms: profile.weightKilograms),
-            calibration: CalibrationSettings(hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration),
+            calibration: CalibrationSettings(
+                hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration,
+                askAgainFrom: strengthCheckAskAgainFrom.map { Calendar.current.startOfDay(for: $0) }
+            ),
             warmUpSets: WorkoutWarmUpSets.isEnabled(
                 preference: settings.workoutWarmUpSets, experience: settings.workoutProfile.experience
             ),
@@ -72,11 +82,18 @@ enum WorkoutLoadContextBuilder {
             liftWeeks: liftWeeks(merged, todayDate: todayDate),
             focus: settings.workoutStrengthFocus,
             foodAware: settings.workoutUsesFoodLogs,
-            // G13 reads logged weigh-ins only; Fernlet keeps no body-weight log yet (the profile holds
-            // one current weight, and Health's is read as the latest only), so the trend stays silent.
-            bodyWeights: [],
-            address: address
+            address: address,
+            deloadWeek: isDeloadWeek(todayKey: todayKey, settings: settings)
         )
+    }
+
+    /// Whether `todayKey` falls in a week the person marked as a deload (w5): the Bodybuilding
+    /// calendar's marks, read only while Bodybuilding is the goal — the only time the calendar, and so
+    /// the way to unmark a week, is on screen.
+    static func isDeloadWeek(todayKey: String, settings: FernletSettings, calendar: Calendar = BodybuildingWeeks.calendar()) -> Bool {
+        guard settings.selectedGoal == .bodybuilding,
+              let week = BodybuildingWeeks.weekStartKey(forDayKey: todayKey, calendar: calendar) else { return false }
+        return settings.bodybuildingCalendar.isDeload(weekStart: week)
     }
 
     /// Weeks from each lift's first logged session, within ``trainingAgeDays``, to today, by
@@ -161,8 +178,10 @@ enum WorkoutLoadContextBuilder {
         return (byLift, lastCalibration)
     }
 
-    /// Folds one hand-logged row's lines into the day's per-lift sessions, keeping the heaviest. Lifts
-    /// in `covered` (normalized names the row's structured results already record) are skipped.
+    /// Folds one hand-logged row's lines into the day's per-lift sessions, keeping for each lift the
+    /// line with the most sets — the weight most sets were done at (w2), so a single heavier line never
+    /// becomes the day's session — and on a tie the heavier. Lifts in `covered` (normalized names the
+    /// row's structured results already record) are skipped.
     static func foldHandLogged(
         _ lines: [String], date: Date, excluding covered: Set<String> = [], flag: WorkoutSessionFlag? = nil,
         into sessions: inout [String: LiftExposure]
@@ -171,9 +190,17 @@ enum WorkoutLoadContextBuilder {
             guard let logged = handLoggedExposure(line, date: date, flag: flag), !covered.contains(logged.key) else {
                 continue
             }
-            if let existing = sessions[logged.key], (existing.weight ?? 0) >= (logged.exposure.weight ?? 0) { continue }
+            if let existing = sessions[logged.key], !replaces(logged.exposure, existing) { continue }
             sessions[logged.key] = logged.exposure
         }
+    }
+
+    /// Whether hand-logged line `candidate` stands for the day's session of its lift over `existing`:
+    /// more sets, or as many at a heavier weight.
+    static func replaces(_ candidate: LiftExposure, _ existing: LiftExposure) -> Bool {
+        let sets = (candidate.repsPerSet.count, existing.repsPerSet.count)
+        guard sets.0 == sets.1 else { return sets.0 > sets.1 }
+        return (candidate.weight ?? 0) > (existing.weight ?? 0)
     }
 
     /// One hand-logged line as a completed session keyed by its lift, or nil for a hold, a rep
@@ -190,7 +217,7 @@ enum WorkoutLoadContextBuilder {
         let exposure = LiftExposure(
             date: date, weight: parsed.weight, unit: parsed.weightUnit.flatMap(LoadUnit.init(rawValue:)),
             targetReps: reps, repsPerSet: Array(repeating: reps, count: min(sets, ExerciseResult.maxSets)),
-            flag: flag
+            flag: flag, assisted: WorkoutAssistedLifts.contains(parsed.name)
         )
         return (key, exposure)
     }

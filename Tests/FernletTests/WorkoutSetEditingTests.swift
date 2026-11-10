@@ -465,3 +465,47 @@ struct WorkoutSetEditingTests {
         #expect(!encoded.contains("exerciseResults") && !encoded.contains("setWeights"))
     }
 }
+
+// MARK: - w6 (W11) a unit change converts the stored range
+
+extension WorkoutSetEditingTests {
+
+    /// 100 lb in a 95–110 lb range, corrected to 45 kg in the Edit sheet: the range stayed in pounds,
+    /// so 45 read as far under it — a lighter override, dropped from the trend.
+    @Test func changingTheUnitConvertsTheStoredRange() throws {
+        let workout = guidedWorkout(guidedBench())
+        let saved = try edited(workout) { draft in
+            draft.unit = .kg
+            draft.rows = rows([(8, "45"), (8, "45"), (8, "45")])
+        }
+        let result = try #require(saved.exerciseResults?.first)
+        #expect((result.unit, result.selectedWeight) == (.kg, 45))
+        let low = try #require(result.rangeLow)
+        let high = try #require(result.rangeHigh)
+        let suggested = try #require(result.suggestedWeight)
+        #expect(abs(low - 95 / LoadUnit.poundsPerKilogram) < 0.001)
+        #expect(abs(high - 110 / LoadUnit.poundsPerKilogram) < 0.001)
+        #expect(abs(suggested - 100 / LoadUnit.poundsPerKilogram) < 0.001)
+        let exposure = LiftExposure(date: day(20), result: result)
+        #expect(exposure.overrideDirection == nil, "45 kg is inside what was 95–110 lb")
+        #expect(WorkoutTrend.isEvidence(exposure))
+        #expect(result.loggedLine == "Bench press - 3 x 8 @ 45 kg")
+        // The same unit changes nothing, and an unloaded record has no range to convert.
+        var same = guidedBench()
+        same.record([LoggedSet(reps: 8, weight: 105), LoggedSet(reps: 8, weight: 105), LoggedSet(reps: 8, weight: 105)], unit: .lb)
+        #expect((same.rangeLow, same.rangeHigh, same.suggestedWeight) == (95, 110, 100))
+        // The next plan reads last time in kilograms, inside its range.
+        let next = nextBench(after: [saved])
+        #expect(next.unit == .kg)
+        #expect(next.previousWeight == 45)
+    }
+
+    /// w2: of several hand-written lines of one lift on one day, the one with the most sets is the
+    /// session — a single heavier line no longer becomes next time's weight.
+    @Test func severalHandWrittenLinesKeepTheOneWithTheMostSets() {
+        let plan = nextBench(after: [handWorkout("Bench press 3x8 @ 100 lb\nBench press 1x8 @ 300 lb")])
+        #expect(plan.previousWeight == 100)
+        let tie = nextBench(after: [handWorkout("Bench press 3x8 @ 100 lb\nBench press 3x8 @ 110 lb")])
+        #expect(tie.previousWeight == 110, "a tie keeps the heavier")
+    }
+}

@@ -206,8 +206,8 @@ public nonisolated enum WorkoutPlateau {
         }
         let overrides = history.suffix(overrideSessions).filter { $0.overrideDirection != nil }.count
         guard overrides < overridesThatExplain else { return nil }
-        let points = WorkoutTrend.points(from: history, unit: unit)
         let profile = profile ?? TrendProfile()
+        let points = WorkoutTrend.points(from: history, unit: unit, bodyWeightKg: profile.traits.bodyWeightKg)
         let reading = WorkoutTrend.reading(of: points, profile: profile, levelKg: levelKg)
         let onset = onsetIndex(points, profile: profile, levelKg: levelKg)
         let weeks = weeksSinceBest(points, today: today)
@@ -261,8 +261,8 @@ public nonisolated enum WorkoutPlateau {
         guard history.suffix(overrideSessions).filter({ $0.overrideDirection != nil }).count < overridesThatExplain else {
             return nil
         }
-        let points = WorkoutTrend.points(from: history, unit: unit)
         let profile = profile ?? TrendProfile()
+        let points = WorkoutTrend.points(from: history, unit: unit, bodyWeightKg: profile.traits.bodyWeightKg)
         guard WorkoutTrend.hasEased(points, profile: profile) else { return nil }
         let reading = WorkoutTrend.reading(of: points, profile: profile)
         return PlateauStatus(state: .eased, weeksHeld: weeksSinceBest(points, today: today), reading: reading)

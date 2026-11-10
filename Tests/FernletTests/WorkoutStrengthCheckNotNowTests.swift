@@ -155,3 +155,123 @@ struct WorkoutStrengthCheckNotNowTests {
                 "counted from the run's own finish, not from when it was logged")
     }
 }
+
+// MARK: - w4, the engine half: the lift falls back to its usual sets, and a hand log counts
+
+extension WorkoutStrengthCheckNotNowTests {
+
+    /// A check step carrying the lift's usual working sets, as the planner now writes it.
+    func check(_ calibration: String) -> GuidedWorkoutRunState.Exercise {
+        var checked = step(calibration: calibration)
+        checked.tracking?.usual = GuidedWorkoutRunState.Tracking.UsualSets(
+            sets: 3, reps: 8, rangeLow: 95, rangeHigh: 110, suggested: 105, confidenceRaw: "low", restSeconds: 120)
+        return checked
+    }
+
+    @Test func notNowFallsBackToTheLiftsUsualWorkingSets() throws {
+        var state = run([check("ramp"), check("ramp"), check("test"), step("Triceps pushdown", calibration: nil, sets: 3)])
+        state.markSetDone(now: Self.t0)   // the first ramp set
+        state.putOffStrengthCheck(now: Self.t0)
+        // The lift is still trained today: its usual sets are the next step, straight after the check.
+        #expect(state.exercises.count == 5)
+        #expect(state.exerciseIndex == 3 && state.currentSet == 1 && state.isWorking)
+        let usual = try #require(state.currentExercise)
+        #expect((usual.name, usual.sets, usual.reps, usual.restSeconds) == ("Bench press", 3, "8", 120))
+        let tracking = try #require(usual.tracking)
+        #expect(tracking.calibrationRaw == nil && tracking.skipped != true && tracking.usual == nil)
+        #expect((tracking.targetReps, tracking.rangeLow, tracking.rangeHigh) == (8, 95, 110))
+        #expect((tracking.suggested, tracking.selected, tracking.confidenceRaw) == (105, 105, "low"))
+        #expect((tracking.unitRaw, tracking.equipmentRaw, tracking.step) == ("lb", "barbell", 5))
+        #expect(state.exercises[4].name == "Triceps pushdown")
+        #expect(state.exercises.map { $0.tracking?.skipped == true } == [false, true, true, false, false])
+        #expect(!state.canPutOffStrengthCheck && state.strengthCheckWasSkipped, "the check itself still went untested")
+
+        // Finished, the log shows the lift done — not skipped — and the test never becomes a result.
+        for _ in 0..<12 where !state.isDone {
+            state.markSetDone(now: Self.t0)
+            state.skipRest(now: Self.t0)
+        }
+        #expect(state.isFinishedNaturally)
+        let log = try #require(GuidedRunLoadLog.log(for: state))
+        #expect(!log.text.contains("Bench press - skipped"))
+        #expect(log.text.contains("Bench press - 3 x 8 @ 105 lb"))
+        #expect(log.results.filter { $0.name == "Bench press" }.map(\.calibration) == [.ramp, nil])
+        let worked = try #require(log.results.first { $0.name == "Bench press" && $0.calibration == nil })
+        #expect((worked.prescribedSets, worked.targetReps, worked.selectedWeight) == (3, 8, 105))
+    }
+
+    @Test func aCheckWithNothingAfterItStillGetsItsUsualSets() throws {
+        var state = run([check("ramp"), check("attempt"), check("attempt"), check("attempt")])
+        state.putOffStrengthCheck(now: Self.t0)
+        #expect(!state.isDone, "the usual sets follow, so the run goes on")
+        #expect(state.exerciseIndex == 4)
+        #expect(state.currentExercise?.tracking?.calibrationRaw == nil && state.currentExercise?.sets == 3)
+        // A run saved before checks carried their usual sets decodes, and moves on as it did.
+        let old = run([step(calibration: "test"), step("Triceps pushdown", calibration: nil, sets: 3)])
+        var decoded = try JSONDecoder().decode(GuidedWorkoutRunState.self, from: JSONEncoder().encode(old))
+        #expect(decoded.exercises.first?.tracking?.usual == nil)
+        decoded.putOffStrengthCheck(now: Self.t0)
+        #expect(decoded.exercises.count == 2 && decoded.currentExercise?.name == "Triceps pushdown")
+    }
+
+    @Test func thePlannersCheckCarriesTheUsualSetsIntoTheRun() throws {
+        let weight = WeightPrescription(low: 95, high: 110, suggested: 105, step: 5, unit: .lb, confidence: .low)
+        var guidance = LoadGuidance(targetReps: 5, prescription: WeightPrescription(low: 110, high: 110, suggested: 110, step: 5, unit: .lb, confidence: .low),
+                                    equipment: .barbell, unit: .lb, calibration: .test)
+        guidance.usual = LoadGuidance.UsualSets(sets: 3, reps: 8, prescription: weight, restSeconds: 120)
+        let test = PrescribedExercise(name: "Bench press", sets: 1, reps: "5", role: .main, fromCatalog: true, guidance: guidance)
+        let tracking = try #require(GuidedRunLoadLog.tracking(for: test))
+        #expect(tracking.usual == GuidedWorkoutRunState.Tracking.UsualSets(
+            sets: 3, reps: 8, rangeLow: 95, rangeHigh: 110, suggested: 105, confidenceRaw: "low", restSeconds: 120))
+        var plain = guidance
+        plain.usual = nil
+        let untouched = PrescribedExercise(name: "Bench press", sets: 1, reps: "5", role: .main, fromCatalog: true, guidance: plain)
+        #expect(try #require(GuidedRunLoadLog.tracking(for: untouched)).usual == nil)
+    }
+
+    // MARK: Logging the due lift by hand
+
+    func plan(checking lift: String) -> WorkoutProgram.DayPlan {
+        let weight = WeightPrescription(low: 110, high: 110, suggested: 110, step: 5, unit: .lb, confidence: .medium)
+        let test = PrescribedExercise(
+            name: lift, sets: 1, reps: "5", role: .main, fromCatalog: true,
+            guidance: LoadGuidance(targetReps: 5, prescription: weight, equipment: .barbell, unit: .lb, calibration: .test))
+        let curl = PrescribedExercise(name: "Curl", sets: 3, reps: "12", role: .accessory, fromCatalog: true)
+        let session = WorkoutProgram.SessionSuggestion(
+            title: "Push", timeLabel: "", kind: .strength, exercises: [test, curl],
+            suggestion: WorkoutSuggestion(name: "Push", exercises: "", notes: ""))
+        return WorkoutProgram.DayPlan(splitName: "Test", dayTitle: "Day", sessions: [session], droppedSlots: [], locationName: "Test")
+    }
+
+    func hand(_ text: String, guided: Bool? = nil) -> Workout {
+        Workout(name: "Push", type: .upper, exercises: text, rpe: nil, notes: "", duration: nil,
+                loggedFromGuidedSession: guided, intensity: .moderate)
+    }
+
+    @Test func loggingTheDueLiftByHandCountsAsNotNow() throws {
+        let defaults = try defaults()
+        let plan = plan(checking: "Bench press")
+        #expect(WorkoutCalibrationDeferral.strengthCheckLifts(in: plan) == ["bench press"])
+        // Another lift, a guided row, or no plan at all changes nothing.
+        #expect(!WorkoutCalibrationDeferral.noteHandLogged(hand("Curl 3x12 @ 25 lb"), plan: plan, at: Self.t0, in: defaults))
+        #expect(!WorkoutCalibrationDeferral.noteHandLogged(hand("Bench press 3x8 @ 135 lb", guided: true), plan: plan, at: Self.t0, in: defaults))
+        #expect(!WorkoutCalibrationDeferral.noteHandLogged(hand("Bench press 3x8 @ 135 lb"), plan: nil, at: Self.t0, in: defaults))
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(asOf: Self.t0, in: defaults) == nil)
+        // The lift the plan had turned into a check, logged by hand: two weeks.
+        #expect(WorkoutCalibrationDeferral.noteHandLogged(hand("  bench  PRESS 3x8 @ 135 lb\nCurl 3x12"), plan: plan, at: Self.t0, in: defaults))
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(asOf: Self.t0, in: defaults) == Self.t0.addingTimeInterval(14 * 86_400))
+        // A second hand log inside the two weeks does not push the check further off…
+        let week = Self.t0.addingTimeInterval(7 * 86_400)
+        #expect(!WorkoutCalibrationDeferral.noteHandLogged(hand("Bench press 3x8 @ 135 lb"), plan: plan, at: week, in: defaults))
+        #expect(WorkoutCalibrationDeferral.askAgainFrom(asOf: week, in: defaults) == Self.t0.addingTimeInterval(14 * 86_400))
+        // …and once it is offered again, passing it over by hand is "not now" again.
+        let later = Self.t0.addingTimeInterval(15 * 86_400)
+        #expect(WorkoutCalibrationDeferral.noteHandLogged(hand("Bench press 3x8 @ 135 lb"), plan: plan, at: later, in: defaults))
+        // Entered set by set counts the same as a written line.
+        let fresh = try self.defaults()
+        let sets = try #require(ExerciseResult.handLogged(name: "Bench press", sets: [LoggedSet(reps: 8, weight: 135)], unit: .lb))
+        var row = hand("")
+        row.exerciseResults = [sets]
+        #expect(WorkoutCalibrationDeferral.noteHandLogged(row, plan: plan, at: Self.t0, in: fresh))
+    }
+}

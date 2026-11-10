@@ -52,6 +52,9 @@ extension WorkoutProgram {
         if plan.recentered, plan.change != .recalibrated {
             return WorkoutPlannerCopy.recentered(name)
         }
+        if plan.assisted, movesHelp(plan.change) {
+            return assistedLine(name, plan: plan, weight: weight, addressing: address)
+        }
         switch plan.change {
         case .moreReps: return WorkoutPlannerCopy.moreReps(name, reps: plan.reps)
         case .moreSets: return WorkoutPlannerCopy.moreSets(name)
@@ -70,7 +73,36 @@ extension WorkoutProgram {
             return WorkoutPlannerCopy.heldAfterFlag(name, shortNight: plan.previousFlag?.sleep != nil,
                                                     travelDay: plan.previousFlag?.travelDay == true)
         case .heldUnfueled: return WorkoutPlannerCopy.heldUnfueled(name)
-        case .same, .blockHold, .firstTime: return nil
+        // w8: a long-trained lifter's block says how long it holds; once its time is up, the hold is
+        // for the second good session in a row, which is the confirming line.
+        case .blockHold:
+            return plan.holdUntil.map { WorkoutPlannerCopy.blockHold(name, until: $0) } ?? WorkoutPlannerCopy.confirming(name)
+        // Topped out (w7): the harder-variation note says it (``offerHarderVariations``). A deload
+        // week (w5) has one line for the whole session.
+        case .same, .firstTime, .toppedOut, .heldAtTop, .deloadWeek: return nil
+        }
+    }
+
+    /// The changes that move the weight — on an assisted machine, the help (w3). Every other change's
+    /// usual line already reads right there (more reps, a hold, one more set).
+    static func movesHelp(_ change: LoadChange) -> Bool {
+        switch change {
+        case .addWeight, .backToBottom, .lighter, .lighterFewerSets, .afterBreak: true
+        default: false
+        }
+    }
+
+    /// An assisted machine's line where the help moves (w3): the weight is help, so a step forward is
+    /// "less help" and a step back "more help" — never "add weight" or "lighter". Nil when there is no
+    /// number to name, which says nothing rather than the wrong way round.
+    static func assistedLine(_ name: String, plan: LiftPlan, weight: String?, addressing address: TermOfAddress) -> String? {
+        switch plan.change {
+        case .addWeight: return weight.map { WorkoutPlannerCopy.lessHelp(name, help: $0) }
+        case .backToBottom: return weight.map { WorkoutPlannerCopy.lessHelpBackToBottom(name, reps: plan.reps, help: $0) }
+        case .lighter: return weight.map { WorkoutPlannerCopy.moreHelp(name, help: $0) }
+        case .lighterFewerSets: return WorkoutPlannerCopy.moreHelpFewerSets(name)
+        case .afterBreak: return WorkoutPlannerCopy.afterBreakMoreHelp(name, addressing: address)
+        default: return nil
         }
     }
 
@@ -88,6 +120,8 @@ extension WorkoutProgram {
         case .heaviest(let top):
             let heaviest = heaviestPhrase(loadText(top, plan.unit), equipment: plan.equipment)
             return WorkoutPlannerCopy.repsFirstHeaviest(name, heaviest: heaviest, reps: plan.reps)
+        case .leastHelp(let bottom):
+            return WorkoutPlannerCopy.repsFirstLeastHelp(name, help: loadText(bottom, plan.unit), reps: plan.reps)
         }
     }
 
@@ -99,6 +133,8 @@ extension WorkoutProgram {
         case .heaviest(let top):
             let heaviest = heaviestPhrase(loadText(top, plan.unit), equipment: plan.equipment)
             return WorkoutPlannerCopy.setFirstHeaviest(name, heaviest: heaviest)
+        case .leastHelp(let bottom):
+            return WorkoutPlannerCopy.setFirstLeastHelp(name, help: loadText(bottom, plan.unit))
         }
     }
 
@@ -120,11 +156,19 @@ extension WorkoutProgram {
 
     /// Context lines a plateau story carries at most, before its plain training option.
     static let maxContextLines = 2
+    /// Lifts the trend story names at most (w9): the first with its context, one more with what today
+    /// changes on it, then a count of the rest.
+    static let maxStoryLifts = 2
 
-    /// The trend story for one lift of the session: a stalled, dipping or eased lift first, else a
-    /// slowing one, else one whose window was mostly flagged. At most ``maxContextLines`` context lines
-    /// (what the trend shows, then what happened alongside it: logged body weight, short nights or
-    /// light days, logged protein, in that order), then always a plain training option.
+    /// The trend story for the session: a stalled, dipping or eased lift first, else a slowing one,
+    /// else one whose window was mostly flagged. At most ``maxContextLines`` context lines (what the
+    /// trend shows, then what happened alongside it: short nights or light days, logged protein, in
+    /// that order), then always a plain training option.
+    ///
+    /// Every lift whose plan the trend changed today is named (w9, 2026-11-10): a second stalled or
+    /// dipping lift used to change silently. The first lift carries the story; the next gets its own
+    /// training option; any beyond ``maxStoryLifts`` are counted in one closing line ("And 1 more
+    /// changed today.").
     /// Calm by rule: steady is normal, a dip happens, a flag is said as co-occurrence, never as blame,
     /// and for a lifter of 60 or more, holding strength is said to be the progress it is (G9).
     static func plateauStory(_ loaded: [LoadedPick], inputs: SlotInputs) -> [String]? {
@@ -138,12 +182,49 @@ extension WorkoutProgram {
         let name = ExerciseHowToCatalog.displayName(for: pick.target.name)
         var context: [String] = []
         if let lead = leadLine(name, status: status) { context.append(lead) }
-        if let weight = bodyWeightLine(status, inputs: inputs) { context.append(weight) }
         if let flags = flagContextLine(status.reading) { context.append(flags) }
         if let protein = proteinLine(status, inputs: inputs) { context.append(protein) }
         let older = (inputs.load?.traits.ageYears ?? 0) >= WorkoutTrend.olderAdultYears
         let option = trainingOption(pick, name: name, status: status, loaded: loaded, goal: inputs.goal, older: older)
-        return Array(context.prefix(maxContextLines)) + [option]
+        let others = alsoChanged(lifts, besides: pick, loaded: loaded, goal: inputs.goal, older: older)
+        return Array(context.prefix(maxContextLines)) + [option] + others
+    }
+
+    /// The other lifts the trend changed today, after the story's own (w9): each one's training
+    /// option up to ``maxStoryLifts`` lifts in all, then one line counting the rest. A lift is
+    /// "changed" when today's plan differs because of its trend — a stall still on its ladder (the
+    /// retest, the heavier block, the variant) or a dip's deload. Holding steady changes nothing, so
+    /// it is not counted.
+    static func alsoChanged(
+        _ lifts: [LoadedPick], besides lead: LoadedPick, loaded: [LoadedPick], goal: GoalType, older: Bool
+    ) -> [String] {
+        let changed = lifts.filter { $0.target.name != lead.target.name && isChangedByTrend($0, loaded: loaded) }
+        let room = max(0, maxStoryLifts - 1)
+        var lines: [String] = changed.prefix(room).compactMap { pick in
+            pick.plateau.map { status in
+                let name = ExerciseHowToCatalog.displayName(for: pick.target.name)
+                // Only the story's own lift moves to the front; another on its retest gets the rest.
+                if status.state == .stalled, status.stage == .fairRetest { return WorkoutPlannerCopy.fairRetestAlso(name) }
+                return trainingOption(pick, name: name, status: status, loaded: loaded, goal: goal, older: older)
+            }
+        }
+        let more = changed.count - min(room, changed.count)
+        if more > 0 { lines.append(WorkoutPlannerCopy.moreLiftsChanged(more)) }
+        return lines
+    }
+
+    /// Whether the plateau response changed this lift's sets, reps, weight or rest today: a dip's
+    /// deload, a stall's retest or heavier block, or a variant that actually joined it (only one lift
+    /// a session gets one).
+    static func isChangedByTrend(_ pick: LoadedPick, loaded: [LoadedPick]) -> Bool {
+        guard let status = pick.plateau else { return false }
+        if status.state == .dipping { return true }
+        guard status.state == .stalled else { return false }
+        switch status.stage {
+        case .fairRetest?, .loadingChange?: return true
+        case .variant?: return loaded.contains { $0.variantOf == pick.target.name }
+        case .holdingSteady?, nil: return false
+        }
     }
 
     /// What the trend shows, as the story's first line; nil when the option line says it all.
@@ -174,20 +255,6 @@ extension WorkoutProgram {
         }
         guard reading.lightDaySessions > 0 else { return nil }
         return WorkoutPlannerCopy.lightDayContext(reading.lightDaySessions, of: window)
-    }
-
-    /// G13: what logged body weight adds, only with the food-aware switch on and the weight falling
-    /// (``WorkoutBodyWeightTrend``): beside a Size lifter's stall, that size usually holds through a
-    /// deficit; beside weight management's strength-held check, a gentle check-in. Nil otherwise —
-    /// too few weigh-ins say nothing.
-    static func bodyWeightLine(_ status: PlateauStatus, inputs: SlotInputs) -> String? {
-        guard let load = inputs.load, load.foodAware,
-              WorkoutBodyWeightTrend.isFalling(load.bodyWeights, today: load.today) else { return nil }
-        switch status.state {
-        case .stalled: return load.focus == .size ? WorkoutPlannerCopy.bodyWeightSizeContext : nil
-        case .eased: return WorkoutPlannerCopy.bodyWeightCheckIn
-        case .dipping, .slowing, .tooEarly, .progressing: return nil
-        }
     }
 
     /// G11: protein under the floor (``RecoverySummary/proteinUnderFloor``), only with the food-aware
@@ -224,7 +291,9 @@ extension WorkoutProgram {
         case .fairRetest:
             return WorkoutPlannerCopy.fairRetest(name)
         case .loadingChange:
-            guard let weight, let reps = guidance?.targetReps, guidance?.equipment != nil else {
+            // An assisted machine has no estimate to load a heavier block from: it gets the set (w3).
+            guard let weight, let reps = guidance?.targetReps, guidance?.equipment != nil,
+                  !WorkoutAssistedLifts.contains(pick.target.name) else {
                 return WorkoutPlannerCopy.extraSet(name)
             }
             return WorkoutPlannerCopy.heavierBlock(name, reps: reps, weight: weight)

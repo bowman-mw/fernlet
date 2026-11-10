@@ -348,10 +348,11 @@ struct GuidedWorkoutRunStoreTests {
         relaunched.guidedMarkSetDone()   // set 3, the last → finish → log
 
         let logged = try #require(relaunched.day.workouts.first { $0.name == "Push" && $0.loggedFromGuidedSession == true })
-        #expect(logged.exercises.contains("Bench press - 3 x 8 @ 110 lb (did 8 @ 100, 8 @ 100, 8 @ 110)"))
+        // w2 (2026-11-10): the line's weight is the one most sets were done at.
+        #expect(logged.exercises.contains("Bench press - 3 x 8 @ 100 lb (did 8 @ 100, 8 @ 100, 8 @ 110)"))
         let result = try #require(logged.exerciseResults?.first)
         let perSet: [Double] = [100, 100, 110]
-        #expect(result.setWeights == perSet && result.selectedWeight == 110)
+        #expect(result.setWeights == perSet && result.selectedWeight == 100)
         relaunched.clearGuidedRun()
     }
 
@@ -488,6 +489,69 @@ struct GuidedWorkoutRunStoreTests {
         store.guidedMarkSetDone()
         let file = try #require(GuidedWorkoutRunStateStore(directory: appGroupDirectory).read())
         #expect(file.currentSet == 3, "an in-app tap wrote a stale run over the intent's set")
+        store.clearGuidedRun()
+    }
+}
+
+// MARK: - w4, the engine half: the store's side
+
+extension GuidedWorkoutRunStoreTests {
+
+    /// A strength check whose steps carry the lift's usual working sets, as the planner writes it.
+    private func strengthCheckWithUsualSets() -> [PrescribedExercise] {
+        let usual = WeightPrescription(low: 95, high: 110, suggested: 105, step: 5, unit: .lb, confidence: .low)
+        return strengthCheck().map { step in
+            var carried = step
+            carried.guidance?.usual = LoadGuidance.UsualSets(sets: 2, reps: 8, prescription: usual, restSeconds: 90)
+            return carried
+        }
+    }
+
+    @Test func notNowTrainsTheLiftAtItsUsualSetsAndLogsThem() throws {
+        let store = makeStore()
+        store.calibrationDeferralDefaults = try deferralDefaults()
+        store.clearGuidedRun()
+        let curl = PrescribedExercise(name: "Curl", sets: 1, reps: "12", role: .accessory, fromCatalog: true)
+        let s = session("Push", strengthCheckWithUsualSets() + [curl])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        store.guidedMarkSetDone()   // the first ramp set, done
+        store.guidedPutOffStrengthCheck()
+        #expect(WorkoutCalibrationDeferral.isPutOff(in: store.calibrationDeferralDefaults))
+        let run = try #require(store.guidedRunState)
+        #expect(run.currentExercise?.name == "Bench press" && run.currentExercise?.sets == 2)
+        #expect(run.currentExercise?.tracking?.calibrationRaw == nil && run.currentExercise?.tracking?.selected == 105)
+
+        for _ in 0..<8 where store.guidedRunState?.isDone == false {
+            store.guidedMarkSetDone()
+            store.guidedSkipRest()
+        }
+        let logged = try #require(store.day.workouts.first { $0.name == "Push" })
+        #expect(!logged.exercises.contains("Bench press - skipped"), "the lift was trained, so nothing says skipped")
+        #expect(logged.exercises.contains("Bench press - 2 x 8 @ 105 lb"))
+        let results = logged.exerciseResults ?? []
+        #expect(results.contains { $0.name == "Bench press" && $0.calibration == nil && $0.prescribedSets == 2 })
+        #expect(!results.contains { $0.calibration == .test })
+        store.clearGuidedRun()
+    }
+
+    @Test func handLoggingTheLiftTodaysPlanCheckedPutsTheCheckOff() throws {
+        let store = makeStore()
+        store.calibrationDeferralDefaults = try deferralDefaults()
+        store.clearGuidedRun()
+        commitPlan(store, session("Push", strengthCheck()))
+        #expect(store.strengthCheckAskAgainFrom == nil)
+        // Something else logged by hand leaves the check where it is.
+        store.addWorkout(Workout(name: "Arms", type: .upper, exercises: "Curl 3x12 @ 25 lb", rpe: nil, notes: "",
+                                 duration: nil, intensity: .moderate))
+        #expect(store.strengthCheckAskAgainFrom == nil)
+        // The check's own lift, logged by hand: "not now", and the planner reads it.
+        let before = Date()
+        store.addWorkout(Workout(name: "Push", type: .upper, exercises: "Bench press 3x8 @ 135 lb", rpe: nil, notes: "",
+                                 duration: nil, intensity: .moderate))
+        let again = try #require(store.strengthCheckAskAgainFrom)
+        #expect(abs(again.timeIntervalSince(before) - 14 * 86_400) < 60)
+        #expect(WorkoutCalibrationDeferral.isPutOff(in: store.calibrationDeferralDefaults))
         store.clearGuidedRun()
     }
 }

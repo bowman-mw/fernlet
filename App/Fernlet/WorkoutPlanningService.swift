@@ -28,6 +28,9 @@ protocol WorkoutPlanningContext: AnyObject {
     /// The travel days of the planner's lookback, as day keys only (World-Airports-Spec §13.4): a session on
     /// one is forgiven. The composition root's per-day yes/no; never a flight, an airport, a time or a place.
     var workoutTravelDayKeys: Set<String> { get }
+    /// The moment a put-off strength check may be offered again, nil when none is put off (w4,
+    /// `WorkoutCalibrationDeferral`): the plan offers no check before that day.
+    var strengthCheckAskAgainFrom: Date? { get }
 }
 
 /// Workout split recommendation + day-plan generation + AI day-plan adjustment,
@@ -125,7 +128,8 @@ final class WorkoutPlanningService {
         )
         let load = WorkoutLoadContextBuilder.build(
             days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
-            body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys
+            body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys,
+            strengthCheckAskAgainFrom: host.strengthCheckAskAgainFrom
         )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,

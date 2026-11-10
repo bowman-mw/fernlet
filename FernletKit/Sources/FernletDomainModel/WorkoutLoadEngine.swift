@@ -67,6 +67,16 @@ public nonisolated enum LoadChange: Equatable, Sendable {
     /// Past the range by the extra reps: one more set at the same weight before the jump (or, with
     /// nothing heavier here, instead of it).
     case setFirst
+    /// The one extra set has been done and nothing more can be added here — a bodyweight lift at the
+    /// top of its range, or a lift at the heaviest load (or the least help) this place has (w7,
+    /// 2026-11-10): the extra set is kept, and the note offers the next harder variation, or says
+    /// plainly that there is none. Said once; after it the lift is ``heldAtTop``.
+    case toppedOut
+    /// Still at that top a session later: the same again, with nothing more to say.
+    case heldAtTop
+    /// A marked deload week (w5, 2026-11-10): last time's weight and reps, about half the sets, and
+    /// never a step up.
+    case deloadWeek
 }
 
 /// A rep target or range read from a prescription's reps text ("5", "8-12").
@@ -116,7 +126,8 @@ public nonisolated struct LiftPlan: Equatable, Sendable {
     public var prescription: WeightPrescription?
     public var change: LoadChange
     public var askReasonOnOverride: Bool
-    /// The weight the last regular session used, for the note ("up from 135 lb").
+    /// The weight the last regular session used, in ``unit`` (converted when that session was logged
+    /// in the other one), for the note ("up from 135 lb") and the deload's kept load.
     public var previousWeight: Double?
     public var unit: LoadUnit
     /// The range was re-centered on the lifter's own recent picks.
@@ -127,6 +138,12 @@ public nonisolated struct LiftPlan: Equatable, Sendable {
     public var equipment: Equipment? = nil
     /// The last regular session's sleep or readiness flag, for the hold note's words.
     public var previousFlag: WorkoutSessionFlag? = nil
+    /// The lift is done on an assisted machine (``WorkoutAssistedLifts``): the weight is help, so the
+    /// note says "less help" and "more help".
+    public var assisted: Bool = false
+    /// While a long-trained lifter's block holds the load (``LoadChange/blockHold``): the day the
+    /// block's time is up (w8). Nil otherwise, and once that day has come.
+    public var holdUntil: Date? = nil
 }
 
 /// The deterministic rules of load-aware progression: estimate, confidence, range, next step.
@@ -214,6 +231,26 @@ public nonisolated enum WorkoutLoadEngine {
         return String(format: "%.1f", tenths / 10)
     }
 
+    /// The weight most of a session's sets were done at — its working weight (w2, 2026-11-10). Sets
+    /// within ``weightTolerance`` of each other are one weight; on a tie the heavier of the tied
+    /// weights wins, so two sets at each of two weights reads as before (the heavier, with the lighter
+    /// pair as dropped sets). Nil for no sets. One heavier set — a top set before back-off sets, a
+    /// last set taken up a step, a mistyped 500 after two sets at 50 — never sets it. Bounded: reads
+    /// at most ``ExerciseResult/maxSets`` weights.
+    public static func mostUsedWeight(_ weights: [Double]) -> Double? {
+        let sets = weights.prefix(ExerciseResult.maxSets).filter(\.isFinite)
+        var best: (weight: Double, count: Int)?
+        for weight in sets {
+            let count = sets.filter { abs($0 - weight) <= weightTolerance }.count
+            guard let current = best else {
+                best = (weight, count)
+                continue
+            }
+            if count > current.count || (count == current.count && weight > current.weight) { best = (weight, count) }
+        }
+        return best?.weight
+    }
+
     /// Whole days from `date` to `today` (negative when `date` is later).
     static func days(from date: Date, to today: Date) -> Int {
         Int((today.timeIntervalSince(date) / 86_400).rounded(.down))
@@ -222,15 +259,22 @@ public nonisolated enum WorkoutLoadEngine {
     // MARK: Estimate
 
     /// Epley's one-rep max with reps in reserve added back, or nil outside 1…``epleyMaxReps`` reps.
+    /// A true single — one rep with nothing left — is its own max (w6, 2026-11-10): Epley at one rep
+    /// would add 3.3 % to a weight that was, by definition, the most the lifter could do. The trend
+    /// reads a single the same way (``WorkoutTrend/setEstimates(of:in:bodyWeightKg:)``).
     public static func epley(weight: Double, reps: Int, repsInReserve: Double) -> Double? {
         guard weight > 0, weight.isFinite, reps >= 1, reps <= epleyMaxReps else { return nil }
-        return weight * (1 + (Double(reps) + max(0, repsInReserve)) / 30)
+        let effortReps = Double(reps) + max(0, repsInReserve)
+        guard effortReps > 1 else { return weight }
+        return weight * (1 + effortReps / 30)
     }
 
     /// One session's estimated max in `unit`, or nil when it can't say (no weight, a ramp set, the
-    /// lighter plateau session, or a set outside Epley's range). A missed set was a set to the limit.
+    /// lighter plateau session, a set outside Epley's range, or an assisted machine, whose number is
+    /// help and no measure of a max — ``WorkoutAssistedLifts``). A missed set was a set to the limit.
     public static func estimatedMax(of exposure: LiftExposure, in unit: LoadUnit) -> Double? {
-        guard let weight = exposure.weight, exposure.calibration != .ramp, !exposure.easierSession else {
+        guard let weight = exposure.weight, exposure.calibration != .ramp, !exposure.easierSession,
+              !exposure.assisted else {
             return nil
         }
         let reserve: Double
@@ -349,11 +393,18 @@ extension WorkoutLoadEngine {
         /// How long the person has trained this lift (G3): a beginner steps after every successful
         /// session, an intermediate after two in a row, an advanced lifter once per block.
         public var tier: TrainingTier
+        /// The lift is done on an assisted machine, where the weight is help (``WorkoutAssistedLifts``):
+        /// every move is turned round. When the caller does not say, the lift's own sessions do
+        /// (``LiftExposure/assisted``), so every path that plans from history gets it right.
+        public var assisted: Bool
+        /// This is a marked deload week (w5): the plan repeats last time's weight and reps at about
+        /// half the sets and never steps up.
+        public var deloadWeek: Bool
 
         public init(
             scheme: RepScheme, baseSets: Int, exposures: [LiftExposure], equipment: Equipment?,
             isLowerBody: Bool, defaultUnit: LoadUnit, today: Date, inventory: WorkoutWeightInventory? = nil,
-            tier: TrainingTier = .beginner
+            tier: TrainingTier = .beginner, assisted: Bool? = nil, deloadWeek: Bool = false
         ) {
             self.scheme = scheme
             self.baseSets = baseSets
@@ -364,6 +415,8 @@ extension WorkoutLoadEngine {
             self.today = today
             self.inventory = inventory
             self.tier = tier
+            self.assisted = assisted ?? (exposures.last?.assisted ?? false)
+            self.deloadWeek = deloadWeek
         }
     }
 
@@ -387,9 +440,13 @@ extension WorkoutLoadEngine {
     /// The next session of one lift.
     ///
     /// With weights set at the location (``LiftInputs/inventory``), the last weight is first placed
-    /// on what the location can load and every move lands on a load it has (``LoadLadder``). With or
+    /// on what the location can load (``placed(_:on:assisted:)``: the nearest, but never a step up
+    /// past the light-load guard) and every move lands on a load it has (``LoadLadder``). With or
     /// without them, a step up that the light-load guard calls too big — or one that doesn't exist —
-    /// becomes reps first, then a set (``loadCap(from:step:lowerBody:ladder:)``).
+    /// becomes reps first, then a set (``loadCap(from:step:lowerBody:ladder:)``). On an assisted
+    /// machine the weight is help and every move is turned round (``WorkoutAssistedLifts``). In a
+    /// marked deload week the plan repeats last time at about half the sets
+    /// (``deloadWeekOutcome(_:inputs:)``, ``deloadWeekSets(_:)``).
     public static func plan(_ inputs: LiftInputs) -> LiftPlan {
         let history = inputs.exposures.filter { $0.calibration != .ramp }
         let unit = history.last(where: { $0.unit != nil })?.unit ?? inputs.defaultUnit
@@ -400,17 +457,22 @@ extension WorkoutLoadEngine {
         guard let anchor = history.last(where: { !$0.easierSession && $0.calibration == nil }) else {
             return firstPlan(inputs, estimate: estimate, step: step, ladder: ladder, unit: unit, ask: ask)
         }
-        let base = anchor.weight.map { placed(unit.converted($0, from: anchor.unit ?? unit), on: ladder) }
-        let cap = step.flatMap { step in
-            base.flatMap { loadCap(from: $0, step: step, lowerBody: inputs.isLowerBody, ladder: ladder) }
+        let base = anchor.weight.map {
+            placed(unit.converted($0, from: anchor.unit ?? unit), on: ladder, assisted: inputs.assisted)
         }
-        var outcome = anchorOutcome(anchor, history: history, inputs: inputs, loadable: step != nil, cap: cap)
+        let cap = step.flatMap { step in base.flatMap { stepCap(from: $0, step: step, ladder: ladder, inputs: inputs) } }
+        var outcome = inputs.deloadWeek
+            ? deloadWeekOutcome(anchor, inputs: inputs)
+            : anchorOutcome(anchor, history: history, inputs: inputs, loadable: step != nil, cap: cap)
         var weight = base
         if let step, let base {
-            weight = movedOnto(base, by: outcome.move, step: step, lowerBody: inputs.isLowerBody, ladder: ladder)
+            weight = inputs.assisted
+                ? helpMoved(base, by: outcome.move, step: step, ladder: ladder)
+                : movedOnto(base, by: outcome.move, step: step, lowerBody: inputs.isLowerBody, ladder: ladder)
         }
         let ceiling = cap == nil ? inputs.scheme.high : inputs.scheme.high + equipmentExtraReps
-        if recalibrationReason(anchor: anchor, history: history, scheme: inputs.scheme, ceiling: ceiling),
+        if !inputs.deloadWeek,
+           recalibrationReason(anchor: anchor, history: history, scheme: inputs.scheme, ceiling: ceiling),
            let estimate, let step {
             outcome.reps = inputs.scheme.contains(outcome.reps) ? outcome.reps : inputs.scheme.low
             weight = workingWeight(oneRepMax: estimate.oneRepMax, reps: outcome.reps, step: step)
@@ -422,12 +484,53 @@ extension WorkoutLoadEngine {
         let prescription = step.flatMap { step in
             weight.flatMap { Self.prescription(suggested: $0, confidence: confidence, step: step, unit: unit, ladder: ladder) }
         }
-        return LiftPlan(
-            sets: max(1, inputs.baseSets + outcome.setsDelta), reps: outcome.reps, prescription: prescription,
-            change: outcome.change, askReasonOnOverride: ask, previousWeight: anchor.weight, unit: unit,
+        let sets = inputs.deloadWeek ? deloadWeekSets(inputs.baseSets) : max(1, inputs.baseSets + outcome.setsDelta)
+        var plan = LiftPlan(
+            sets: sets, reps: outcome.reps, prescription: prescription,
+            change: outcome.change, askReasonOnOverride: ask,
+            // In the plan's unit (w6): the anchor may have been logged in the other one.
+            previousWeight: anchor.weight.map { unit.converted($0, from: anchor.unit ?? unit) }, unit: unit,
             recentered: estimate?.recentered ?? false, cap: outcome.cap, equipment: inputs.equipment,
             previousFlag: anchor.flag
         )
+        plan.assisted = inputs.assisted
+        if outcome.change == .blockHold {
+            plan.holdUntil = blockHoldEnd(anchor, history: history, today: inputs.today)
+        }
+        return plan
+    }
+
+    /// Why this lift can't simply step: the light-load guard's reasons for a loaded lift
+    /// (``loadCap(from:step:lowerBody:ladder:)``), or the least help an assisted machine gives
+    /// (``helpCap(from:step:ladder:)``).
+    static func stepCap(from weight: Double, step: Double, ladder: LoadLadder?, inputs: LiftInputs) -> LoadCap? {
+        inputs.assisted
+            ? helpCap(from: weight, step: step, ladder: ladder)
+            : loadCap(from: weight, step: step, lowerBody: inputs.isLowerBody, ladder: ladder)
+    }
+
+    /// A marked deload week's decision (w5): last time's reps at last time's weight — held, whatever
+    /// the last result was. Never a step, a cut or an extra set.
+    static func deloadWeekOutcome(_ anchor: LiftExposure, inputs: LiftInputs) -> Outcome {
+        let ceiling = inputs.scheme.high + equipmentExtraReps
+        let reps = (inputs.scheme.low...ceiling).contains(anchor.targetReps) ? anchor.targetReps : inputs.scheme.low
+        return Outcome(reps: reps, setsDelta: 0, change: .deloadWeek, move: .hold)
+    }
+
+    /// About half the usual sets, rounded up, for a marked deload week (w5): 3 → 2, 4 → 2, 5 → 3.
+    public static func deloadWeekSets(_ sets: Int) -> Int {
+        max(1, (max(1, sets) + 1) / 2)
+    }
+
+    /// The day a long-trained lifter's block is up (w8): ``blockDays`` after the first of the
+    /// sessions in a row at the anchor's prescription. Nil once that day has come — the hold is then
+    /// for the second good session in a row, not for time.
+    static func blockHoldEnd(_ anchor: LiftExposure, history: [LiftExposure], today: Date) -> Date? {
+        let regular = history.filter { !$0.easierSession && $0.calibration == nil }
+        let held = regular.reversed().prefix { samePrescription($0, anchor) }
+        guard let first = held.last else { return nil }
+        let end = first.date.addingTimeInterval(Double(blockDays) * 86_400)
+        return days(from: today, to: end) >= 1 ? end : nil
     }
 
     /// The anchor's decision: a little lighter after a long break, else what its result says.
@@ -455,11 +558,14 @@ extension WorkoutLoadEngine {
                 suggested: weight, confidence: estimate.confidence, step: step, unit: unit, ladder: ladder
             )
         }
-        return LiftPlan(
-            sets: max(1, inputs.baseSets), reps: reps, prescription: prescription,
+        var plan = LiftPlan(
+            sets: inputs.deloadWeek ? deloadWeekSets(inputs.baseSets) : max(1, inputs.baseSets), reps: reps,
+            prescription: prescription,
             change: prescription == nil ? .firstTime : .recalibrated, askReasonOnOverride: ask,
             previousWeight: nil, unit: unit, equipment: inputs.equipment
         )
+        plan.assisted = inputs.assisted
+        return plan
     }
 
     /// Rebaseline from the estimate when the newest session was a calibration, or the goal's reps
@@ -509,7 +615,10 @@ extension WorkoutLoadEngine {
             return Outcome(reps: target, setsDelta: 0, change: tier == .advanced ? .blockHold : .confirming, move: .hold)
         }
         if anchor.overrideReason == .equipment || !loadable {
-            return repsOnlyOutcome(target: target, scheme: scheme, equipmentCapped: anchor.overrideReason == .equipment)
+            let capped = anchor.overrideReason == .equipment
+            let top = capped ? scheme.high + equipmentExtraReps : scheme.high
+            return repsOnlyOutcome(target: target, scheme: scheme, equipmentCapped: capped,
+                                   sessionsAtTop: sessionsAtTop(top, anchor: anchor, history: history))
         }
         if let cap, target >= scheme.high {
             return cappedOutcome(target: target, scheme: scheme, cap: cap, anchor: anchor, history: history)
@@ -520,16 +629,48 @@ extension WorkoutLoadEngine {
         return Outcome(reps: scheme.low, setsDelta: 0, change: scheme.isRange ? .backToBottom : .addWeight, move: .up)
     }
 
-    /// Progress on reps (then one extra set) when the load can't move: bodyweight and band work, or a
-    /// lifter whose equipment tops out.
-    static func repsOnlyOutcome(target: Int, scheme: RepScheme, equipmentCapped: Bool) -> Outcome {
+    /// Progress on reps, then one extra set, when the load can't move: bodyweight and band work, or a
+    /// lifter whose equipment tops out. At most one extra set (w7, 2026-11-10): the session after it
+    /// keeps the set and says the lift has topped out (``LoadChange/toppedOut`` — the note offers the
+    /// next harder variation), and from then on it holds with nothing more said
+    /// (``LoadChange/heldAtTop``). `sessionsAtTop` is ``sessionsAtTop(_:anchor:history:)``; a fixed-rep
+    /// scheme has no climb, so its first completed session is already at the top.
+    static func repsOnlyOutcome(target: Int, scheme: RepScheme, equipmentCapped: Bool, sessionsAtTop: Int = 1) -> Outcome {
         let ceiling = equipmentCapped ? scheme.high + equipmentExtraReps : scheme.high
         if target < ceiling {
             return Outcome(reps: target + 1, setsDelta: 0,
                            change: equipmentCapped ? .holdForEquipment : .moreReps, move: .hold)
         }
+        if let held = toppedOutChange(sessionsAtTop: sessionsAtTop) {
+            return Outcome(reps: ceiling, setsDelta: 1, change: held, move: .hold)
+        }
         return Outcome(reps: ceiling, setsDelta: 1,
                        change: equipmentCapped ? .holdForEquipment : .moreSets, move: .hold)
+    }
+
+    /// What a lift with nothing left to add says after its one extra set (w7): topped out on the
+    /// second session in a row at the top, held from the third; nil on the first, which adds the set.
+    static func toppedOutChange(sessionsAtTop: Int) -> LoadChange? {
+        if sessionsAtTop >= 3 { return .heldAtTop }
+        return sessionsAtTop == 2 ? .toppedOut : nil
+    }
+
+    /// Regular sessions in a row, newest backwards and the anchor included, completed at `top` reps
+    /// (or more) at the anchor's weight — how long a lift has had nothing left to add. Counted by
+    /// sessions, not sets, so a time budget trimming the extra set can't restart it. Bounded by the
+    /// history (at most ``maxExposuresPerLift``).
+    static func sessionsAtTop(_ top: Int, anchor: LiftExposure, history: [LiftExposure]) -> Int {
+        let regular = history.filter { !$0.easierSession && $0.calibration == nil }
+        return regular.reversed().prefix { session in
+            session.completed && session.targetReps >= top && sameWeight(session, anchor)
+        }.count
+    }
+
+    /// The same weight (in either unit), or both with no load.
+    static func sameWeight(_ a: LiftExposure, _ b: LiftExposure) -> Bool {
+        guard let first = a.weight, let second = b.weight else { return a.weight == nil && b.weight == nil }
+        let unit = b.unit ?? a.unit ?? .lb
+        return abs(unit.converted(first, from: a.unit ?? unit) - second) <= weightTolerance
     }
 
     /// Whether a completed session may take the next step yet, by training age (G3, 2026-10-20): a
@@ -556,10 +697,7 @@ extension WorkoutLoadEngine {
 
     /// The same target reps at the same weight (in either unit), or both with no load.
     static func samePrescription(_ a: LiftExposure, _ b: LiftExposure) -> Bool {
-        guard a.targetReps == b.targetReps else { return false }
-        guard let first = a.weight, let second = b.weight else { return a.weight == nil && b.weight == nil }
-        let unit = b.unit ?? a.unit ?? .lb
-        return abs(unit.converted(first, from: a.unit ?? unit) - second) <= weightTolerance
+        a.targetReps == b.targetReps && sameWeight(a, b)
     }
 
     /// Regular sessions in a row, newest backwards, that missed their target on an unflagged day. A

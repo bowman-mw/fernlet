@@ -224,6 +224,26 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// optional, so such a run decodes and logs every set at ``selected`` as it always did. The key
         /// is a FROZEN token. An edit (``actualWeights``) wins over it.
         var doneWeights: [Double]?
+        /// On a strength check's step: the lift's usual working sets, as planned before the check
+        /// replaced them (w4, 2026-11-10; the domain's `LoadGuidance.UsualSets`). "Not now" falls back
+        /// to them, so the lift is still trained that day
+        /// (``GuidedWorkoutRunState/putOffStrengthCheck(now:)``). Nil on every other step and in a run
+        /// persisted before checks carried them — optional, so such a run decodes and "Not now"
+        /// moves past the check as it did. The key is a FROZEN token.
+        var usual: UsualSets?
+
+        /// A lift's usual working sets behind a strength check (``usual``): sets, reps, the weight
+        /// range they would have been prescribed at, and the lift's ordinary rest. Field names are
+        /// FROZEN tokens (a run in progress stores them).
+        struct UsualSets: Codable, Hashable {
+            var sets: Int
+            var reps: Int
+            var rangeLow: Double?
+            var rangeHigh: Double?
+            var suggested: Double?
+            var confidenceRaw: String?
+            var restSeconds: Int
+        }
 
         /// Sets an edit may carry at most.
         static let maxSets = 20
@@ -232,21 +252,45 @@ struct GuidedWorkoutRunState: Codable, Hashable {
 
         /// The weight one tap of the lighter (`direction` −1) or heavier (+1) button picks: the next
         /// owned load that way when the location's weights are known, else one ``step``. At the end of
-        /// the owned loads it stays put. With nothing picked yet (a lift with no history, w1) it starts
-        /// at the lightest load the location owns — the empty bar, the lightest dumbbell — and opens
-        /// upward from there; from `start` when the location's weights are not known.
+        /// the owned loads it stays put — unless the carried loads are only a window of what the
+        /// location owns (``windowMayBeCut(direction:)``), where it carries on by the step, so a strong
+        /// first-timer is not stopped at the 48th load. With nothing picked yet (a lift with no history,
+        /// w1) it starts at the lightest load the location owns — the empty bar, the lightest dumbbell —
+        /// and opens upward from there; from `start` when the location's weights are not known.
         func steppedWeight(direction: Int, start: Double?) -> Double? {
             guard let selected else { return loads?.first ?? start }
-            guard let loads, !loads.isEmpty else {
-                return step.map { selected + Double(direction.signum()) * $0 }
-            }
-            if direction > 0 { return loads.first { $0 > selected + 0.01 } ?? selected }
-            return loads.last { $0 < selected - 0.01 } ?? selected
+            let byStep = step.map { selected + Double(direction.signum()) * $0 }
+            guard let loads, !loads.isEmpty else { return byStep }
+            let next = direction > 0
+                ? loads.first(where: { $0 > selected + 0.01 }) : loads.last(where: { $0 < selected - 0.01 })
+            if let next { return next }
+            guard windowMayBeCut(direction: direction), let byStep, byStep > 0 else { return selected }
+            return byStep
+        }
+
+        /// Owned loads the planner carries into a run at most — the domain's
+        /// `LoadGuidance.maxRunnerLoads`, spelled here because this shared file cannot import the
+        /// domain (a test pins the two equal).
+        static let carriedWindow = 48
+
+        /// Whether the carried loads may stop short of what the location owns in `direction`: only a
+        /// full window can have been cut. Its top always can; its bottom only when it was taken around
+        /// a suggestion — with none (a lift with no history, w1) the window starts at the lightest load
+        /// the location owns, and nothing is lighter than the empty bar.
+        func windowMayBeCut(direction: Int) -> Bool {
+            guard let loads, loads.count >= Self.carriedWindow else { return false }
+            return direction > 0 || suggested != nil
         }
 
         /// `weight` placed on the owned loads (the nearest, a tie going lighter), or on the step when
-        /// none are known.
+        /// none are known — or when `weight` lies past an end of a carried window that may be cut
+        /// (``windowMayBeCut(direction:)``), where the nearest carried load would pull it back in.
         func snapped(_ weight: Double) -> Double? {
+            if let loads, let first = loads.first, let last = loads.last, let step, step > 0,
+               (weight > last + 0.01 && windowMayBeCut(direction: 1))
+                || (weight < first - 0.01 && windowMayBeCut(direction: -1)) {
+                return max(step, (weight / step).rounded() * step)
+            }
             if let loads, !loads.isEmpty {
                 var best = loads[0]
                 for load in loads.prefix(Self.maxLoads) where abs(load - weight) < abs(best - weight) - 1e-9 { best = load }
@@ -786,15 +830,19 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     }
 
     /// Put the current strength check off — the runner's "Not now" (w4): its remaining steps, the
-    /// current one included, are marked skipped and the run moves to the first step after the check, or
-    /// finishes naturally when nothing follows. Ramp sets already done stay logged as ramp-ups; the
-    /// test leaves one "skipped" line and never a result, so no estimate reads it. The app records the
-    /// two-week deferral (`WorkoutCalibrationDeferral`); this only moves the run.
+    /// current one included, are marked skipped and the lift falls back to its usual working sets for
+    /// this session (``Tracking/usual``), so it is still trained today: they become the next step,
+    /// straight after the check. A check that carries none (an older run) moves to the first step after
+    /// it, or finishes naturally when nothing follows. Ramp sets already done stay logged as ramp-ups;
+    /// the test never leaves a result, so no estimate reads it. The app records the two-week deferral
+    /// (`WorkoutCalibrationDeferral`); this only moves the run.
     mutating func putOffStrengthCheck(now: Date) {
         guard canPutOffStrengthCheck, let check = strengthCheckRun(around: exerciseIndex) else { return }
+        let usual = usualSetsStep(behind: check)
         for index in exerciseIndex...check.upperBound where exercises[index].tracking != nil {
             exercises[index].tracking?.skipped = true
         }
+        if let usual { exercises.insert(usual, at: check.upperBound + 1) }
         guard check.upperBound < exercises.count - 1 else {
             finish(at: now)
             return
@@ -805,6 +853,35 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         restEndsAt = nil
         setStartedAt = now
         phase = .working
+    }
+
+    /// The lift's usual working sets as a step of their own, built from what the strength check at
+    /// `check` carries (``Tracking/usual``): the check's lift, gear, unit and owned loads, the usual
+    /// sets, reps, range and rest, the suggestion preselected, and nothing of the check itself. Nil when
+    /// the check carries none.
+    private func usualSetsStep(behind check: ClosedRange<Int>) -> Exercise? {
+        guard let source = exercises[check].last(where: { $0.tracking?.usual != nil }),
+              var tracking = source.tracking, let usual = tracking.usual else { return nil }
+        tracking.targetReps = max(1, usual.reps)
+        tracking.rangeLow = usual.rangeLow
+        tracking.rangeHigh = usual.rangeHigh
+        tracking.suggested = usual.suggested
+        tracking.selected = usual.suggested
+        tracking.confidenceRaw = usual.confidenceRaw ?? tracking.confidenceRaw
+        tracking.calibrationRaw = nil
+        tracking.skipped = nil
+        tracking.actualReps = nil
+        tracking.actualWeights = nil
+        tracking.actualDrops = nil
+        tracking.doneWeights = nil
+        tracking.effortRaw = nil
+        tracking.overrideReasonRaw = nil
+        tracking.usual = nil
+        return Exercise(
+            name: source.name, sets: min(max(1, usual.sets), Tracking.maxSets), reps: String(max(1, usual.reps)),
+            roleRaw: source.roleRaw, fromCatalog: source.fromCatalog, restSeconds: max(0, usual.restSeconds),
+            blockRaw: source.blockRaw, tracking: tracking, displayName: source.displayName, lastTime: source.lastTime
+        )
     }
 
     /// Adds the current timed set's held seconds to its step — from the end of its lead-in to `now`, no

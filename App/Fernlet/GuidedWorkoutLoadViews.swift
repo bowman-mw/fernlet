@@ -221,7 +221,8 @@ struct GuidedWeightPicker: View {
                 .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
             HStack(spacing: 16) {
-                stepButton(systemImage: "minus", label: Text("Lighter"), identifier: "workout.guided.weight.lighter", direction: -1)
+                stepButton(systemImage: "minus", label: isAssisted ? Text("Less help") : Text("Lighter"),
+                           identifier: "workout.guided.weight.lighter", direction: -1)
                 selectedText
                     .font(look == nil ? .fernlet(.stat) : .custom(FernletFontName.frauncesSemiBold, size: 40, relativeTo: .largeTitle))
                     .foregroundStyle(look?.text ?? Color.bark)
@@ -229,7 +230,8 @@ struct GuidedWeightPicker: View {
                     .minimumScaleFactor(0.6)
                     .frame(minWidth: 96)
                     .accessibilityIdentifier("workout.guided.weight")
-                stepButton(systemImage: "plus", label: Text("Heavier"), identifier: "workout.guided.weight.heavier", direction: 1)
+                stepButton(systemImage: "plus", label: isAssisted ? Text("More help") : Text("Heavier"),
+                           identifier: "workout.guided.weight.heavier", direction: 1)
             }
         }
     }
@@ -242,6 +244,10 @@ struct GuidedWeightPicker: View {
             return Text("As planned: \(GuidedLoadFormat.weight(planned, unit: GuidedLoadFormat.unit(tracking)))")
         }
         guard let suggested = tracking.suggested else {
+            guard !isAssisted else {
+                return Text("The weight here is help. Pick the help that leaves you about 2 reps to spare.",
+                            comment: "Guided workout: the first-time ask on an assisted machine (assisted pull-up, assisted dip), where the weight on the stack helps the person, so a bigger number is easier.")
+            }
             return Text("Pick a weight you could lift about 2 more times than asked.")
         }
         let suggestion = GuidedLoadFormat.weight(suggested, unit: GuidedLoadFormat.unit(tracking))
@@ -250,6 +256,12 @@ struct GuidedWeightPicker: View {
                         comment: "Guided workout: the weight Fernlet suggests for a set with one fixed weight (a warm-up set or a strength check), e.g. 'Suggested 95 lb'.")
         }
         return Text("Range \(range) · suggested \(suggestion)")
+    }
+
+    /// The lift is on an assisted machine, where the number is help (``WorkoutAssistedLifts``, w3):
+    /// the − and + buttons are named "Less help" and "More help" for VoiceOver and Voice Control.
+    private var isAssisted: Bool {
+        store.guidedRunState?.exercises.first { $0.id == exerciseID }.map { WorkoutAssistedLifts.contains($0.name) } ?? false
     }
 
     private var selectedText: Text {

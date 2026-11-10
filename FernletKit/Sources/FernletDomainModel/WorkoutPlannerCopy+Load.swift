@@ -79,6 +79,98 @@ extension WorkoutPlannerCopy {
                comment: "Workout session note about one lift for someone past their first months of lifting: progress comes after two good sessions in a row, so today repeats the last one. The argument is the exercise name.")
     }
 
+    // MARK: - Assisted machines (w3, 2026-11-10)
+
+    /// "Assisted pull-up: a little less help today (35 lb)." The weight on an assisted machine is help,
+    /// so progress is less of it — never "add weight".
+    static func lessHelp(_ name: String, help: String) -> String {
+        String(localized: "workoutNote.load.assisted.lessHelp",
+               defaultValue: "\(name): a little less help today (\(help)).", bundle: .module,
+               comment: "Workout session note about a lift on an assisted machine (assisted pull-up, assisted dip), where the weight on the stack HELPS the person: after a good session the machine helps a little less today. Arguments: the exercise name, then the help as a weight with its unit (e.g. '35 lb').")
+    }
+
+    /// "Assisted pull-up: back to 8 reps — a little less help now (35 lb)."
+    static func lessHelpBackToBottom(_ name: String, reps: Int, help: String) -> String {
+        String(localized: "workoutNote.load.assisted.lessHelpBackToBottom",
+               defaultValue: "\(name): back to \(repCount(reps)) — a little less help now (\(help)).", bundle: .module,
+               comment: "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the reps reset to the bottom of the range because it is time for less help. Arguments: the exercise name, a number of reps (e.g. '8 reps'), then the help as a weight with its unit.")
+    }
+
+    /// "Assisted pull-up: a little more help today (45 lb) to get the reps back."
+    static func moreHelp(_ name: String, help: String) -> String {
+        String(localized: "workoutNote.load.assisted.moreHelp",
+               defaultValue: "\(name): a little more help today (\(help)) to get the reps back.", bundle: .module,
+               comment: "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the reps fell short the last two times, so the machine helps a little more today. Arguments: the exercise name, then the help as a weight with its unit.")
+    }
+
+    /// "Assisted pull-up: more help and one set fewer today — a reset, not a step back."
+    static func moreHelpFewerSets(_ name: String) -> String {
+        String(localized: "workoutNote.load.assisted.moreHelpFewerSets",
+               defaultValue: "\(name): more help and one set fewer today — a reset, not a step back.", bundle: .module,
+               comment: "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: more help and a shorter day after several hard sessions. The argument is the exercise name.")
+    }
+
+    /// "Assisted pull-up: welcome back — a little more help to start." Greets the user, so it agrees
+    /// with `address` like ``afterBreak(_:weight:addressing:)``.
+    static func afterBreakMoreHelp(_ name: String, addressing address: TermOfAddress) -> String {
+        let lift = AddressedCopy.argument(name)
+        return AddressedCopy.string(
+            LocalizedStringResource("workoutNote.load.assisted.afterBreak",
+                                    defaultValue: "\(lift): welcome back — a little more help to start.", bundle: .module,
+                                    comment: "Workout session note about a lift on an assisted machine after a break from training, where the weight on the stack HELPS the person: start with a little more help. The argument is the exercise name."),
+            addressing: address)
+    }
+
+    /// "Assisted pull-up: 10 lb is the least help here, so more reps instead — 13 today."
+    static func repsFirstLeastHelp(_ name: String, help: String, reps: Int) -> String {
+        String(localized: "workoutNote.load.assisted.repsFirstLeastHelp",
+               defaultValue: "\(name): \(help) is the least help here, so more reps instead — \(reps) today.", bundle: .module,
+               comment: "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the machine is already at its smallest help, so reps go up instead. Arguments: the exercise name, the help as a weight with its unit, and today's number of reps.")
+    }
+
+    /// "Assisted pull-up: one more set today — 10 lb is the least help here."
+    static func setFirstLeastHelp(_ name: String, help: String) -> String {
+        String(localized: "workoutNote.load.assisted.setFirstLeastHelp",
+               defaultValue: "\(name): one more set today — \(help) is the least help here.", bundle: .module,
+               comment: "Workout session note about a lift on an assisted machine, where the weight on the stack HELPS the person: the machine is already at its smallest help, so today adds a set. Arguments: the exercise name, then the help as a weight with its unit.")
+    }
+
+    // MARK: - Holds that say why (w5, w7, w8)
+
+    /// w8: "Bench press: holding this block until November 24." The date is drawn in the device's
+    /// own format.
+    static func blockHold(_ name: String, until date: Date) -> String {
+        let day = date.formatted(.dateTime.month(.wide).day())
+        return String(localized: "workoutNote.load.blockHold",
+                      defaultValue: "\(name): holding this block until \(day).", bundle: .module,
+                      comment: "Workout session note about one lift for someone who has lifted for more than two years: progress comes once per four-week block, so the weight and reps stay the same until the date given. Arguments: the exercise name, then a date already formatted for the reader's language (e.g. 'November 24').")
+    }
+
+    /// w5: the one line of a session in a week the person marked as a deload.
+    static var deloadWeek: String {
+        String(localized: "workoutNote.load.deloadWeek",
+               defaultValue: "Deload week: the same weights as last time and about half the sets. Nothing steps up this week, and next week picks up from where you were.",
+               bundle: .module,
+               comment: "Workout session note in a week the person marked as a deload (a planned lighter week): what the plan does this week. Calm; a lighter week is training too.")
+    }
+
+    /// w7: "Push-up: this is as far as reps and sets go here. Decline push-up is the next step up —
+    /// it's the first swap when you edit the plan." Said in place of another "one more set today".
+    static func toppedOutVariation(_ variant: String, lift: String) -> String {
+        String(localized: "workoutNote.load.toppedOutVariation",
+               defaultValue: "\(lift): this is as far as reps and sets go here. \(variant) is the next step up — it's the first swap when you edit the plan.",
+               bundle: .module,
+               comment: "Workout session note: a lift has reached the most reps and sets the plan adds (and, where it takes weight, the heaviest weight this place has), so a harder version of it is suggested, never required. Arguments: the lift, then the harder exercise.")
+    }
+
+    /// w7, with no harder variation in the catalogue for this place: said once, then the lift holds.
+    static func toppedOut(_ lift: String) -> String {
+        String(localized: "workoutNote.load.toppedOut",
+               defaultValue: "\(lift): this is as far as reps and sets go here, and there's no harder version to offer at this place. It holds steady from now on, which is a fine place to be.",
+               bundle: .module,
+               comment: "Workout session note: a lift has reached the most reps and sets the plan adds and there is no harder version of it to suggest, so it stays as it is. Calm, no pressure. The argument is the lift.")
+    }
+
     /// N7: "If you'd like a harder step for Goblet squat, Bulgarian split squat works the same muscles
     /// — it's the first swap when you edit the plan. Otherwise more reps, then a set, keep it moving."
     static func harderVariation(_ variant: String, lift: String) -> String {
