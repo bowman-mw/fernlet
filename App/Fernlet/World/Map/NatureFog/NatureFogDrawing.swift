@@ -51,15 +51,25 @@ nonisolated enum NatureFogDrawer {
 
     /// How much of the fog a found airport's grounds keep (owner 2026-11-02: translucent, the map showing through).
     static let veilOpacity: CGFloat = 0.5
+    /// How much of the fog a cell only driven past keeps (owner 2026-11-09: "mostly transparent but still there").
+    static let drivenOpacity: CGFloat = 0.3
 
-    /// The veiled hexes as one translucent layer, so a seam over a hex doesn't darken where they meet.
+    /// The veiled hexes, each kind as one translucent layer at its own strength, so a seam over a hex doesn't darken
+    /// where they meet: the found airports' grounds at ``veilOpacity``, the cells only driven past at ``drivenOpacity``.
     static func drawVeils(_ layout: NatureFogLayout, scale: NatureFogScale, palette: NatureFogPalette,
                           in context: CGContext, origin: CGPoint) {
-        guard !layout.veils.isEmpty else { return }
+        drawLayer(layout.veils, opacity: veilOpacity, scale: scale, palette: palette, in: context, origin: origin)
+        drawLayer(layout.drivenVeils, opacity: drivenOpacity, scale: scale, palette: palette, in: context, origin: origin)
+    }
+
+    /// `hexes` as one translucent layer at `opacity`.
+    private static func drawLayer(_ hexes: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)], opacity: CGFloat,
+                                  scale: NatureFogScale, palette: NatureFogPalette, in context: CGContext, origin: CGPoint) {
+        guard !hexes.isEmpty else { return }
         var veils = NatureFogLayout()
-        veils.hexes = layout.veils
+        veils.hexes = hexes
         context.saveGState()
-        context.setAlpha(veilOpacity)
+        context.setAlpha(opacity)
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         drawGround(veils, scale: scale, palette: palette, in: context, origin: origin)
         context.endTransparencyLayer()

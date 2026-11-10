@@ -247,7 +247,9 @@ final class NatureFogTileBook {
     /// Moves the book to `next`, dropping the tiles the change reaches (ready or on their way).
     func change(to next: NatureFogClearing) -> NatureFogChange {
         guard next != clearing else { return NatureFogChange() }
-        let changed = Array(clearing.lifted.symmetricDifference(next.lifted).union(clearing.uncovered.symmetricDifference(next.uncovered)))
+        // A cell walked after it was driven past changes only in `driven` (owner 2026-11-09): its tiles redraw too.
+        let changed = Array(clearing.lifted.symmetricDifference(next.lifted).union(clearing.uncovered.symmetricDifference(next.uncovered))
+            .union(clearing.driven.symmetricDifference(next.driven)))
         let veilsMoved = clearing.veils != next.veils
         let covers = changed.contains { !next.isClear($0) } || !next.veils.holds(everyAirportIn: clearing.veils)
         clearing = next

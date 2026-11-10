@@ -35,7 +35,11 @@ nonisolated extension NatureFogGrower {
     /// One hex's ground and what grows on it, with the hex's own mulberry32 stream (`hash ^ 0x9e3779b9`).
     private func grow(_ cell: HexCell, area: CGRect, ground: Bool, covered: Set<HexCell>, into layout: inout NatureFogLayout) {
         guard case .wild(let kind) = state(cell) else {
-            if ground, clearing.isVeiled(cell) { layout.veils.append(veil(cell)) }
+            if ground, clearing.isVeiled(cell) {
+                layout.veils.append(veil(cell))
+            } else if ground, clearing.isDriven(cell) {
+                layout.drivenVeils.append(veil(cell))
+            }
             return
         }
         let land = self.land(cell)

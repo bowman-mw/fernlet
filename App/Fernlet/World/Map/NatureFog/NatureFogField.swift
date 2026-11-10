@@ -50,6 +50,8 @@ nonisolated struct NatureFogClearing: Equatable {
     var uncovered: Set<HexCell> = []
     /// Found airports' grounds, drawn as translucent fog.
     var veils = NatureFogVeils.none
+    /// Lifted cells only driven past, never walked (owner 2026-11-09), drawn as see-through fog.
+    var driven: Set<HexCell> = []
 
     /// Whether `cell` shows the map, through a veil or not: nothing grows on it and no tree stands over it.
     func isClear(_ cell: HexCell) -> Bool {
@@ -60,6 +62,12 @@ nonisolated struct NatureFogClearing: Equatable {
     /// kept clear.
     func isVeiled(_ cell: HexCell) -> Bool {
         !veils.isEmpty && !lifted.contains(cell) && !uncovered.contains(cell) && veils.thins(cell)
+    }
+
+    /// Whether `cell` draws the driven see-through fog: lifted by a drive only, and not kept clear round a home or a
+    /// kept place.
+    func isDriven(_ cell: HexCell) -> Bool {
+        !driven.isEmpty && driven.contains(cell) && !uncovered.contains(cell)
     }
 }
 
@@ -115,6 +123,8 @@ nonisolated struct NatureFogLayout {
     var hexes: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)] = []
     /// The hexes drawn translucent over a found airport's grounds, under everything else (``NatureFogVeils``).
     var veils: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)] = []
+    /// The hexes only driven past, drawn see-through the same way at their own strength (owner 2026-11-09).
+    var drivenVeils: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)] = []
     /// Water-set hexes (World-Exploration-Spec §1: no seams), in the water look.
     var seas: [(centre: CGPoint, paint: NaturePaint)] = []
     var specks: [NatureFogBlock] = []
