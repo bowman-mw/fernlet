@@ -250,8 +250,15 @@ nonisolated enum ProximityRunPolicy {
         /// (``TapToConnectController/isHangoutPending``): discovery runs on Home for the hand-off.
         let tapHangoutPending: Bool
 
-        /// Builds an input from the eleven facts, and the four tap-to-connect facts (each defaulting to
-        /// the value that keeps the tap rendezvous down, so a caller that predates them decides as it did).
+        /// This session's search was stood down for the background by `holdCommittedLinks()` and the
+        /// session has not ended since (`FernletStore.meshSearchHeldInBackground`, and the session
+        /// still live). A hold leaves the browser and advertiser down, so a link that died behind it
+        /// can only heal once the search is back up; with this fact a foreground return brings it
+        /// back on EVERY tab, not only Friends. Off, the policy decides exactly as it did before.
+        let searchOwedAfterBackgroundHold: Bool
+
+        /// Builds an input from the eleven facts, the four tap-to-connect facts and the hold fact (each
+        /// defaulting to the value that changes nothing, so a caller that predates them decides as it did).
         ///
         /// - Parameters:
         ///   - scenePhase: The scene phase.
@@ -269,6 +276,7 @@ nonisolated enum ProximityRunPolicy {
         ///   - lowPowerMode: Whether Low Power Mode is on.
         ///   - homeIsFrontmost: Whether Home is the front page.
         ///   - tapHangoutPending: Whether a tap hand-off is waiting for the mesh.
+        ///   - searchOwedAfterBackgroundHold: Whether a background hold left this session's search down.
         init(
             scenePhase: ScenePhase,
             selectedTab: FernletTab,
@@ -284,7 +292,8 @@ nonisolated enum ProximityRunPolicy {
             allowConnectByTapping: Bool = false,
             lowPowerMode: Bool = false,
             homeIsFrontmost: Bool = false,
-            tapHangoutPending: Bool = false
+            tapHangoutPending: Bool = false,
+            searchOwedAfterBackgroundHold: Bool = false
         ) {
             self.scenePhase = scenePhase
             self.selectedTab = selectedTab
@@ -301,6 +310,7 @@ nonisolated enum ProximityRunPolicy {
             self.lowPowerMode = lowPowerMode
             self.homeIsFrontmost = homeIsFrontmost
             self.tapHangoutPending = tapHangoutPending
+            self.searchOwedAfterBackgroundHold = searchOwedAfterBackgroundHold
         }
     }
 
@@ -471,8 +481,10 @@ nonisolated enum ProximityRunPolicy {
         }
     }
 
-    /// The discovery radio. A hard stop stands it down; in the foreground the Friends tab wants it
-    /// and any other tab keeps it only for a committed peer; in the background a live continuation
+    /// The discovery radio. A hard stop stands it down; in the foreground the Friends tab wants it,
+    /// a session owed its search after a background hold wants it on every tab
+    /// (``Input/searchOwedAfterBackgroundHold``), and any other tab keeps it only for a committed
+    /// peer; in the background a live continuation
     /// task must not browse or admit (invariant 5), and otherwise a committed peer's links are held
     /// while a search with nobody stands down.
     ///
@@ -495,13 +507,21 @@ nonisolated enum ProximityRunPolicy {
             case .social: return .foregroundOnly
             // World Friends: a tap both people said yes to hands off to the hangout search, on Home.
             case .home where input.tapHangoutPending && input.session != .peerCommitted: return .foregroundOnly
-            case .home, .food, .move, .personal: return heldForACommittedPeer(input.session)
+            case .home, .food, .move, .personal: return offFriendsDiscoveryState(input)
             }
         }
         switch input.continuation {
         case .running: return .stop
         case .notRequested, .refused, .expired: return heldForACommittedPeer(input.session)
         }
+    }
+
+    /// Foreground discovery on any tab but Friends. A session whose search a background hold stood
+    /// down gets it back on whatever tab the person returns to — a World hangout lives on Home, and
+    /// nothing else re-opens the radios — and every other session keeps only a committed peer's links.
+    private static func offFriendsDiscoveryState(_ input: Input) -> ProximityRunState {
+        if input.searchOwedAfterBackgroundHold, input.session != .absent { return .foregroundOnly }
+        return heldForACommittedPeer(input.session)
     }
 
     /// ``ProximityRunState/hold`` for a committed peer — standing the radios down would drop the

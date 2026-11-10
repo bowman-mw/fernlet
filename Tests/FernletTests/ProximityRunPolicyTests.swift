@@ -544,6 +544,51 @@ enum ProximityRunPolicyProduct {
                 "and does not resume a held mesh")
     }
 
+    /// A copy of one row with the background-hold fact raised and every other fact kept.
+    private static func owedItsSearch(_ r: ProximityRunPolicy.Input) -> ProximityRunPolicy.Input {
+        ProximityRunPolicy.Input(
+            scenePhase: r.scenePhase, selectedTab: r.selectedTab, duressSessionActive: r.duressSessionActive,
+            protectedDataAvailable: r.protectedDataAvailable, belowMinimumAge: r.belowMinimumAge,
+            deleteAllInProgress: r.deleteAllInProgress, continuation: r.continuation, session: r.session,
+            allowNearbyPresence: r.allowNearbyPresence, allowNearbyRecipeShares: r.allowNearbyRecipeShares,
+            sessionPhotoReviewBlocksDiscovery: r.sessionPhotoReviewBlocksDiscovery,
+            searchOwedAfterBackgroundHold: true
+        )
+    }
+
+    /// **A session whose search a background hold stood down gets it back on every tab**
+    /// (2026-11-09, the owner's phone test). `holdCommittedLinks()` takes the browser and advertiser
+    /// down, a link that dies behind it can only heal once they are back, and until this fact the
+    /// only row that brought them back was a Friends visit — so a World hangout, which lives on
+    /// Home, never reconnected after a trip to the background. Over the whole product the fact
+    /// raises exactly the rows it names to `foregroundOnly` and moves nothing else at all.
+    @Test func aSessionOwedItsSearchAfterAHoldSearchesOnEveryForegroundTab() {
+        let rows = Product.rows()
+        var raised = 0
+        var wrong = 0
+        // R2: bounded by the product.
+        for r in rows {
+            let before = Product.verdict(r)
+            let after = Product.verdict(Self.owedItsSearch(r))
+            let named = Product.foreground(r) && !Product.hardStop(r) && r.selectedTab != .social
+                && r.session != .absent && !r.sessionPhotoReviewBlocksDiscovery
+            let expected: ProximityRunState = named ? .foregroundOnly : before.discovery
+            if named { raised += 1 }
+            let restUnmoved = after.mesh == before.mesh && after.presence == before.presence
+                && after.recipeShare == before.recipeShare && after.routedAccessGate == before.routedAccessGate
+                && after.tapRendezvous == before.tapRendezvous
+            if after.discovery != expected || !restUnmoved { wrong += 1 }
+        }
+        #expect(wrong == 0, "the fact moves discovery on the named rows and nothing anywhere else")
+        #expect(raised == 2 * 4 * 4 * 2 * 8, "2 foreground phases × 4 tabs × 4 task states × 2 held sessions × protected data × the 4 opt-in pairs")
+        let home = Product.row(tab: .home, continuation: .expired, session: .meshHeld)
+        #expect(Product.verdict(home).discovery == .stop, "the row the phones were stranded on: Home, task expired, links gone")
+        #expect(Product.verdict(Self.owedItsSearch(home)).discovery == .foregroundOnly, "and the same row once the hold is remembered")
+        let background = Product.row(phase: .background, tab: .home, continuation: .running, session: .peerCommitted)
+        #expect(Product.verdict(Self.owedItsSearch(background)).discovery == .stop,
+                "it never runs discovery in the background (invariant 5)")
+    }
+
     /// The flat re-statements of the mesh and discovery rules agree on every row — the named
     /// expectation per row, whose value is catching a guard-order slip.
     @Test func theMirrorOracleAgreesOnEveryRow() {

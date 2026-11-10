@@ -403,7 +403,7 @@ struct MeshP8CoordinatorTableAcceptanceTests {
         #expect(reading.completedUnitCount == MeshContinuationProgress.totalUnitCount - 1,
                 "yet the reported count stops one short of the total: a Progress that completes says the work has finished, and the mesh has not")
         let halfway = MeshContinuationProgress.advancing(from: nil, elapsed: budget / 2, budget: budget)
-        #expect(halfway.fraction == 0.5 && halfway.completedUnitCount == 50, "halfway reads halfway")
+        #expect(halfway.fraction == 0.5 && halfway.completedUnitCount == 5_000, "halfway reads halfway")
         // R2: bounded by the three unusable budgets.
         for bad in [0.0, -1, .nan] as [TimeInterval] {
             let held = MeshContinuationProgress.advancing(from: halfway, elapsed: 600, budget: bad)

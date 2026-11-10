@@ -36,6 +36,7 @@
 
 import Foundation
 import Testing
+import ProximityKit
 @testable import Fernlet
 
 // MARK: - MeshContinuationProduct
@@ -473,23 +474,44 @@ enum MeshContinuationProduct {
         let budget: TimeInterval = 100
         let quarter = MeshContinuationProgress.advancing(from: nil, elapsed: 25, budget: budget)
         #expect(quarter.fraction == 0.25, "a quarter of the budget is a quarter of the bar")
-        #expect(quarter.completedUnitCount == 25, "which is 25 of the probe's 100 units")
+        #expect(quarter.completedUnitCount == 2_500, "which is 2,500 of the 10,000 units")
         let start = MeshContinuationProgress.advancing(from: nil, elapsed: 0, budget: budget)
         #expect(start.fraction == 0, "a session that just started has spent none of its ceiling")
         #expect(start.completedUnitCount == 0, "and shows an empty bar")
-        #expect(MeshContinuationProgress.totalUnitCount == 100, "the scale is the probe's 100")
+        #expect(MeshContinuationProgress.totalUnitCount == 10_000, "the scale is 10,000 units, not the probe's 100")
         #expect(MeshContinuationProgress.zero.fraction == 0, "and the resting reading is empty")
+    }
+
+    /// Every 30-second poller tick MOVES the reported count across the whole 6-hour ceiling
+    /// (2026-11-09). On the probe's 100-unit scale a unit was 216 seconds, so seven ticks in eight
+    /// re-reported the number the system already had — and the system ends a continued task whose
+    /// progress stops advancing, which is what the owner's two phones met in the background.
+    @Test func everyPollerTickAdvancesTheReportedCount() {
+        let budget = MeshSessionCeiling.ceilingSeconds
+        let interval = ProximitySessionPoller.interval
+        var reading: MeshContinuationProgress?
+        var stalled = 0
+        // R2: bounded by the ceiling in ticks, less the last few, where the count rests one short
+        // of the total by design.
+        for tick in 1..<(ProximitySessionPoller.maxTicks - 2) {
+            let next = MeshContinuationProgress.advancing(
+                from: reading, elapsed: Double(tick) * interval, budget: budget
+            )
+            if let reading, next.completedUnitCount <= reading.completedUnitCount { stalled += 1 }
+            reading = next
+        }
+        #expect(stalled == 0, "no tick of a six-hour session hands the system an unchanged count")
     }
 
     /// The bar never reaches its total: a `Progress` that completes says the work is done.
     @Test func progressNeverReachesTheTotal() {
         let full = MeshContinuationProgress.advancing(from: nil, elapsed: 100, budget: 100)
         #expect(full.fraction == 1, "a session at its ceiling is at the top of the fraction")
-        #expect(full.completedUnitCount == 99, "but the bar stops one short of the total, as the probe's does")
+        #expect(full.completedUnitCount == 9_999, "but the bar stops one short of the total, as the probe's does")
         let over = MeshContinuationProgress.advancing(from: nil, elapsed: 10_000, budget: 100)
         #expect(over.fraction == 1, "an elapsed past the budget clamps rather than overflowing")
-        #expect(over.completedUnitCount == 99, "and still never reaches the total")
-        #expect(MeshContinuationProgress(fraction: 4.5).completedUnitCount == 99, "a hand-built reading clamps too")
+        #expect(over.completedUnitCount == 9_999, "and still never reaches the total")
+        #expect(MeshContinuationProgress(fraction: 4.5).completedUnitCount == 9_999, "a hand-built reading clamps too")
         #expect(MeshContinuationProgress(fraction: -3).fraction == 0, "and a negative one reads as empty")
     }
 
