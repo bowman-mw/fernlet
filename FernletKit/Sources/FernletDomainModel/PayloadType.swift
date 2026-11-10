@@ -317,6 +317,16 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     case meshCoordinatorBeacon = "fernlet.mesh.coordinator.beacon.v1"
     // Diagnostic
     case inspectorEcho         = "fernlet.diagnostic.echo.v1"
+    // Road trips (World-RoadTrip-Spec, owner-approved 2026-11-10, PR 2 "Mesh exchange")
+    /// A road trip's direct, phone-to-phone message (`RoadTripPayload` in FernletSocial): the invite a
+    /// hangout member sends when they start a trip, each friend's Join or Not this time, and the
+    /// catch-up swap at a stop (the road each member was there for, who maps, and whether the trip
+    /// ended). One token for the three kinds, told apart by the payload's own `kind`. Always sealed (it
+    /// carries where the car went); sent only to a committed, vault-trusted (kept) friend that
+    /// advertises the `roadTrip` capability, over the captured-slot feature send, never as a routed
+    /// row. Appended last, after the diagnostic echo: a new case never reorders the frozen ones.
+    /// Additive-safe (older clients park it).
+    case roadTrip              = "fernlet.road-trip.v1"
 }
 
 /// Feature capabilities a device advertises in the identity handshake (Proximity Mesh Redesign
@@ -349,4 +359,9 @@ public nonisolated enum ProximityCapability: String, Codable, CaseIterable, Send
     /// mints/gossips one-time prekey bundles and understands `friendHeartDrop`. Advertised only
     /// when the user opted into away delivery (`heartsAwayDelivery`).
     case heartsAway
+    /// Road trips (World-RoadTrip-Spec, owner-approved 2026-11-10): this build understands the
+    /// `roadTrip` payload (invite, join answer, catch-up). A capability of the build, not a user
+    /// opt-in — advertised unconditionally, last in the signed array (after `hearts`), so no existing
+    /// token moves. Declared last for the same reason: `.fernlet`'s known list is this enum's order.
+    case roadTrip
 }

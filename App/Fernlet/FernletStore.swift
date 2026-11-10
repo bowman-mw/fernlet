@@ -240,6 +240,8 @@ final class FernletStore {
             #endif
             // The World map's fog follows the decoy on the same flag: history hidden, nothing written.
             worldFog.setDecoy(duressSessionActive)
+            // A road trip's invite, catch-up note and short hangout are the real person's: neither side keeps the other's.
+            roadTripMesh.forget()
             // "Where you've been" captures nothing in a decoy (and Private's Places page shows nothing).
             worldPlaces.setDecoy(duressSessionActive)
             // The solo camera's decoy keeps its shots in memory and drops them when the decoy ends.
@@ -324,6 +326,8 @@ final class FernletStore {
             self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
         }
         features.capabilities.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
+        // Road trips (World-RoadTrip-Spec PR 2): the invite, the answers and the catch-up swap, never in a decoy.
+        wireRoadTripExchange(features.roadTrip)
         return features
     }()
     /// The mesh engine, which ``meshFeatures`` built and owns; reading it builds the features first.
@@ -349,6 +353,10 @@ final class FernletStore {
     @ObservationIgnored var homeIsFrontmost = false
     /// The tap hand-off's check loop (``runTapHandOff()``), cancelled when a new one starts.
     @ObservationIgnored var tapHandOffTask: Task<Void, Never>?
+    /// A road trip's mesh moments on Home and in the hangout (World-RoadTrip-Spec PR 2): the invite waiting for an
+    /// answer, who the catch-up note asks about, the last catch-up's note and a one-tap catch-up's short hangout.
+    /// Memory only; a decoy and every wipe drop it.
+    @ObservationIgnored let roadTripMesh = RoadTripMeshState()
     /// Device-local hearts state (received hearts + per-friend-per-day rate limit). Deliberately
     /// outside the snapshot: heart activity never enters any synced store.
     ///

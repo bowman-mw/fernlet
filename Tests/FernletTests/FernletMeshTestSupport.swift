@@ -85,12 +85,13 @@ enum FernletMeshRig {
     /// The payload tokens the composition registers a handler for through the mesh's token door, each
     /// spelled as its feature registers it (`PayloadType.<case>.rawValue`): the clothing catalog and its
     /// request (plan step A0.5.6), the item report and the friend state (A0.5.7), and the activity
-    /// offer, join request, join grant, roster snapshot and sync (A0.5.8).
+    /// offer, join request, join grant, roster snapshot and sync (A0.5.8), and the road trip's one token
+    /// (World-RoadTrip-Spec PR 2, 2026-11-10).
     private static let featurePayloadTokens = [
         PayloadType.clothingCatalog.rawValue, PayloadType.clothingCatalogRequest.rawValue,
         PayloadType.itemReport.rawValue, PayloadType.friendState.rawValue,
         PayloadType.activityOffer.rawValue, PayloadType.activityJoinRequest.rawValue,
         PayloadType.activityJoinGrant.rawValue, PayloadType.activityRosterSnapshot.rawValue,
-        PayloadType.activitySync.rawValue
+        PayloadType.activitySync.rawValue, PayloadType.roadTrip.rawValue
     ]
 }

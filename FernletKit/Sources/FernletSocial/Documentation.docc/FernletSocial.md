@@ -1,6 +1,6 @@
 # ``FernletSocial``
 
-Fernlet's social features over ProximityKit's mechanisms: the mesh features the routed mesh engine carries — ``FernletMeshFeatures``, the composition that owns the engine and every feature on it (the session photos and their review, live-session chat, the in-session hearts with the heart ledger, the clothing shop, Group Activities, the moderation report relay, friend-state exchange, the capability list and the vouch list), and ``FernletRoutedTypes``, the routed-type rows those features ride — presence — ``PresenceManager``, which drives ProximityKit's presence radio so kept friends recognize each other nearby by rotating pairwise tags, and delivers in-person hearts over short-lived connections formed on that recognition — recipe sharing — ``ProximityRecipeShareManager``, which sends a recipe to a nearby Fernlet and queues the recipes nearby Fernlets send, over ProximityKit's one-to-one pair session under Fernlet's recipe profile, with the recipe payload's wire types — the heart dead-drop — ``HeartDropService``, the offline "away" hearts that ride an injected public-database transport as sealed blobs under rotating day tags, with its sealer, prekey store, sidecar stores and seal — moderation's device-local records — ``ModerationLedger``, the report rows; ``ModerationBanStore``, the tamper-resistant store-ban clock; and ``ModerationContentHash``, the key a report binds an artwork by — with the ``ClosenessLedger``, the ``FriendStateCache`` and its ``CachedFriendState`` rows, and ``TempMessagePayload``, the parked live-session chat payload.
+Fernlet's social features over ProximityKit's mechanisms: the mesh features the routed mesh engine carries — ``FernletMeshFeatures``, the composition that owns the engine and every feature on it (the session photos and their review, live-session chat, the in-session hearts with the heart ledger, the clothing shop, Group Activities, the moderation report relay, friend-state exchange, road trips' exchange, the capability list and the vouch list), and ``FernletRoutedTypes``, the routed-type rows those features ride — presence — ``PresenceManager``, which drives ProximityKit's presence radio so kept friends recognize each other nearby by rotating pairwise tags, and delivers in-person hearts over short-lived connections formed on that recognition — recipe sharing — ``ProximityRecipeShareManager``, which sends a recipe to a nearby Fernlet and queues the recipes nearby Fernlets send, over ProximityKit's one-to-one pair session under Fernlet's recipe profile, with the recipe payload's wire types — the heart dead-drop — ``HeartDropService``, the offline "away" hearts that ride an injected public-database transport as sealed blobs under rotating day tags, with its sealer, prekey store, sidecar stores and seal — moderation's device-local records — ``ModerationLedger``, the report rows; ``ModerationBanStore``, the tamper-resistant store-ban clock; and ``ModerationContentHash``, the key a report binds an artwork by — with the ``ClosenessLedger``, the ``FriendStateCache`` and its ``CachedFriendState`` rows, and ``TempMessagePayload``, the parked live-session chat payload.
 
 ## Overview
 
@@ -24,7 +24,7 @@ engine through its public seams.
   FernletStore's `meshFeatures`. It asks the host for the device identity once, builds the mesh with
   it, builds each feature over the mesh and the same identity, and installs every engine role a
   feature plays before its initializer returns — the capability provider, the vouch-list exchange,
-  nine payload handlers on the engine's payload token door, the activity manager's two mesh seams, the
+  ten payload handlers on the engine's payload token door, the activity manager's two mesh seams, the
   chat's and the photos' projection handlers and the hearts' ledger judge under their rows' tokens,
   and, last, the session observer — so no restore, re-entry or radio start sees a mesh without them.
   It owns the mesh and every feature (the app reaches the mesh as `meshFeatures.mesh`); the mesh
@@ -115,10 +115,20 @@ engine through its public seams.
 - ``FriendStateExchange`` (`Mesh/FriendStateExchange.swift`): the fuzzy friend state's mesh wiring —
   the opt-in that gates its capability, the handler that hands a vault-trusted friend's state to the
   app, which records it in ``FriendStateCache``, and the commit-time send of this device's own.
+- ``RoadTripExchange`` (`RoadTrip/RoadTripExchange.swift`, with ``RoadTripPayload`` and its parts in
+  `Wire/RoadTripPayloads.swift`; road trip mode PR 2, `Docs/World-RoadTrip-Spec.md`): a road trip's
+  invite, join answer and catch-up swap between kept friends linked in a hangout, over the direct,
+  captured-slot feature send under the one `.roadTrip` token, sealed, never a routed row. Its invariants:
+  only a committed, vault-trusted, unblocked friend that advertises `roadTrip` is sent to or heard from;
+  nothing moves while the app's gate is closed (never in a decoy); a body over 6 MiB or breaking any
+  bound (five members, sixteen stretches, 100,000 points, time running forwards, points on the globe) is
+  refused whole; an offer is answered by one reply computed before the offer reaches the app, at most once
+  per friend every 20 s, and a reply is never answered. What a trip is and which road a member was there
+  for are the app's: this module carries points as 1e-5° and whole seconds and imports no WorldMapStore.
 - ``FernletMeshCapabilities`` and ``FernletVouchList`` (`Mesh/`): the capability tokens the mesh
   advertises, composed from the features' switches in their signed order (photos, the namespace's wire2
   token, then away hearts, the shop, messages, moderation, friend state, activities and hearts, each
-  switched one in its place), and the friend vouch list's content — the lists committed peers sent,
+  switched one in its place, and road trips last, unconditionally, since 2026-11-10), and the friend vouch list's content — the lists committed peers sent,
   the list this device would send, the receive hygiene and the "Friend of" label the app reads
   (``FernletVouchList/vouchLabel(for:)``).
 - The content layer (`Mesh/MeshContentLedger.swift`, `Mesh/MeshContentIngest.swift`): Fernlet's three
@@ -597,3 +607,16 @@ decode or a derivation never hops an actor.
 - ``FriendStateCache``
 - ``CachedFriendState``
 - ``FriendStateExchange``
+
+### Road trips
+
+- ``RoadTripExchange``
+- ``RoadTripPayload``
+- ``RoadTripInvitePayload``
+- ``RoadTripJoinPayload``
+- ``RoadTripCatchUpPayload``
+- ``RoadTripWireSegment``
+- ``RoadTripWirePoint``
+- ``RoadTripWireMember``
+- ``RoadTripWireMapperState``
+- ``RoadTripWireTakeover``

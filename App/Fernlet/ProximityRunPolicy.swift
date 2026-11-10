@@ -246,7 +246,8 @@ nonisolated enum ProximityRunPolicy {
         /// other tab over it. The tap rendezvous listens only then (§1.4).
         let homeIsFrontmost: Bool
 
-        /// Two people tapped and both said yes, and the hangout mesh has not linked them yet
+        /// Two people tapped and both said yes, or a road trip's one-tap catch-up asked for a short hangout with a
+        /// kept friend (World-RoadTrip-Spec PR 2), and the hangout mesh has not linked them yet
         /// (``TapToConnectController/isHangoutPending``): discovery runs on Home for the hand-off.
         let tapHangoutPending: Bool
 

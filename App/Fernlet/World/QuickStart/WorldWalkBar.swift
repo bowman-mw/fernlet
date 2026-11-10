@@ -100,6 +100,8 @@ struct WorldLoggedNote: View {
         case ride = "world.rideToast"
         case flights = "world.flightsToast"
         case shopsClosed = "friendShop.closedToast"
+        /// A road trip's "Caught up: 84 km of road, 6 photos." (World-RoadTrip-Spec PR 2).
+        case roadTripCaughtUp = "roadTrip.caughtUpToast"
 
         /// The Undo button's.
         var undo: String { rawValue + ".undo" }

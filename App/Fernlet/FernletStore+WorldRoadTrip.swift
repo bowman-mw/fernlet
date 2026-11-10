@@ -1,11 +1,13 @@
 import FernletFoundation
+import FernletSocial
 import Foundation
 import UIKit
 import WorldMapStore
 
 /// The road trip's side of the store (World-RoadTrip-Spec PR 1, "Trip core", owner-approved 2026-11-10): the trip's
 /// keeper (`worldFog.roadTrip`, ``RoadTripKeeper``) wired to the map's location, this iPhone's state for the mapper
-/// rule, Trip info's rows and actions, and the DEBUG scene that stages a trip (no entry point until PR 2).
+/// rule, Trip info's rows and actions, and the DEBUG scene that stages a trip. PR 2's mesh exchange (Start a road
+/// trip, Join, the catch-up swap) is `FernletStore+RoadTripMesh.swift` and `FernletStore+RoadTripCatchUp.swift`.
 ///
 /// - **The passenger gate:** ``wireWorldRoadTrip(to:adopted:)`` tells the location source whether this iPhone is a
 ///   passenger now and whenever that changes, so a passenger traces no drive.
@@ -38,16 +40,21 @@ extension FernletStore {
     func roadTripInfo(now: Date = Date()) -> RoadTripInfo? {
         let keeper = worldFog.roadTrip
         guard !duressSessionActive, let trip = keeper.active else { return nil }
+        let reach = roadTripCatchUpMembers()
         return RoadTripInfo(title: RoadTripCopy.name(of: trip), mapperName: trip.mapper?.firstName,
                             lastCatchUp: trip.lastCatchUp, metres: keeper.lineMetres(),
-                            photos: RoadTripTestScenes.photoCount ?? 0, isMapping: trip.isMapping)
+                            photos: RoadTripTestScenes.photoCount ?? 0, isMapping: trip.isMapping,
+                            canCatchUp: !reach.linked.isEmpty || !reach.nearby.isEmpty)
     }
 
-    /// "Map from this iPhone": this iPhone maps from now (PR 1 knows only its own state). Whether it changed anything.
+    /// "Map from this iPhone": this iPhone maps from now, the rule's answer read over every member's state as last
+    /// heard (this phone's fresh). Whether it changed anything.
     func mapRoadTripFromThisPhone(now: Date = Date()) -> Bool {
         let keeper = worldFog.roadTrip
         guard !duressSessionActive, let trip = keeper.active else { return false }
-        return keeper.mapFromThisPhone(states: [trip.selfID: roadTripDeviceState()], now: now)
+        var states = trip.states ?? [:]
+        states[trip.selfID] = roadTripDeviceState()
+        return keeper.mapFromThisPhone(states: states, now: now)
     }
 
     /// "Leave the road trip" (local in PR 1). Whether it was written.
@@ -56,10 +63,15 @@ extension FernletStore {
         return worldFog.roadTrip.leave(now: now)
     }
 
-    /// "End the road trip" (local in PR 1; PR 2 carries it to the others). Whether it was written.
+    /// "End the road trip": it ends here, and for everyone at their next catch-up — at once for the members linked in
+    /// this hangout. Whether it was written.
     func endRoadTrip(now: Date = Date()) -> Bool {
         guard !duressSessionActive else { return false }
-        return worldFog.roadTrip.end(now: now)
+        let linked = roadTripCatchUpMembers().linked
+        guard worldFog.roadTrip.end(now: now) else { return false }
+        let told = linked.isEmpty ? 0 : meshFeatures.roadTrip.offerCatchUp(to: linked)
+        FernletAuditLog.log("worldMap.roadTrip.ended", context: ["told": "\(told)"])
+        return true
     }
 
     /// DEBUG ``RoadTripTestScenes`` (`roadTrip`, `roadTripPassenger`): with no trip on, starts the staged one and its

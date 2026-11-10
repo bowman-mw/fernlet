@@ -46,7 +46,8 @@ import WorldMapStore
 /// **A road trip** (owner-approved 2026-11-10, World-RoadTrip-Spec PR 1). ``roadTrip`` keeps the trip on now and its
 /// timed line: every reading this keeper accepts also joins the line while this iPhone maps (``handle(_:saveNow:thinLine:)``,
 /// the store's readings and the locked launch's alike), under the buffer key, so it grows with the phone locked. It
-/// follows the decoy (``setDecoy(_:)``), writes with ``flush()`` and goes with every wipe through ``clearAll()``.
+/// follows the decoy (``setDecoy(_:)``), writes with ``flush()`` and goes with every wipe through ``clearAll()``. The
+/// road friends hand over at a catch-up (PR 2) lifts as driven cells through ``liftReceivedRoad(_:)``.
 ///
 /// **A locked phone.** The store's key works only while the phone is unlocked, so readings that
 /// arrive while it is locked (a walk with the screen off, Always mode's visits) go into the
@@ -231,6 +232,38 @@ final class WorldFogKeeper {
         drivenCells = driven.cells
         sinceSave += added
         if sinceSave >= Self.saveEvery { flush() }
+        return added
+    }
+
+    /// A road trip's road received at a catch-up (World-RoadTrip-Spec §2.6: "Every phone's fog lifts along its stretch
+    /// as driven cells"): the drive's lane along `points` (oldest first; ``driveRadius`` either side, joined every
+    /// ``joinStep`` up to ``maxJoin``) lifts as **driven** cells, never walked, so it shows see-through like any drive;
+    /// what was uncovered before stays as it was. Only with "Uncover the map as you go" on, never in a decoy; with the
+    /// phone locked the cells wait in the driven buffer. Nothing reaches the passport or the week's corner (the
+    /// readings were a friend's phone's). Written at once. How many cells were new.
+    func liftReceivedRoad(_ points: [GeoPoint]) -> Int {
+        guard !isDecoy, WorldMapPreferences.uncoverAsYouGo(in: defaults), !points.isEmpty else { return 0 }
+        var lane = Set<HexCell>()
+        var from: GeoPoint?
+        // R2: bounded by the line's own bound.
+        for point in points.prefix(RoadTripLine.maxPoints) where point.isValid {
+            lane.formUnion(Self.lane(from: from, to: point))
+            from = point
+        }
+        let cells = Array(lane)
+        guard !cells.isEmpty else { return 0 }
+        guard isProtectedDataAvailable(), store.isLoaded else {
+            bufferWhileLocked(cells, driving: true)
+            return 0
+        }
+        let fresh = cells.filter { !store.cells.contains($0) }
+        let lifted = store.lift(cells)
+        let gaps = FogGapCloser.closing(around: cells, in: store.cells)
+        let added = lifted + store.lift(gaps)
+        driven.add(fresh + gaps)
+        visibleCells = store.cells
+        drivenCells = driven.cells
+        flush()
         return added
     }
 

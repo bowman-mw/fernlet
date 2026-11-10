@@ -42,9 +42,15 @@ nonisolated struct RoadTripMapperOverride: Codable, Equatable, Sendable {
 /// - **Who maps:** ``mapperID``, decided by ``RoadTripMapperRule`` and overridden by ``mapperOverride``.
 /// - **Catch-ups:** ``lastCatchUp`` starts at ``startedAt`` (everyone is together at the start).
 /// - **The end:** ``endedAt`` (End the road trip, on any phone) or ``leftAt`` (this phone left); either way the record
-///   and its line stay on this iPhone, sealed, until map history is deleted.
+///   and its line stay on this iPhone, sealed, until map history is deleted. An end this phone has not yet told a
+///   member at a catch-up is ``endToTell`` (PR 2: "ends it for everyone at their next catch-up").
+/// - **Proof of presence** (PR 2, `rt-catchup`): ``atStart`` and ``ledger`` say which catch-ups each member was part
+///   of as this iPhone knows them (``RoadTripPresence``); ``states`` is each other member's phone as last heard at a
+///   catch-up, for the mapper rule.
 ///
-/// Its line is kept apart, in pieces (``RoadTripLine``, `RoadTripStore`). Frozen at rest: the field names.
+/// Its line is kept apart, in pieces (``RoadTripLine``, `RoadTripStore`). Frozen at rest: the field names. The four
+/// fields PR 2 added are optional, so a book PR 1 wrote reads unchanged (nil: every member at the start, no
+/// catch-up yet, no state heard, no end owed).
 nonisolated struct RoadTrip: Codable, Equatable, Identifiable, Sendable {
     /// The most people on one trip (one phone's direct links).
     static let maxMembers = 5
@@ -73,6 +79,15 @@ nonisolated struct RoadTrip: Codable, Equatable, Identifiable, Sendable {
     var endedAt: Date?
     /// When this phone left the trip, if it did.
     var leftAt: Date?
+    /// The members who were at the start (they joined from the hangout it began in); nil for every member.
+    var atStart: [String]? = nil
+    /// This iPhone's catch-up ledger: for each member, this one included, when this iPhone caught up with them,
+    /// oldest first (at most ``RoadTripPresence/maxCatchUps`` each).
+    var ledger: [String: [Date]]? = nil
+    /// Each other member's phone as last heard at a catch-up, for the mapper rule.
+    var states: [String: RoadTripDeviceState]? = nil
+    /// After the trip ended: the members this iPhone has not yet told at a catch-up.
+    var endToTell: [String]? = nil
 
     /// Whether the trip is still on for this iPhone: not ended and not left.
     var isActive: Bool { endedAt == nil && leftAt == nil }
@@ -99,7 +114,14 @@ nonisolated struct RoadTrip: Codable, Equatable, Identifiable, Sendable {
         guard lastCatchUp >= startedAt else { return false }
         if let endedAt, endedAt < startedAt { return false }
         if let leftAt, leftAt < startedAt { return false }
-        return true
+        return presenceIsValid(members: ids)
+    }
+
+    /// Whether the PR 2 fields name only members, within their bounds.
+    private func presenceIsValid(members ids: Set<String>) -> Bool {
+        guard ids.isSuperset(of: atStart ?? []), ids.isSuperset(of: endToTell ?? []),
+              ids.isSuperset(of: (ledger ?? [:]).keys), ids.isSuperset(of: (states ?? [:]).keys) else { return false }
+        return (ledger ?? [:]).values.allSatisfy { $0.count <= RoadTripPresence.maxCatchUps }
     }
 }
 
@@ -146,10 +168,33 @@ nonisolated struct RoadTripBook: Codable, Equatable, Sendable {
 
     /// The book with the trip on now changed by `change`, or nil with none on or when the change leaves it invalid.
     func changingActive(_ change: (inout RoadTrip) -> Void) -> RoadTripBook? {
-        guard let index = trips.lastIndex(where: \.isActive) else { return nil }
+        guard let id = active?.id else { return nil }
+        return changing(id, change)
+    }
+
+    /// The book with the trip `id` changed by `change`, or nil without it, when the change leaves it invalid or
+    /// changes its id, or when it would leave two trips on.
+    func changing(_ id: UUID, _ change: (inout RoadTrip) -> Void) -> RoadTripBook? {
+        guard let index = trips.lastIndex(where: { $0.id == id }) else { return nil }
         var next = self
         change(&next.trips[index])
-        guard next.trips[index].isValid else { return nil }
+        guard next.trips[index].id == id, next.trips[index].isValid, next.trips.filter(\.isActive).count <= 1 else { return nil }
         return next
+    }
+
+    /// The trip `member` and this iPhone share for a catch-up. Without `id` (a commit, Catch up now): the trip on now
+    /// when they are another member of it, else the newest trip, when it ended and still owes them its end. With `id`
+    /// (their catch-up names it): that trip, on or ended, while this iPhone has not left it and they are on it, so a
+    /// friend who missed the end is answered with it.
+    func trip(sharedWith member: String, id: UUID? = nil) -> RoadTrip? {
+        if let id {
+            guard let trip = trips.last(where: { $0.id == id }), trip.leftAt == nil,
+                  trip.others.contains(where: { $0.id == member }) else { return nil }
+            return trip
+        }
+        if let trip = active, trip.others.contains(where: { $0.id == member }) { return trip }
+        guard let last = trips.last, last.leftAt == nil, last.endedAt != nil,
+              last.endToTell?.contains(member) == true else { return nil }
+        return last
     }
 }

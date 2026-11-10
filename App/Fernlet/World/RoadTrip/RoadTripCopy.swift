@@ -35,6 +35,68 @@ nonisolated enum RoadTripCopy {
         "roadTrip.end.message", defaultValue: "It ends for everyone at their next catch-up.",
         comment: "Trip info: the end confirmation's message; the other members' phones end it when they next catch up")
 
+    // MARK: PR 2 — Start, Join and the catch-up (`rt-start`, `rt-join`, `rt-catchup`), verbatim
+
+    static let startRow = LocalizedStringResource(
+        "roadTrip.start.row", defaultValue: "Start a road trip",
+        comment: "The hangout's menu on Home: starts a road trip with the friends in this hangout")
+    static let startLine = LocalizedStringResource(
+        "roadTrip.start.line",
+        defaultValue: "One phone maps the road while the others rest. At each stop, Fernlet catches everyone up: the road you drove together and the photos you took.",
+        comment: "Start a road trip sheet: what a road trip does; 'you' is everyone on the trip")
+    static let startButton = LocalizedStringResource(
+        "roadTrip.start.button", defaultValue: "Start the road trip",
+        comment: "Start a road trip sheet: starts it and asks each friend in the hangout to join")
+    static let notNow = LocalizedStringResource(
+        "roadTrip.start.notNow", defaultValue: "Not now",
+        comment: "Start a road trip sheet: closes it; nothing starts")
+    static let join = LocalizedStringResource(
+        "roadTrip.join.button", defaultValue: "Join",
+        comment: "A friend started a road trip: joins it")
+    static let notThisTime = LocalizedStringResource(
+        "roadTrip.join.notThisTime", defaultValue: "Not this time",
+        comment: "A friend started a road trip: says no; the hangout stays as it was")
+    static let catchUp = LocalizedStringResource(
+        "roadTrip.catchUp.button", defaultValue: "Catch up",
+        comment: "World Home's note when a road trip friend is nearby: opens a short hangout that swaps the road and photos")
+
+    /// "Mike started a road trip".
+    static func joinTitle(_ name: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.join.title", defaultValue: "\(name) started a road trip",
+                                comment: "The join prompt's title: the first name of the friend who started the road trip")
+    }
+
+    /// "Join, and Fernlet shares the road you drive together and your trip photos with Mike and Sam, in person at each
+    /// stop."
+    static func joinLine(_ names: String) -> LocalizedStringResource {
+        LocalizedStringResource(
+            "roadTrip.join.line",
+            defaultValue: "Join, and Fernlet shares the road you drive together and your trip photos with \(names), in person at each stop.",
+            comment: "The join prompt's line: the other people on the trip, first names joined, e.g. 'Mike and Sam'")
+    }
+
+    /// "Rae is here. Catch up the road trip?".
+    static func catchUpQuestion(_ name: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.catchUp.question", defaultValue: "\(name) is here. Catch up the road trip?",
+                                comment: "World Home's note, asked once when a road trip friend is nearby with Fernlet open: their first name")
+    }
+
+    /// "Caught up: 84 km of road, 6 photos.".
+    static func caughtUp(distance: String, photos: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.caughtUp", defaultValue: "Caught up: \(distance) of road, \(photos).",
+                                comment: "World Home's note after a road trip catch-up: the trip's road on this iPhone (e.g. '84 km') and its photos (e.g. '6 photos')")
+    }
+
+    /// The Start sheet's title, "Road trip with Rae and Sam", and the join prompt's people, in the reader's language.
+    static func names(_ names: [String]) -> String {
+        Array(names.prefix(RoadTrip.maxMembers)).formatted(.list(type: .and))
+    }
+
+    /// "Caught up: 84 km of road, 6 photos." as one string, for the note and VoiceOver.
+    static func caughtUpLine(_ note: RoadTripCaughtUpNote) -> String {
+        AddressedCopy.plain(caughtUp(distance: distance(note.metres), photos: AddressedCopy.plain(photos(note.photos))))
+    }
+
     /// "Road trip · 3": the chip under the status plate, with how many people are on the trip, this one included.
     static func chip(members: Int) -> LocalizedStringResource {
         LocalizedStringResource("roadTrip.chip", defaultValue: "Road trip · \(members)",

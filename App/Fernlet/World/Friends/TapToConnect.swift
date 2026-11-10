@@ -67,7 +67,9 @@ struct PendingTapHangout: Equatable {
 /// **The hand-off.** On a match both phones start the hangout search (the run policy's discovery row
 /// runs on Home while ``pendingHangout`` is set), the narrowed doors admit the matched key, and
 /// ``commitPendingSlot(in:)`` commits the slot whose fingerprint matches — the tap already happened, so
-/// nobody taps twice. The pending hand-off ends when a peer commits or after ``handOffSeconds``.
+/// nobody taps twice. The pending hand-off ends when a peer commits or after ``handOffSeconds``. A road trip's one-tap
+/// catch-up (World-RoadTrip-Spec PR 2) opens the same window for a kept friend presence hears nearby
+/// (``beginKeptFriendHandOff(signingPublicKey:fingerprint:)``), with no tap and nothing remembered as met by tapping.
 @MainActor
 final class TapToConnectController {
 
@@ -181,6 +183,20 @@ final class TapToConnectController {
             expiresAt: now().addingTimeInterval(Self.handOffSeconds)
         )
         onPolicyInputsChanged?()
+    }
+
+    /// A kept friend's short hangout, asked for with one tap (World-RoadTrip-Spec §2.6, a road trip's catch-up):
+    /// the same hand-off window as a tap match — discovery runs on Home and the friend's slot is committed once their
+    /// introduction arrives — without remembering them as met by tapping (they are a friend already, so the mesh's
+    /// doors admit them). Whether it opened; refused while another hand-off is pending.
+    func beginKeptFriendHandOff(signingPublicKey: Data, fingerprint: String) -> Bool {
+        guard !isHangoutPending else { return false }
+        pendingHangout = PendingTapHangout(
+            signingPublicKey: signingPublicKey, fingerprint: fingerprint,
+            expiresAt: now().addingTimeInterval(Self.handOffSeconds)
+        )
+        onPolicyInputsChanged?()
+        return true
     }
 
     /// The question as Home draws it: the name sanitized, the look decoded within its bound.
