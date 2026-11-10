@@ -189,20 +189,21 @@ extension WorkoutPlannerCopy {
                       comment: "Workout session note in the plateau story, said only when meals have been logged most days for two weeks and protein ran under the floor. Arguments: grams of protein per kilogram of body weight a day, as decimals — the floor (e.g. '1.2'), then the amount that covers it (e.g. '1.6').")
     }
 
-    /// G13: a Size lifter's stall beside a falling body weight.
-    static var bodyWeightSizeContext: String {
-        String(localized: "workoutNote.plateau.bodyWeightSize",
-               defaultValue: "Your logged body weight has been coming down over the last few weeks, and muscle size usually holds steady while it does — this stretch may simply be that.",
+    /// w9: a second lift on its fair retest the same day — it gets the rest, and only the first goes
+    /// first: "Overhead press also gets at least 3 minutes' rest between sets — a fair retest."
+    static func fairRetestAlso(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.retestAlso",
+               defaultValue: "\(name) also gets at least 3 minutes' rest between sets — a fair retest.",
                bundle: .module,
-               comment: "Workout session note in the plateau story for someone training for muscle size who logs their weight: their weight has been falling, which explains a stall. Calm and factual; never advice to eat more.")
+               comment: "Workout session note for a second lift that has held steady, after the same note about another lift: it too gets longer rest between sets today, to give it a fair try. The argument is the exercise name.")
     }
 
-    /// G13: weight management's strength-held check beside a falling body weight — a gentle check-in.
-    static var bodyWeightCheckIn: String {
-        String(localized: "workoutNote.plateau.bodyWeightCheckIn",
-               defaultValue: "Your logged body weight has been coming down over the same weeks, and the two often happen together. How have you been feeling lately?",
-               bundle: .module,
-               comment: "Workout session note for someone whose goal is weight management and who logs their weight: strength has eased a little while weight came down. A gentle check-in, never advice about eating.")
+    /// w9: the lifts the trend changed today beyond the two the story names — "And 1 more changed
+    /// today."
+    static func moreLiftsChanged(_ count: Int) -> String {
+        String(localized: "workoutNote.plateau.moreLiftsChanged",
+               defaultValue: "And \(count) more changed today.", bundle: .module,
+               comment: "Workout session note closing the list of lifts whose plan changed today, after two were named: how many more lifts changed. The argument is a count of lifts, 1 or more (e.g. 'And 1 more changed today.').")
     }
 
     // MARK: - The calibration brief

@@ -113,4 +113,34 @@ struct InjuryNoteMatcherTests {
         )
         #expect(!feasible.contains { $0.movementPattern == .squat || $0.movementPattern == .lunge })
     }
+
+
+    // MARK: - Words with no area of their own (e8.6, 2026-11-10)
+
+    /// Hand, biceps, quad, shin and hernia each name the nearest area the picker has.
+    @Test(arguments: [
+        ("broke my hand last year", BodyArea.wristHand),
+        ("left hand is weak", .wristHand),
+        ("hand surgery in March", .wristHand),
+        ("torn biceps", .elbow),
+        ("bicep tendon strain", .elbow),
+        ("pulled quad", .knee),
+        ("sore quads", .knee),
+        ("quadriceps tendon", .knee),
+        ("shin splints", .ankleFoot),
+        ("both shins ache", .ankleFoot),
+        ("recovering from a hernia", .lowerBack),
+    ])
+    func wordsWithoutAnAreaNameTheNearestOne(note: String, area: BodyArea) {
+        #expect(InjuryNoteMatcher.match(note).areas == [area], "\"\(note)\"")
+    }
+
+    /// "Hand" counts only with a sign that it is the body part; a quad bike and shin guards are things.
+    @Test(arguments: [
+        "on the other hand I like running", "hand weights only at home", "second hand bike", "give me a hand",
+        "quad bike at the weekend", "I wear shin guards for football",
+    ])
+    func handQuadAndShinIdiomsNameNothing(note: String) {
+        #expect(InjuryNoteMatcher.match(note).areas.isEmpty, "\"\(note)\"")
+    }
 }

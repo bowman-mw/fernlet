@@ -10,7 +10,8 @@
 //    own order (yesterday was the split day right before today's); moving then would push the same day
 //    back on every pass through the split, so that day would never come round;
 // 2. otherwise keeps the day and takes a set off each lift whose primary muscles overlap, with a plain
-//    note saying why.
+//    note saying why. Overlap that comes only from the previous split day's accessory work does not
+//    count (``WorkoutRecoveryGuard/counted(_:split:dueIndex:)``).
 // Recovery and mobility days, and the warm-up, activation and cool-down, are exempt: only the lifting
 // block is hard work. Defaults for the owner's review are the constants below.
 
@@ -92,6 +93,34 @@ public nonisolated enum WorkoutRecoveryGuard {
             return Decision(dayIndex: other, movedFrom: due)
         }
         return Decision(dayIndex: due, overlap: overlap)
+    }
+
+    /// `recent` as today's plan counts it. When yesterday was the split's own previous day, the
+    /// muscles only that day's ACCESSORY slots train are left out: a Pull day's accessory hinge is
+    /// planned light and the split puts Legs right after it on purpose, so it must not take a set
+    /// off every Legs lift, and bar the Legs day from its strength check, every single week (e8.2,
+    /// 2026-11-10). Main-lift overlap built into the order (Full Body A then B) still counts, and
+    /// so does everything when yesterday was not the split's previous day.
+    public static func counted(_ recent: RecentTraining, split: TrainingSplit, dueIndex: Int) -> RecentTraining {
+        let count = split.days.count
+        guard count > 1, !recent.hardMuscles.isEmpty else { return recent }
+        let due = ((dueIndex % count) + count) % count
+        let previous = (due - 1 + count) % count
+        guard WorkoutProgram.matchedDayIndex(in: split, names: recent.latestSessionNames) == previous else { return recent }
+        var counted = recent
+        counted.hardMuscles.subtract(accessoryOnlyMuscles(of: split.days[previous]))
+        return counted
+    }
+
+    /// The muscles a split day trains only through accessory slots, never through a main one.
+    static func accessoryOnlyMuscles(of day: WorkoutSplitDay) -> Set<MuscleGroup> {
+        var main: Set<MuscleGroup> = []
+        var accessory: Set<MuscleGroup> = []
+        for session in day.sessions where session.kind == .strength || session.kind == .fullBody || session.kind == .sport {
+            for slot in session.slots where slot.role == .main { main.formUnion(slot.muscles) }
+            for slot in session.slots where slot.role == .accessory { accessory.formUnion(slot.muscles) }
+        }
+        return accessory.subtracting(main)
     }
 
     /// The muscles a split day trains hard: the target muscles of the lifting slots in its strength,

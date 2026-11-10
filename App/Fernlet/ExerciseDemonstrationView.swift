@@ -400,8 +400,8 @@ struct ExerciseDemonstrationPlaceholder: View {
     }
 
     /// The glyph for an exercise: the tool it is done with, or for a bodyweight move the one piece of
-    /// gear it needs (a pull-up bar), else a mat. A generic weight machine draws the seated-machine
-    /// glyph.
+    /// gear it needs (a pull-up bar), else a mat. A machine draws its own glyph when one is drawn
+    /// (the leg press, the Smith machine), else the seated-machine glyph.
     static func glyph(for target: ExerciseTarget?) -> GymEquipment {
         guard let target else { return .yogaMat }
         switch target.equipment {
@@ -411,10 +411,15 @@ struct ExerciseDemonstrationPlaceholder: View {
         case .band: return .resistanceBands
         case .bench: return .weightBench
         case .cable: return .cableMachine
-        case .machine: return target.requiredGear.first ?? .chestPress
-        case .cardio: return target.requiredGear.first ?? .treadmill
-        case .bodyweight, .none: return target.requiredGear.first ?? .yogaMat
+        case .machine: return drawnGear(target) ?? .chestPress
+        case .cardio: return drawnGear(target) ?? .treadmill
+        case .bodyweight, .none: return drawnGear(target) ?? .yogaMat
         }
+    }
+
+    /// The first piece of gear the exercise names that has a drawn glyph.
+    private static func drawnGear(_ target: ExerciseTarget) -> GymEquipment? {
+        target.requiredGear.first { EquipmentIconLibrary.equipment[$0] != nil }
     }
 }
 

@@ -125,9 +125,21 @@ extension FernletStore {
         if let plan = currentGuidedWorkoutPlan { return plan }
         let base = commitTodaysGuidedWorkoutPlan(intensity: .light)
         guard !needsRestToday else { return base }
-        let travel = WorkoutPlanner.travelDayPlan(locationName: settings.activeWorkoutLocation.name)
-        replaceGuidedWorkoutPlan(travel, replacing: Set(base.sessions.map(\.id)))
+        replaceGuidedWorkoutPlan(travelDayResetPlan(), replacing: Set(base.sessions.map(\.id)))
         return currentGuidedWorkoutPlan ?? base
+    }
+
+    /// The Travel-day reset built for the active space, the limits and the hidden exercises as they are
+    /// now. What ``commitTodaysTravelDayPlan()`` commits, and what a change to one of the three rebuilds
+    /// today's reset from (the owner's fix e4, `FernletStore+GuidedPlanLifetime.swift`).
+    func travelDayResetPlan() -> WorkoutProgram.DayPlan {
+        // Through the planner's own pool: limits and hidden exercises apply to the reset too (e2).
+        let pool = WorkoutProgram.suggestablePool(
+            in: WorkoutExerciseCatalog.allExercises, location: settings.activeWorkoutLocation,
+            profile: settings.workoutProfile, preferences: settings.workoutExercisePreferences
+        )
+        return WorkoutPlanner.travelDayPlan(locationName: settings.activeWorkoutLocation.name, pool: pool,
+                                            limits: settings.workoutProfile.injuryLimits)
     }
 
     /// "Lift instead, lighter" (§13.2): today's Travel-day reset gives way to the planner's light plan (a set

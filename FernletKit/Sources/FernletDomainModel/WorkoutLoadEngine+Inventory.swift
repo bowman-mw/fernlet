@@ -4,8 +4,10 @@
 // The load engine on real equipment (2026-10-20, idea 10 of the comparison report).
 //
 // - Snapping. When the location has weights set (``WorkoutWeightInventory``), the last weight is placed
-//   on the nearest load the location has, every move lands on a load it has (the heavier or lighter
-//   one closest to the usual step), and the prescribed range is drawn from those loads.
+//   on the nearest load the location has — rounding DOWN instead when the nearest is a step up the
+//   light-load guard would call too big (w6, 2026-11-10: 30 lb at the gym, home owns 10, 20 and 35 →
+//   20, not 35) — every move lands on a load it has (the heavier or lighter one closest to the usual
+//   step), and the prescribed range is drawn from those loads.
 // - The light-load guard. The usual step is 5 lb (2 kg on dumbbells) with "always at least one step",
 //   so a 15 lb dumbbell press went to 20 lb — 33 % in one session. Whenever the next load is more than
 //   ``WorkoutLoadEngine/lightLoadGuardRatio`` heavier, or there is nothing heavier at all, the lift
@@ -23,6 +25,9 @@ public nonisolated enum LoadCap: Equatable, Sendable {
     case bigStep(from: Double, to: Double, owned: Bool)
     /// Nothing heavier exists at this location; `top` is the heaviest it has.
     case heaviest(top: Double)
+    /// An assisted machine at the least help it gives (``WorkoutAssistedLifts``): there is no "less
+    /// help" left to step to; `bottom` is that least help.
+    case leastHelp(bottom: Double)
 }
 
 extension WorkoutLoadEngine {
@@ -35,8 +40,54 @@ extension WorkoutLoadEngine {
 
     /// `weight` placed on the location's loads — the nearest it has, a tie going lighter — or
     /// unchanged with no ladder.
-    static func placed(_ weight: Double, on ladder: LoadLadder?) -> Double {
-        ladder?.nearest(to: weight) ?? weight
+    ///
+    /// The nearest load is never taken when it is a jump the light-load guard would refuse (w6,
+    /// 2026-11-10): placing is not progress, so when the nearest is more than
+    /// ``lightLoadGuardRatio`` above `weight` the heaviest load at or under it is used instead (30 lb
+    /// on 10, 20 and 35 → 20), and only with nothing at or under it the lightest there is. On an
+    /// assisted machine the weight is help, so the guard faces the other way: a nearest load more
+    /// than the ratio BELOW `weight` gives way to the least help at or above it.
+    public static func placed(_ weight: Double, on ladder: LoadLadder?, assisted: Bool = false) -> Double {
+        guard let ladder else { return weight }
+        let nearest = ladder.nearest(to: weight)
+        guard weight > 0, weight.isFinite else { return nearest }
+        if assisted {
+            guard nearest < weight * (1 - lightLoadGuardRatio) - weightTolerance else { return nearest }
+            return ladder.loads.first { $0 >= weight - weightTolerance } ?? nearest
+        }
+        guard nearest > weight * (1 + lightLoadGuardRatio) + weightTolerance else { return nearest }
+        return ladder.loads.last { $0 <= weight + weightTolerance } ?? nearest
+    }
+
+    /// The help on an assisted machine moved one decision's worth (``WorkoutAssistedLifts``): `.up`
+    /// — the lifter is stronger — takes one step of help AWAY, and `.down` gives help back: one step
+    /// after two misses, two after a third or a long break (``missDecrease`` against the larger
+    /// cuts). With a ladder the move lands on a load the machine has; with none that way it stays on
+    /// the nearest. The help never goes under one step.
+    static func helpMoved(_ help: Double, by move: WeightMove, step: Double, ladder: LoadLadder?) -> Double {
+        let target: Double
+        switch move {
+        case .hold:
+            return ladder?.nearest(to: help) ?? help
+        case .up:
+            target = max(step, help - step)
+            guard let ladder else { return target }
+            return ladder.closest(to: target, among: ladder.lighter(than: help)) ?? ladder.nearest(to: help)
+        case .down(let fraction):
+            target = help + (fraction > missDecrease + 1e-9 ? 2 : 1) * step
+            guard let ladder else { return target }
+            return ladder.closest(to: target, among: ladder.heavier(than: help)) ?? ladder.nearest(to: help)
+        }
+    }
+
+    /// An assisted machine's only cap: it is already at the least help it gives — the lightest load
+    /// the location has for it, or one step when its weights aren't set. Nil while less help exists.
+    /// The light-load guard does not apply: a 5 lb step from 20 lb of help is a quarter of the
+    /// number but a small part of the load actually moved.
+    static func helpCap(from help: Double, step: Double, ladder: LoadLadder?) -> LoadCap? {
+        guard help > 0, help.isFinite, step > 0 else { return nil }
+        let next = helpMoved(help, by: .up, step: step, ladder: ladder)
+        return next >= help - weightTolerance ? .leastHelp(bottom: help) : nil
     }
 
     /// `weight` moved one decision's worth. With a ladder the move lands on a load the location has:
@@ -94,7 +145,10 @@ extension WorkoutLoadEngine {
 
     /// A completed session at or past the top of the range while the next load waits: one more rep
     /// up to ``equipmentExtraReps`` past the range, then one more set; after a second session at
-    /// that ceiling the lift takes the jump — unless nothing heavier exists, when it stays there.
+    /// that ceiling the lift takes the jump — unless nothing heavier exists (or, on an assisted
+    /// machine, no less help). Then the one extra set is all it adds (w7, 2026-11-10): the session
+    /// after it keeps the set and says the lift has topped out (``LoadChange/toppedOut`` — the note
+    /// offers the next harder variation), and after that it holds with nothing more said.
     static func cappedOutcome(
         target: Int, scheme: RepScheme, cap: LoadCap, anchor: LiftExposure, history: [LiftExposure]
     ) -> Outcome {
@@ -102,10 +156,14 @@ extension WorkoutLoadEngine {
         if target < ceiling {
             return Outcome(reps: target + 1, setsDelta: 0, change: .repsFirst, move: .hold, cap: cap)
         }
-        if case .bigStep = cap, previousSessionReached(ceiling, before: anchor, in: history) {
+        if case .bigStep = cap {
+            guard previousSessionReached(ceiling, before: anchor, in: history) else {
+                return Outcome(reps: ceiling, setsDelta: 1, change: .setFirst, move: .hold, cap: cap)
+            }
             return Outcome(reps: scheme.low, setsDelta: 0, change: scheme.isRange ? .backToBottom : .addWeight, move: .up)
         }
-        return Outcome(reps: ceiling, setsDelta: 1, change: .setFirst, move: .hold, cap: cap)
+        let held = toppedOutChange(sessionsAtTop: sessionsAtTop(ceiling, anchor: anchor, history: history))
+        return Outcome(reps: ceiling, setsDelta: 1, change: held ?? .setFirst, move: .hold, cap: cap)
     }
 
     /// Whether the regular session before `anchor` was also completed at `ceiling` reps at the same

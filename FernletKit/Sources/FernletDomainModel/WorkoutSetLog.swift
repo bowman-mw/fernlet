@@ -65,10 +65,16 @@ extension ExerciseResult {
     /// Records what the sets actually were — a correction in the Edit sheet, or a set-by-set entry.
     ///
     /// The prescription (sets, target, range, suggestion) is history and stays as it was; what
-    /// changes is the record of what was lifted. The working weight becomes the heaviest set's,
+    /// changes is the record of what was lifted. The working weight becomes the weight most sets
+    /// were done at (w2: ``WorkoutLoadEngine/mostUsedWeight(_:)``, a tie going to the heavier),
     /// ``setWeights`` is kept only when the sets differed, and ``actualReps`` only when the reps
     /// left the prescription — so recording the sets as prescribed reads as "completed as
     /// prescribed" again. A blank weight repeats the set before it. An empty list changes nothing.
+    ///
+    /// When the weights come in another unit than the record's (the Edit sheet's unit picker, w6
+    /// 2026-11-10), the stored range and suggestion are converted with it, so they stay the same
+    /// weights: 100 lb in a 95–110 lb range corrected to 45 kg is still inside its range, not a
+    /// lighter override that drops the session from the trend.
     ///
     /// - Parameter unit: The unit the weights were entered in; ignored when no set has a weight.
     public mutating func record(_ sets: [LoggedSet], unit: LoadUnit?) {
@@ -76,10 +82,17 @@ extension ExerciseResult {
         guard !capped.isEmpty else { return }
         let reps = capped.map(\.reps)
         let weights = LoggedSet.filledWeights(capped)
-        let top = weights?.max()
-        selectedWeight = top
-        if top != nil, let unit { unitToken = unit.rawValue }
-        if let weights, let top, weights.contains(where: { top - $0 > WorkoutLoadEngine.weightTolerance }) {
+        let working = weights.flatMap(WorkoutLoadEngine.mostUsedWeight)
+        selectedWeight = working
+        if working != nil, let unit {
+            if let stored = self.unit, stored != unit {
+                rangeLow = rangeLow.map { unit.converted($0, from: stored) }
+                rangeHigh = rangeHigh.map { unit.converted($0, from: stored) }
+                suggestedWeight = suggestedWeight.map { unit.converted($0, from: stored) }
+            }
+            unitToken = unit.rawValue
+        }
+        if let weights, let working, weights.contains(where: { abs(working - $0) > WorkoutLoadEngine.weightTolerance }) {
             setWeights = weights
         } else {
             setWeights = nil
@@ -102,15 +115,15 @@ extension ExerciseResult {
         let capped = Array(sets.prefix(maxSets)).map(\.clamped)
         guard !trimmed.isEmpty, !capped.isEmpty else { return nil }
         let weights = LoggedSet.filledWeights(capped)
-        let top = weights?.max()
+        let most = weights.flatMap(WorkoutLoadEngine.mostUsedWeight)
         let working = capped.indices.filter { index in
-            guard let top, let weights else { return true }
-            return weights[index] >= top - WorkoutLoadEngine.weightTolerance
+            guard let most, let weights else { return true }
+            return abs(weights[index] - most) <= WorkoutLoadEngine.weightTolerance
         }
         let target = max(1, working.map { capped[$0].reps }.max() ?? 1)
         var result = ExerciseResult(
             name: trimmed, prescribedSets: capped.count, targetReps: target,
-            unit: top == nil ? nil : unit, equipment: equipment, effort: effort
+            unit: most == nil ? nil : unit, equipment: equipment, effort: effort
         )
         result.record(capped, unit: unit)
         return result

@@ -187,6 +187,8 @@ struct PrivacyWipeCoverageTests {
         // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of
         // 2026-10-20). The heart-rate switches stored beside it are kept; this is about their body.
         "WorkoutZonePreferences.clearMaxHeartRate",
+        // "Not now" on a strength check (w4, 2026-11-10): the moment a check may be offered again.
+        "WorkoutCalibrationDeferral.clear",
         "RecipeWebImageAttemptMemory.clearAll",
         // The local food-search correction memory (research §26 fix 1.10). Two tokens, because the
         // surface has two live copies: the defaults sidecar AND the `FoodCatalog`'s in-memory alias
@@ -208,6 +210,10 @@ struct PrivacyWipeCoverageTests {
         // which would override an explicit "keep my Health samples" answer at the wipe.
         "workoutTombstones.clearAll",
         "guidedRunStateStore.clear",
+        // Today's workout plan file (e7, 2026-11-10, `GuidedPlanFile`): the plan's sessions, "Anything
+        // else?" as typed, and the limits it was built around. The next launch reads the file back,
+        // so a wipe that left it would restore a plan onto a wiped device.
+        "guidedPlanFile?.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
         // The first-workout Health-offer fact (`fernlet.healthkit.workoutAccessOfferResolved`) in the
@@ -333,7 +339,11 @@ struct PrivacyWipeCoverageTests {
         "func clearMessagesImportInboxes()",
         "func clearDeviceLocalLedgers(",
         "func rotateProximityIdentityAndPurgeDeadDrop(",
-        "func resetAll() -> [String]"
+        "func resetAll() -> [String]",
+        // A sub-leg of `resetAll`, split out for the 60-line rule when today's workout plan joined
+        // the guided run's clears (e7, 2026-11-10): it holds `guidedRunStateStore.clear` and
+        // `guidedPlanFile?.clear`, so it must be scanned or both tokens would go unseen.
+        "func clearGuidedWorkoutStateForWipe()"
     ]
 
     /// The `ContentView` half of the wipe path: five real clears live inside the hook closures

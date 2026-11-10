@@ -263,6 +263,11 @@ struct PersistedSurfaceWipeBoundaryTests {
         // The token is the CALL in `resetAll`; `clearMaxHeartRate` is declared in GuidedZones.swift,
         // outside every registered wipe signature, so it cannot satisfy itself.
         "fernlet.workoutCues.maxHeartRate": .cleared(token: "WorkoutZonePreferences.clearMaxHeartRate"),
+        // "Not now" on a strength check (w4, 2026-11-10, WorkoutCalibrationDeferral): the moment a
+        // check may be offered again — a trace of what the person did on a day, so the funnel clears
+        // it. The token is the CALL in `resetAll`; `clear(in:)` is declared in
+        // WorkoutCalibrationDeferral.swift, outside every registered wipe signature.
+        "fernlet.workoutCalibration.askAgainFrom": .cleared(token: "WorkoutCalibrationDeferral.clear"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),
         // The period backup's observed foreign head (Sealed backup v2 design 2026-09-30, §4.3, §9):

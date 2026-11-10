@@ -6663,7 +6663,7 @@ struct LocalizationBoundaryTests {
             reason: "The resource overload's default for its many callers whose copy never describes the user; part I2 makes every user-gendered key pass addressing:."),
         MasculineDefault(
             path: "FernletKit/Sources/FernletDomainModel/WorkoutProgram+Load.swift",
-            line: "bodyWeights: [BodyWeightSample] = [], address: TermOfAddress = .masculine",
+            line: "address: TermOfAddress = .masculine, deloadWeek: Bool = false",
             reason: "A load context built without saying so (test fixtures) plans as an unanswered profile; WorkoutLoadContextBuilder always passes the effective profile's term."),
         MasculineDefault(
             path: "App/Fernlet/FernletStore.swift", line: "let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine",

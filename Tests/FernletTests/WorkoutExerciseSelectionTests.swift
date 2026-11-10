@@ -85,15 +85,21 @@ struct WorkoutExerciseSelectionTests {
     }
 
     /// With nothing but bodyweight, the arm slots drop honestly instead of taking an ab wheel and
-    /// a bird dog, and the vertical pull drops instead of offering a pull-up with no bar.
+    /// a bird dog, and both pulls drop instead of offering a pull-up or an inverted row with no bar
+    /// (fix e5: an inverted row needs a low bar). That leaves Upper day two pushes, so the short
+    /// session is filled from the lifts the bare room does allow (fix s3).
     @Test func bodyweightOnlyDropsSlotsItCannotFill() {
         let upper = names(WorkoutSessions.upper, at: Self.park, experience: .intermediate)
         #expect(upper.dropped.contains("Biceps"))
         #expect(upper.dropped.contains("Triceps"))
         #expect(upper.dropped.contains("Vertical pull"))
+        #expect(upper.dropped.contains("Horizontal pull"))
         #expect(!upper.picked.contains("Ab wheel") && !upper.picked.contains("Bird dog"))
         #expect(upper.picked.contains("Push-up"))
-        #expect(upper.picked.contains("Inverted row"))
+        #expect(!upper.picked.contains("Inverted row") && !upper.picked.contains("Dip"))
+        #expect(upper.picked.count >= WorkoutProgram.minimumLifts && upper.picked.contains("Bodyweight squat"))
+        let withBar = names(WorkoutSessions.upper, at: WorkoutLocation(name: "Park bars", ownedEquipment: [.lowBar]), experience: .intermediate)
+        #expect(withBar.picked.contains("Inverted row"))
     }
 
     /// Core slots no longer all go to "Medicine ball slam": it is a power move that needs a
@@ -123,22 +129,35 @@ struct WorkoutExerciseSelectionTests {
 
     /// Every pick, in every slot of every template, at every location and level, satisfies the
     /// slot's pattern, plane and primary-muscle requirements and is rep-measured strength work.
-    /// Picks are matched back to slots in order, skipping the slots the plan reports as dropped.
+    /// Picks are matched back to slots in order, skipping the slots the plan reports as dropped —
+    /// except where a short session was filled from other body areas (the owner's fix s3,
+    /// 2026-11-10): there the fill picks stand in the first dropped slots, are strength work the
+    /// location can run, and are deliberately NOT the dropped slot's own kind of work.
     @Test func everyPickIsEligibleForItsSlot() {
         for session in Self.allSessions {
             for location in Self.allLocations {
                 for experience in ExperienceLevel.allCases {
                     let result = names(session, at: location, experience: experience)
                     var remaining = result.picked[...]
+                    let liftSlots = session.slots.prefix(experience.maxSlotsPerDay).filter { $0.role != .core }
+                    let ownPicks = liftSlots.filter { !result.dropped.contains($0.label) }.count
+                    var fills = max(0, result.picked.count - ownPicks)
                     // Core slots run in the activation block; the lifting picks follow the rest in order.
-                    for slot in session.slots.prefix(experience.maxSlotsPerDay)
-                    where slot.role != .core && !result.dropped.contains(slot.label) {
+                    for slot in liftSlots where remaining.first != nil || !result.dropped.contains(slot.label) {
+                        let isFill = result.dropped.contains(slot.label)
+                        if isFill && fills == 0 { continue }
                         guard let name = remaining.popFirst(), let exercise = catalogExercise(name) else {
                             Issue.record("\(session.title) @ \(location.name): no pick for \(slot.label)")
                             break
                         }
-                        #expect(WorkoutProgram.isEligible(exercise, for: slot),
-                                "\(session.title) @ \(location.name) [\(experience)]: \(name) in \(slot.label)")
+                        if isFill {
+                            fills -= 1
+                            #expect(exercise.modality == .strength && !WorkoutProgram.isEligible(exercise, for: slot),
+                                    "\(session.title) @ \(location.name) [\(experience)]: \(name) fills \(slot.label)")
+                        } else {
+                            #expect(WorkoutProgram.isEligible(exercise, for: slot),
+                                    "\(session.title) @ \(location.name) [\(experience)]: \(name) in \(slot.label)")
+                        }
                         #expect(WorkoutSafetyFilter.hasEquipment(for: exercise, at: location))
                     }
                 }
@@ -273,5 +292,78 @@ struct WorkoutExerciseSelectionTests {
         let split = WorkoutSplitCatalog.fullBody3
         let filler = Array(repeating: ["Walk"], count: WorkoutProgram.rotationLookbackDays)
         #expect(WorkoutProgram.nextDayIndex(in: split, recentSessionNames: filler + [["Full Body A"]]) == 0)
+    }
+
+
+    // MARK: - The smaller planner fixes (e8, 2026-11-10)
+
+    /// Logging only the morning cardio of a two-session day used to match the earliest day with
+    /// that session and send the rotation back. It now carries on from the day logged before it.
+    @Test func aPartlyLoggedTwoSessionDayDoesNotRewindTheRotation() {
+        let split = WorkoutSplitCatalog.cardioStrength4
+        let dayThreeMorningOnly = [["Morning · Easy cardio"], ["Morning · Intervals", "Evening · Lower"]]
+        #expect(WorkoutProgram.nextDayIndex(in: split, recentSessionNames: dayThreeMorningOnly) == 3)
+        // After day 4 the rotation wraps, so the same morning session is day 1's.
+        let dayOneMorningOnly = [["Morning · Easy cardio"], ["Morning · Steady cardio", "Evening · Pull"]]
+        #expect(WorkoutProgram.nextDayIndex(in: split, recentSessionNames: dayOneMorningOnly) == 1)
+        // With nothing logged before it, the earliest day it fits, as before.
+        #expect(WorkoutProgram.nextDayIndex(in: split, recentSessionNames: [["Morning · Easy cardio"]]) == 1)
+        // A whole day logged is never ambiguous.
+        #expect(WorkoutProgram.nextDayIndex(in: split, recentSessionNames: [["Morning · Easy cardio", "Evening · Push"]]) == 3)
+    }
+
+    /// Cardio machines alternate from one cardio day to the next: the seed is the count of cardio
+    /// sessions logged, not the cardio day's fixed place in the split.
+    @Test func cardioMachinesAlternateFromOneCardioDayToTheNext() throws {
+        let split = WorkoutSplitCatalog.dailyMove
+        #expect(WorkoutProgram.cardioSessionsLogged(in: split, recentSessionNames: []) == 0)
+        let history = [["Full Body A"], ["Easy cardio"], ["Evening walk"], ["Full Body B"], ["Easy cardio", "Stretch"]]
+        #expect(WorkoutProgram.cardioSessionsLogged(in: split, recentSessionNames: history) == 2)
+        #expect(WorkoutProgram.cardioSessionsLogged(in: WorkoutSplitCatalog.ppl3, recentSessionNames: history) == 0)
+        let gym = WorkoutLocation(name: "Garage", ownedEquipment: [.exerciseBike, .rowingMachine])
+        func machine(seed: Int) throws -> String {
+            let plan = WorkoutProgram.dayPlan(goal: .wellness, intensity: .moderate, profile: WorkoutProfile(), location: gym,
+                                              context: "", split: split, rotationIndex: 1, cardioSeed: seed)
+            return try #require(WorkoutCardioMachines.machine(in: plan.sessions.first?.suggestion.exercises ?? ""))
+        }
+        #expect(try machine(seed: 0) != machine(seed: 1), "the same cardio day names the other machine next time")
+        #expect(try machine(seed: 0) == machine(seed: 2))
+    }
+
+    /// An exercise a coach defines gets the traits the filters read: a pull-up's plane, bar and
+    /// difficulty, a stretch's modality, a bench lift's bench.
+    @Test func coachDefinedExercisesGetDefaultTraits() {
+        func traits(_ name: String, _ muscles: Set<MuscleGroup>, _ equipment: Equipment, _ pattern: MovementPattern) -> ExerciseTarget {
+            CoachExerciseTraits.applied(to: ExerciseTarget(name: name, primaryMuscles: muscles, equipment: equipment, movementPattern: pattern))
+        }
+        let pullUp = traits("Weighted pull-up", [.lats], .bodyweight, .pull)
+        #expect(pullUp.plane == .vertical && pullUp.difficulty == .advanced && pullUp.requiredGear == [.pullUpBar])
+        #expect(!WorkoutSafetyFilter.hasEquipment(for: pullUp, at: WorkoutLocation(name: "Room", ownedEquipment: [])))
+        #expect(!WorkoutProgram.isEligible(pullUp, for: WorkoutSessions.upper.slots[1]), "a pull-up is no horizontal pull")
+        #expect(!InjuryLimits(mildAreas: [.upperBack]).allows(traits("Weighted pull-up", [.upperBack], .bodyweight, .pull)))
+
+        let row = traits("Chest-supported dumbbell row", [.upperBack], .dumbbell, .pull)
+        #expect(row.plane == .horizontal && row.difficulty == .foundational)
+        let press = traits("Incline dumbbell bench press", [.chest], .dumbbell, .push)
+        #expect(press.plane == .horizontal && press.requiredGear == [.weightBench])
+        #expect(traits("Arnold press", [.frontDelts], .dumbbell, .push).plane == .vertical)
+        #expect(traits("Incline push-up", [.chest], .bodyweight, .push).requiredGear.isEmpty)
+
+        let stretch = traits("Couch stretch", [.quads], .bodyweight, .isolation)
+        #expect(stretch.modality == .mobility)
+        #expect(!WorkoutProgram.isEligible(stretch, for: WorkoutSessions.legs.slots[0]), "a stretch fills no lifting slot")
+        #expect(traits("Tuck jump", [.quads], .bodyweight, .squat).modality == .power)
+        #expect(traits("Assisted pull-up", [.lats], .machine, .pull).difficulty == .foundational)
+
+        // Each machine has its own row (e5): a coach's machine exercise asks for its machine, so one
+        // leg press does not unlock it; the same words on another tool ask for nothing.
+        let extension_ = traits("Single-leg leg extension", [.quads], .machine, .isolation)
+        #expect(extension_.requiredGear == [.legExtension])
+        #expect(!WorkoutSafetyFilter.hasEquipment(for: extension_, at: WorkoutLocation(name: "Room", ownedEquipment: [.legPress])))
+        #expect(traits("Band leg curl", [.hamstrings], .band, .isolation).requiredGear.isEmpty)
+        #expect(traits("Ab wheel rollout", [.abs], .bodyweight, .isolation).requiredGear == [.abWheel])
+
+        let plain = traits("Hammer curl", [.biceps], .dumbbell, .isolation)
+        #expect(plain.plane == nil && plain.modality == .strength && plain.difficulty == .standard && plain.requiredGear.isEmpty)
     }
 }

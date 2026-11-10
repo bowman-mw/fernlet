@@ -296,7 +296,10 @@ struct WorkoutExercisePreferencesTests {
         let kneeHurts = dayPlan(template, location: .fullGym, profile: WorkoutProfile(injuryAreas: [.knee: .severe]),
                                 preferences: WorkoutExercisePreferences(), options: WorkoutSessionOptions(), catalog: [custom])
         #expect(lifting(kneeHurts).isEmpty)
-        #expect(notes(kneeHurts).contains("Skipped Lunge — no safe option here."))
+        // With nothing else to lift, the session is the mobility offer (the owner's fix s3,
+        // 2026-11-10; this used to pin "Skipped Lunge — no safe option here." beside a circuit).
+        #expect(notes(kneeHurts).contains("Not enough lifts fit Probe day today, so here is some seated mobility instead."))
+        #expect(kneeHurts.droppedSlots == ["Lunge"])
 
         var cardio = draft
         cardio.modality = .cardio
@@ -564,5 +567,33 @@ struct WorkoutExercisePreferencesTests {
         row = timed
         let back = GuidedWorkoutEditorSheet.swapped(row, to: try target("Dead bug"), goal: .strength)
         #expect(back.holdSeconds == nil && !back.reps.hasSuffix(" s"))
+    }
+
+
+    // MARK: - Hidden means hidden everywhere (e6, 2026-11-10)
+
+    /// A hidden stretch stays out of the Mobility flow and the rest day's gentle stretch: the run
+    /// builds them from the same pool the planner picks from.
+    @Test func aHiddenStretchStaysOutOfTheMobilityFlowAndGentleStretch() {
+        let hidden = ["Cat-cow", "Child's pose", "Low lunge stretch"]
+        let profile = WorkoutProfile(experience: .intermediate)
+        func names(_ line: String, hiding: [String]) -> [String] {
+            let pool = WorkoutProgram.suggestablePool(in: base, location: .fullGym, profile: profile,
+                                                      preferences: WorkoutExercisePreferences(hidden: hiding))
+            let step = PrescribedExercise(name: line, sets: 0, reps: "", role: .accessory, fromCatalog: false)
+            return WorkoutTimedSessions.expand([step], feasible: pool).map(\.name)
+        }
+        for line in ["Mobility flow - 15 min", "Gentle stretching or an easy walk - 10 min"] {
+            let shown = names(line, hiding: [])
+            #expect(!Set(shown).isDisjoint(with: hidden), "\(line) uses these stretches when nothing is hidden")
+            let after = names(line, hiding: hidden)
+            #expect(Set(after).isDisjoint(with: hidden), "\(line) still has \(Set(after).intersection(hidden))")
+            #expect(after.count > 1, "\(line) keeps the rest")
+        }
+        // The pool is the planner's: equipment and limits apply as they always did.
+        let knee = WorkoutProfile(injuryAreas: [.knee: .severe])
+        let pool = WorkoutProgram.suggestablePool(in: base, location: .home, profile: knee,
+                                                  preferences: WorkoutExercisePreferences(hidden: ["Calf stretch"]))
+        #expect(!pool.contains { ["Calf stretch", "Low lunge stretch", "Bench press"].contains($0.name) })
     }
 }

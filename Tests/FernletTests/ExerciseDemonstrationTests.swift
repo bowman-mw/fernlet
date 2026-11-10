@@ -191,7 +191,12 @@ struct ExerciseDemonstrationTests {
         #expect(try glyph("Pull-up") == .pullUpBar)
         #expect(try glyph("Medicine ball slam") == .medicineBall)
         #expect(try glyph("Treadmill run") == .treadmill)
-        #expect(try glyph("Leg press") == .chestPress)
+        // A machine exercise names its machine now (fix e5): the leg press draws its own glyph, and a
+        // machine with no drawn glyph keeps the seated-machine one.
+        #expect(try glyph("Leg press") == .legPress)
+        #expect(try glyph("Leg extension") == .chestPress)
+        #expect(try glyph("Dip") == .dipBars)
+        #expect(try glyph("Ab wheel") == .abWheel)
         #expect(try glyph("Plank") == .yogaMat)
         #expect(ExerciseDemonstrationPlaceholder.glyph(for: nil) == .yogaMat)
     }

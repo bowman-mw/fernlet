@@ -163,9 +163,16 @@ struct WorkoutWeightInventoryTests {
         let top = plan([session(26, 25, reps: 12)], equipment: .dumbbell, inventory: homeSet(), today: 28)
         #expect((top.change, top.reps) == (.repsFirst, 13))
         #expect(top.cap == .heaviest(top: 25))
+        let set = plan([session(26, 25, reps: 15)], equipment: .dumbbell, inventory: homeSet(), today: 28)
+        #expect((set.change, set.reps, set.sets, set.prescription?.suggested) == (.setFirst, 15, 4, 25))
+        // w7 (2026-11-10): one extra set, then it has topped out — never "one more set" again.
         let held = plan([session(24, 25, reps: 15), session(26, 25, reps: 15, sets: 4)],
                         equipment: .dumbbell, inventory: homeSet(), today: 28)
-        #expect((held.change, held.reps, held.sets, held.prescription?.suggested) == (.setFirst, 15, 4, 25))
+        #expect((held.change, held.reps, held.sets, held.prescription?.suggested) == (.toppedOut, 15, 4, 25))
+        #expect(held.cap == .heaviest(top: 25))
+        let after = plan([22, 24, 26].map { session($0, 25, reps: 15, sets: 4) },
+                         equipment: .dumbbell, inventory: homeSet(), today: 28)
+        #expect((after.change, after.sets, after.prescription?.suggested) == (.heldAtTop, 4, 25))
     }
 
     @Test func aSmallMissAtTheExtraRepsRepeatsThem() {
@@ -305,7 +312,8 @@ struct WorkoutWeightInventoryTests {
         let top = try object(decoded)
         #expect(top["workoutLocationWeights"] == nil, "no weights, no key: the old blob's shape")
         let locations = try #require(top["workoutLocations"] as? [[String: Any]])
-        #expect(locations.first?.keys.sorted() == ["id", "name", "ownedEquipment"])
+        // The one key added since: which equipment list the ticks were made against (fix e5).
+        #expect(locations.first?.keys.sorted() == ["equipmentListVersion", "id", "name", "ownedEquipment"])
         let fresh = try object(FernletSettings())
         #expect(!fresh.keys.contains("workoutLocationWeights"))
     }
@@ -325,7 +333,7 @@ struct WorkoutWeightInventoryTests {
         #expect(entry["barWeight"] as? Double == 45)
         #expect(entry["platePairs"] as? [Double] == [45, 45])
         let nested = try #require((top["workoutLocations"] as? [[String: Any]])?.first)
-        #expect(nested.keys.sorted() == ["id", "name", "ownedEquipment"], "the weights are not nested")
+        #expect(nested.keys.sorted() == ["equipmentListVersion", "id", "name", "ownedEquipment"], "the weights are not nested")
 
         let again = try JSONDecoder().decode(FernletSettings.self, from: JSONEncoder().encode(original))
         #expect(again.workoutLocations == original.workoutLocations)
@@ -522,4 +530,26 @@ private nonisolated struct OlderBuildKey: CodingKey {
     var intValue: Int? { nil }
     init(stringValue: String) { self.stringValue = stringValue }
     init?(intValue: Int) { nil }
+}
+
+// MARK: - w6 (W8) placing last time's weight on another space's loads
+
+extension WorkoutWeightInventoryTests {
+
+    /// 30 lb dumbbells at the gym; home owns 10, 20 and 35. The nearest load is 35, a 17 % jump, and
+    /// the plan said "one more rep than last time" at it.
+    @Test func lastTimesWeightIsPlacedDownWhenTheNearestLoadIsTooBigAJump() throws {
+        var home = WorkoutWeightInventory(unit: .lb)
+        home.setDumbbells([10, 20, 35])
+        let ladder = try #require(home.ladder(for: .dumbbell, in: .lb))
+        #expect(ladder.nearest(to: 30) == 35)
+        #expect(WorkoutLoadEngine.placed(30, on: ladder) == 20)
+        #expect(WorkoutLoadEngine.placed(33, on: ladder) == 35, "inside the 10 % guard the nearest load is fine")
+        #expect(WorkoutLoadEngine.placed(22, on: ladder) == 20)
+        #expect(WorkoutLoadEngine.placed(8, on: ladder) == 10, "with nothing at or under it, the lightest there is")
+        #expect(WorkoutLoadEngine.placed(30, on: nil) == 30)
+        let moved = plan([session(28, 30, reps: 10)], equipment: .dumbbell, inventory: home)
+        #expect((moved.change, moved.reps, moved.prescription?.suggested) == (.moreReps, 11, 20))
+        #expect(moved.previousWeight == 30)
+    }
 }

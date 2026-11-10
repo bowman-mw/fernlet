@@ -549,7 +549,17 @@ adding variations fills gaps without moving the plans people already follow. The
 by ("ab roller" for the Ab wheel); an alias only adds results after the direct matches, so a lookup
 that takes the first result resolves as before.
 ``WorkoutSafetyFilter`` gates equipment on the exercise's tool or any alternative plus every piece of
-required gear (a pull-up bar, a bench). The split advances by the last logged split day
+required gear (a pull-up bar, a bench). Each exercise needs its own gear (the owner's fix e5,
+2026-11-10): every bundled machine exercise names its machine, a free barbell lift names the plates
+(and the rack where it needs one), and Dip, Inverted row and Ab wheel name ``GymEquipment/dipBars``,
+``GymEquipment/lowBar`` and ``GymEquipment/abWheel`` — so one leg press unlocks only Leg press, and
+only the barbell itself is a barbell (``GymEquipment/capability``; a Smith machine, plates or a rack
+alone no longer unlock a free barbell lift, and Smith machine squat needs only the Smith machine). A
+``WorkoutLocation`` saved before each machine had its own row carries no `equipmentListVersion` and is
+read once, as it decodes, through ``WorkoutLocation/legacyGearGrant(for:)``: a space that ticked a leg
+press or chest press keeps every machine (ticked, for its owner to correct), a ticked barbell keeps
+its plates, and the default Full gym with all 22 older pieces gets the whole list. The corrections
+that make a space safer are not granted back. The split advances by the last logged split day
 (`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.
 
 A lifting session runs in ``SessionBlock`` order — the owner's layout (2026-10-19): the warm-up
@@ -576,11 +586,59 @@ prescribes the area's main lift as accessory work. A Smith machine row is a mach
 end, by the owner's call of 2026-10-21 — but its bar still sits on the spine, so a spine area counts a
 Smith squat as loading it, as it counts a back squat.
 
+Those rules read only tags, so they are the floor. Every bundled exercise also carries a reviewed
+record of the areas it loads (``ExerciseAreaLoads``; the catalogue rows' `areaLoads` map of frozen
+area token → ``AreaLoad`` token, with one phrase of reasoning each in `areaLoadNotes`, which the app
+never reads): weight on the hands or a hard grip for the wrist, hanging and overhead work for the
+shoulder, bent-over and carried loads for the lower back, jumping for the ankle and knee. Severe
+leaves out every exercise the record names for the area; mild leaves out the ones it marks hard and
+keeps the light, supported ones. The record only adds — nothing the floor leaves out comes back — and
+an exercise without one (a person's or a coach's own) gets the floor alone, never "loads nothing".
+``WorkoutExerciseCatalog/areaLoads(for:)`` finds the record by the frozen name, so ``ExerciseTarget``'s
+persisted shape is unchanged. A new catalogue row must ship with a record: `ExerciseAreaLoadTests`
+fails without one, and fails when a record says less than the floor. A mild area eases every kept
+lift its record names, however lightly (``InjuryLimits/eases(_:)``): accessory treatment, and never a
+calibration or a max test.
+
+A limit ends through one switch, "No longer an issue" (``InjuryEasing``, the owner's fix s5,
+2026-11-10). `WorkoutProfile.injuryEasingTokens` — the settings blob's top-level `workoutInjuryEasing`,
+optional, written only when a switch is on, carried verbatim for a newer build — holds one frozen token
+per area: `pending` until the next workout is logged, then that workout's day key. The area is mild
+(``InjuryEasingState/easing``) while pending and for ``InjuryEasing/days`` days from that day, then has
+no limit at all, from the picker, the note or the older avoided sets; the note's text is never edited.
+`WorkoutProfile.injuryLimits(onDayKey:)` is where all four inputs combine.
+
+**A lifting session never falls back to an unfiltered circuit** (the owner's fix s3, 2026-11-10;
+`WorkoutProgram+Fill.swift`). When fewer than ``WorkoutProgram/minimumLifts`` safe lifts remain, each
+empty slot takes a safe lift for another body area from the same filtered, non-hidden pool, in the
+slot's own role, the areas the split trains on its next day taken last, and the note says which area
+was worked around. A session still short offers a mobility flow and an easy walk instead, under the
+day's own name so the rotation moves on — seated mobility and no walk when a severe ankle, knee or
+hip rules walking out (``InjuryLimits/barsWalking``), which also turns a cardio day with no machine
+left into seated mobility. ``WorkoutProgram/suggestablePool(in:location:profile:preferences:)`` is the
+one pool every surface that picks exercises reads, so a hidden exercise is hidden everywhere.
+
+**"Anything else?" is read for today only** (the owner's fix e3, 2026-11-10; ``WorkoutDayNote``). The
+plan sheet's free text used to add a few points to exercises whose name shared a word with it, under a
+note that said "Noted: …". `WorkoutProgram.dayPlan` now reads it with ``InjuryNoteMatcher``: a body
+area it names is trained around today (the Mild treatment, a muscle word counting as its nearest area)
+on top of the saved limits (``InjuryLimits/applying(_:)`` — a saved Severe is never weakened, and
+nothing is written to the profile); a time phrase ("short on time", "only 30 minutes") picks a shorter
+``WorkoutSessionLength`` unless the caller passes `noteMayShorten: false` because the person chose a
+length for this plan; and the name-word nudge stays only where it cannot contradict that (never a word
+naming a body part, and nothing from a note that reads as a complaint). The first session's note then
+says each thing applied, a sentence each, or that nothing could be applied and where lasting limits are
+set (`WorkoutPlannerCopy+DayNote.swift`). The vocabulary is frozen English matching input, like the
+saved note's.
+
 The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
 (``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
 those primary muscles hard again it moves to the next split day that spares them — unless the
 overlap is the split's own order, which moving would only push back every pass — and otherwise takes
-a set off each overlapping lift, saying why in the note. Recovery and mobility days, and the warm-up,
+a set off each overlapping lift, saying why in the note. Overlap that comes only from the previous
+split day's accessory slots does not count (``WorkoutRecoveryGuard/counted(_:split:dueIndex:)``: a Pull
+day's accessory hinge no longer lightens every Legs day), and a logged Travel-day reset is never hard
+training. Recovery and mobility days, and the warm-up,
 activation and cool-down, are exempt.
 
 A session's length follows ``WorkoutSessionOptions`` (synced settings with frozen tokens and parked
@@ -617,7 +675,8 @@ budget caps it — and become timed steps only when a guided run starts
 reads a line strictly (``TimedDescriptor``): "Easy cardio - 20 min" is one steady countdown, "Intervals -
 8 × 1 min hard / 1 min easy" is sixteen ``CardioSegment``s of a ``CardioPace`` each, every part after
 the first following straight on with no lead-in; "Mobility flow - 15 min" is a stretch session in the
-owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block), and the rest day's
+owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block), "Seated mobility - 15
+min" is sitting and lying stretches only (what stands in for a walk a limit rules out), and the rest day's
 gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
 certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
 run's log folds segments back into their line, and a cardio or mobility session logs as the matching
@@ -639,7 +698,9 @@ runner can time stays a descriptor for the expansion above (checked first, since
 as eight sets of one), sets × reps and timed holds become counted steps under the catalog's name, and
 anything else one step marked done that shows the line. Nothing is filtered or dropped. A weight the line
 names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
-names none gets the load engine's suggestion, for the sets and reps as written.
+names none gets the load engine's suggestion, for the sets and reps as written — on the weights the
+space owns and at the person's training age for the lift, as the planner's own sessions are (w6,
+2026-11-10: this path used to plan every lift as a beginner's, on no particular weights).
 
 The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``. FernletScoring's AI-free fallback workouts are saved under a frozen ``WorkoutFallbackName`` ("Suggested Light", "Mood Reset"), which `Workout.displayedName` draws localized (2026-10-20, Spanish round step 2).
 
@@ -659,7 +720,12 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``BodyArea``
 - ``InjurySeverity``
 - ``InjuryLimits``
+- ``AreaLoad``
+- ``ExerciseAreaLoads``
+- ``InjuryEasing``
+- ``InjuryEasingState``
 - ``InjuryNoteMatcher``
+- ``WorkoutDayNote``
 - ``WorkoutRecoveryGuard``
 - ``WorkoutSessionOptions``
 - ``WorkoutSessionLength``
@@ -705,20 +771,25 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 
 The owner's spec of 2026-10-19, with round 2's trend and ladder (2026-10-20). Given a
 ``WorkoutLoadContext`` (each lift's logged sessions as ``LiftExposure``s with their sleep and
-readiness flags, recent protein and logged weigh-ins, the calibration state), `WorkoutProgram.dayPlan` runs
+readiness flags, recent protein, the calibration state, whether this is a marked deload week), `WorkoutProgram.dayPlan` runs
 its lifting picks through a load pass. Everything is derived from the history each time — no stored
 estimate — so the same history always builds the same plan.
 
 - **Estimate and range.** ``WorkoutLoadEngine`` estimates a one-rep max by Epley with the reps left in
   the tank added back (sets of 12 or fewer, three sessions in eight weeks weighted 3:2:1) and sets a
   ``WeightPrescription`` whose width follows ``EstimateConfidence``: ±10 % low, ±5 % medium, one step
-  at high, on the equipment's steps.
+  at high, on the equipment's steps. A true single — one rep with nothing left — is its own max, not
+  Epley's 3.3 % more (w6, 2026-11-10). A session's working weight is the weight most of its sets were
+  done at (`WorkoutLoadEngine.mostUsedWeight`, w2; a tie goes to the heavier): one mistyped or one
+  deliberately heavier set never becomes the next suggestion, a set done lighter still keeps the
+  session from counting as completed, and a top set before back-off sets reads at the back-off weight.
+  Of several hand-written lines of one lift on one day, the one with the most sets is the session.
 - **Next session.** Completed → one more rep, or at the top of the range a fixed step heavier and back
   to the bottom ("add weight now"; G4: one equipment step on an upper-body lift, one or two on a
   lower-body one, landing on the location's own weights) — as often as the lift's training age allows
   (G3, ``TrainingTier``: after every successful session in the first six months, after two in a row
   from six months to two years (`LoadChange.confirming`), once per four-week block past that
-  (`LoadChange.blockHold`)). The training age is Workout setup's "How long have you lifted
+  (`LoadChange.blockHold`, whose note says the day the block is up — ``LiftPlan/holdUntil``, w8)). The training age is Workout setup's "How long have you lifted
   regularly?" — the existing ``ExperienceLevel``, nothing new stored — raised per lift by how long that
   lift has been logged (``WorkoutLoadContext/trainingAge(for:)``); "under 6 months" keeps the trend's
   age inferred. Tough or a miss → repeat; a second miss in a row on days with no sleep or
@@ -751,7 +822,24 @@ estimate — so the same history always builds the same plan.
   goal-appropriate options. A dip gets a deload instead: half the sets at the kept load, once. The old
   helper-muscle support step is gone; the old ladder's tokens resolve to the nearest new step
   (``PlateauStage/resolve(token:parkedToken:)``). The session note gives at most two context lines and
-  always a plain training option.
+  always a plain training option, and names every lift the trend changed today: the first with its
+  story, a second with what changes on it, the rest as a count (w9, 2026-11-10).
+- **Assisted machines (w3, 2026-11-10).** On an assisted pull-up or assisted dip the number is help.
+  ``WorkoutAssistedLifts`` is the one list (frozen catalogue names, held to the catalogue by
+  `WorkoutAssistedLiftTests`); its answer travels as a flag (``LiftExposure/assisted``,
+  ``LiftPlan/assisted``). For such a lift a good session takes one step of help away and misses give
+  one back (two after a third miss or a long break), with no light-load guard; the least help the
+  machine gives is the cap (``LoadCap/leastHelp(bottom:)``); the notes say "less help" and "more
+  help"; the engine keeps no one-rep-max estimate (so no strength check, heavier block or warm-up
+  ramp); and the trend scores body weight less the help
+  (``WorkoutAssistedLifts/effectiveLoad(help:unit:bodyWeightKg:)``), so less help reads as stronger.
+- **A marked deload week (w5, 2026-11-10).** When the person has marked this week as a deload on the
+  Bodybuilding calendar (``WorkoutLoadContext/deloadWeek``, read by the app only while Bodybuilding is
+  the goal), every lift repeats last time's weight and reps at about half the sets
+  (`WorkoutLoadEngine.deloadWeekSets`, `LoadChange.deloadWeek`), nothing steps up, no plateau response
+  or strength check runs, and each lift with a history is flagged an easier session, so the week
+  never anchors the next one or reads as the trend. ``BodybuildingDeloadRule`` counts only lifting
+  sessions toward a hard week (``BodybuildingDeloadRule/isLifting(_:)``).
 - **What each goal hears (G7, 2026-10-20).** ``PlateauTracking``: wellness, mental health, recovery
   and exploring get no plateau notes and no monthly strength test — they track minutes and sessions;
   weight management hears only a quiet "strength held" check
@@ -764,11 +852,10 @@ estimate — so the same history always builds the same plan.
   progress, and missing logs say nothing. Protein (``RecoverySummary``) is read against a fixed floor
   of about 1.2 g per kg a day, allowing for self-logged intake running about a fifth low, only with
   meals on five or more days in each of the last two weeks, beside a stall, a dip or a slowing, never
-  to weight management, with a doctor caveat for older lifters and kidney concerns. Logged weigh-ins
-  (``WorkoutBodyWeightTrend``: at least 0.5 % a week down over two to four weeks, 1.645 standard
-  errors clear of flat, on three weigh-ins in a row — 3 % of steady weights called falling over eight
-  weeks in its simulation) explain a Size lifter's stall, and beside weight management's strength-held
-  check bring a gentle check-in. Before a long, high-volume session the runner may ask one optional
+  to weight management, with a doctor caveat for older lifters and kidney concerns. Body weight is
+  not read: the planner keeps no weigh-in log, and the body-weight trend that once claimed to feed the
+  notes (G13) was never given a weigh-in and was removed (w10, 2026-11-10; ``BodyWeightSample`` stays
+  for the Bodybuilding calendar). Before a long, high-volume session the runner may ask one optional
   "Eaten in the last few hours?" (``WorkoutFuelCheck``); a "no" holds a shortfall in the later sets
   rather than counting it (`LoadChange.heldUnfueled`, ``ExerciseResult/unfueled``) and the trend
   scores the top set alone.
@@ -786,21 +873,35 @@ estimate — so the same history always builds the same plan.
   weeks for people without a coach plan, a one-set strength check when the estimate is already
   trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max. On a
   day whose time budget can't hold it (under 30 minutes, or the block with the check's rests over the
-  budget), the check waits for a roomier day and the note says so (N3).
+  budget), the check waits for a roomier day and the note says so (N3). A check can be put off (w4,
+  2026-11-10): ``CalibrationSettings/askAgainFrom`` — the app's device-local "Not now", written by the
+  runner's button, a run finished with its test skipped, or the due lift logged by hand — keeps
+  `WorkoutCalibration.isDue` false until that day, and no check is ever planned within
+  `WorkoutCalibration.minimumGapDays` (7) of the last. Every step of a planned check carries the
+  lift's usual working sets (``LoadGuidance/usual``), which "Not now" in the runner falls back to, so
+  the lift is still trained that day.
 - **At the heaviest weight (N7).** While a lift sits at the heaviest load its location has, the plan
   offers a harder variation — the same work one difficulty step up, a squat may step to a split
   squat (``LoadGuidance/harderVariation``) — as the plan editor's first swap; more reps, then a set,
-  stays the plan. The guided runner's lighter and heavier buttons step through the loads the location
-  owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6).
+  stays the plan. The set is one set (w7, 2026-11-10): the session after it the lift has topped out
+  (`LoadChange.toppedOut`) and the note names the next harder variation instead of "one more set"
+  again — or says plainly that there is none — and after that it holds with nothing more said
+  (`LoadChange.heldAtTop`). A bodyweight lift at the top of its range does the same. The guided runner's lighter and heavier buttons step through the loads the location
+  owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6): those around the
+  suggestion, or for a lift with no history the lightest it owns, so a first-time lift starts at the
+  empty bar or the lightest dumbbell and opens upward (w1, 2026-11-10).
 - **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
   plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
   the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
-  load it can make (``LoadLadder``). The light-load guard holds with or without them: when the next
+  load it can make (``LoadLadder``). Last time's weight from another space is placed on the nearest
+  load, but never up past the guard: it rounds down instead (30 lb onto 10, 20 and 35 is 20; w6,
+  `WorkoutLoadEngine.placed`). The light-load guard holds with or without them: when the next
   load is more than `WorkoutLoadEngine.lightLoadGuardRatio` (10 %) heavier, or there is none, the
   lift adds reps up to three past the range, then a set, then takes the jump (``LoadCap``,
   ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
   level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
-  itself now parks a newer build's equipment tokens and keys.
+  itself now parks a newer build's equipment tokens and keys, and writes `equipmentListVersion`
+  (optional and additive: a location without it is one saved before 2026-11-10).
 - **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets in front of the session's
   FIRST heavy main lift — a compound main lift on a barbell or dumbbells — when it has a suggested
   weight; when that lift can't ramp, no later lift does. A barbell ramp is the empty bar × 8, then
@@ -813,11 +914,31 @@ estimate — so the same history always builds the same plan.
   Barbell warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the
   standard 45 lb / 20 kg bar and plates, or the location's own bar and plates) says which plates go on
   each side, or the closest load it can make.
-- **After "Adjust with AI".** The on-device adjuster answers with names, sets and reps only, so
-  ``WorkoutAdjustedLoad`` loads the adjusted lifting block again: a lift kept at the same reps keeps its
-  guidance, any other catalog lift is prescribed from its history on the location's weights, the
-  compound count ahead of each lift is redone, and the warm-up ramp goes back before the first heavy main
-  lift when the setting is on and the committed day isn't light. The time budget is not applied again.
+- **One finishing pass for every plan** (the owner's fix s1, 2026-11-10; ``WorkoutPlanFinisher``). The
+  48-hour guard's lighter sets and the time budget run in one place,
+  `WorkoutPlanFinisher.settle(_:goal:recentHard:budgetMinutes:)`, which the planner's tail calls for
+  its own sessions and every edit calls again. "Adjust with AI"
+  (``WorkoutPlanFinisher/adjusted(_:picks:request:pool:others:context:)``) and the plan editor's rows
+  (``WorkoutPlanFinisher/finish(_:previous:others:origin:context:)``) first put the lifts in the state a
+  planner's pick arrives in: a timed movement carries a real `holdSeconds` however its text read
+  ("30 sec"), a lift that loads a mild area is accessory work (never ramped, never a strength check, and
+  — for a lift that is new to the session — on the accessory sets and reps), an adjustment repeats
+  neither the activation move nor a lift of another of today's sessions, a kept lift at the same reps
+  keeps its guidance and any other catalog lift is prescribed from its history on the location's weights
+  at the person's training age, and the warm-up ramp stands before the first heavy main lift when the
+  setting is on and the day isn't light — never before an assisted lift. Then the same trim and the
+  same budget run, and the note is rebuilt from what the pass did: a session's note is carried as
+  ``WorkoutNotePart``s (`SessionSuggestion.noteParts`), so the pass keeps the lines still true, rewrites
+  the budget's and the 48-hour guard's, drops a line about a lift that no longer stands as it did, and
+  adds "Adjusted to your note." once. **Invariants:** a session the pass has finished comes back from it
+  untouched (`WorkoutPlanFinisherTests` finishes generated plans over every split day and a dozen
+  profiles); an AI reply that leaves fewer than ``WorkoutProgram/minimumLifts`` lifts in a session that
+  had more is refused; in a hand edit the rows are the person's — none is dropped and no number they
+  kept is changed; the parts are not written to today's plan file, so a session read back from it has
+  its note rebuilt from nothing on its next edit. What a request rules out is read in code
+  (``WorkoutAdjustmentRequest``: "no barbell", "dumbbells only"; English, frozen words) and enforced on
+  the candidates and on the reply. ``WorkoutAdjustedLoad`` is the pass with no limits, window or budget
+  in play.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -876,6 +997,9 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutWarmUpSets``
 - ``WarmUpSet``
 - ``WorkoutAdjustedLoad``
+- ``WorkoutPlanFinisher``
+- ``WorkoutNotePart``
+- ``WorkoutAdjustmentRequest``
 - ``PlateCalculator``
 - ``WorkoutBlocks``
 - ``BlockPhase``
@@ -883,7 +1007,7 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutStrengthFocus``
 - ``PlateauTracking``
 - ``WorkoutFuelCheck``
-- ``WorkoutBodyWeightTrend``
+- ``WorkoutAssistedLifts``
 - ``BodyWeightSample``
 - ``BarbellPlateSet``
 - ``PlateLoadout``
@@ -930,6 +1054,7 @@ through `PlannedWorkout.displayedNotes` and `Workout.displayedNotes`.
 - ``CoachPlanEditAction``
 - ``CoachPlanStartPolicy``
 - ``CoachPlanTokens``
+- ``CoachExerciseTraits``
 - ``CoachPlanLimits``
 - ``CoachPlanIssue``
 - ``CoachPlanDecodeError``

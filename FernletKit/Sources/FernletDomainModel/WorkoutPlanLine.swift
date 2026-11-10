@@ -9,7 +9,8 @@
 // place, and the trainer export and the AI adjuster pass the lines on as written. So the lines stay
 // the frozen English the planner has always written — the warm-up and cool-down summaries
 // (``WorkoutSessionBlocks/planText(for:)``), the conditioning descriptors (``WorkoutSessions``,
-// ``WorkoutGoalStyle``) and the fallback circuit — and a screen draws each through ``displayed(_:)``.
+// ``WorkoutGoalStyle``), the short-session offer (WorkoutProgram+Fill) and the fallback circuit older
+// builds wrote, which logged rows still carry — and a screen draws each through ``displayed(_:)``.
 
 import Foundation
 
@@ -83,11 +84,13 @@ public nonisolated enum WorkoutPlanLine {
         case "Cool-down stretches": String(localized: "workoutPlanLine.coolDown", defaultValue: "Cool-down stretches - \(minutes) min", bundle: .module, comment: "A line of a workout plan: the cool-down stretches. The argument is minutes.")
         case "Easy cardio": String(localized: "workoutPlanLine.easyCardio", defaultValue: "Easy cardio - \(minutes) min", bundle: .module, comment: "A line of a workout plan: gentle cardio. The argument is minutes.")
         case "Steady cardio": String(localized: "workoutPlanLine.steadyCardio", defaultValue: "Steady cardio - \(minutes) min", bundle: .module, comment: "A line of a workout plan: cardio at an even pace. The argument is minutes.")
+        case "Seated mobility": String(localized: "workoutPlanLine.seatedMobility", defaultValue: "Seated mobility - \(minutes) min", bundle: .module, comment: "A line of a workout plan: stretches done sitting or lying down, offered when an injury rules out a walk. The argument is minutes.")
         case "Mobility flow": String(localized: "workoutPlanLine.mobilityFlow", defaultValue: "Mobility flow - \(minutes) min", bundle: .module, comment: "A line of a workout plan: a mobility routine. The argument is minutes.")
         case "Conditioning intervals": String(localized: "workoutPlanLine.conditioningIntervals", defaultValue: "Conditioning intervals - \(minutes) min", bundle: .module, comment: "A line of a workout plan: interval conditioning. The argument is minutes.")
         case "Easy walk": String(localized: "workoutPlanLine.easyWalk", defaultValue: "Easy walk - \(minutes) min", bundle: .module, comment: "A line of a workout plan: an easy walk. The argument is minutes.")
         case "Gentle mobility + walk": String(localized: "workoutPlanLine.gentleMobilityWalk", defaultValue: "Gentle mobility + walk - \(minutes) min", bundle: .module, comment: "A line of a workout plan: gentle mobility work and a walk. The argument is minutes.")
         case "Optional cardio": String(localized: "workoutPlanLine.optionalCardio", defaultValue: "Optional cardio - \(minutes) min", bundle: .module, comment: "A line of a workout plan: cardio if the person wants it. The argument is minutes.")
+        case WorkoutTimedSessions.seatedGentleHead: String(localized: "workoutPlanLine.restDaySeated", defaultValue: "Gentle stretching, seated - \(minutes) min", bundle: .module, comment: "A line of a workout plan on a day the person marked themselves unwell, when an injured ankle, knee or hip rules out a walk: optional gentle stretches done sitting or lying down. The argument is minutes.")
         case "Gentle stretching or an easy walk": String(localized: "workoutPlanLine.restDayMovement", defaultValue: "Gentle stretching or an easy walk - \(minutes) min", bundle: .module, comment: "A line of a workout plan on a day the person marked themselves unwell. The argument is minutes.")
         default: nil
         }

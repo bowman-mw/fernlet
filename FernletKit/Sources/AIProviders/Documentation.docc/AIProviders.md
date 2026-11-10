@@ -26,13 +26,19 @@ follows the same shape:
 2. **Gate check at the dispatch point.** Each model call routes through `FernletAIGate` (from
    `AIContext`) immediately before dispatch: it caps by device capability, applies the daily
    sleepy/resting budget, and charges exactly one call. A gate fallback returns `nil` (or, for recipe
-   import, throws a typed error) so the caller runs its deterministic path — every stage has one.
+   import, throws a typed error; the workout adjuster answers a ``WorkoutAdjustmentReply`` that says
+   whether AI is off or the call could not be made just now, so the app can tell the person why
+   nothing changed) so the caller runs its deterministic path — every stage has one.
 3. **Guided generation.** The prompt is answered into a private `@Generable` schema
    (`FoundationMealSelection`-style shapes). Guided generation guarantees shape, never validity.
 4. **Code-side binding.** The response carries candidate *numbers* or food *names*, which code
    re-binds to real catalog entries — unknown numbers dropped, duplicates deduped, quantities and
    sets clamped, results capped. The model contributes judgment and world knowledge only; it never
-   emits a food, exercise, macro, or number that persists unchecked.
+   emits a food, exercise, macro, or number that persists unchecked. The workout adjuster's binding
+   (``WorkoutAdjustmentCandidateBuilder/resolved(_:candidates:)`` over plain ``WorkoutAdjustmentPick``s)
+   sits outside the FoundationModels gate so it is tested with made-up replies, and its candidate pool
+   already leaves out what today's limits and the request itself rule out ("no barbell" is read in
+   code by `WorkoutAdjustmentRequest`, never left to the model).
 5. **Audit.** Every dispatch outcome (succeeded / fell back / error class) is recorded to
    `AIAuditLog` with the payload kind and included *field names* — never content. Session errors are
    audited, then rethrown.
@@ -130,6 +136,8 @@ their helpers are extracted.
 - ``FoundationWorkoutAdjustmentModel``
 - ``WorkoutAdjustmentCandidateBuilder``
 - ``WorkoutAdjustmentCandidate``
+- ``WorkoutAdjustmentPick``
+- ``WorkoutAdjustmentReply``
 
 ### Journal memory summary
 

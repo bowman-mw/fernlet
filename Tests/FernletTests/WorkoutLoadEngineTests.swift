@@ -474,3 +474,134 @@ struct WorkoutLoadEngineTests {
         #expect(try JSONDecoder().decode(Workout.self, from: Data(encoded.utf8)).exerciseResults == nil)
     }
 }
+
+// MARK: - The 2026-11-10 fixes (w2, w5, w6, w7, w8)
+
+extension WorkoutLoadEngineTests {
+
+    /// w2 (W3): sets typed 50, 50, 500 made 500 the working weight, and the next plan held at 500.
+    @Test func theWorkingWeightIsTheOneMostSetsWereDoneAtNotTheHeaviest() throws {
+        #expect(WorkoutLoadEngine.mostUsedWeight([50, 50, 500]) == 50)
+        #expect(WorkoutLoadEngine.mostUsedWeight([100, 110]) == 110, "a tie goes to the heavier")
+        #expect(WorkoutLoadEngine.mostUsedWeight([100, 100, 110, 110]) == 110)
+        #expect(WorkoutLoadEngine.mostUsedWeight([200, 160, 160]) == 160)
+        #expect(WorkoutLoadEngine.mostUsedWeight([]) == nil)
+
+        var typo = ExerciseResult(name: "Bench press", prescribedSets: 3, targetReps: 8, rangeLow: 45, rangeHigh: 55,
+                                  suggestedWeight: 50, selectedWeight: 50, unit: .lb, equipment: .barbell)
+        typo.record([50, 50, 500].map { LoggedSet(reps: 8, weight: $0) }, unit: .lb)
+        #expect(typo.workingWeight == 50)
+        #expect(typo.selectedWeight == 50)
+        #expect(typo.setWeights == [50, 50, 500])
+        #expect(typo.loggedLine == "Bench press - 3 x 8 @ 50 lb (did 8 @ 50, 8 @ 50, 8 @ 500)")
+        let exposure = LiftExposure(date: day(28), result: typo)
+        #expect(exposure.weight == 50)
+        #expect(exposure.completed && exposure.overrideDirection == nil)
+        let next = plan([exposure])
+        #expect((next.change, next.reps, next.prescription?.suggested) == (.moreReps, 9, 50))
+        let estimate = try #require(WorkoutLoadEngine.estimatedMax(of: exposure, in: .lb))
+        #expect(estimate < 70, "the estimate reads the 50 lb sets, not the 500")
+
+        // The same, entered set by set in the Log sheet.
+        let logged = try #require(ExerciseResult.handLogged(
+            name: "Bench press", sets: [50, 50, 500].map { LoggedSet(reps: 8, weight: $0) }, unit: .lb))
+        #expect((logged.workingWeight, logged.targetReps) == (50, 8))
+    }
+
+    /// w2: a deliberate top set before back-off sets reads at the back-off weight; a dropped set still
+    /// repeats the load; two-and-two reads as before.
+    @Test func aTopSetBeforeBackOffSetsReadsSensiblyAndADroppedSetStillRepeats() {
+        let topSet = LiftExposure(date: day(28), weight: 160, unit: .lb, targetReps: 8, repsPerSet: [5, 8, 8],
+                                  rangeLow: 150, rangeHigh: 170, structured: true, setWeights: [200, 160, 160])
+        #expect(topSet.workingSetReps == [8, 8])
+        #expect(topSet.lighterSets == 0 && topSet.completed, "the heavier set is extra, not a miss")
+        let after = plan([topSet])
+        #expect((after.change, after.reps, after.prescription?.suggested) == (.moreReps, 9, 160))
+
+        var dropped = ExerciseResult(name: "Bench press", prescribedSets: 3, targetReps: 8, selectedWeight: 100, unit: .lb)
+        dropped.record([100, 100, 90].map { LoggedSet(reps: 8, weight: $0) }, unit: .lb)
+        let exposure = LiftExposure(date: day(28), result: dropped)
+        #expect(exposure.weight == 100)
+        #expect(exposure.lighterSets == 1 && !exposure.completed)
+        #expect(plan([exposure]).change == .same)
+
+        var split = ExerciseResult(name: "Bench press", prescribedSets: 4, targetReps: 8, selectedWeight: 100, unit: .lb)
+        split.record([100, 100, 110, 110].map { LoggedSet(reps: 8, weight: $0) }, unit: .lb)
+        let tied = LiftExposure(date: day(28), result: split)
+        #expect(tied.weight == 110)
+        #expect(tied.lighterSets == 2 && !tied.completed)
+    }
+
+    /// w6 (W7): Epley at one rep added 3.3 % to a true single.
+    @Test func aTrueSingleIsItsOwnMax() throws {
+        #expect(WorkoutLoadEngine.epley(weight: 200, reps: 1, repsInReserve: 0) == 200)
+        let double = try #require(WorkoutLoadEngine.epley(weight: 200, reps: 2, repsInReserve: 0))
+        #expect(abs(double - 200 * (1 + 2.0 / 30)) < 0.001)
+        let easySingle = try #require(WorkoutLoadEngine.epley(weight: 200, reps: 1, repsInReserve: 2))
+        #expect(abs(easySingle - 220) < 0.001, "a single with reps to spare is still read through Epley")
+        let attempt = session(0, 200, reps: [1], target: 1, calibration: .attempt)
+        #expect(WorkoutLoadEngine.estimatedMax(of: attempt, in: .lb) == 200)
+        #expect(WorkoutTrend.sessionScore(of: attempt, in: .lb) == 200, "the engine and the trend agree on a single")
+    }
+
+    /// w6 (W11): the anchor's weight reaches the plan in the plan's unit, whichever it was logged in.
+    @Test func lastTimesWeightIsReadInThePlansUnit() {
+        var anchor = session(20, 45, reps: [8, 8, 8], target: 8, range: (40, 50))
+        anchor.unit = .kg
+        // A lighter session logged in pounds since: the newest unit named is the plan's.
+        let easier = session(24, 100, reps: [8, 8], target: 8, easier: true)
+        let next = plan([anchor, easier])
+        #expect(next.unit == .lb)
+        let previous = next.previousWeight ?? 0
+        #expect(abs(previous - 45 * LoadUnit.poundsPerKilogram) < 0.001, "45 kg read as 99 lb, not as 45 lb")
+    }
+
+    /// w7 (W13): "one more set today" repeated every session.
+    @Test func aBodyweightLiftAddsOneSetThenTopsOutThenHolds() {
+        func bodyweight(_ sessions: [(day: Int, reps: Int)]) -> LiftPlan {
+            plan(sessions.map { session($0.day, nil, reps: [$0.reps, $0.reps, $0.reps], target: $0.reps) }, equipment: nil)
+        }
+        let climbing = bodyweight([(28, 11)])
+        #expect((climbing.change, climbing.reps, climbing.sets) == (.moreReps, 12, 3))
+        let first = bodyweight([(26, 11), (28, 12)])
+        #expect((first.change, first.reps, first.sets) == (.moreSets, 12, 4))
+        let second = bodyweight([(24, 11), (26, 12), (28, 12)])
+        #expect((second.change, second.reps, second.sets) == (.toppedOut, 12, 4), "one extra set, then the harder variation")
+        let third = bodyweight([(22, 11), (24, 12), (26, 12), (28, 12)])
+        #expect((third.change, third.reps, third.sets) == (.heldAtTop, 12, 4), "and after that nothing more is said")
+        // A miss at the top starts the count again: the lift is not "topped out" while it is being missed.
+        let missed = plan([session(24, nil, reps: [12, 12, 12], target: 12), session(26, nil, reps: [12, 12, 12], target: 12),
+                           session(28, nil, reps: [12, 10, 9], target: 12)], equipment: nil)
+        #expect(missed.change == .same)
+    }
+
+    /// w8 (W14): the advanced pace stays 28 days, and the plan knows the day the block is up.
+    @Test func aBlockHoldKnowsTheDayItEnds() {
+        let midBlock = plan([20, 24, 28].map { session($0, 135, reps: [9, 9, 9], target: 9) }, tier: .advanced)
+        #expect(midBlock.change == .blockHold)
+        #expect(midBlock.holdUntil == day(48), "28 days from the first session at this prescription")
+        // Once the time is up the hold is for the second good session, not for a date.
+        let timeUp = plan([session(2, 135, reps: [9, 9, 9], target: 9)], tier: .advanced)
+        #expect(timeUp.change == .blockHold)
+        #expect(timeUp.holdUntil == nil)
+        #expect(plan([session(28, 135, reps: [9, 9, 9], target: 9)], tier: .intermediate).holdUntil == nil)
+    }
+
+    /// w5 (W6): in a marked deload week the plan itself lightens.
+    @Test func aDeloadWeekRepeatsLastTimeAtAboutHalfTheSetsAndNeverStepsUp() {
+        func deload(_ history: [LiftExposure], sets: Int = 3) -> LiftPlan {
+            WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
+                scheme: RepScheme(low: 8, high: 12), baseSets: sets, exposures: history, equipment: .barbell,
+                isLowerBody: false, defaultUnit: .lb, today: day(30), deloadWeek: true
+            ))
+        }
+        let top = [session(28, 135, reps: [12, 12, 12], target: 12)]
+        #expect(plan(top).change == .backToBottom, "outside a deload week this history adds weight")
+        let held = deload(top)
+        #expect((held.change, held.reps, held.sets, held.prescription?.suggested) == (.deloadWeek, 12, 2, 135))
+        let missed = deload([24, 26, 28].map { session($0, 135, reps: [8, 6, 5], target: 8) }, sets: 4)
+        #expect((missed.change, missed.reps, missed.sets, missed.prescription?.suggested) == (.deloadWeek, 8, 2, 135),
+                "no cut either: the week is already the lighter one")
+        #expect(WorkoutLoadEngine.deloadWeekSets(5) == 3 && WorkoutLoadEngine.deloadWeekSets(1) == 1)
+    }
+}

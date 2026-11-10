@@ -45,7 +45,7 @@ struct WorkoutCopyLocalizationTests {
     /// The files that declare idea 16's keys.
     static let copyFiles = [
         "WorkoutPlannerCopy.swift", "WorkoutPlannerCopy+Load.swift", "WorkoutPlannerCopy+Plateau.swift",
-        "WorkoutPlannerNames.swift", "WorkoutPlannerNames+Slots.swift", "WorkoutPlannerNames+Locations.swift",
+        "WorkoutPlannerCopy+DayNote.swift", "WorkoutPlannerNames.swift", "WorkoutPlannerNames+Slots.swift", "WorkoutPlannerNames+Locations.swift",
         "WorkoutPlanLine.swift", "WorkoutProgram.swift", "WorkoutModels.swift",
     ]
 
@@ -586,5 +586,35 @@ struct WorkoutCopyLocalizationTests {
             index += 1
         }
         return result
+    }
+}
+
+// MARK: - The 2026-11-10 lines (w5, w7, w8, w9)
+
+extension WorkoutCopyLocalizationTests {
+
+    @Test func aToppedOutLiftNamesTheNextStepOrSaysPlainlyThereIsNone() throws {
+        let squat = try #require(WorkoutExerciseCatalog.exercise(named: "Goblet squat"))
+        let harder = try #require(WorkoutExerciseCatalog.exercise(named: "Dumbbell front squat"))
+        #expect(WorkoutProgram.harderNote(lift: squat, harder: harder, change: .toppedOut)
+                == "Goblet squat: this is as far as reps and sets go here. Dumbbell front squat is the next step up — it's the first swap when you edit the plan.")
+        #expect(WorkoutProgram.harderNote(lift: squat, harder: nil, change: .toppedOut)
+                == "Goblet squat: this is as far as reps and sets go here, and there's no harder version to offer at this place. It holds steady from now on, which is a fine place to be.")
+        #expect(WorkoutProgram.harderNote(lift: squat, harder: harder, change: .heldAtTop) == nil)
+        #expect(WorkoutProgram.harderNote(lift: squat, harder: nil, change: .heldAtTop) == nil)
+        #expect(WorkoutProgram.harderNote(lift: squat, harder: nil, change: .setFirst) == nil)
+        let offered = WorkoutProgram.harderNote(lift: squat, harder: harder, change: .repsFirst)
+        #expect(offered?.hasPrefix("If you'd like a harder step for Goblet squat, Dumbbell front squat works the same muscles") == true)
+    }
+
+    @Test func theHoldAndDeloadLinesKeepTheirEnglish() {
+        let date = Date(timeIntervalSince1970: 1_795_000_000)
+        #expect(WorkoutPlannerCopy.blockHold("Bench press", until: date)
+                == "Bench press: holding this block until \(date.formatted(.dateTime.month(.wide).day())).")
+        #expect(WorkoutPlannerCopy.deloadWeek.hasPrefix("Deload week: the same weights as last time and about half the sets."))
+        #expect(WorkoutPlannerCopy.moreLiftsChanged(1) == "And 1 more changed today.")
+        #expect(WorkoutPlannerCopy.moreLiftsChanged(3) == "And 3 more changed today.")
+        #expect(WorkoutPlannerCopy.fairRetestAlso("Overhead press")
+                == "Overhead press also gets at least 3 minutes' rest between sets — a fair retest.")
     }
 }

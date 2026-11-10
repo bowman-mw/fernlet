@@ -66,7 +66,20 @@ struct OwnerExerciseAdditionsTests {
                         let what = "\(split.name), \(location.name), \(experience), day \(rotation)"
                         #expect(location.name != "Full gym", "\(what): \(old) became \(new)")
                         #expect(plans[1].droppedSlots.count < plans[0].droppedSlots.count, "\(what): \(old) became \(new)")
-                        #expect(old.filter { lifts.contains($0) && !new.contains($0) }.isEmpty, "\(what): a lift was displaced")
+                        // A lift may leave only when it was a stand-in: a short session's fill from
+                        // another body area (fix s3), which goes once an addition fills that session's
+                        // own slot. A lift that fits one of its session's own slots is never displaced.
+                        let templates = split.days.indices.contains(rotation) ? split.days[rotation].sessions : []
+                        var displaced: [String] = []
+                        for (index, session) in plans[0].sessions.enumerated() {
+                            let slots = templates.indices.contains(index) ? templates[index].slots : []
+                            let kept = Set(plans[1].sessions.indices.contains(index) ? plans[1].sessions[index].exercises.map(\.name) : [])
+                            for name in session.exercises.map(\.name) where lifts.contains(name) && !kept.contains(name) {
+                                guard let row = all.first(where: { $0.name == name }) else { continue }
+                                if slots.contains(where: { WorkoutProgram.isEligible(row, for: $0) }) { displaced.append(name) }
+                            }
+                        }
+                        #expect(displaced.isEmpty, "\(what): a lift was displaced")
                     }
                 }
             }

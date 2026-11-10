@@ -161,3 +161,41 @@ struct BodybuildingDeloadRuleTests {
         Workout(name: "Push", type: .upper, exercises: "", rpe: nil, notes: "", duration: 50, intensity: .moderate)
     }
 }
+
+// MARK: - w5: only lifting sessions count toward a hard week
+
+extension BodybuildingDeloadRuleTests {
+
+    static func workout(_ name: String, type: WorkoutType = .upper, mode: WorkoutMode = .strengthTraining,
+                        activity: WorkoutActivityType? = nil) -> Workout {
+        Workout(name: name, type: type, mode: mode, activityType: activity, exercises: "", rpe: nil, notes: "",
+                duration: 30, intensity: .moderate)
+    }
+
+    @Test func onlyLiftingSessionsCountTowardAHardWeek() {
+        #expect(BodybuildingDeloadRule.isLifting(Self.workout("Push")))
+        #expect(BodybuildingDeloadRule.isLifting(Self.workout("Legs", type: .lower)))
+        #expect(BodybuildingDeloadRule.isLifting(Self.workout("Gym", type: .fullBody, mode: .activity, activity: .traditionalStrengthTraining)))
+        #expect(!BodybuildingDeloadRule.isLifting(Self.workout("Easy cardio", type: .cardio)))
+        #expect(!BodybuildingDeloadRule.isLifting(Self.workout("Walk", type: .cardio, mode: .activity, activity: .walking)))
+        #expect(!BodybuildingDeloadRule.isLifting(Self.workout("Yoga", type: .fullBody, mode: .activity, activity: .yoga)))
+        #expect(!BodybuildingDeloadRule.isLifting(Self.workout("Mobility", type: .fullBody, mode: .activity)))
+
+        // A week of two lifts and three walks is not a hard week; three lifts are.
+        let walk = Self.workout("Walk", type: .cardio, mode: .activity, activity: .walking)
+        let lift = Self.workout("Push")
+        let days: [String: FernletDay] = [
+            "2026-10-19": FernletDay(date: "2026-10-19", workouts: [lift, walk]),
+            "2026-10-20": FernletDay(date: "2026-10-20", workouts: [walk]),
+            "2026-10-21": FernletDay(date: "2026-10-21", workouts: [lift, walk]),
+            "2026-10-26": FernletDay(date: "2026-10-26", workouts: [lift]),
+            "2026-10-27": FernletDay(date: "2026-10-27", workouts: [lift, lift]),
+            "2026-11-02": FernletDay(date: "2026-11-02", workouts: [walk, walk, walk]),
+        ]
+        let counts = BodybuildingDeloadRule.workoutsByWeek(days, calendar: Self.calendar)
+        #expect(counts == ["2026-10-19": 2, "2026-10-26": 3])
+        #expect(!BodybuildingDeloadRule.isHard("2026-10-19", workoutsByWeek: counts, deloadWeeks: []))
+        #expect(BodybuildingDeloadRule.isHard("2026-10-26", workoutsByWeek: counts, deloadWeeks: []))
+        #expect(!BodybuildingDeloadRule.isHard("2026-11-02", workoutsByWeek: counts, deloadWeeks: []))
+    }
+}

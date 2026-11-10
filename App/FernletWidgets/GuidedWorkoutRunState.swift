@@ -176,7 +176,8 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// Tokens are the domain's raw values (`LoadUnit`, `Equipment`, `EstimateConfidence`,
     /// `CalibrationStep`, `ExerciseEffort`, `OverrideReason`), spelled as strings because this shared
     /// file cannot import the domain. Untouched, the lift logs as "completed as prescribed" at
-    /// `selected` — the suggestion, preselected — with no extra step.
+    /// `selected` — the suggestion, preselected — with no extra step. Each set keeps the weight it was
+    /// done at (``doneWeights``, s4): changing `selected` afterwards moves only the sets still to do.
     struct Tracking: Codable, Hashable {
         var targetReps: Int
         var rangeLow: Double?
@@ -216,6 +217,33 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// the editor marks them again when reopened. Nil when there are none. Display only: the log
         /// records a drop set as one more set at its weight.
         var actualDrops: [Bool]?
+        /// The weight on the bar when each finished set's Done was tapped, in set order (s4, 2026-11-10):
+        /// written by ``GuidedWorkoutRunState/markSetDone(now:)`` wherever it runs, the Lock Screen
+        /// included, so a weight changed mid-lift moves only the sets still to do. Nil until a set of a
+        /// loaded lift is done with a weight picked, and in a run persisted before sets recorded one —
+        /// optional, so such a run decodes and logs every set at ``selected`` as it always did. The key
+        /// is a FROZEN token. An edit (``actualWeights``) wins over it.
+        var doneWeights: [Double]?
+        /// On a strength check's step: the lift's usual working sets, as planned before the check
+        /// replaced them (w4, 2026-11-10; the domain's `LoadGuidance.UsualSets`). "Not now" falls back
+        /// to them, so the lift is still trained that day
+        /// (``GuidedWorkoutRunState/putOffStrengthCheck(now:)``). Nil on every other step and in a run
+        /// persisted before checks carried them — optional, so such a run decodes and "Not now"
+        /// moves past the check as it did. The key is a FROZEN token.
+        var usual: UsualSets?
+
+        /// A lift's usual working sets behind a strength check (``usual``): sets, reps, the weight
+        /// range they would have been prescribed at, and the lift's ordinary rest. Field names are
+        /// FROZEN tokens (a run in progress stores them).
+        struct UsualSets: Codable, Hashable {
+            var sets: Int
+            var reps: Int
+            var rangeLow: Double?
+            var rangeHigh: Double?
+            var suggested: Double?
+            var confidenceRaw: String?
+            var restSeconds: Int
+        }
 
         /// Sets an edit may carry at most.
         static let maxSets = 20
@@ -224,19 +252,45 @@ struct GuidedWorkoutRunState: Codable, Hashable {
 
         /// The weight one tap of the lighter (`direction` −1) or heavier (+1) button picks: the next
         /// owned load that way when the location's weights are known, else one ``step``. At the end of
-        /// the owned loads it stays put; with nothing picked yet it starts from `start`.
+        /// the owned loads it stays put — unless the carried loads are only a window of what the
+        /// location owns (``windowMayBeCut(direction:)``), where it carries on by the step, so a strong
+        /// first-timer is not stopped at the 48th load. With nothing picked yet (a lift with no history,
+        /// w1) it starts at the lightest load the location owns — the empty bar, the lightest dumbbell —
+        /// and opens upward from there; from `start` when the location's weights are not known.
         func steppedWeight(direction: Int, start: Double?) -> Double? {
-            guard let selected else { return start }
-            guard let loads, !loads.isEmpty else {
-                return step.map { selected + Double(direction.signum()) * $0 }
-            }
-            if direction > 0 { return loads.first { $0 > selected + 0.01 } ?? selected }
-            return loads.last { $0 < selected - 0.01 } ?? selected
+            guard let selected else { return loads?.first ?? start }
+            let byStep = step.map { selected + Double(direction.signum()) * $0 }
+            guard let loads, !loads.isEmpty else { return byStep }
+            let next = direction > 0
+                ? loads.first(where: { $0 > selected + 0.01 }) : loads.last(where: { $0 < selected - 0.01 })
+            if let next { return next }
+            guard windowMayBeCut(direction: direction), let byStep, byStep > 0 else { return selected }
+            return byStep
+        }
+
+        /// Owned loads the planner carries into a run at most — the domain's
+        /// `LoadGuidance.maxRunnerLoads`, spelled here because this shared file cannot import the
+        /// domain (a test pins the two equal).
+        static let carriedWindow = 48
+
+        /// Whether the carried loads may stop short of what the location owns in `direction`: only a
+        /// full window can have been cut. Its top always can; its bottom only when it was taken around
+        /// a suggestion — with none (a lift with no history, w1) the window starts at the lightest load
+        /// the location owns, and nothing is lighter than the empty bar.
+        func windowMayBeCut(direction: Int) -> Bool {
+            guard let loads, loads.count >= Self.carriedWindow else { return false }
+            return direction > 0 || suggested != nil
         }
 
         /// `weight` placed on the owned loads (the nearest, a tie going lighter), or on the step when
-        /// none are known.
+        /// none are known — or when `weight` lies past an end of a carried window that may be cut
+        /// (``windowMayBeCut(direction:)``), where the nearest carried load would pull it back in.
         func snapped(_ weight: Double) -> Double? {
+            if let loads, let first = loads.first, let last = loads.last, let step, step > 0,
+               (weight > last + 0.01 && windowMayBeCut(direction: 1))
+                || (weight < first - 0.01 && windowMayBeCut(direction: -1)) {
+                return max(step, (weight / step).rounded() * step)
+            }
             if let loads, !loads.isEmpty {
                 var best = loads[0]
                 for load in loads.prefix(Self.maxLoads) where abs(load - weight) < abs(best - weight) - 1e-9 { best = load }
@@ -244,6 +298,16 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             }
             guard let step, step > 0 else { return nil }
             return max(step, (weight / step).rounded() * step)
+        }
+
+        /// The weight each of `count` sets is logged at when no edit says otherwise (s4): the weight on
+        /// the bar when its Done was tapped (``doneWeights``), and for a set never marked done — one
+        /// still to do, a set the reps editor added — the weight selected now, else the last done one.
+        /// Nil when the lift has no weight at all.
+        func setWeights(count: Int) -> [Double]? {
+            let done = Array((doneWeights ?? []).prefix(Self.maxSets))
+            guard let fallback = selected ?? done.last else { return nil }
+            return (0..<min(max(0, count), Self.maxSets)).map { $0 < done.count ? done[$0] : fallback }
         }
 
         /// The lift takes a load: the runner shows its weight picker.
@@ -486,6 +550,42 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         return warmUpRun(around: exerciseIndex).upperBound < exercises.count - 1
     }
 
+    /// Whether the cursor is on a strength check that can be put off — the runner's "Not now" (w4): any
+    /// step of a calibration (its ramp, its test set, a max attempt) while the run is live. Never a
+    /// plain warm-up set, whose lift is ordinary working sets.
+    var canPutOffStrengthCheck: Bool {
+        (isWorking || isResting) && strengthCheckRun(around: exerciseIndex) != nil
+    }
+
+    /// Whether this run's strength check went untested: it has a test set or max attempts, and every
+    /// one of them was skipped ("Not now", or skipped past). A finished run like this counts as "not
+    /// now" (w4). False for a run with no check, and once any test set or attempt was done.
+    var strengthCheckWasSkipped: Bool {
+        let tests = exercises.filter {
+            let raw = $0.tracking?.calibrationRaw
+            return raw == CalibrationToken.test || raw == CalibrationToken.attempt
+        }
+        return !tests.isEmpty && tests.allSatisfy { $0.tracking?.skipped == true }
+    }
+
+    /// The steps of the strength check that include `index`: the same lift's calibration steps in a
+    /// row around it, when one of them is the test set or a max attempt. Nil off a check — a warm-up
+    /// set leads into working sets, not a test. Bounded: each walk moves one step inside `exercises`.
+    private func strengthCheckRun(around index: Int) -> ClosedRange<Int>? {
+        guard exercises.indices.contains(index), exercises[index].tracking?.calibrationRaw != nil else { return nil }
+        let name = exercises[index].name
+        var start = index
+        while start > 0, exercises[start - 1].name == name, exercises[start - 1].tracking?.calibrationRaw != nil { start -= 1 }
+        var end = index
+        while end + 1 < exercises.count, exercises[end + 1].name == name,
+              exercises[end + 1].tracking?.calibrationRaw != nil { end += 1 }
+        let hasTest = exercises[start...end].contains {
+            let raw = $0.tracking?.calibrationRaw
+            return raw == CalibrationToken.test || raw == CalibrationToken.attempt
+        }
+        return hasTest ? start...end : nil
+    }
+
     /// The ramp-up steps of one lift in a row that include `index` (just `index` off a ramp-up step).
     /// Bounded: each walk moves one step at a time inside `exercises`.
     private func warmUpRun(around index: Int) -> ClosedRange<Int> {
@@ -619,10 +719,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     // MARK: Transitions (pure — mirror the old WorkoutSessionRunner state machine)
 
     /// Mark the current set done. More sets of this exercise → rest; last set of this exercise →
-    /// straight to the next exercise; last set of the last exercise → done.
+    /// straight to the next exercise; last set of the last exercise → done. A loaded lift's set keeps
+    /// the weight on the bar at this tap (``Tracking/doneWeights``, s4).
     mutating func markSetDone(now: Date) {
         guard phase == .working, let exercise = currentExercise else { return }
         recordHeld(now: now)
+        recordDoneWeight()
         let total = max(1, exercise.sets)
         if currentSet < total {
             currentSet += 1
@@ -727,6 +829,61 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         phase = .working
     }
 
+    /// Put the current strength check off — the runner's "Not now" (w4): its remaining steps, the
+    /// current one included, are marked skipped and the lift falls back to its usual working sets for
+    /// this session (``Tracking/usual``), so it is still trained today: they become the next step,
+    /// straight after the check. A check that carries none (an older run) moves to the first step after
+    /// it, or finishes naturally when nothing follows. Ramp sets already done stay logged as ramp-ups;
+    /// the test never leaves a result, so no estimate reads it. The app records the two-week deferral
+    /// (`WorkoutCalibrationDeferral`); this only moves the run.
+    mutating func putOffStrengthCheck(now: Date) {
+        guard canPutOffStrengthCheck, let check = strengthCheckRun(around: exerciseIndex) else { return }
+        let usual = usualSetsStep(behind: check)
+        for index in exerciseIndex...check.upperBound where exercises[index].tracking != nil {
+            exercises[index].tracking?.skipped = true
+        }
+        if let usual { exercises.insert(usual, at: check.upperBound + 1) }
+        guard check.upperBound < exercises.count - 1 else {
+            finish(at: now)
+            return
+        }
+        exerciseIndex = check.upperBound + 1
+        currentSet = 1
+        restStartedAt = nil
+        restEndsAt = nil
+        setStartedAt = now
+        phase = .working
+    }
+
+    /// The lift's usual working sets as a step of their own, built from what the strength check at
+    /// `check` carries (``Tracking/usual``): the check's lift, gear, unit and owned loads, the usual
+    /// sets, reps, range and rest, the suggestion preselected, and nothing of the check itself. Nil when
+    /// the check carries none.
+    private func usualSetsStep(behind check: ClosedRange<Int>) -> Exercise? {
+        guard let source = exercises[check].last(where: { $0.tracking?.usual != nil }),
+              var tracking = source.tracking, let usual = tracking.usual else { return nil }
+        tracking.targetReps = max(1, usual.reps)
+        tracking.rangeLow = usual.rangeLow
+        tracking.rangeHigh = usual.rangeHigh
+        tracking.suggested = usual.suggested
+        tracking.selected = usual.suggested
+        tracking.confidenceRaw = usual.confidenceRaw ?? tracking.confidenceRaw
+        tracking.calibrationRaw = nil
+        tracking.skipped = nil
+        tracking.actualReps = nil
+        tracking.actualWeights = nil
+        tracking.actualDrops = nil
+        tracking.doneWeights = nil
+        tracking.effortRaw = nil
+        tracking.overrideReasonRaw = nil
+        tracking.usual = nil
+        return Exercise(
+            name: source.name, sets: min(max(1, usual.sets), Tracking.maxSets), reps: String(max(1, usual.reps)),
+            roleRaw: source.roleRaw, fromCatalog: source.fromCatalog, restSeconds: max(0, usual.restSeconds),
+            blockRaw: source.blockRaw, tracking: tracking, displayName: source.displayName, lastTime: source.lastTime
+        )
+    }
+
     /// Adds the current timed set's held seconds to its step — from the end of its lead-in to `now`, no
     /// more than the hold, no less than nothing — for a cardio segment or a stretch-session step only,
     /// whose run logs its length from them (`GuidedRunTimedLog`).
@@ -736,6 +893,22 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         let hold = window.upperBound.timeIntervalSince(window.lowerBound)
         let held = min(max(0, now.timeIntervalSince(window.lowerBound)), hold)
         exercises[exerciseIndex].heldSeconds = (exercises[exerciseIndex].heldSeconds ?? 0) + Int(held.rounded())
+    }
+
+    /// Records the weight on the bar for the set being finished (s4): the lift's selected weight, at
+    /// the current set's place in ``Tracking/doneWeights``. A recorded transition, not an edit — it runs
+    /// in whichever process marks the set done. Nothing is recorded for an unloaded lift, a lift with
+    /// no weight picked, or one being skipped past. Sets finished before any weight was recorded (an
+    /// older build's run, a weight picked late) take this one, as they logged before.
+    private mutating func recordDoneWeight() {
+        guard exercises.indices.contains(exerciseIndex), var tracking = exercises[exerciseIndex].tracking,
+              tracking.isLoadable, tracking.skipped != true, let weight = tracking.selected else { return }
+        let setIndex = min(max(1, currentSet), Tracking.maxSets) - 1
+        var done = Array((tracking.doneWeights ?? []).prefix(setIndex))
+        done += Array(repeating: weight, count: setIndex - done.count)
+        done.append(weight)
+        tracking.doneWeights = done
+        exercises[exerciseIndex].tracking = tracking
     }
 
     /// Abandon the run: `.done` but `completedNaturally` stays false, so nothing is logged.
@@ -770,15 +943,36 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     }
 
     /// The weight the lifter picked for one lift, snapped to the location's owned loads when the run
-    /// carries them (R6), else to the equipment's step, and kept positive.
+    /// carries them (R6), else to the equipment's step, and kept positive. It is the weight of the
+    /// sets still to do only (s4): a finished set keeps the weight it was done at
+    /// (``Tracking/doneWeights``), and where the reps editor already listed each set's weight, only the
+    /// sets not yet done follow the new pick — never a finished set, never a drop set.
     mutating func selectWeight(_ weight: Double?, forExercise id: UUID) {
         guard let index = index(of: id), var tracking = exercises[index].tracking, tracking.isLoadable else { return }
         if let weight, weight.isFinite, let placed = tracking.snapped(weight) {
             tracking.selected = placed
+            if var edited = tracking.actualWeights {
+                let drops = tracking.actualDrops ?? []
+                let done = setsDone(at: index)
+                let sets = min(edited.count, max(1, exercises[index].sets))
+                for set in done..<max(done, sets) where !(set < drops.count && drops[set]) {
+                    edited[set] = placed
+                }
+                tracking.actualWeights = edited
+            }
         } else {
             tracking.selected = nil
         }
         exercises[index].tracking = tracking
+    }
+
+    /// How many sets of the step at `index` are finished: all of a step behind the cursor (or of any
+    /// step once the run is done), the cursor's own finished sets, none of a step ahead.
+    private func setsDone(at index: Int) -> Int {
+        guard exercises.indices.contains(index) else { return 0 }
+        let total = max(1, exercises[index].sets)
+        if index < exerciseIndex || phase == .done { return total }
+        return index == exerciseIndex ? max(0, min(currentSet - 1, total)) : 0
     }
 
     /// The reps of each set when they differed. All-on-target clears the edit (back to "as
@@ -796,14 +990,17 @@ struct GuidedWorkoutRunState: Codable, Hashable {
 
     /// Each set's reps and weight from the reps editor (`b3-edit-reps` draft 2), with which sets are
     /// drop sets. The weights are kept only for a lift that takes a load and only when one differs from
-    /// ``Tracking/selected`` (or nothing was selected); the drop marks only when there is one. The reps
-    /// go through ``setActualReps(_:forExercise:)``, so a drop set — one more set — always reads as edited.
+    /// what the taps recorded (``Tracking/setWeights(count:)``: the weight each finished set was done
+    /// at, ``Tracking/selected`` for the rest) or nothing was selected; the drop marks only when there
+    /// is one. Kept weights win over the taps' record in the log. The reps go through
+    /// ``setActualReps(_:forExercise:)``, so a drop set — one more set — always reads as edited.
     mutating func setActualSets(reps: [Int], weights: [Double], drops: [Bool], forExercise id: UUID) {
         guard let index = index(of: id), var tracking = exercises[index].tracking else { return }
         let count = min(reps.count, Tracking.maxSets)
         let cleanWeights = weights.prefix(count).map { $0.isFinite ? max(0, $0) : 0 }
-        let differs = tracking.selected.map { selected in cleanWeights.contains { abs($0 - selected) > 0.01 } }
-            ?? cleanWeights.contains { $0 > 0 }
+        let differs = tracking.setWeights(count: count).map { tapped in
+            zip(cleanWeights, tapped).contains { abs($0 - $1) > 0.01 }
+        } ?? cleanWeights.contains { $0 > 0 }
         let keepsWeights = tracking.isLoadable && cleanWeights.count == count && differs
         tracking.actualWeights = keepsWeights ? Array(cleanWeights) : nil
         let cleanDrops = Array(drops.prefix(count))
