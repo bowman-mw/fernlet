@@ -1992,6 +1992,9 @@ struct WorkoutSuggestionSheet: View {
     @State private var showDiscardConfirm = false
     @State private var adjustRequest = ""
     @State private var isAdjusting = false
+    /// Why the last "Adjust with AI" changed nothing (s2); nil once the plan changed or the request
+    /// was reworded.
+    @State private var adjustNotice: WorkoutAdjustmentOutcome.Reason?
     @State private var didApplyReadiness = false
     // True while a plan is being generated after the user taps "Suggest" — drives the loading state.
     @State private var isSuggesting = false
@@ -2648,7 +2651,24 @@ struct WorkoutSuggestionSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isAdjusting || adjustRequest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                adjustNoticeLine
             }
+        }
+        // A reworded request is a new one: the line about the last one goes.
+        .onChange(of: adjustRequest) { _, _ in
+            if !isAdjusting { adjustNotice = nil }
+        }
+    }
+
+    /// "Couldn't adjust just now. Try again." — why the last adjustment changed nothing (s2), in the
+    /// plan pane's notice style, under the field that still holds the request.
+    @ViewBuilder private var adjustNoticeLine: some View {
+        if let adjustNotice {
+            Text(verbatim: adjustNotice.message)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(suggestLook?.dim ?? Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("workout.adjust.notice")
         }
     }
 
@@ -3000,12 +3020,22 @@ struct WorkoutSuggestionSheet: View {
         // plan (fresh ids) meanwhile, in which case `replaceGuidedWorkoutPlan` refuses the stale write.
         let baseSessionIDs = Set(plan.sessions.map(\.id))
         isAdjusting = true
+        adjustNotice = nil
         Task {
-            let adjusted = await store.adjustWorkoutDayPlan(plan, request: request)
+            let outcome = await store.adjustWorkoutDayPlan(plan, request: request)
             // An adjustment keeps each session's id, so completions stay valid — replace in place, but
             // only if the committed plan is still the one we started from.
-            store.replaceGuidedWorkoutPlan(adjusted, replacing: baseSessionIDs)
-            adjustRequest = ""
+            if case .changed(let adjusted) = outcome {
+                store.replaceGuidedWorkoutPlan(adjusted, replacing: baseSessionIDs)
+            }
+            // The request is cleared only when the plan changed; otherwise it stays, with the reason
+            // under it, and VoiceOver hears the reason (s2).
+            let field = WorkoutAdjustField.after(outcome, request: request)
+            adjustRequest = field.request
+            adjustNotice = field.notice
+            if let notice = field.notice {
+                FernletAnnouncer.system.announce(.status, resolved: notice.message)
+            }
             isAdjusting = false
         }
     }

@@ -1462,8 +1462,9 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
 /// `dayPlan` picks the rotation day, filters the catalog through ``WorkoutSafetyFilter``, fills
 /// each slot with the best-scoring feasible exercise (deterministic tie-breaks on name/id),
 /// applies double progression from per-exercise completion counts, and honestly reports slots it
-/// had to drop. The AI adjuster's output re-enters via `applyAdjustment` and must run back through
-/// the safety filter, never around it.
+/// had to drop. Every session leaves through the finishing pass (``WorkoutPlanFinisher``): the 48-hour
+/// trim and the time budget run there for the planner's own sessions, and the AI adjuster's output
+/// and the plan editor's rows re-enter through it — never around the safety filter or the pass.
 public nonisolated enum WorkoutProgram {
     /// One rendered session: its prescribed exercises plus the displayable ``WorkoutSuggestion``.
     ///
@@ -1476,6 +1477,10 @@ public nonisolated enum WorkoutProgram {
         public var kind: SessionKind
         public var exercises: [PrescribedExercise] = []
         public var suggestion: WorkoutSuggestion
+        /// The note as its parts (``WorkoutNotePart``), when the planner or the finishing pass
+        /// composed it: `suggestion.notes` is their text. Nil on a session built any other way and
+        /// on one read back from today's plan file — the pass then rebuilds the note from nothing.
+        public var noteParts: [WorkoutNotePart]?
 
         public init(id: UUID = UUID(), title: String, timeLabel: String, kind: SessionKind, exercises: [PrescribedExercise] = [], suggestion: WorkoutSuggestion) {
             self.id = id
@@ -1679,24 +1684,31 @@ public nonisolated enum WorkoutProgram {
         if let decision, let from = decision.movedFrom {
             prependNote(WorkoutRecoveryGuard.movedNote(to: day, from: split.days[from]), to: &sessions)
         }
-        appendNotes(today.lines(matched: today.matchedLifts(in: sessions)), to: &sessions)
+        let matched = today.matchedLifts(in: sessions)
+        appendNotes(today.lines(matched: matched), to: &sessions, matched: matched)
 
         return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped,
                        locationName: location.name, recovery: decision)
     }
 
-    /// Puts `note` first in the first session's note.
+    /// Puts `note` first in the first session's note (and in its parts, as a line about the session).
     static func prependNote(_ note: String, to sessions: inout [SessionSuggestion]) {
         guard !sessions.isEmpty else { return }
         let existing = sessions[0].suggestion.notes
         sessions[0].suggestion.notes = existing.isEmpty ? note : "\(note) · \(existing)"
+        sessions[0].noteParts?.insert(WorkoutNotePart(.session, note), at: 0)
     }
 
-    /// Adds `notes` to the end of the first session's note, a part each.
-    static func appendNotes(_ notes: [String], to sessions: inout [SessionSuggestion]) {
+    /// Adds `notes` to the end of the first session's note, a part each. `matched` are the lifts the
+    /// last of them names (today's note's matched lifts), when it names any: that line is about them.
+    static func appendNotes(_ notes: [String], to sessions: inout [SessionSuggestion], matched: [String] = []) {
         guard !sessions.isEmpty, !notes.isEmpty else { return }
         let existing = sessions[0].suggestion.notes
         sessions[0].suggestion.notes = ([existing] + notes).filter { !$0.isEmpty }.joined(separator: " · ")
+        for (index, note) in notes.enumerated() {
+            let namesLifts = !matched.isEmpty && index == notes.count - 1
+            sessions[0].noteParts?.append(namesLifts ? WorkoutNotePart(.lifts, note, lifts: matched) : WorkoutNotePart(.session, note))
+        }
     }
 
     /// How many past training days ``nextDayIndex(in:recentSessionNames:)`` looks through.
@@ -1854,16 +1866,19 @@ public nonisolated enum WorkoutProgram {
             let hiddenDrops = hiddenOnlyDrops(built.dropped, slots: session.slots, inputs: inputs)
             let covered = built.isOffer || built.namesLimits
             let unsafe = built.dropped.filter { !hiddenDrops.contains($0) && !(covered && built.replaced.contains($0)) }
+            let parts = noteParts(inputs: inputs, dropped: unsafe, progress: built.noteParts,
+                                  hiddenDropped: hiddenDrops, namesLimits: built.namesLimits)
             let suggestion = WorkoutSuggestion(
                 name: name,
                 exercises: WorkoutSessionBlocks.planText(for: built.exercises),
-                notes: notes(inputs: inputs, dropped: unsafe, progressNotes: built.progressNotes,
-                             hiddenDropped: hiddenDrops, namesLimits: built.namesLimits)
+                notes: WorkoutNotePart.text(of: parts)
             )
             // The mobility offer is a stretch session: it logs as one, under the day's own name, so
             // the rotation still moves on.
             let kind: SessionKind = built.isOffer ? .mobility : session.kind
-            return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: kind, exercises: built.exercises, suggestion: suggestion), built.dropped)
+            var rendered = SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: kind, exercises: built.exercises, suggestion: suggestion)
+            rendered.noteParts = parts
+            return (rendered, built.dropped)
         }
     }
 
@@ -1945,7 +1960,9 @@ public nonisolated enum WorkoutProgram {
         var exercises: [PrescribedExercise]
         /// Every template slot nothing could fill, by its frozen label (the day plan's `droppedSlots`).
         var dropped: [String]
-        var progressNotes: [String]
+        /// What the note says about progression, time and recovery, as parts (``WorkoutNotePart``):
+        /// the fill's line, the budget's and the 48-hour guard's slots, then the load pass's lines.
+        var noteParts: [WorkoutNotePart]
         /// The dropped labels a fill pick stands in for: not named as skipped.
         var replaced: [String] = []
         /// True when the session is the mobility offer rather than lifting.
@@ -1978,8 +1995,8 @@ public nonisolated enum WorkoutProgram {
         guard lifting.targets.count >= minimumLifts(for: liftSlots) else {
             // Too few lifts even after the fill: mobility and a walk, not a padded session.
             let offer = mobilityOffer(sessionTitle: session.title, inputs: inputs)
-            return BuiltSession(exercises: offer.steps, dropped: dropped, progressNotes: [offer.note],
-                                replaced: dropped, isOffer: true)
+            return BuiltSession(exercises: offer.steps, dropped: dropped,
+                                noteParts: [WorkoutNotePart(.session, offer.note)], replaced: dropped, isOffer: true)
         }
         calibrationOpen = calibration
         let legPatterns: Set<MovementPattern> = [.squat, .hinge, .lunge]
@@ -1993,13 +2010,21 @@ public nonisolated enum WorkoutProgram {
         if session.kind == .sport, !inputs.limits.barsWalking { cardio.append(descriptorStep(inputs.style.conditioningLabel)) }
         if let extra = session.conditioning { cardio.append(descriptorStep(extra)) }
         let mainLabels = Set(liftSlots.filter { $0.role == .main }.map(\.label)).union(lifting.fillMainLabels)
-        let fitted = sessionBlocks(activation: activation, lifting: lifting, cardio: cardio,
-                                   mainLabels: mainLabels, inputs: inputs)
+        // The finishing pass (WorkoutPlanFinisher.swift): the 48-hour guard's lighter sets, then the
+        // time budget. Nothing else trims a session, here or after an edit.
+        let settled = WorkoutPlanFinisher.settle(
+            sessionBlocks(activation: activation, lifting: lifting, cardio: cardio, mainLabels: mainLabels, inputs: inputs),
+            goal: inputs.goal, recentHard: inputs.recentHard, budgetMinutes: inputs.options.length.minutes
+        )
         let fill = lifting.replaced.isEmpty ? nil : fillNote(
             sessionTitle: session.title, dropped: liftSlots.filter { lifting.replaced.contains($0.label) }, inputs: inputs
         )
-        return BuiltSession(exercises: fitted.exercises, dropped: dropped,
-                            progressNotes: (fill.map { [$0.text] } ?? []) + (fitted.note.map { [$0] } ?? []) + lifting.notes,
+        var liftNames: [String] = []
+        for step in lifting.steps where step.fromCatalog && !liftNames.contains(step.name) { liftNames.append(step.name) }
+        let parts = (fill.map { [WorkoutNotePart(.session, $0.text)] } ?? [])
+            + [WorkoutNotePart(.budget, settled.budget?.note ?? ""), WorkoutPlanFinisher.recoveryPart(settled.lightened)]
+            + lifting.notes.map { WorkoutNotePart(.lifts, $0, lifts: liftNames) }
+        return BuiltSession(exercises: settled.blocks.exercises, dropped: dropped, noteParts: parts,
                             replaced: lifting.replaced, namesLimits: fill?.namesArea ?? false)
     }
 
@@ -2018,8 +2043,8 @@ public nonisolated enum WorkoutProgram {
 
     /// The lifting slots filled — a session left short of ``minimumLifts(for:)`` taking safe lifts
     /// for other body areas in its empty slots (``filled(_:slots:inputs:used:)``) — then through the
-    /// load pass when there is one (``applyLoad(_:inputs:load:used:calibrationOpen:)``), then the
-    /// 48-hour guard's lighter sets.
+    /// load pass when there is one (``applyLoad(_:inputs:load:used:calibrationOpen:)``). The 48-hour
+    /// guard's lighter sets come after, in the finishing pass (``WorkoutPlanFinisher``).
     static func liftingBlock(
         _ slots: [WorkoutSlotSpec], inputs: SlotInputs, used: inout Set<String>, dropped: inout [String],
         calibrationOpen: inout Bool
@@ -2036,16 +2061,14 @@ public nonisolated enum WorkoutProgram {
         }
         block.replaced = fill.replaced
         block.fillMainLabels = fill.mainLabels
-        let recovery = lightened(block.steps, targets: block.targets, recentHard: inputs.recentHard)
-        block.steps = recovery.steps
-        if let note = recovery.note { block.notes.insert(note, at: 0) }
         return block
     }
 
     /// The session in run order with the stretch blocks the options ask for — the owner's warm-up
     /// flow in full, the short day-aware version (``WorkoutSessionBlocks/shortWarmUpSeconds``) or
-    /// none; the cool-down for the worked muscles or none — fitted to the time budget when one is
-    /// set (``WorkoutSessionBudget``), with the budget's note.
+    /// none; the cool-down for the worked muscles or none — as the finishing pass's draft
+    /// (``WorkoutPlanFinisher``), which takes the 48-hour guard's sets off and fits the time budget
+    /// when one is set (``WorkoutSessionBudget``).
     ///
     /// A lifting step is a main lift when its slot is one of the template's main slots
     /// (`mainLabels`), so a main lift eased to accessory work for a mild injury is still never
@@ -2053,7 +2076,7 @@ public nonisolated enum WorkoutProgram {
     static func sessionBlocks(
         activation: [PrescribedExercise], lifting: LiftingBlock, cardio: [PrescribedExercise],
         mainLabels: Set<String>, inputs: SlotInputs
-    ) -> (exercises: [PrescribedExercise], note: String?) {
+    ) -> WorkoutPlanFinisher.Draft {
         let options = inputs.options
         let worked = lifting.targets.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.primaryMuscles) }
         let budget = options.length.minutes
@@ -2074,11 +2097,8 @@ public nonisolated enum WorkoutProgram {
             warmUp: warmUp, activation: activation, lifting: lifting.steps, mainLift: mainLift,
             cardio: cardio, coolDown: coolDown
         )
-        guard let budget else { return (blocks.exercises, nil) }
-        let outcome = WorkoutSessionBudget.fit(
-            blocks, budgetMinutes: budget, goal: inputs.goal, shortWarmUp: options.warmUp == .full ? short : nil
-        )
-        return (outcome.blocks.exercises, outcome.note)
+        return WorkoutPlanFinisher.Draft(blocks: blocks, targets: lifting.targets.map(Optional.some),
+                                         shortWarmUp: options.warmUp == .full ? short : nil)
     }
 
     /// Fills slots in order with their best eligible pick, prescribing each for its block, and
@@ -2179,25 +2199,6 @@ public nonisolated enum WorkoutProgram {
         }
     }
 
-    /// Takes a set off every lifting step whose primary muscles worked hard inside the 48-hour
-    /// window, and names those lifts in the note (``WorkoutRecoveryGuard``). Steps and targets are
-    /// parallel; a timed hold or a single-set step simply keeps its one set.
-    static func lightened(
-        _ steps: [PrescribedExercise], targets: [ExerciseTarget], recentHard: Set<MuscleGroup>
-    ) -> (steps: [PrescribedExercise], note: String?) {
-        guard !recentHard.isEmpty, steps.count == targets.count else { return (steps, nil) }
-        var result = steps
-        var names: [String] = []
-        for index in result.indices where result[index].fromCatalog && result[index].block == .lifting {
-            guard !targets[index].primaryMuscles.isDisjoint(with: recentHard) else { continue }
-            let fewer = WorkoutRecoveryGuard.lightenedSets(result[index].sets)
-            guard fewer < result[index].sets else { continue }
-            result[index].sets = fewer
-            if !names.contains(result[index].name) { names.append(result[index].name) }
-        }
-        return (result, names.isEmpty ? nil : WorkoutRecoveryGuard.lightenedNote(lifts: names))
-    }
-
     /// Sets and reps (or a hold) for one pick. Lifting picks follow the goal and the day's energy,
     /// with double progression on rep-counted work; activation picks are deliberately light — two
     /// easy sets — so the trunk is awake, not tired, when the heavy lifting starts.
@@ -2248,7 +2249,9 @@ public nonisolated enum WorkoutProgram {
     }
 
     /// Replaces a session's lifting block with an AI-adjusted set, rebuilding its display + note.
-    /// The warm-up, activation, cardio and cool-down blocks around it are kept as they were.
+    /// The warm-up, activation, cardio and cool-down blocks around it are kept as they were. This is
+    /// only the first half of an adjustment: the finishing pass takes the result from here
+    /// (``WorkoutPlanFinisher/adjusted(_:picks:request:pool:others:context:)``) and rewrites the note.
     public static func applyAdjustment(to session: SessionSuggestion, exercises: [PrescribedExercise]) -> SessionSuggestion {
         guard exercises.isEmpty == false else { return session }
         var updated = session
@@ -2434,27 +2437,36 @@ public nonisolated enum WorkoutProgram {
         return tokens.filter { $0.count >= 3 }.union(note.nudgeWords)
     }
 
-    private static func notes(
+    /// A cardio or mobility session's note: the space, then `progressNotes`, then the limits line.
+    private static func notes(inputs: SlotInputs, dropped: [String], progressNotes: [String]) -> String {
+        WorkoutNotePart.text(of: noteParts(inputs: inputs, dropped: dropped,
+                                           progress: progressNotes.map { WorkoutNotePart(.session, $0) }))
+    }
+
+    /// A session's note as its parts (``WorkoutNotePart``), in the order it reads: the space,
+    /// `progress`, the saved limits, the slots nothing safe could fill, the slots only hidden
+    /// exercises could.
+    private static func noteParts(
         inputs: SlotInputs,
         dropped: [String],
-        progressNotes: [String],
+        progress: [WorkoutNotePart],
         hiddenDropped: [String] = [],
         namesLimits: Bool = false
-    ) -> String {
+    ) -> [WorkoutNotePart] {
         // The note is display text composed now, in the device's language: the location reads by its
         // drawn name and the dropped slots by theirs. `dropped` itself stays the frozen labels.
-        var parts: [String] = [inputs.location.displayedName]
-        parts += progressNotes
+        var parts = [WorkoutNotePart(.session, inputs.location.displayedName)]
+        parts += progress
         if !inputs.limits.isEmpty, !namesLimits, !inputs.limitsAreTodaysOnly {
-            parts.append(WorkoutPlannerCopy.workedAroundLimits)
+            parts.append(WorkoutNotePart(.session, WorkoutPlannerCopy.workedAroundLimits))
         }
         if dropped.isEmpty == false {
-            parts.append(WorkoutPlannerCopy.skippedNoSafeOption(WorkoutSlotNames.drawnList(dropped)))
+            parts.append(WorkoutNotePart(.session, WorkoutPlannerCopy.skippedNoSafeOption(WorkoutSlotNames.drawnList(dropped))))
         }
         if hiddenDropped.isEmpty == false {
-            parts.append(hiddenDropNote(hiddenDropped))
+            parts.append(WorkoutNotePart(.session, hiddenDropNote(hiddenDropped)))
         }
-        return parts.joined(separator: " · ")
+        return parts
     }
 
     /// The note for slots that only hidden exercises could fill. `labels` are the frozen slot labels;

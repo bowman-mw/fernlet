@@ -118,6 +118,10 @@ public nonisolated enum WorkoutTimedSessions {
     /// The lowercase label of the seated stretch line ("Seated mobility - 15 min"), which is timed as a
     /// stretch session built by ``seatedMobility(minutes:feasible:)``.
     static let seatedMobilityLabel = WorkoutProgram.seatedMobilityHead.lowercased()
+    /// The FROZEN head of the rest day's line when a walk is ruled out (a severe ankle, knee or hip):
+    /// "Gentle stretching, seated - 10 min". Still the optional gentle stretch (it starts as that line
+    /// does), but it offers no walk and is built from the seated stretches.
+    public static let seatedGentleHead = "Gentle stretching, seated"
     /// The seated session's stretches, in order: sitting first, then lying — nothing standing, nothing
     /// kneeling, nothing to balance on. What the planner offers in a walk's place when a severe ankle,
     /// knee or hip rules the walk out.
@@ -408,7 +412,10 @@ public nonisolated enum WorkoutTimedSessions {
                 ? seatedMobility(minutes: minutes, feasible: feasible)
                 : mobilityFlow(minutes: minutes, feasible: feasible)
         case .gentleStretch:
-            built = gentleStretch(feasible: feasible)
+            // The rest day's line when a walk is ruled out: the seated stretches, for its minutes.
+            built = label(of: step.name) == seatedGentleHead
+                ? seatedMobility(minutes: WorkoutProgram.descriptorMinutes(in: step.name) ?? 0, feasible: feasible)
+                : gentleStretch(feasible: feasible)
         }
         return built.isEmpty ? nil : built
     }

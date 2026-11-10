@@ -698,7 +698,9 @@ runner can time stays a descriptor for the expansion above (checked first, since
 as eight sets of one), sets × reps and timed holds become counted steps under the catalog's name, and
 anything else one step marked done that shows the line. Nothing is filtered or dropped. A weight the line
 names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
-names none gets the load engine's suggestion, for the sets and reps as written.
+names none gets the load engine's suggestion, for the sets and reps as written — on the weights the
+space owns and at the person's training age for the lift, as the planner's own sessions are (w6,
+2026-11-10: this path used to plan every lift as a beginner's, on no particular weights).
 
 The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``. FernletScoring's AI-free fallback workouts are saved under a frozen ``WorkoutFallbackName`` ("Suggested Light", "Mood Reset"), which `Workout.displayedName` draws localized (2026-10-20, Spanish round step 2).
 
@@ -912,11 +914,31 @@ estimate — so the same history always builds the same plan.
   Barbell warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the
   standard 45 lb / 20 kg bar and plates, or the location's own bar and plates) says which plates go on
   each side, or the closest load it can make.
-- **After "Adjust with AI".** The on-device adjuster answers with names, sets and reps only, so
-  ``WorkoutAdjustedLoad`` loads the adjusted lifting block again: a lift kept at the same reps keeps its
-  guidance, any other catalog lift is prescribed from its history on the location's weights, the
-  compound count ahead of each lift is redone, and the warm-up ramp goes back before the first heavy main
-  lift when the setting is on and the committed day isn't light. The time budget is not applied again.
+- **One finishing pass for every plan** (the owner's fix s1, 2026-11-10; ``WorkoutPlanFinisher``). The
+  48-hour guard's lighter sets and the time budget run in one place,
+  `WorkoutPlanFinisher.settle(_:goal:recentHard:budgetMinutes:)`, which the planner's tail calls for
+  its own sessions and every edit calls again. "Adjust with AI"
+  (``WorkoutPlanFinisher/adjusted(_:picks:request:pool:others:context:)``) and the plan editor's rows
+  (``WorkoutPlanFinisher/finish(_:previous:others:origin:context:)``) first put the lifts in the state a
+  planner's pick arrives in: a timed movement carries a real `holdSeconds` however its text read
+  ("30 sec"), a lift that loads a mild area is accessory work (never ramped, never a strength check, and
+  — for a lift that is new to the session — on the accessory sets and reps), an adjustment repeats
+  neither the activation move nor a lift of another of today's sessions, a kept lift at the same reps
+  keeps its guidance and any other catalog lift is prescribed from its history on the location's weights
+  at the person's training age, and the warm-up ramp stands before the first heavy main lift when the
+  setting is on and the day isn't light — never before an assisted lift. Then the same trim and the
+  same budget run, and the note is rebuilt from what the pass did: a session's note is carried as
+  ``WorkoutNotePart``s (`SessionSuggestion.noteParts`), so the pass keeps the lines still true, rewrites
+  the budget's and the 48-hour guard's, drops a line about a lift that no longer stands as it did, and
+  adds "Adjusted to your note." once. **Invariants:** a session the pass has finished comes back from it
+  untouched (`WorkoutPlanFinisherTests` finishes generated plans over every split day and a dozen
+  profiles); an AI reply that leaves fewer than ``WorkoutProgram/minimumLifts`` lifts in a session that
+  had more is refused; in a hand edit the rows are the person's — none is dropped and no number they
+  kept is changed; the parts are not written to today's plan file, so a session read back from it has
+  its note rebuilt from nothing on its next edit. What a request rules out is read in code
+  (``WorkoutAdjustmentRequest``: "no barbell", "dumbbells only"; English, frozen words) and enforced on
+  the candidates and on the reply. ``WorkoutAdjustedLoad`` is the pass with no limits, window or budget
+  in play.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -975,6 +997,9 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutWarmUpSets``
 - ``WarmUpSet``
 - ``WorkoutAdjustedLoad``
+- ``WorkoutPlanFinisher``
+- ``WorkoutNotePart``
+- ``WorkoutAdjustmentRequest``
 - ``PlateCalculator``
 - ``WorkoutBlocks``
 - ``BlockPhase``

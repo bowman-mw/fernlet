@@ -489,6 +489,10 @@ struct GuidedWorkoutEditorSheet: View {
         // Rebuild the display list so the sheet card and the logged workout reflect the edits.
         let lines = WorkoutSessionBlocks.planText(for: updated.exercises)
         updated.suggestion.exercises = lines.isEmpty ? session.suggestion.exercises : lines
+        // The one finishing pass every plan goes through (s1): a swapped-in or added lift is eased,
+        // loaded and trimmed like a planner's pick, a hold gets its countdown, and the note is
+        // rebuilt from what was done. The rows themselves stay the person's.
+        updated = store.finishedGuidedSession(updated, previous: session)
         // R7: the store refuses the save when the plan moved on or the session already started —
         // say so instead of dismissing as if the edits landed.
         guard store.updateGuidedSession(updated) else {

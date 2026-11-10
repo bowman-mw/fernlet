@@ -4794,7 +4794,8 @@ final class FernletStore {
         intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
     ) -> WorkoutProgram.DayPlan {
         if needsRestToday {
-            return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name)
+            return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name,
+                                                      limits: settings.workoutProfile.injuryLimits)
         }
         return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
     }
@@ -4805,10 +4806,18 @@ final class FernletStore {
     }
 
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
-    /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
-    /// AI is off/unavailable or the request is empty.
-    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutProgram.DayPlan {
+    /// Models, constrained to the equipment/injury-filtered catalog, and says what happened: the
+    /// adjusted plan, or why nothing changed (``WorkoutAdjustmentOutcome``).
+    func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutAdjustmentOutcome {
         await workoutPlanningService.adjustWorkoutDayPlan(plan, request: request)
+    }
+
+    /// A session of today's plan edited in the plan editor, through the one finishing pass every
+    /// plan goes through (``WorkoutPlanningService/finishedSession(_:previous:)``).
+    func finishedGuidedSession(
+        _ edited: WorkoutProgram.SessionSuggestion, previous: WorkoutProgram.SessionSuggestion
+    ) -> WorkoutProgram.SessionSuggestion {
+        workoutPlanningService.finishedSession(edited, previous: previous)
     }
 
     // MARK: Guided workout — today's plan (kept on this device for the day; never synced)

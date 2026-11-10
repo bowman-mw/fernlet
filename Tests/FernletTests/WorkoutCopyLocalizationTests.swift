@@ -45,7 +45,7 @@ struct WorkoutCopyLocalizationTests {
     /// The files that declare idea 16's keys.
     static let copyFiles = [
         "WorkoutPlannerCopy.swift", "WorkoutPlannerCopy+Load.swift", "WorkoutPlannerCopy+Plateau.swift",
-        "WorkoutPlannerNames.swift", "WorkoutPlannerNames+Slots.swift", "WorkoutPlannerNames+Locations.swift",
+        "WorkoutPlannerCopy+DayNote.swift", "WorkoutPlannerNames.swift", "WorkoutPlannerNames+Slots.swift", "WorkoutPlannerNames+Locations.swift",
         "WorkoutPlanLine.swift", "WorkoutProgram.swift", "WorkoutModels.swift",
     ]
 
