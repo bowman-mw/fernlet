@@ -146,7 +146,8 @@ struct PassportIndexRow<Stamp: View, Line: View>: View {
 /// The index's Airports and Flights rows (World-Airports-Spec §4.2, `ap-index`): the Airports row (a ticket at
 /// 0.6 so it fits the rows' 34-pt column, dashed before the first airport, "Airports" and the count, every found airport A to Z with its pages, or "None yet"), then the Flights row
 /// (the jet at 2×, "Flights", "5 · page 7", "1 layover"; "None yet" before the first flight) where the book shows
-/// a Flights page. Airports are named only once found.
+/// a Flights page, then the Road trips row (World-RoadTrip-Spec PR 4: the ride's car, "Road trips", "3 · page 8")
+/// where it shows a Road trips page. Airports are named only once found.
 struct PassportIndexAirportRows<Links: View>: View {
     let index: PassportIndexModel
     let library: PassportLibrary
@@ -180,9 +181,19 @@ struct PassportIndexAirportRows<Links: View>: View {
                 }
             }
         }
+        // World-RoadTrip-Spec PR 4: the Road trips row, on the Flights row's pattern (the ride's car, "Road trips",
+        // "3 · page 8"), where the book shows a Road trips page.
+        if let roadTrips = index.roadTrips {
+            PassportIndexRow(stamp: WorldSpriteView(sprite: WorldSprites.rideCar, scale: 2),
+                             name: Text(RoadTripCopy.passportTitle),
+                             count: Text(PassportPageCopy.flightsCount(roadTrips.count, page: roadTrips.page)),
+                             open: turn(to: roadTrips.page), hint: RoadTripCopy.passportTurnsTo) {
+                EmptyView()
+            }
+        }
     }
 
-    /// The Flights row's tap: turns to `page`, or nil (no tap) when the index can't turn pages.
+    /// The Flights or Road trips row's tap: turns to `page`, or nil (no tap) when the index can't turn pages.
     private func turn(to page: Int) -> (() -> Void)? {
         guard let onGo else { return nil }
         return { onGo(page) }

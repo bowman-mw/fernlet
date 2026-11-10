@@ -22,12 +22,13 @@ import WorldMapStore
 extension FernletStore {
 
     /// The catch-up for `fingerprint`'s member: at a commit or Catch up now (`tripID` nil), or in answer to their
-    /// offer for `tripID`. Nil in a decoy, when they share no trip with this phone, or when the line can't be read
-    /// right now (nothing is sent rather than a road with a hole in it).
+    /// offer for `tripID`. Nil in a decoy, when they share no trip with this phone, when they said they left it (PR 4:
+    /// they get no road from after they went), or when the line can't be read right now (nothing is sent rather than a
+    /// road with a hole in it).
     func roadTripCatchUp(for fingerprint: String, tripID: UUID?, isReply: Bool, now: Date = Date()) -> RoadTripCatchUpPayload? {
         guard !duressSessionActive else { return nil }
         let member = RoadTripMembers.id(fingerprint), keeper = worldFog.roadTrip
-        guard let trip = keeper.trip(sharedWith: member, id: tripID) else { return nil }
+        guard let trip = keeper.trip(sharedWith: member, id: tripID), !(trip.othersLeft ?? []).contains(member) else { return nil }
         var segments: [RoadTripWireSegment] = []
         if let window = RoadTripPresence.sendWindow(to: member, in: trip, now: now) {
             guard let points = keeper.linePoints(of: trip, after: window.after, through: window.through) else { return nil }
@@ -49,7 +50,10 @@ extension FernletStore {
         let member = RoadTripMembers.id(fingerprint), keeper = worldFog.roadTrip
         guard let trip = keeper.trip(sharedWith: member, id: catchUp.tripID) else {
             guard !catchUp.isReply, roadTripMesh.invite?.id != catchUp.tripID else { return }
-            let answered = meshFeatures.roadTrip.sendJoinAnswer(RoadTripJoinPayload(tripID: catchUp.tripID, joins: false), to: [fingerprint])
+            // PR 4: a trip this phone left is answered as left, so their copy counts this phone as gone.
+            let left: Bool? = keeper.hasLeft(catchUp.tripID, sharedWith: member) ? true : nil
+            let answered = meshFeatures.roadTrip.sendJoinAnswer(RoadTripJoinPayload(tripID: catchUp.tripID, joins: false, left: left),
+                                                                to: [fingerprint])
             FernletAuditLog.log("worldMap.roadTrip.catchUpNotOnTrip", context: ["answered": "\(answered)"])
             return
         }
@@ -154,8 +158,9 @@ extension FernletStore {
         return last
     }
 
-    /// The members of `trip` to catch up with: the others while it is on, those still owed its end after.
+    /// The members of `trip` to catch up with: the others still on it while it is on (PR 4: not those who said they
+    /// left), those still owed its end after.
     private func roadTripMembersToCatchUp(in trip: RoadTrip) -> [String] {
-        trip.isActive ? trip.others.map(\.id) : (trip.endToTell ?? [])
+        trip.isActive ? trip.othersOnTrip.map(\.id) : (trip.endToTell ?? [])
     }
 }

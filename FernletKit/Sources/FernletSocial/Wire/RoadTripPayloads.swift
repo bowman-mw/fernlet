@@ -189,19 +189,31 @@ public nonisolated struct RoadTripInvitePayload: Codable, Equatable, Sendable {
 }
 
 /// A friend's answer to the invite (`rt-join`): Join, or Not this time (also what a phone answers a catch-up for a
-/// trip it is not on). The sender is the transport-verified peer, never a field. Frozen: `tripID` and `joins` are
-/// field names.
+/// trip it is not on). The sender is the transport-verified peer, never a field. Frozen: `tripID`, `joins` and `left`
+/// are field names.
+///
+/// **A leave** (PR 4, `rt-end`: "when everyone has left"): a Not this time with ``left`` true says the sender was on
+/// the trip and left it (Leave the road trip, or its seven quiet days), sent to the members linked when it leaves and
+/// in answer to a later catch-up for it; the receiver counts them as gone and ends the trip once every other member
+/// has. Nil or false is the plain Not this time (an invite declined, or a trip the sender never joined), so a build
+/// without the field reads a leave as before. Appended to the existing kind, version 1 kept; one optional flag.
 public nonisolated struct RoadTripJoinPayload: Codable, Equatable, Sendable {
     /// The trip answered.
     public let tripID: UUID
     /// Join (true) or Not this time (false).
     public let joins: Bool
+    /// With Not this time: the sender left the trip (PR 4). Nil and false mean the same.
+    public let left: Bool?
 
-    /// An answer.
-    public init(tripID: UUID, joins: Bool) {
+    /// An answer; `left` only with Not this time, from a phone that was on the trip and left it.
+    public init(tripID: UUID, joins: Bool, left: Bool? = nil) {
         self.tripID = tripID
         self.joins = joins
+        self.left = left
     }
+
+    /// Whether it says the sender left the trip.
+    public var saysLeft: Bool { !joins && left == true }
 }
 
 /// The catch-up swap at a stop (`rt-catchup`): the road the sender holds that the receiver was there for (since

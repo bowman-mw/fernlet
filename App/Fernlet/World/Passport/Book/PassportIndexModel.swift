@@ -44,6 +44,10 @@ nonisolated struct PassportIndexModel: Equatable, Sendable {
     /// How many passport countries are found (each once).
     let countryCount: Int
 
+    /// The Road trips row (World-RoadTrip-Spec PR 4), or nil where the book shows no Road trips page (a decoy, the
+    /// demo, no trip over yet).
+    let roadTrips: RoadTripsRow?
+
     /// The Flights row (`ap-index`): every flight counted once, the Flights page's number, the layovers.
     struct FlightsRow: Hashable, Sendable {
         let count: Int
@@ -51,11 +55,17 @@ nonisolated struct PassportIndexModel: Equatable, Sendable {
         let layovers: Int
     }
 
+    /// The Road trips row, on the Flights row's pattern: every road trip counted once and the Road trips page's number.
+    struct RoadTripsRow: Hashable, Sendable {
+        let count: Int
+        let page: Int
+    }
+
     /// The index of `book`, with `table` for each country's continent and sovereign, `name` for each place's
-    /// name in `language` (which also orders them), and `flights` (the Flights page's model, nil with none) for the
-    /// Flights row.
+    /// name in `language` (which also orders them), `flights` (the Flights page's model, nil with none) for the
+    /// Flights row and `roadTrips` (the Road trips page's, nil with none) for the Road trips row.
     init(book: PassportBookModel, table: PassportCountryTable, language: FernletLanguage = .app,
-         flights: PassportFlightsModel? = nil, name: (PassportStampKind) -> String) {
+         flights: PassportFlightsModel? = nil, roadTrips: PassportRoadTripsModel? = nil, name: (PassportStampKind) -> String) {
         var countryPages: [String: [Int]] = [:], airportPages: [String: [Int]] = [:]
         var otherPages: [PassportStampKey: Int] = [:]
         // Bounded: the book holds at most PassportStampEntry.maxEntries.
@@ -94,6 +104,7 @@ nonisolated struct PassportIndexModel: Equatable, Sendable {
             Place(token: token, name: name(.airport(token, transit: false)), pages: Array(Set(pages)).sorted())
         }, language: language)
         self.flights = Self.flightsRow(book: book, flights: flights)
+        self.roadTrips = Self.roadTripsRow(book: book, roadTrips: roadTrips)
         countryCount = places.count
     }
 
@@ -101,6 +112,12 @@ nonisolated struct PassportIndexModel: Equatable, Sendable {
     static func flightsRow(book: PassportBookModel, flights: PassportFlightsModel?) -> FlightsRow? {
         guard let flights, let page = book.flightsPage else { return nil }
         return FlightsRow(count: flights.flightCount, page: page, layovers: flights.layoverCount)
+    }
+
+    /// The Road trips row for `book`'s Road trips page, or nil where it shows none.
+    static func roadTripsRow(book: PassportBookModel, roadTrips: PassportRoadTripsModel?) -> RoadTripsRow? {
+        guard let roadTrips, !roadTrips.isEmpty, let page = book.roadTripsPage else { return nil }
+        return RoadTripsRow(count: roadTrips.trips.count, page: page)
     }
 
     /// `places` A to Z by name in `language` (accents and case ignored), then by token.

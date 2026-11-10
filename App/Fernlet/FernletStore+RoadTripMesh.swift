@@ -121,15 +121,20 @@ extension FernletStore {
     }
 
     /// A friend's answer: Not this time takes them off this phone's copy of the trip (a Join changes nothing: the
-    /// invite already named them).
-    func receiveRoadTripAnswer(_ answer: RoadTripJoinPayload, from fingerprint: String) {
+    /// invite already named them). One that says they left (PR 4) keeps them on the record as gone instead, and the
+    /// trip ends here once every other member has left (``RoadTripEndRules/markingLeft(_:in:now:)``).
+    func receiveRoadTripAnswer(_ answer: RoadTripJoinPayload, from fingerprint: String, now: Date = Date()) {
         let member = RoadTripMembers.id(fingerprint)
         guard !duressSessionActive, !answer.joins,
               let trip = worldFog.roadTrip.trip(sharedWith: member, id: answer.tripID) else { return }
-        guard worldFog.roadTrip.change(trip.id, { $0 = RoadTripCatchUpRules.removing(member, from: $0) }) else {
+        let saved = worldFog.roadTrip.change(trip.id) {
+            $0 = answer.saysLeft ? RoadTripEndRules.markingLeft(member, in: $0, now: now) : RoadTripCatchUpRules.removing(member, from: $0)
+        }
+        guard saved else {
             FernletAuditLog.log("worldMap.roadTrip.declineUnsaved")
             return
         }
+        if answer.saysLeft { FernletAuditLog.log("worldMap.roadTrip.memberLeft") }
     }
 
     /// The first names this iPhone knows the hangout's people by, by member id.

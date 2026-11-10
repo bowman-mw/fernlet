@@ -215,8 +215,13 @@ nonisolated enum PassportFlightsText {
     /// The trip's days in its year's log, whose header gives the year: "20 AUG", "2–3 SEP", "31 AUG – 1 SEP"; a trip
     /// that lands in the next year keeps its years ("31 DEC 2025 – 1 JAN 2026").
     static func daysInYear(of trip: PassportFlightTrip, calendar: Calendar = .current, language: FernletLanguage = .app) -> String {
-        let first = trip.departure
-        guard let last = trip.arrival, !calendar.isDate(first, inSameDayAs: last) else {
+        daysInYear(from: trip.departure, to: trip.arrival, calendar: calendar, language: language)
+    }
+
+    /// The days from `first` to `last` (nil: one day) in a year's log, as ``daysInYear(of:calendar:language:)`` writes
+    /// them (also the Road trips page's, World-RoadTrip-Spec PR 4).
+    static func daysInYear(from first: Date, to last: Date?, calendar: Calendar = .current, language: FernletLanguage = .app) -> String {
+        guard let last, !calendar.isDate(first, inSameDayAs: last) else {
             return PassportBookDates.shortDay(first, calendar: calendar, language: language)
         }
         let start = calendar.dateComponents([.day, .month, .year], from: first)
@@ -234,8 +239,13 @@ nonisolated enum PassportFlightsText {
 
     /// The trip's days: "20 AUG 2026", or "2–3 SEP 2026" when it lands on a later day, or "31 AUG – 1 SEP 2026".
     static func days(of trip: PassportFlightTrip, calendar: Calendar = .current, language: FernletLanguage = .app) -> String {
-        let first = trip.departure
-        guard let last = trip.arrival, !calendar.isDate(first, inSameDayAs: last) else {
+        days(from: trip.departure, to: trip.arrival, calendar: calendar, language: language)
+    }
+
+    /// The days from `first` to `last` (nil: one day), as ``days(of:calendar:language:)`` writes them (also the Road
+    /// trips page's, World-RoadTrip-Spec PR 4).
+    static func days(from first: Date, to last: Date?, calendar: Calendar = .current, language: FernletLanguage = .app) -> String {
+        guard let last, !calendar.isDate(first, inSameDayAs: last) else {
             return PassportDates.short(first, calendar: calendar, language: language)
         }
         let start = calendar.dateComponents([.day, .month, .year], from: first)
