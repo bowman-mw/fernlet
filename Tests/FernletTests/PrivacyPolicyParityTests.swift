@@ -147,8 +147,14 @@ struct PrivacyPolicyParityTests {
     /// - `you're driving or riding, the road you take` — background mapping traces a detected drive or bike
     ///   ride in full ("or riding" added with Refinements group 19, approved 2026-10-29), so the
     ///   background sentence no longer says "low-power" (`only during a walk you started` stays pinned);
-    /// - `If you turn on Log my bike rides` — Motion & Fitness is read only behind that switch;
+    /// - `If you turn on background mapping or Log my bike` — Motion & Fitness is read only behind one of those
+    ///   two switches (background mapping joined it 2026-11-09, with the owner's approved Motion permission text);
     /// - `never keeps the motion data itself` — bike rides log as exercise, and the motion data is never kept.
+    ///
+    /// The two markers added 2026-11-09 (trips that keep tracking) pin what background mapping now also does:
+    /// - `to notice a trip starting` — it asks iOS to tell it when the person leaves a place, then checks for a
+    ///   couple of minutes (the leaving fence and its listen);
+    /// - `so your trips map properly` — why it reads motion data at all.
     private static let substanceMarkers = [
         // World Friends (2026-10-31): what the tap sends before both say yes, and that the rings tell.
         "only short-lived random codes",
@@ -201,8 +207,10 @@ struct PrivacyPolicyParityTests {
         "only while Fernlet is open",
         "All of this is encrypted on this iPhone only: never synced",
         "you're driving or riding, the road you take",
-        "If you turn on Log my bike rides",
-        "never keeps the motion data itself"
+        "If you turn on background mapping or Log my bike",
+        "never keeps the motion data itself",
+        "to notice a trip starting",
+        "so your trips map properly"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

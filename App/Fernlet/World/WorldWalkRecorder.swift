@@ -15,8 +15,8 @@ import WorldMapStore
 /// distance between kept points where the person was moving (``minMovingSpeed`` or faster, no gap longer
 /// than ``maxGap``); stops and lost signal don't count. A moving pace of ``runningSpeed`` or faster is a
 /// run (``paceKind(metres:seconds:)``). No motion sensor is read: CoreMotion's activity would need the
-/// Motion & Fitness permission, which is asked only when "Log my bike rides" is turned on (decided
-/// 2026-10-22). Move can change a walk to a run afterwards (and back). `FernletStore.finishWorldWalk`
+/// Motion & Fitness permission, which is asked only when "Log my bike rides" or background mapping is turned
+/// on (decided 2026-10-22; background mapping since 2026-11-09). Move can change a walk to a run afterwards (and back). `FernletStore.finishWorldWalk`
 /// turns a finished walk into a logged workout and, when "Save new routes" is on and no decoy is open, a
 /// sealed line (a run's line too).
 @MainActor

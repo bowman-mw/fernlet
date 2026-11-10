@@ -98,13 +98,18 @@
      §4's sealed-backup list adds the passport (its stamps, trips and flights), and §6's "never …
      backed up" for map data now names the passport's own sealed backup as the one exception. The
      passport backup is off by default. Nothing new is sent to the developer and no promise is weakened
+     under §13), and 2026-11-09 (trips that keep tracking; the owner approved the new Motion permission
+     text on 2026-11-09, and this wording is drafted for their review with it: §6's background mapping
+     adds that Fernlet asks iOS to tell it when you leave a place and then checks for a couple of
+     minutes, and motion data is read with background mapping as well as with Log my bike rides.
+     Everything stays on the device; nothing new is sent to the developer and no promise is weakened
      under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** October 31, 2026
+**Effective date:** November 9, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -423,9 +428,11 @@ in Settings → Home map.
 The one exception is your passport: its stamps, trips and flights go in the passport's own sealed backup if you use it.
 Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
-you're driving or riding, the road you take. If you turn on Log my bike rides, Fernlet uses your iPhone's
-motion data to tell when you're cycling or riding in a car, on this iPhone only; it logs your bike
-rides as exercise and never keeps the motion data itself. The map itself is drawn by Apple Maps,
+you're driving or riding, the road you take; to notice a trip starting, it asks iOS to tell it when
+you leave a place, then checks for a couple of minutes. If you turn on background mapping or Log my bike
+rides, Fernlet uses your iPhone's motion data to tell when you're riding in a car or cycling, on this
+iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
+exercise; it never keeps the motion data itself. The map itself is drawn by Apple Maps,
 which receives the area on your screen in order to send its map images, under Apple's privacy terms;
 it never receives your map history or your walks. Location is never attached to your identity for
 us.

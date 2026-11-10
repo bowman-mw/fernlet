@@ -7221,7 +7221,7 @@ final class FernletStore {
         // lines, the workout-space pins, Where you've been's log and device side, and the solo photos'
         // places, one folder) and both of its device keys, plus its device-only settings. World build only.
         if !worldFog.clearAll() { incompleteStores.append("your map history") }
-        worldPlaces.forget()
+        forgetWorldPlacesAndBackgroundMapping()
         WorldMapPreferences.clearAll()
         // Advanced period tracking's device-only switch (World build, `b3-period-settings`): how the
         // person tracks their cycle, so it goes with everything else.

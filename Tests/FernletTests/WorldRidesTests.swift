@@ -502,6 +502,38 @@ struct WorldBikeRideLoggingTests {
         #expect(store.worldLocation.rides.loggedRide == nil && motion.queries.isEmpty)
     }
 
+    /// Background mapping reads Motion too (owner 2026-11-09): turned on, it asks iOS once and reads Motion
+    /// without "Log my bike rides", yet never looks through the history for rides; the bike switch going off
+    /// keeps Motion while background mapping is on; both off, Motion stops. A decoy or background mapping off
+    /// asks nothing.
+    @Test func backgroundMappingReadsMotionWithoutTheBikeSwitch() async throws {
+        let motion = ScriptedMotion(permission: .notAsked, grants: true)
+        motion.script = [.init(kind: .cycling, isConfident: true, at: Self.at(600)),
+                         .init(kind: .walking, isConfident: true, at: Self.at(1_800))]
+        let (store, defaults) = try Self.store(motion)
+        let rides = store.worldLocation.rides
+        await store.askWorldMotionForBackgroundMapping(defaults: defaults)
+        #expect(motion.permission == .notAsked && !rides.usesMotion, "background mapping off asks nothing")
+
+        WorldMapPreferences.setAlwaysLowPower(true, in: defaults)
+        store.duressSessionActive = true
+        await store.askWorldMotionForBackgroundMapping(defaults: defaults)
+        #expect(motion.permission == .notAsked && !rides.usesMotion, "a decoy asks nothing")
+        store.duressSessionActive = false
+
+        await store.askWorldMotionForBackgroundMapping(defaults: defaults)
+        #expect(motion.permission == .allowed && rides.usesMotion)
+        #expect(store.worldRidesReadMotion(defaults: defaults) && !store.worldBikeRidesFromHistory(defaults: defaults))
+        await store.catchUpWorldBikeRides(now: Self.at(3_600), defaults: defaults)
+        #expect(motion.queries.isEmpty && rides.loggedRide == nil, "background mapping alone never reads the history")
+
+        #expect(await store.setWorldBikeRides(true, now: Self.at(0), defaults: defaults))
+        #expect(!(await store.setWorldBikeRides(false, defaults: defaults)))
+        #expect(rides.usesMotion, "background mapping still reads Motion")
+        WorldMapPreferences.setAlwaysLowPower(false, in: defaults)
+        #expect(!store.worldRidesReadMotion(defaults: defaults))
+    }
+
     /// Catch-up logs a ride from the history once, never one that began before the checkpoint, waits for a
     /// ride still going, and in a decoy logs nothing and leaves the checkpoint alone.
     @Test func catchUpLogsHistoryRidesOnce() async throws {

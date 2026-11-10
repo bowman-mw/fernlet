@@ -26,7 +26,7 @@ protocol WorldMotionReading: AnyObject {
 
 /// The motion coprocessor's activity for car and bike detection (round 7). **The only file in the app
 /// that imports CoreMotion** (`MapAndLocationConfinementBoundaryTests`). Asked only when "Log my bike
-/// rides" is turned on; the samples are handed on as plain values and never kept.
+/// rides" or background mapping is turned on; the samples are handed on as plain values and never kept.
 @MainActor
 final class WorldMotionSource: WorldMotionReading {
     private let manager = CMMotionActivityManager()

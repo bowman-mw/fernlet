@@ -28,9 +28,9 @@ extension FernletStore {
     /// The most rides one catch-up logs (a bound; three days hold far fewer).
     static let maxCaughtUpRides = 64
 
-    /// Wires the ride keeper's callbacks to the store and reads Motion only when allowed: "Log my bike
-    /// rides" on, Motion & Fitness allowed, no decoy; and wires the flight gate (``wireWorldFlights()``). Safe to
-    /// call more than once (each front edge does).
+    /// Wires the ride keeper's callbacks to the store and reads Motion only when allowed
+    /// (``worldRidesReadMotion(defaults:)``); and wires the flight gate (``wireWorldFlights()``). Safe to call more
+    /// than once (each front edge does).
     func wireWorldRides() {
         let rides = worldLocation.rides
         rides.onBikeRide = { [weak self] ride in self?.logWorldBikeRide(ride) }
@@ -38,10 +38,30 @@ extension FernletStore {
         wireWorldFlights()
     }
 
-    /// Whether the ride keeper may read Motion now.
+    /// Whether the ride keeper may read Motion now: Motion & Fitness allowed, no decoy, and "Log my bike rides" or
+    /// background mapping on (owner 2026-11-09: Motion tells a car from a bike, so background mapping's trips map
+    /// properly, as well as finding bike rides). Neither on, car detection goes by speed alone.
     func worldRidesReadMotion(defaults: UserDefaults = .standard) -> Bool {
-        guard WorldMapPreferences.logsBikeRides(in: defaults), !duressSessionActive else { return false }
+        guard WorldMapPreferences.logsBikeRides(in: defaults) || WorldMapPreferences.alwaysLowPower(in: defaults),
+              !duressSessionActive else { return false }
         return worldLocation.rides.motion.permission == .allowed
+    }
+
+    /// Whether the motion history is looked through for bike rides the map didn't see: only with Motion read and
+    /// "Log my bike rides" on (background mapping alone reads Motion for the live trip, never the history).
+    func worldBikeRidesFromHistory(defaults: UserDefaults = .standard) -> Bool {
+        WorldMapPreferences.logsBikeRides(in: defaults) && worldRidesReadMotion(defaults: defaults)
+    }
+
+    /// Background mapping just turned on in Settings (owner 2026-11-09): asks for Motion & Fitness when iOS
+    /// hasn't asked yet, so car and bike detection can tell a drive from a ride for the trips it traces, then
+    /// reads Motion if allowed. Never in a decoy, and never at a launch (iOS's prompt needs the person there).
+    func askWorldMotionForBackgroundMapping(defaults: UserDefaults = .standard) async {
+        let rides = worldLocation.rides
+        if !duressSessionActive, WorldMapPreferences.alwaysLowPower(in: defaults), rides.motion.permission == .notAsked {
+            _ = await rides.motion.requestAccess()
+        }
+        rides.usesMotion = worldRidesReadMotion(defaults: defaults)
     }
 
     /// Logs a finished bike ride as an outdoor cycling workout, puts it on Home's note and moves the
@@ -67,13 +87,13 @@ extension FernletStore {
 
     /// Turns "Log my bike rides" on (asking for Motion & Fitness) or off; whether it is on afterwards. On only
     /// when Motion is allowed; turning it on starts the motion history's check from `now`, so no ride from
-    /// before is logged. Off forgets the checkpoint and stops reading Motion.
+    /// before is logged. Off forgets the checkpoint and stops reading Motion unless background mapping still does.
     func setWorldBikeRides(_ on: Bool, now: Date = Date(), defaults: UserDefaults = .standard) async -> Bool {
         let rides = worldLocation.rides
         guard on else {
             WorldMapPreferences.setLogsBikeRides(false, in: defaults)
             WorldMapPreferences.setBikeRidesCheckedThrough(nil, in: defaults)
-            rides.usesMotion = false
+            rides.usesMotion = worldRidesReadMotion(defaults: defaults)
             return false
         }
         let allowed = await rides.motion.requestAccess()
@@ -94,14 +114,14 @@ extension FernletStore {
     /// allowed, a decoy is open or a ride is on live; the app's front edge calls it.
     func catchUpWorldBikeRides(now: Date = Date(), defaults: UserDefaults = .standard) async {
         let rides = worldLocation.rides
-        guard worldRidesReadMotion(defaults: defaults), !rides.isCycling else { return }
+        guard worldBikeRidesFromHistory(defaults: defaults), !rides.isCycling else { return }
         guard let checked = WorldMapPreferences.bikeRidesCheckedThrough(in: defaults), checked < now else {
             WorldMapPreferences.setBikeRidesCheckedThrough(now, in: defaults)
             return
         }
         let samples = await rides.motion.samples(from: max(checked, now.addingTimeInterval(-Self.bikeRideCatchUpLimit)), to: now)
         // The switch, the decoy or a live ride may have changed while the history was read.
-        guard worldRidesReadMotion(defaults: defaults), !rides.isCycling,
+        guard worldBikeRidesFromHistory(defaults: defaults), !rides.isCycling,
               WorldMapPreferences.bikeRidesCheckedThrough(in: defaults) == checked else { return }
         let found = WorldRideWatch.rides(in: samples, until: now).filter { $0.started > checked }
         for ride in found.prefix(Self.maxCaughtUpRides) {

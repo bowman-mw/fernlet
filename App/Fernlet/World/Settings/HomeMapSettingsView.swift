@@ -200,6 +200,7 @@ extension HomeMapSettingsView {
         case .always:
             WorldMapPreferences.setAlwaysLowPower(true)
             store.applyWorldBackgroundMapping()
+            Task { await store.askWorldMotionForBackgroundMapping() }
         case .whileUsing:
             awaitsAlways = true
             alwaysPromptShown = false
@@ -211,11 +212,13 @@ extension HomeMapSettingsView {
     }
 
     /// iOS answered: background mapping starts when Always was allowed, here or later in iOS's Settings
-    /// (the location source turns the preference on for either, W-09).
+    /// (the location source turns the preference on for either, W-09), and then asks for Motion & Fitness
+    /// (owner 2026-11-09), so car and bike detection can tell a drive from a ride for the trips it traces.
     private func permissionChanged(_ permission: WorldLocationPermission) {
         if permission == .always, WorldMapPreferences.alwaysLowPower() || awaitsAlways {
             WorldMapPreferences.setAlwaysLowPower(true)
             store.applyWorldBackgroundMapping()
+            Task { await store.askWorldMotionForBackgroundMapping() }
         }
         awaitsAlways = false
     }

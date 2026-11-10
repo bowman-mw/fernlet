@@ -2,8 +2,8 @@ import Foundation
 import WorldMapStore
 
 /// What the motion coprocessor says the person is doing, in plain values: no CoreMotion type leaves
-/// `WorldMotionSource.swift` (round 7, car and bike detection). Read only while "Log my bike rides" is on
-/// and Motion & Fitness is allowed, held in memory, never kept.
+/// `WorldMotionSource.swift` (round 7, car and bike detection). Read only while "Log my bike rides" or
+/// background mapping is on and Motion & Fitness is allowed, held in memory, never kept.
 nonisolated enum WorldMotionKind: String, Equatable, Sendable {
     case stationary
     case walking
@@ -29,8 +29,23 @@ nonisolated enum WorldRideMode: Equatable, Sendable {
     /// In a car or bus since `since`: the companion rides along, quick starts and banners pause, only a
     /// lane of fog lifts along the road, and with background mapping the road is traced.
     case driving(since: Date)
-    /// On a bike since `since` (only with Motion: "Log my bike rides" on and allowed).
+    /// On a bike since `since` (only with Motion: "Log my bike rides" or background mapping on, and allowed).
     case cycling(since: Date)
+}
+
+/// Why the last drive ended (owner 2026-11-09, trips dropping in the background). The location source keeps
+/// listening a few minutes after a drive that ended on foot, which a long red light can still fake, and goes
+/// straight to the leaving fence after one that parked; a drive that ended on foot resumes after a shorter run at
+/// a car's speed (``WorldRideWatch/resumeHold``).
+nonisolated enum WorldDriveEnd: Equatable, Sendable {
+    /// Walking-pace readings, or Motion's confident walking or running.
+    case onFoot
+    /// Nothing faster than walking, nor far from where the car last moved, for ``WorldRideWatch/parkTime``.
+    case parked
+    /// Motion said cycling: the drive became a bike ride.
+    case cycling
+    /// The flight gate found a flight under way.
+    case flight
 }
 
 /// A finished bike ride, ready to log as exercise.

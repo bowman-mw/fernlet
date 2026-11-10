@@ -235,19 +235,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone."
+            "value" : "Fernlet uses motion to tell when you're in a car or on a bike, so your trips map properly and bike rides log. It stays on this iPhone."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet usa el movimiento para saber cuándo vas en bici o en coche, solo mientras “Registrar mis salidas en bici” está activado. Todo se queda en este iPhone."
+            "value" : "Fernlet usa el movimiento para saber cuándo vas en coche o en bici, para que tus trayectos queden bien en el mapa y se registren tus salidas en bici. Todo se queda en este iPhone."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet usa el movimiento para saber cuándo vas en bici o en carro, solo mientras “Registrar mis salidas en bici” está activado. Todo se queda en este iPhone."
+            "value" : "Fernlet usa el movimiento para saber cuándo vas en carro o en bici, para que tus trayectos queden bien en el mapa y se registren tus salidas en bici. Todo se queda en este iPhone."
           }
         }
       }
