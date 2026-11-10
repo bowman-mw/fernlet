@@ -180,6 +180,27 @@ public final class WorldMapVault {
         /// reached, so the week's pick survives a relaunch.
         public static let corner = File(name: "corner.bin", purpose: FernletCryptoPurpose.AEAD.worldMapCornerV1,
                                         role: .store)
+        /// The road trips (owner-approved 2026-11-10, World-RoadTrip-Spec; the app's `RoadTripStore`): each trip's
+        /// name, members (a stable id and a first name), who maps and when it last caught up, ended or was left.
+        /// The device side's purpose and the buffer key, since the phone that maps is in a pocket and a locked launch
+        /// must know whether to trace, bound to its own context so it never opens as `places-device.bin`.
+        public static let roadTrips = File(name: "road-trips.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
+                                           role: .buffer, context: Data("roadTrips".utf8))
+
+        /// The prefix every piece of road trip `trip`'s line starts with (``roadTripLine(trip:chunk:)``).
+        public static func roadTripLinePrefix(trip: UUID) -> String {
+            "road-trip-line-\(trip.uuidString)-"
+        }
+
+        /// Piece `chunk` of road trip `trip`'s timed line (the app's `RoadTripStore`): the walk lines' purpose under
+        /// the buffer key, appended while the phone is locked, and bound to the trip and the piece, so no piece ever
+        /// opens as another trip's or another piece. `chunk` is written with four digits (the app keeps at most 200).
+        public static func roadTripLine(trip: UUID, chunk: Int) -> File {
+            let digits = String(max(0, min(chunk, 9_999)))
+            let index = String(repeating: "0", count: max(0, 4 - digits.count)) + digits
+            return File(name: roadTripLinePrefix(trip: trip) + index + ".bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
+                        role: .buffer, context: Data("roadTripLine:\(trip.uuidString):\(index)".utf8))
+        }
     }
 
     /// The folder the files live in.

@@ -4034,6 +4034,9 @@ struct LocalizationBoundaryTests {
                      source: "Privacy & data: announced after deleting the kept airports and flights ('Deleted 1 airport or flight')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%lld layovers",
                      source: "Sprout's passport index: the Flights row's layovers ('1 layover')"),
+        // World road trip mode, PR 1 (2026-11-10): Trip info's photo row, which would read "1 photos".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "roadTrip.info.photos",
+                     source: "Trip info: the road trip's photos so far ('1 photo')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

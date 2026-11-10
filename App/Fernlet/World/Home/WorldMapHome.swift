@@ -322,6 +322,8 @@ struct WorldMapHome: View {
                         .padding(.trailing, -2)
                 }
             }
+            // A road trip (`rt-home`, owner-approved 2026-11-10): "Road trip · 3" under the status plate, Trip info on a tap.
+            RoadTripChip(store: store)
             if isWalking {
                 WorldWalkBar(metres: walkMetres, kind: store.worldWalk.kind, onEnd: endWalk)
             }
@@ -977,6 +979,8 @@ extension WorldMapHome {
         if UITestSupport.stagesCorner { Task { await stageTestCorner() } }
         let scenes = testScenes
         guard !scenes.isEmpty else { return }
+        // `roadTrip`, `roadTripPassenger`: a road trip on, for the chip and Trip info (``RoadTripTestScenes``).
+        store.stageRoadTripTestScene()
         if scenes.contains("sick") != store.isSick(on: store.todayKey) { store.setSick(scenes.contains("sick"), on: store.todayKey) }
         do {
             try await Task.sleep(for: .seconds(2))

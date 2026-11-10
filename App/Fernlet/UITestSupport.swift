@@ -214,7 +214,8 @@ enum UITestSupport {
     /// `namesOffline` (Private's Places page gets no place
     /// names back, as offline), and round 6's places scenes (`homes`, `hotel`, `greeting`, `asleep`, `places`,
     /// `restaurant`, `refused`, `where`, `tagSheet`, `homeSheet`, `photoSheet`; ``WorldPlacesTestScenes``, display
-    /// only). Consumed by `WorldMapHome`, `WorldMapCompanion`,
+    /// only), and the road trip's (`roadTrip`, `roadTripPassenger`; ``RoadTripTestScenes``, written to the vault like
+    /// a real trip). Consumed by `WorldMapHome`, `WorldMapCompanion`,
     /// `WorldLocationIntroPresenter`, the blue button's label and `FernletStore+WorldPlaces`;
     /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.
     static var worldHomeScenes: Set<String> {

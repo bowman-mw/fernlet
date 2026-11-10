@@ -789,7 +789,8 @@ final class FernletStore {
     /// (`armWorldBackgroundMappingAtLaunch()`, W-09 B1); every reading goes to
     /// ``worldFog``, which decides whether it lifts the fog. A source a locked launch already started before the
     /// store (`WorldLockedMapping`, owner 2026-11-09) is taken over rather than a second one built: its drive, fence
-    /// or listen carries on, and its car book reads the disk again now the phone allows it.
+    /// or listen carries on, and its car book reads the disk again now the phone allows it. A road trip's passenger
+    /// traces no drive (`wireWorldRoadTrip(to:adopted:)`, owner-approved 2026-11-10).
     @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
         let adopted = WorldLockedMapping.shared.handOver()
         let source = adopted ?? WorldLocationSource()
@@ -805,6 +806,7 @@ final class FernletStore {
         source.onVisit = { [weak self] visit in
             self?.worldPlaces.handleVisit(visit)
         }
+        wireWorldRoadTrip(to: source, adopted: adopted != nil)
         return source
     }()
     /// "Where you've been"'s capture (`WorldPlacesKeeper`; `FernletStore+WorldPlaces`): the stops the map

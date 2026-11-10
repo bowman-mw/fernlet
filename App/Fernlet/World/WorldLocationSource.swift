@@ -113,6 +113,13 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   and connecting while the app runs in the background starts a listen. Driving Focus's "Map my drive" filter and the
 ///   Start a drive / End a drive actions reach ``hintDrive(_:now:)``: a hint shortens the start for ``hintLife`` and
 ///   listens ``hintListenTime``; its end ends a quiet drive.
+/// - **A road trip's passengers trace no drive (owner-approved 2026-11-10, World-RoadTrip-Spec `rt-mapper`):** while a
+///   road trip is on and another member's iPhone maps (``setRoadTripPassenger(_:)``, told by the trip's keeper), no drive
+///   trace starts and one running stops (``startsTrace(_:roadTripPassenger:)``): "the others stay in background mapping's
+///   low-power mode until the next stop". Car detection still runs, so Sprout rides along, and the low-power mode, the
+///   leaving fence and its listens stay, except that no listen starts, and one running ends, once the passenger is
+///   known to be driving (``listens(roadTripPassenger:driving:)``): a listen only looks for a drive to trace, so fence
+///   after fence down the road would trace the drive by another name. A bike ride is followed as ever.
 /// - **A bike ride, followed closely (Refinements group 19, `ref-ride-line`, owner-approved 2026-10-29):**
 ///   exactly as a drive is traced, under the same conditions
 ///   (``followsRide(permission:backgroundMapping:declaresBackground:walking:)``), a ride car and bike
@@ -198,6 +205,10 @@ final class WorldLocationSource: NSObject {
 
     /// Whether a listen is running: continuous updates after the person left the leaving fence.
     var isListening: Bool { listening != nil }
+
+    /// Whether this iPhone is a road trip's passenger now: a trip is on and another member's iPhone maps (owner-approved
+    /// 2026-11-10, `rt-mapper`). Told by the trip's keeper; false with no trip and in a decoy.
+    @ObservationIgnored private(set) var isRoadTripPassenger = false
 
     /// Whether a trace's cool-down is running: a drive ended on foot and the updates still run a while.
     var isCoolingDown: Bool { coolDown != nil }
@@ -432,14 +443,61 @@ final class WorldLocationSource: NSObject {
         end == .onFoot
     }
 
+    // MARK: A road trip's passengers (owner-approved 2026-11-10)
+
+    /// Whether a trace of `kind` may start: never a drive's on a road trip's passenger, whose trip another member's
+    /// iPhone maps; a bike ride's always.
+    nonisolated static func startsTrace(_ kind: WorldTrace, roadTripPassenger: Bool) -> Bool {
+        kind != .drive || !roadTripPassenger
+    }
+
+    /// Whether a listen may start: never while a road trip's passenger is driving, since the drive is found and
+    /// another iPhone traces it.
+    nonisolated static func listens(roadTripPassenger: Bool, driving: Bool) -> Bool {
+        !(roadTripPassenger && driving)
+    }
+
+    /// The road trip's keeper says this iPhone became a passenger (true), or maps again or the trip is over (false).
+    /// A passenger's drive trace stops at once, and a listen that found the drive ends; mapping again traces a drive
+    /// under way.
+    func setRoadTripPassenger(_ passenger: Bool) {
+        guard passenger != isRoadTripPassenger else { return }
+        isRoadTripPassenger = passenger
+        guard passenger else {
+            if rides.isDriving { startTrace(.drive) }
+            return
+        }
+        stopTrace(.drive)
+        if rides.isDriving { endPassengerListen() }
+    }
+
+    /// A road trip's passenger is driving: a listen running ends now, as one that found nothing would (the updates stop
+    /// unless the map or a walk keeps them, and the fence is armed where the person is), without widening the next
+    /// fence.
+    private func endPassengerListen() {
+        guard listening != nil else { return }
+        endListening()
+        applyPace()
+        guard trace == nil else { return }
+        if walkSession == nil { manager.allowsBackgroundLocationUpdates = false }
+        guard !isUpdating, !isWalking else { return }
+        manager.stopUpdatingLocation()
+        armFence()
+    }
+
     /// Starts tracing a drive, or following a bike ride, when
     /// ``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)`` allows; when it is already
     /// followed, only the cool-down ends (the drive picked up again). A drive becoming a ride (or back) hands the
     /// updates over, and a listen running ends, since the trace takes its updates over. iOS's blue location pill
-    /// shows while either runs (owner 2026-10-29), so the person can see the road or the ride is being noted.
+    /// shows while either runs (owner 2026-10-29), so the person can see the road or the ride is being noted. A road
+    /// trip's passenger traces no drive (``startsTrace(_:roadTripPassenger:)``), and a listen that found it ends.
     private func startTrace(_ kind: WorldTrace) {
         guard trace != kind else {
             endCoolDown()
+            return
+        }
+        guard Self.startsTrace(kind, roadTripPassenger: isRoadTripPassenger) else {
+            endPassengerListen()
             return
         }
         guard Self.tracesDrive(permission: permission, backgroundMapping: backgroundMapping(),
@@ -567,9 +625,10 @@ final class WorldLocationSource: NSObject {
 
     /// The person left the fence (or a car connected, or a hint came): continuous updates for `duration`
     /// (``listenTime`` by default), unless updates already run (the map in front, a walk, a trace) or a listen is
-    /// on, or the fence is no longer allowed.
+    /// on, the fence is no longer allowed, or a road trip's passenger is driving (``listens(roadTripPassenger:driving:)``).
     fileprivate func startListening(for duration: TimeInterval = WorldLocationSource.listenTime) {
         guard listening == nil, trace == nil, !isUpdating, !isWalking, Self.declaresBackgroundLocation,
+              Self.listens(roadTripPassenger: isRoadTripPassenger, driving: rides.isDriving),
               Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: true) else { return }
         manager.allowsBackgroundLocationUpdates = true

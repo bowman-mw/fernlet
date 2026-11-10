@@ -1,0 +1,81 @@
+import FernletFoundation
+import Foundation
+import UIKit
+import WorldMapStore
+
+/// The road trip's side of the store (World-RoadTrip-Spec PR 1, "Trip core", owner-approved 2026-11-10): the trip's
+/// keeper (`worldFog.roadTrip`, ``RoadTripKeeper``) wired to the map's location, this iPhone's state for the mapper
+/// rule, Trip info's rows and actions, and the DEBUG scene that stages a trip (no entry point until PR 2).
+///
+/// - **The passenger gate:** ``wireWorldRoadTrip(to:adopted:)`` tells the location source whether this iPhone is a
+///   passenger now and whenever that changes, so a passenger traces no drive.
+/// - **Recording** needs no wiring here: the fog keeper hands the trip every reading it accepts.
+/// - **Decoy and wipes** are the fog keeper's: a decoy shows no trip and records nothing; every wipe and Delete map
+///   history remove the trips with the vault.
+extension FernletStore {
+    /// Wires the road trip's keeper to `source`: the book read (again, after the store adopted a locked launch's
+    /// source, whose own keeper wrote meanwhile), and the passenger gate told now and on every change.
+    func wireWorldRoadTrip(to source: WorldLocationSource, adopted: Bool) {
+        let trip = worldFog.roadTrip
+        if adopted { trip.reload() } else { trip.load() }
+        trip.onPassengerChanged = { [weak source] passenger in source?.setRoadTripPassenger(passenger) }
+        source.setRoadTripPassenger(trip.isPassenger)
+    }
+
+    /// This iPhone's state for the mapper rule now (`rt-mapper`): CarPlay connected (the car keeper's route) and
+    /// plugged in (the battery, read with monitoring on for the moment only).
+    func roadTripDeviceState() -> RoadTripDeviceState {
+        let device = UIDevice.current
+        let wasMonitoring = device.isBatteryMonitoringEnabled
+        if !wasMonitoring { device.isBatteryMonitoringEnabled = true }
+        let battery = device.batteryState
+        if !wasMonitoring { device.isBatteryMonitoringEnabled = false }
+        let carPlay = worldLocation.cars.connected.contains { $0.kind == .carPlay }
+        return RoadTripDeviceState(onCarPlay: carPlay, isCharging: battery == .charging || battery == .full)
+    }
+
+    /// Trip info's rows now; nil with no trip on, and in a decoy.
+    func roadTripInfo(now: Date = Date()) -> RoadTripInfo? {
+        let keeper = worldFog.roadTrip
+        guard !duressSessionActive, let trip = keeper.active else { return nil }
+        return RoadTripInfo(title: RoadTripCopy.name(of: trip), mapperName: trip.mapper?.firstName,
+                            lastCatchUp: trip.lastCatchUp, metres: keeper.lineMetres(),
+                            photos: RoadTripTestScenes.photoCount ?? 0, isMapping: trip.isMapping)
+    }
+
+    /// "Map from this iPhone": this iPhone maps from now (PR 1 knows only its own state). Whether it changed anything.
+    func mapRoadTripFromThisPhone(now: Date = Date()) -> Bool {
+        let keeper = worldFog.roadTrip
+        guard !duressSessionActive, let trip = keeper.active else { return false }
+        return keeper.mapFromThisPhone(states: [trip.selfID: roadTripDeviceState()], now: now)
+    }
+
+    /// "Leave the road trip" (local in PR 1). Whether it was written.
+    func leaveRoadTrip(now: Date = Date()) -> Bool {
+        guard !duressSessionActive else { return false }
+        return worldFog.roadTrip.leave(now: now)
+    }
+
+    /// "End the road trip" (local in PR 1; PR 2 carries it to the others). Whether it was written.
+    func endRoadTrip(now: Date = Date()) -> Bool {
+        guard !duressSessionActive else { return false }
+        return worldFog.roadTrip.end(now: now)
+    }
+
+    /// DEBUG ``RoadTripTestScenes`` (`roadTrip`, `roadTripPassenger`): with no trip on, starts the staged one and its
+    /// staged line, written to the vault like a real trip, so the chip, Trip info, recording and the passenger gate
+    /// can be tried. Never in a decoy; a no-op without the scene (always in release builds, whose scene list is empty).
+    func stageRoadTripTestScene(now: Date = Date()) {
+        guard RoadTripTestScenes.stagesTrip, !duressSessionActive else { return }
+        let keeper = worldFog.roadTrip
+        keeper.load()
+        guard keeper.active == nil else { return }
+        let trip = RoadTripTestScenes.trip(now: now, passenger: RoadTripTestScenes.asPassenger)
+        guard keeper.start(trip) else {
+            FernletAuditLog.log("worldMap.roadTrip.testSceneRefused")
+            return
+        }
+        let kept = keeper.appendLine(RoadTripTestScenes.line(startingAt: trip.startedAt.addingTimeInterval(15 * 60)))
+        FernletAuditLog.log("worldMap.roadTrip.testSceneStaged", context: ["points": "\(kept)"])
+    }
+}
