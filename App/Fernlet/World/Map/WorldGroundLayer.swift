@@ -14,6 +14,8 @@ struct WorldGround: Equatable {
     var uncovered: Set<HexCell> = []
     /// Found airports' grounds, drawn as translucent fog (never written into the fog either).
     var veils = NatureFogVeils.none
+    /// Lifted cells only driven past, never walked, drawn as see-through fog (owner 2026-11-09).
+    var driven: Set<HexCell> = []
     /// Saved lines (routes, trails), drawn solid.
     var trails: [[GeoPoint]] = []
     /// Lines in progress or from this session, drawn as dotted footsteps.
@@ -59,7 +61,8 @@ struct WorldGroundLayer: View {
                 drawTrails(in: &context, size: size)
             }
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
-                                                 clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered, veils: ground.veils),
+                                                 clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered, veils: ground.veils,
+                                                                             driven: ground.driven),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
                                                  motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera, terrain: terrain,
                                                  isFrontmost: isFrontmost))

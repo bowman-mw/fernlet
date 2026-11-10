@@ -72,6 +72,9 @@ public final class FogCellStore {
     public private(set) var refusedCount = 0
     /// Whether ``cells`` has changes ``save()`` hasn't written yet.
     public private(set) var hasUnsavedChanges = false
+    /// The cells the last ``drainPending()`` took from the locked-phone buffer, new or not: what was walked while the
+    /// phone was locked (a drive buffers on its own, `DrivenFogStore`), so the driven store can drop them.
+    public private(set) var lastDrained: Set<HexCell> = []
 
     private let vault: WorldMapVault
 
@@ -143,6 +146,7 @@ public final class FogCellStore {
     public func drainPending() throws -> Int {
         guard isLoaded else { return 0 }
         let pending = try readPending()
+        lastDrained = pending
         guard !pending.isEmpty else {
             vault.remove(.pendingFog)
             return 0
@@ -157,6 +161,7 @@ public final class FogCellStore {
     public func forget() {
         cells = []
         hasUnsavedChanges = false
+        lastDrained = []
     }
 
     /// The buffer's cells (empty when there is none, or it can't be opened).

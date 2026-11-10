@@ -43,6 +43,8 @@ A key that can't be read right now is an error, never a reason to mint a new one
 
 ``FogCellStore`` holds the lifted cells: at most ``FogCellStore/maxCells`` (a lifetime of walking one city), with ``FogCellStore/maxPendingCells`` waiting in the buffer, stored in ``FogCellCodec``'s compact delta form. Past a cap new cells are refused and counted, never an eviction of old history. It never decides whether to lift: the app's `WorldFogKeeper` does (precise location, "Uncover the map as you go" on, no decoy session).
 
+``DrivenFogStore`` (2026-11-09) holds the lifted cells only driven past, never walked, which the app draws as see-through fog: a drive adds the cells it newly uncovers, a walk or a bike ride takes them out for good, and every one of them stays in ``FogCellStore`` too. Its own locked-phone buffer holds a drive's cells until the app merges them with what was walked meanwhile. `fog-driven.bin` and `fog-pending-driven.bin` reuse the fog's and the buffer's purposes and keys under their own context, so no file opens as another. ``FogCellStore/lastDrained`` says what the fog buffer held at its last drain.
+
 **Wipes.** ``WorldMapVault/clearAll()`` removes the folder and both keys. Delete everything and the duress silent wipe reach it through `FernletStore.resetAll()`; the duress recovery lock through its own purge hook (design page answer 16). A decoy session never reads or writes it.
 
 ### The atlas
@@ -102,6 +104,7 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``WorldMapKeys``
 - ``WorldMapKeyRole``
 - ``FogCellStore``
+- ``DrivenFogStore``
 - ``FogCellCodec``
 - ``WorldRouteStore``
 - ``WorldRouteCodec``

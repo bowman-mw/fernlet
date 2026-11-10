@@ -461,7 +461,8 @@ struct WorldMapHome: View {
         let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
         let demo = WorldRoadTestScenes.isOn(decoy: store.duressSessionActive)
         return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged).union(demo ? WorldRoadTestScenes.cells : []),
-                           veils: airportVeils.veils(for: store), trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
+                           veils: airportVeils.veils(for: store), driven: store.worldFog.drivenCells,
+                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
                                + (demo ? [WorldRoadTestScenes.walk] : []),
                            traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog)
     }

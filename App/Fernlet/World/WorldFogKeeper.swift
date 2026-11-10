@@ -16,6 +16,14 @@ import WorldMapStore
 /// ``maxJoin`` apart), not the 50-m circle (``handle(_:saveNow:thinLine:)``; the store passes whether car
 /// detection says the person is driving). Walks and bike rides keep the circle.
 ///
+/// **Driven, not walked** (owner 2026-11-09: "driven should be mostly transparent but still there, then you fully unlock
+/// when you walk"): the cells a drive newly uncovers are also kept as ``drivenCells`` (`DrivenFogStore`), which the
+/// map draws as see-through fog; walking or riding a bike through one makes it fully clear for good. Every uncovered
+/// cell stays in the fog store, so the passport, the city card's share and roads crossed, and furthest from home
+/// count a drive as before; only the week's new corner needs walking (``currentCorner(home:now:)``). What was
+/// uncovered before this stays clear. While the phone is locked a drive's cells wait in their own buffer and are
+/// merged at the next load with what was walked meanwhile.
+///
 /// **Duress.** In a decoy session nothing is read from or written to the store: the map shows only the
 /// cells lifted during the decoy itself, held in memory and dropped when the decoy ends, so a coerced
 /// unlock reveals no history and leaves none behind. The silent wipe and Delete everything reach
@@ -60,6 +68,9 @@ final class WorldFogKeeper {
 
     /// The cells the map draws: the whole lifted history, or in a decoy session only the decoy's own.
     private(set) var visibleCells: Set<HexCell> = []
+    /// Those of them only driven past, never walked, which the map draws as see-through fog (owner 2026-11-09); the
+    /// history's, or in a decoy session the decoy's own.
+    private(set) var drivenCells: Set<HexCell> = []
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
     /// The drive's last lifted reading, which the next joins; nil off a drive.
@@ -70,10 +81,13 @@ final class WorldFogKeeper {
     /// The weekly new corner (round 7, spec §5), sealed in the vault; Home asks ``currentCorner(home:now:)``.
     @ObservationIgnored let cornerNudge: WorldCornerNudgeKeeper
     @ObservationIgnored private let store: FogCellStore
+    /// The cells only driven past (owner 2026-11-09), beside the fog store, which still holds every lifted cell.
+    @ObservationIgnored private let driven: DrivenFogStore
     @ObservationIgnored private let vault: WorldMapVault
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isProtectedDataAvailable: @MainActor () -> Bool
     @ObservationIgnored private var decoyCells: Set<HexCell> = []
+    @ObservationIgnored private var decoyDriven: Set<HexCell> = []
     @ObservationIgnored private var sinceSave = 0
     /// The map widget's picture in the app group (tests point it at their own folder).
     @ObservationIgnored var widgetMap: WorldWidgetMapFile
@@ -88,6 +102,7 @@ final class WorldFogKeeper {
          isProtectedDataAvailable: (@MainActor () -> Bool)? = nil) {
         self.vault = vault
         self.store = FogCellStore(vault: vault)
+        self.driven = DrivenFogStore(vault: vault)
         self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) },
                                       openAtlasOffMain: WorldAtlasKeeper.bundledPackOffMain { try WorldAtlas(data: $0) },
                                       openLandmarks: WorldAtlasKeeper.bundledLandmarks(),
@@ -114,12 +129,31 @@ final class WorldFogKeeper {
         }
         do {
             try store.load()
+            try driven.load()
+            try mergeDriven()
         } catch {
             FernletAuditLog.log("worldMap.fog.loadDeferred")
             return
         }
         visibleCells = store.cells
+        drivenCells = driven.cells
         atlas.load()
+    }
+
+    /// Folds what the phone buffered while locked into the driven cells (owner 2026-11-09): what was walked meanwhile
+    /// (the fog buffer the store just drained) is walked, and a drive's buffered cells join the fog, driven unless
+    /// they were walked before or meanwhile.
+    private func mergeDriven() throws {
+        guard driven.isLoaded else { return }
+        driven.remove(store.lastDrained)
+        let pending = try driven.takePending()
+        if !pending.isEmpty {
+            let walked = store.cells.subtracting(driven.cells)
+            store.lift(Array(pending))
+            driven.add(Array(pending.subtracting(walked)))
+            try store.save()
+        }
+        try driven.save()
     }
 
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
@@ -132,11 +166,11 @@ final class WorldFogKeeper {
         let added: Int
         if thinLine {
             let accepted = accepts(fix)
-            added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point))
+            added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point), driving: true)
             if accepted { laneFrom = fix.point }
         } else {
             laneFrom = nil
-            added = lift(fix, cells: MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius))
+            added = lift(fix, cells: MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius), driving: false)
         }
         if saveNow, added > 0 { flush() }
         return added
@@ -162,30 +196,42 @@ final class WorldFogKeeper {
             && fix.point.isValid
     }
 
-    /// Lifts `cells` (around `fix`) when the rules allow `fix`; returns how many cells were new.
-    private func lift(_ fix: WorldFix, cells: [HexCell]) -> Int {
+    /// Lifts `cells` (around `fix`) when the rules allow `fix`; returns how many cells were new. `driving`: the cells
+    /// it newly uncovers are only driven past (see-through fog, owner 2026-11-09), and the week's corner isn't walked
+    /// into; otherwise every cell it reaches is walked, driven no more.
+    private func lift(_ fix: WorldFix, cells: [HexCell], driving: Bool) -> Int {
         guard accepts(fix) else { return 0 }
-        if isDecoy {
-            let before = decoyCells.count
-            decoyCells.formUnion(cells)
-            decoyCells.formUnion(FogGapCloser.closing(around: cells, in: decoyCells))
-            visibleCells = decoyCells
-            return decoyCells.count - before
-        }
+        guard !isDecoy else { return liftDecoy(cells, driving: driving) }
         guard isProtectedDataAvailable(), store.isLoaded else {
-            bufferWhileLocked(cells)
+            bufferWhileLocked(cells, driving: driving)
             return 0
         }
+        let fresh = cells.filter { !store.cells.contains($0) }
         let lifted = store.lift(cells)
         let gaps = FogGapCloser.closing(around: cells, in: store.cells)
         let added = lifted + store.lift(gaps)
+        if driving { driven.add(fresh + gaps) } else { driven.remove(cells + gaps) }
         // Inside the grounds just landed at, the passport waits for the person to leave (the flight gate).
         if !fix.atLandedAirport { atlas.observe(point: fix.point, at: fix.at) }
-        cornerNudge.noteRevealed(cells + gaps)
+        if !driving { cornerNudge.noteRevealed(cells + gaps) }
         visibleCells = store.cells
+        drivenCells = driven.cells
         sinceSave += added
         if sinceSave >= Self.saveEvery { flush() }
         return added
+    }
+
+    /// A decoy's own lift, in memory only: the same rules over its own cells.
+    private func liftDecoy(_ cells: [HexCell], driving: Bool) -> Int {
+        let before = decoyCells.count
+        let fresh = cells.filter { !decoyCells.contains($0) }
+        decoyCells.formUnion(cells)
+        let gaps = FogGapCloser.closing(around: cells, in: decoyCells)
+        decoyCells.formUnion(gaps)
+        if driving { decoyDriven.formUnion(fresh + gaps) } else { decoyDriven.subtract(cells + gaps) }
+        visibleCells = decoyCells
+        drivenCells = decoyDriven
+        return decoyCells.count - before
     }
 
     /// Writes unsaved cells (the app leaving the foreground, or a walk ending).
@@ -193,6 +239,7 @@ final class WorldFogKeeper {
         guard !isDecoy else { return }
         do {
             try store.save()
+            try driven.save()
             sinceSave = 0
         } catch {
             FernletAuditLog.log("worldMap.fog.saveDeferred")
@@ -212,15 +259,20 @@ final class WorldFogKeeper {
         atlas.setDecoy(on)
         cornerNudge.setDecoy(on)
         decoyCells = []
+        decoyDriven = []
         visibleCells = on ? [] : store.cells
+        drivenCells = on ? [] : driven.cells
     }
 
     /// The wipe: forgets the cells and deletes every World map file and key, and the map widget's picture.
     /// Whether it all went.
     func clearAll() -> Bool {
         store.forget()
+        driven.forget()
         decoyCells = []
+        decoyDriven = []
         visibleCells = []
+        drivenCells = []
         sinceSave = 0
         let pictureGone = removeWidgetMap()
         let passportGone = atlas.clearAll()
@@ -233,7 +285,8 @@ final class WorldFogKeeper {
     /// from the loaded history; nil in a decoy, before the history is read, or with no home.
     func currentCorner(home: GeoPoint?, now: Date = Date()) -> HexCell? {
         guard !isDecoy, store.isLoaded else { return nil }
-        return cornerNudge.current(home: home, revealed: store.cells, now: now, isWater: atlas.isWater)
+        // Only walking reaches the corner (owner 2026-11-09): a cell only driven past is still one to walk into.
+        return cornerNudge.current(home: home, revealed: store.cells.subtracting(driven.cells), now: now, isWater: atlas.isWater)
     }
 
     /// Deletes the map widget's picture and reloads the widget; whether the picture is gone.
@@ -249,17 +302,21 @@ final class WorldFogKeeper {
     private func mergeWhileLoaded() {
         flush()
         do {
-            guard try store.drainPending() > 0 else { return }
+            try store.drainPending()
+            if !driven.isLoaded { try driven.load() }
+            try mergeDriven()
             visibleCells = store.cells
+            drivenCells = driven.cells
         } catch {
             FernletAuditLog.log("worldMap.fog.loadDeferred")
         }
     }
 
-    /// Puts cells lifted while the phone is locked into the buffer for the next unlock.
-    private func bufferWhileLocked(_ cells: [HexCell]) {
+    /// Puts cells lifted while the phone is locked into the buffer for the next unlock: a drive's into the driven
+    /// store's own buffer (they join the fog at the merge), anything else into the fog's.
+    private func bufferWhileLocked(_ cells: [HexCell], driving: Bool) {
         do {
-            try store.appendPending(cells)
+            if driving { try driven.appendPending(cells) } else { try store.appendPending(cells) }
         } catch {
             FernletAuditLog.log("worldMap.fog.bufferUnavailable")
         }
