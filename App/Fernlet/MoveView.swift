@@ -2057,8 +2057,9 @@ struct WorkoutSuggestionSheet: View {
 
     /// The "Equipment & limits" entry — the only app-wide way into `WorkoutSetupSheet` (split,
     /// frequency, experience, injuries). Kept on the committed-plan branch, so the full setup stays
-    /// reachable once a plan is pinned (change it here, then "Rework today's plan" to regenerate
-    /// against the new setup); the configurator now states the space inline instead (MOVE-34).
+    /// reachable once a plan is pinned: a change to the space, the limits or the hidden exercises
+    /// made there rebuilds the sessions not yet started by itself (e4), and "Rework today's plan"
+    /// is for everything else; the configurator now states the space inline instead (MOVE-34).
     @ViewBuilder private var equipmentLimitsButton: some View {
         if suggestLook != nil {
             // World build: the framed link card the Move pages use (`b2-move-root`'s history link).
@@ -2384,7 +2385,9 @@ struct WorkoutSuggestionSheet: View {
         // never build a harder plan on it.
         let intensity = store.needsRestToday ? .light : energy
         let requestContext = context
-        let length = sessionLength
+        // A length passed on is one the person chose here: left as Workout setup's, it goes as nil,
+        // so "short on time" in the note may still shorten the session (e3).
+        let length: WorkoutSessionLength? = sessionLength == store.settings.workoutSessionLength ? nil : sessionLength
         Task {
             await Task.yield()
             do {
@@ -2628,10 +2631,24 @@ struct WorkoutSuggestionSheet: View {
     /// then adjust / equipment / rework. The split eyebrow lives in the pinned header, not here,
     /// and no controls compete with the bottom bar's single green (MOVE-17) — Start now lives there.
     @ViewBuilder private func committedPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        planUpdatedLine
         if WorkoutPlanner.isTravelDayPlan(dayPlan) {
             travelPlanContent(dayPlan)
         } else {
             regularPlanContent(dayPlan)
+        }
+    }
+
+    /// "Updated for Home." — shown once the plan's not-yet-started sessions were rebuilt because the
+    /// space, the limits or the hidden exercises changed (e4), with a second sentence when that
+    /// replaced the person's own changes to a session.
+    @ViewBuilder private var planUpdatedLine: some View {
+        if let notice = store.todaysGuidedPlanNotice {
+            Text(verbatim: GuidedPlanNoticeCopy.line(notice))
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(suggestLook?.dim ?? Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("workout.plan.updated")
         }
     }
 
@@ -2686,9 +2703,11 @@ struct WorkoutSuggestionSheet: View {
 
     /// "Full gym · built for a hard day" — where and at what intensity the plan was built.
     /// `displayWord` is the localized half of the intensity's token/display fork — never
-    /// interpolate the frozen `rawValue` into display copy.
+    /// interpolate the frozen `rawValue` into display copy. The space is the one the PLAN was built
+    /// for (its own `locationName`), never simply the active one (e4).
     private var committedContextLine: some View {
-        let locationName = store.settings.activeWorkoutLocation.displayedName
+        let builtFor = dayPlan?.locationName ?? store.settings.activeWorkoutLocation.name
+        let locationName = WorkoutLocationNames.displayed(builtFor) ?? builtFor
         let intensity = (store.committedGuidedIntensity ?? energy).displayWord
         return Text("\(locationName) · built for a \(intensity) day")
             .font(.fernlet(.labelSmall))
@@ -2898,8 +2917,8 @@ struct WorkoutSuggestionSheet: View {
                             // One presenter for every row's info button, regular or travel-day, on
                             // the plan rather than on each card, so two sessions never bind two
                             // sheets to the same state. The store lets the sheet offer "Don't suggest
-                            // this" (N6); today's committed plan keeps the exercise, later plans
-                            // leave it out.
+                            // this" (N6): a session of today's plan that holds the exercise and has
+                            // not started is rebuilt without it (e4), and later plans leave it out.
                             .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)
                     } else {
                         configuratorContent

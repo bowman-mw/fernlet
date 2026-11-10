@@ -208,6 +208,10 @@ struct PrivacyWipeCoverageTests {
         // which would override an explicit "keep my Health samples" answer at the wipe.
         "workoutTombstones.clearAll",
         "guidedRunStateStore.clear",
+        // Today's workout plan file (e7, 2026-11-10, `GuidedPlanFile`): the plan's sessions, "Anything
+        // else?" as typed, and the limits it was built around. The next launch reads the file back,
+        // so a wipe that left it would restore a plan onto a wiped device.
+        "guidedPlanFile?.clear",
         "cookingRunStateStore.clear",
         "clearSensitiveVisibilityResolution",
         // The first-workout Health-offer fact (`fernlet.healthkit.workoutAccessOfferResolved`) in the
@@ -333,7 +337,11 @@ struct PrivacyWipeCoverageTests {
         "func clearMessagesImportInboxes()",
         "func clearDeviceLocalLedgers(",
         "func rotateProximityIdentityAndPurgeDeadDrop(",
-        "func resetAll() -> [String]"
+        "func resetAll() -> [String]",
+        // A sub-leg of `resetAll`, split out for the 60-line rule when today's workout plan joined
+        // the guided run's clears (e7, 2026-11-10): it holds `guidedRunStateStore.clear` and
+        // `guidedPlanFile?.clear`, so it must be scanned or both tokens would go unseen.
+        "func clearGuidedWorkoutStateForWipe()"
     ]
 
     /// The `ContentView` half of the wipe path: five real clears live inside the hook closures

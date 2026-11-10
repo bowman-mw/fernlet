@@ -156,6 +156,10 @@ extension FernletStore {
     /// Today's plan at `spaceID`: makes the space the active one and returns the session to guide,
     /// committing today's plan first, as Move's "Start today's workout" does. Nil when nothing is left
     /// to guide.
+    ///
+    /// The plan is the one for THIS space (the owner's fix e4): making the space active rebuilds the
+    /// sessions of an already-committed plan that have not started, so a plan approved at the gym no
+    /// longer starts gym lifts at home. A session already logged, or running, stays as it was.
     func startTodaysPlan(at spaceID: UUID) -> WorkoutProgram.SessionSuggestion? {
         if settings.activeWorkoutLocationID != spaceID { setActiveWorkoutLocation(spaceID) }
         let plan = commitTodaysGuidedWorkoutPlan(intensity: recommendedWorkoutIntensity() ?? .moderate)
@@ -174,7 +178,8 @@ extension FernletStore {
     }
 
     /// Prepares Move's "Suggest today's workout" for `spaceID`: that space becomes the active one, so
-    /// the suggestion is built from its equipment.
+    /// the suggestion is built from its equipment — and a plan already committed for another space
+    /// has its not-yet-started sessions rebuilt for this one (e4).
     func prepareSuggestion(at spaceID: UUID) {
         if settings.activeWorkoutLocationID != spaceID { setActiveWorkoutLocation(spaceID) }
     }
