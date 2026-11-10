@@ -171,3 +171,84 @@ divergence count went from 15 to 16, because typed "quest protein bar" now answe
 
 Timing: on the branded pass, per-query times stayed near baseline. The base pass ran at load average 20–28, where
 even the untouched SQLite retrieval slowed by the same factor. Device timing is still owed.
+
+## After the review fixes (2026-11-09, branch `claude/food-search-fixes`)
+
+A read-only review of main (61fa06ff) found that the fixes above were only partly true and had two side
+effects. This round fixes those. Everything is still typed-surface only: `scoredResults`, the resolver's
+`candidates`, and every confidence gate rank exactly as before.
+
+1. **A generic first word is no longer read as a brand.** The rule asked for a fifth of the matched rows.
+   "turkey burger" cleared it (30 % of the rows carry "turkey" in the brand field: Jennie-O Turkey Store),
+   so that maker's rows led every other burger, a logged one included. A run now needs 60 % of the rows
+   that have a brand of their own, counting the brand's brand-field rows. Measured on both catalogs,
+   every brand query tried reads 67 % or more and every generic one under 50 %.
+2. **A person's own foods agree with a typed brand through their name.** Their brand field is a label
+   the app wrote ("Custom ingredient", "Imported recipe"), which the rule read as a rival brand, so a
+   custom "Heinz ketchup" sank below every catalog Heinz row.
+3. **A brand's products join rows that already matched.** The brand-field fetch ran only when the
+   search showed nothing. "chobani blueberry yogurt" matched one row by name, so the brand's other
+   blueberry yogurts were never offered. The fetch now also runs beside the normal gate for the leading
+   one- and two-word runs, and its rows join when the run qualifies as the typed brand. Rows that name
+   the brand lead the ones that do not, below this person's logged rows. Bounded: 400 rows per source
+   and run, at most 20,000 gate rows read through the `LIKE`, and no fetch while the last word is under
+   three letters.
+4. **Possessives typed plain.** "amys burrito" and "kelloggs corn flakes" now reach "Amy's Kitchen" and
+   "Kellogg Company". A typed word and a brand-field word agree when either is the other's regular
+   singular, and a hyphen in the brand field reads as a space.
+5. **Single-letter brands.** "m&m's" had no search token and "m&ms" searched `ms*` (MSG soup bases).
+   `FoodBrandInitialism` reads the letters and each source finds them as an exact FTS5 phrase; rows
+   whose name states them lead the list.
+6. **Plurals.** "cookies" offered only the stem "cooky" and an -es plural only its -s stem. The stems now
+   include `ies → ie` and `es` after a sibilant or an `o` (cookie, sandwich, tomato). A lone plural still
+   shows only rows that say it (the score floor is unchanged); beside another word it reaches the
+   singular-named product.
+7. **The "Did you mean" line is built.** The three search fields show it under "No catalog matches.";
+   tapping it fills the field. It is offered only when the corrected query finds something. Seen working
+   in the simulator's meal composer.
+
+### Measured
+
+The 64-query panel above does not hold these failure classes, so a second panel does:
+`Tests/FoodSearchBaseline/review-panel-2026-11-09.json`, 19 labelled queries (draft labels, owner review
+pending). Replay it with `TEST_RUNNER_FERNLET_BRAND_PANEL=review-panel-2026-11-09.json`. Both panels were
+replayed on main's search code and on this branch, same machine, same day.
+
+| Panel | Configuration | Profile | Top-1 | Top-6 | Zero results | Brand mismatch |
+| --- | --- | --- | --- | --- | --- | --- |
+| Review, 19 | base + branded | cold | 0.789 → **1.000** | 0.842 → **1.000** | 0.053 → **0** | 0.063 → **0** |
+| Review, 19 | base + branded | warm | 0.895 → **1.000** | 0.895 → **1.000** | 0.053 → **0** | 0.062 → **0** |
+| Review, 19 | base | cold | 0.737 → **1.000** | 0.789 → **1.000** | 0.105 → **0** | 0.072 → **0** |
+| Original, 64 | base + branded | cold | 0.790 → 0.790 | 0.871 → 0.871 | 0.109 → 0.109 | 0.039 → 0.037 |
+| Original, 64 | base + branded | warm | 0.855 → 0.855 | 0.871 → 0.871 | 0.109 → 0.109 | 0.039 → 0.037 |
+| Original, 64 | base | cold | 0.790 → 0.790 | 0.855 → 0.855 | 0.141 → 0.141 | 0.037 → 0.031 |
+
+By query, base + branded:
+- **Now right:** amys burrito (first acceptable row #45 → #1), m&m's and m&ms (nothing / MSG and store
+  mixes → Mars' own M&M's), m&m peanut (#25 → #1), a&w root beer (#2 → #1).
+- **More of the brand offered:** chobani strawberry yogurt and sargento string cheese 2 rows → 6, quest
+  chips 4 → 6.
+- **Generic again:** jelly beans showed six Jelly Belly rows and now shows six makers; turkey burger
+  3 makers → 5.
+- **Original panel:** no query changed its top-1, top-6 or zero-result outcome. kind bar lost its one
+  wrong-brand row on the base catalog.
+
+### Cost and limits
+
+- **Time.** The brand-field fetch adds work to every multi-word typed query. In a Debug build on the
+  simulator the original panel's median repeat query went from 3.9 ms to 21.4 ms and its p95 stayed at
+  about 165 ms; the slowest single cases gained 15 to 45 ms. Release timing on a phone is still owed.
+- **candy corn shows three rows.** With "candy" no longer a brand, the top 60 rows are mostly the same
+  name from many makers, and the one-row-per-name collapse reads only those 60. This is the collapse's
+  existing window, not new, but this query now meets it.
+- **m&m peanut** puts a Mars KUDOS bar first (a USDA reference row naming "M&M MARS"), then M&M's Peanut.
+- **Not done from the review:** a superseded search still finishes its retrieval; one- and two-letter
+  queries say "No catalog matches."; the branded catalog load is tried once per launch; the chain
+  lexicon matches by substring ("chipotle chicken"); a lone digit is still dropped ("2% milk", "7 up").
+- **Still wrong from before:** owner-only brands (Doritos), Spanish queries, generic head-noun ranking.
+
+Tests: 314 tests in 19 suites pass (the food search, catalog and typeahead suites plus the Power-of-10,
+localization, S3 and no-tracking walls). Two pins changed on purpose: `matchVariants` for "berries", and
+the shipped candidate-set sizes for "tomatoes" (951 → 2,143) and "potatoes" (1,211 → 3,090). The full
+`FernletTests` run was not made.
+

@@ -1184,8 +1184,10 @@ struct FoodSearchCorpusTests {
         ("chiken breast", 0),
         ("chicken breast", 931),
         ("mozzarella cheese", 429),
-        ("tomatoes", 951),
-        ("potatoes", 1_211),
+        // 2026-11-09: the -oes plural gained its singular stem (`tomato*`, `potato*`), so these two
+        // now reach the rows named in the singular: 951 → 2,143 and 1,211 → 3,090.
+        ("tomatoes", 2_143),
+        ("potatoes", 3_090),
         ("apple", 3_803),
         ("protein bar", 336),
         ("string cheese", 49)

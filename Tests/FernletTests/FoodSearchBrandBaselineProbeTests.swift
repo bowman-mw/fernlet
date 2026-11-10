@@ -35,6 +35,9 @@
 //       TEST_RUNNER_FERNLET_REPLAY_BRANDED=/abs/FoodCatalogBranded.sqlite \
 //       xcodebuild test-without-building … -only-testing:FernletTests/FoodSearchBrandBaselineProbeTests
 //
+// `TEST_RUNNER_FERNLET_BRAND_PANEL=review-panel-2026-11-09.json` replays the 2026-11-09 review's panel
+// instead (the failure classes the 64 queries lack).
+//
 // A missing branded file is REPORTED (`brandedAvailable: false` in the summary), never counted as
 // branded coverage.
 
@@ -56,9 +59,18 @@ struct BrandSearchPanel: Codable {
     /// Every labeled query.
     let entries: [BrandSearchPanelEntry]
 
-    /// The panel as committed.
-    static func load() throws -> BrandSearchPanel {
-        let data = try Data(contentsOf: RepoRoot.url("Tests/FoodSearchBaseline/brand-panel.json"))
+    /// The 64-query panel the 2026-10-29 baseline was measured on.
+    static let brandPanelFile = "brand-panel.json"
+    /// The 2026-11-09 review's panel: the failure classes the 64 queries lack (a generic first word in
+    /// a maker's brand field, a brand its products rarely name, possessives typed plain, single-letter
+    /// brands, plurals). Replayed by naming it in `FERNLET_BRAND_PANEL`.
+    static let reviewPanelFile = "review-panel-2026-11-09.json"
+    /// Every committed panel.
+    static let panelFiles = [brandPanelFile, reviewPanelFile]
+
+    /// A committed panel, by its file name in `Tests/FoodSearchBaseline`.
+    static func load(named file: String = brandPanelFile) throws -> BrandSearchPanel {
+        let data = try Data(contentsOf: RepoRoot.url("Tests/FoodSearchBaseline/" + file))
         return try JSONDecoder().decode(BrandSearchPanel.self, from: data)
     }
 }
@@ -260,8 +272,8 @@ struct BrandBaselineSummary: Codable {
 /// either labeled or explicitly expects no acceptable row, and both splits cover brand and generic
 /// intents, so a held-out set always exists to check tuning against.
 struct FoodSearchBrandPanelTests {
-    @Test func panelIsWellFormed() throws {
-        let panel = try BrandSearchPanel.load()
+    @Test(arguments: BrandSearchPanel.panelFiles) func panelIsWellFormed(_ file: String) throws {
+        let panel = try BrandSearchPanel.load(named: file)
         let ids = panel.entries.map(\.id)
         #expect(Set(ids).count == ids.count, "panel ids must be unique")
         for entry in panel.entries {
@@ -308,7 +320,10 @@ struct FoodSearchBrandBaselineProbeTests {
     @Test func replayBrandPanel() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["FERNLET_BRAND_BASELINE"] != nil || env["TEST_RUNNER_FERNLET_BRAND_BASELINE"] != nil else { return }
-        let panel = try BrandSearchPanel.load()
+        // `FERNLET_BRAND_PANEL` names another committed panel; anything else is refused, not read.
+        let named = env["FERNLET_BRAND_PANEL"] ?? env["TEST_RUNNER_FERNLET_BRAND_PANEL"] ?? BrandSearchPanel.brandPanelFile
+        try #require(BrandSearchPanel.panelFiles.contains(named), "unknown panel \(named)")
+        let panel = try BrandSearchPanel.load(named: named)
         let out = env["FERNLET_REPLAY_OUT"] ?? env["TEST_RUNNER_FERNLET_REPLAY_OUT"]
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount > 100_000, "the shipped catalog must be loaded")

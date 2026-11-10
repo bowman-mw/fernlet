@@ -15984,6 +15984,22 @@
         }
       }
     },
+    "Did you mean “%@”?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Querías decir “%@”?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Quisiste decir “%@”?"
+          }
+        }
+      }
+    },
     "Difficulty" : {
       "localizations" : {
         "es" : {

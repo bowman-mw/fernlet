@@ -2157,6 +2157,27 @@ enum CatalogTypeahead {
         guard !Task.isCancelled else { return nil }
         return hits
     }
+
+    /// One settled-keystroke answer: the matches and, when there are none, a spelling to offer
+    /// ("chobanni yogurt" → "chobani yogurt"). nil = superseded; apply nothing. The spelling is only
+    /// ever offered — the field's text changes when the person taps it, never before.
+    static func answer(
+        for text: String, catalog: FoodCatalog, ranking: FoodSearchRanking
+    ) async -> (items: [FoodItem], suggestion: String?)? {
+        guard let hits = await matches(for: text, catalog: catalog, ranking: ranking) else { return nil }
+        guard hits.isEmpty else { return (hits, nil) }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return (hits, nil) }
+        // The catalog's first suggestion reads its whole word list, so this too runs off the main actor.
+        let lookup = Task.detached { [catalog] in catalog.spellingSuggestion(for: trimmed) }
+        let suggestion = await withTaskCancellationHandler {
+            await lookup.value
+        } onCancel: {
+            lookup.cancel()
+        }
+        guard !Task.isCancelled else { return nil }
+        return (hits, suggestion)
+    }
 }
 
 /// A query-bound typeahead snapshot. Cached rows are visible and selectable only while they answer
@@ -2164,15 +2185,26 @@ enum CatalogTypeahead {
 nonisolated struct CatalogTypeaheadResultSet {
     private(set) var settledQuery = ""
     private(set) var items: [FoodItem] = []
+    /// The spelling offered for a settled miss, bound to the same query as the rows.
+    private(set) var suggestion: String?
 
     mutating func clear() {
         settledQuery = ""
         items = []
+        suggestion = nil
     }
 
-    mutating func bind(_ items: [FoodItem], to query: String) {
+    mutating func bind(_ items: [FoodItem], to query: String, suggestion: String? = nil) {
         settledQuery = Self.normalized(query)
         self.items = items
+        self.suggestion = suggestion
+    }
+
+    /// The spelling to offer under the miss notice, only while it answers the field's current text
+    /// and that text found nothing.
+    func visibleSuggestion(for query: String) -> String? {
+        guard isSettled(for: query), items.isEmpty else { return nil }
+        return suggestion
     }
 
     func visibleMatches(for query: String) -> [FoodItem] {
@@ -2261,6 +2293,31 @@ private struct CatalogSuggestionRow: View {
     }
 }
 
+/// The spelling a settled miss offers: "Did you mean “chobani yogurt”?". Tapping it puts the spelling
+/// in the field, which searches again; nothing is rewritten until then.
+private struct CatalogSpellingSuggestionButton: View {
+    var suggestion: String
+    var onAccept: (String) -> Void
+    @Environment(\.fernletFramedLook) private var look
+
+    var body: some View {
+        Button {
+            FernletFeedback.system.play(.tick)
+            onAccept(suggestion)
+        } label: {
+            Text("Did you mean “\(suggestion)”?")
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.button)
+                .foregroundStyle(look?.link ?? Color.moss)
+                .fernletWrappingText()
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("catalogSearch.spellingSuggestion")
+    }
+}
+
 /// The shared settled-miss card for catalog searches.
 ///
 /// The action stack is deliberately its own seam: a later recipe-description drafting affordance
@@ -2268,11 +2325,17 @@ private struct CatalogSuggestionRow: View {
 /// deterministic manual path. This increment adds no AI control or behavior.
 private struct CatalogSearchEmptyState: View {
     var actionTitle: LocalizedStringKey
+    /// A spelling to offer above the action, with what a tap does with it.
+    var suggestion: String?
+    var onAcceptSuggestion: (String) -> Void = { _ in }
     var action: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
             EmptyState(text: "No catalog matches.", systemImage: "magnifyingglass")
+            if let suggestion {
+                CatalogSpellingSuggestionButton(suggestion: suggestion, onAccept: onAcceptSuggestion)
+            }
             Button(action: action) {
                 Label(actionTitle, systemImage: "plus.circle")
                     .font(.fernlet(.label))
@@ -2420,7 +2483,11 @@ struct RecipeIngredientEditor: View {
             .accessibilityIdentifier("recipeIngredient.catalogResults")
             CustomIngredientEscapeRow(isCreating: isCreatingCustomIngredient) { isCreatingCustomIngredient = true }
         } else if showsSettledMiss && !isCreatingCustomIngredient {
-            CatalogSearchEmptyState(actionTitle: "Create custom ingredient") {
+            CatalogSearchEmptyState(
+                actionTitle: "Create custom ingredient",
+                suggestion: typeaheadResults.visibleSuggestion(for: ingredient.name),
+                onAcceptSuggestion: { ingredient.name = $0 }
+            ) {
                 isCreatingCustomIngredient = true
             }
             .accessibilityIdentifier("recipeIngredient.catalogMiss")
@@ -2532,10 +2599,10 @@ struct RecipeIngredientEditor: View {
         }
         // nil = superseded by a newer keystroke: keep the current list rather than a stale one. A
         // recipe line wants the ingredient itself first (F5).
-        guard let hits = await CatalogTypeahead.matches(for: text, catalog: catalog, ranking: .ingredientIdentity) else {
+        guard let answer = await CatalogTypeahead.answer(for: text, catalog: catalog, ranking: .ingredientIdentity) else {
             return
         }
-        typeaheadResults.bind(hits, to: text)
+        typeaheadResults.bind(answer.items, to: text, suggestion: answer.suggestion)
     }
 
     private var showsSettledMiss: Bool {
@@ -3306,6 +3373,9 @@ struct MealSheet: View {
         } else if showsMealCatalogMiss {
             FernletNotice("No catalog matches.") { FernletIcon(.search, scale: 2) }
                 .accessibilityIdentifier("mealComposer.catalogMiss")
+            if let suggestion = catalogResults.visibleSuggestion(for: description) {
+                CatalogSpellingSuggestionButton(suggestion: suggestion) { description = $0 }
+            }
         }
     }
 
@@ -3340,10 +3410,10 @@ struct MealSheet: View {
             return
         }
         // A meal keeps the standard order (F5 is the recipe surfaces' ranking only).
-        guard let hits = await CatalogTypeahead.matches(for: query, catalog: store.foodCatalog, ranking: .standard) else {
+        guard let answer = await CatalogTypeahead.answer(for: query, catalog: store.foodCatalog, ranking: .standard) else {
             return
         }
-        catalogResults.bind(hits, to: query)
+        catalogResults.bind(answer.items, to: query, suggestion: answer.suggestion)
     }
 
     /// Cancels on text edits and can deliberately re-run an unchanged query after Change selection.
@@ -4897,6 +4967,9 @@ private struct MealItemSearchField: View {
             }
             if showsSettledMiss && !isCreatingCustomFood {
                 FernletNotice("No catalog matches.") { FernletIcon(.search, scale: 2) }
+                if let suggestion = typeaheadResults.visibleSuggestion(for: searchText) {
+                    CatalogSpellingSuggestionButton(suggestion: suggestion) { searchText = $0 }
+                }
                 Button { isCreatingCustomFood = true } label: {
                     HStack(spacing: 8) {
                         FernletIcon(.plus, scale: 2)
@@ -4925,8 +4998,8 @@ private struct MealItemSearchField: View {
                 return
             }
             // Adjust meal corrects a logged meal: the standard order (F5 is recipes only).
-            guard let hits = await CatalogTypeahead.matches(for: query, catalog: catalog, ranking: .standard) else { return }
-            typeaheadResults.bind(hits, to: query)
+            guard let answer = await CatalogTypeahead.answer(for: query, catalog: catalog, ranking: .standard) else { return }
+            typeaheadResults.bind(answer.items, to: query, suggestion: answer.suggestion)
         }
     }
 
