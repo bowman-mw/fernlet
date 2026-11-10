@@ -77,12 +77,6 @@ public nonisolated enum WorkoutPlannerCopy {
 
     // MARK: - Session-level notes (WorkoutProgram)
 
-    /// "Noted: <what the person typed>".
-    static func noted(_ context: String) -> String {
-        String(localized: "workoutNote.noted", defaultValue: "Noted: \(context)", bundle: .module,
-               comment: "Workout session note: echoes the note the person typed when asking for a plan. The argument is their own text.")
-    }
-
     /// The person's injury limits shaped the plan.
     static var workedAroundLimits: String {
         String(localized: "workoutNote.workedAroundLimits", defaultValue: "Worked around your noted limits.", bundle: .module,

@@ -1605,6 +1605,11 @@ public nonisolated enum WorkoutProgram {
     /// A lifting session never falls back to an unfiltered circuit (the owner's fix s3): one left
     /// short of ``minimumLifts`` is filled with safe lifts for other body areas, and one still short
     /// offers mobility and a walk instead (WorkoutProgram+Fill.swift).
+    ///
+    /// `context` is the plan sheet's "Anything else?", read for this plan only (``WorkoutDayNote``,
+    /// the owner's fix e3): a body area it names is trained around today on top of the saved
+    /// limits, a time phrase picks a shorter session unless `noteMayShorten` is false (the person
+    /// chose a length for this plan themselves), and the first session's note says what was applied.
     public static func dayPlan(
         goal: GoalType,
         intensity: WorkoutIntensity,
@@ -1619,12 +1624,16 @@ public nonisolated enum WorkoutProgram {
         options: WorkoutSessionOptions = WorkoutSessionOptions(),
         preferences: WorkoutExercisePreferences = WorkoutExercisePreferences(),
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises,
-        cardioSeed: Int? = nil
+        cardioSeed: Int? = nil,
+        noteMayShorten: Bool = true
     ) -> DayPlan {
+        // Today's note over the saved limits and the session length (WorkoutDayNote.swift).
+        let today = WorkoutDayNote.Applied(context: context, saved: profile.injuryLimits, options: options,
+                                           mayShorten: noteMayShorten)
+        let limits = today.limits
         // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
         // `max(count, 1)` made that trap on `days[0]` instead of degrading. Fall back to the same
         // "just move" session the empty-render path below produces.
-        let limits = profile.injuryLimits
         guard !split.days.isEmpty else {
             return DayPlan(splitName: split.name, dayTitle: "Move",
                            sessions: [fallbackSession(limits: limits)], droppedSlots: [],
@@ -1639,7 +1648,7 @@ public nonisolated enum WorkoutProgram {
         let style = WorkoutGoalStyle.style(for: goal, energy: intensity, sport: profile.sport)
         let equipped = catalog.filter { WorkoutSafetyFilter.hasEquipment(for: $0, at: location) }
         let pool = splitHidden(equipped.filter(limits.allows), preferences: preferences)
-        let biasTokens = selectionTokens(profile: profile, context: context)
+        let biasTokens = selectionTokens(profile: profile, note: today.note)
 
         var dayUsed: Set<String> = []
         var dropped: [String] = []
@@ -1652,16 +1661,14 @@ public nonisolated enum WorkoutProgram {
             let inputs = SlotInputs(
                 goal: goal, intensity: intensity, style: style, feasible: pool.shown, biasTokens: biasTokens,
                 profile: profile, location: location, progression: progression, load: load,
-                limits: limits, recentHard: counted?.hardMuscles ?? [], options: options,
+                limits: limits, recentHard: counted?.hardMuscles ?? [], options: today.options,
                 hiddenFeasible: pool.hidden, alternates: preferences.alternateKeys,
                 cardioSeed: cardioSeed ?? rotationIndex,
                 blocked: limits.isEmpty ? [] : equipped.filter { !limits.allows($0) },
-                upcomingMuscles: upcomingMuscles(in: split, after: dayIndex)
+                upcomingMuscles: upcomingMuscles(in: split, after: dayIndex),
+                limitsAreTodaysOnly: today.saved.isEmpty
             )
-            let rendered = render(
-                session: session, inputs: inputs, context: context, used: &dayUsed,
-                isMultiSession: day.sessions.count > 1, calibrationOpen: &calibrationOpen
-            )
+            let rendered = render(session: session, inputs: inputs, used: &dayUsed, calibrationOpen: &calibrationOpen)
             dropped.append(contentsOf: rendered.dropped)
             sessions.append(rendered.session)
         }
@@ -1672,6 +1679,7 @@ public nonisolated enum WorkoutProgram {
         if let decision, let from = decision.movedFrom {
             prependNote(WorkoutRecoveryGuard.movedNote(to: day, from: split.days[from]), to: &sessions)
         }
+        appendNotes(today.lines(matched: today.matchedLifts(in: sessions)), to: &sessions)
 
         return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped,
                        locationName: location.name, recovery: decision)
@@ -1682,6 +1690,13 @@ public nonisolated enum WorkoutProgram {
         guard !sessions.isEmpty else { return }
         let existing = sessions[0].suggestion.notes
         sessions[0].suggestion.notes = existing.isEmpty ? note : "\(note) · \(existing)"
+    }
+
+    /// Adds `notes` to the end of the first session's note, a part each.
+    static func appendNotes(_ notes: [String], to sessions: inout [SessionSuggestion]) {
+        guard !sessions.isEmpty, !notes.isEmpty else { return }
+        let existing = sessions[0].suggestion.notes
+        sessions[0].suggestion.notes = ([existing] + notes).filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// How many past training days ``nextDayIndex(in:recentSessionNames:)`` looks through.
@@ -1806,9 +1821,7 @@ public nonisolated enum WorkoutProgram {
     private static func render(
         session: WorkoutSessionTemplate,
         inputs: SlotInputs,
-        context: String,
         used: inout Set<String>,
-        isMultiSession: Bool,
         calibrationOpen: inout Bool
     ) -> (session: SessionSuggestion, dropped: [String]) {
         let timeLabel = session.time.label
@@ -1827,7 +1840,7 @@ public nonisolated enum WorkoutProgram {
             let exercises = [PrescribedExercise(name: detail, sets: 0, reps: "", role: .accessory, fromCatalog: false)]
             let suggestion = WorkoutSuggestion(
                 name: name, exercises: detail,
-                notes: notes(inputs: inputs, context: context, dropped: [], includeContext: !isMultiSession,
+                notes: notes(inputs: inputs, dropped: [],
                              progressNotes: (capped.note.map { [$0] } ?? []) + (seated.map { [$0.note] } ?? []))
             )
             return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: exercises, suggestion: suggestion), [])
@@ -1844,8 +1857,7 @@ public nonisolated enum WorkoutProgram {
             let suggestion = WorkoutSuggestion(
                 name: name,
                 exercises: WorkoutSessionBlocks.planText(for: built.exercises),
-                notes: notes(inputs: inputs, context: context, dropped: unsafe,
-                             includeContext: !isMultiSession, progressNotes: built.progressNotes,
+                notes: notes(inputs: inputs, dropped: unsafe, progressNotes: built.progressNotes,
                              hiddenDropped: hiddenDrops, namesLimits: built.namesLimits)
             )
             // The mobility offer is a stretch session: it logs as one, under the day's own name, so
@@ -1890,6 +1902,9 @@ public nonisolated enum WorkoutProgram {
         var blocked: [ExerciseTarget] = []
         /// The muscles the split trains hard on its next day, which a short session's fill takes last.
         var upcomingMuscles: Set<MuscleGroup> = []
+        /// True when every limit comes from today's "Anything else?" (``WorkoutDayNote``): its own
+        /// line names the area, so the general "worked around your noted limits" line stays out.
+        var limitsAreTodaysOnly = false
     }
 
     /// The safety-filtered pool split into what the planner may suggest and what the user hid.
@@ -2409,19 +2424,19 @@ public nonisolated enum WorkoutProgram {
         }
     }
 
-    private static func selectionTokens(profile: WorkoutProfile, context: String) -> Set<String> {
+    /// The words that nudge a pick toward an exercise whose name shares one: the profile's
+    /// interests and sport, and the words of today's note that may (``WorkoutDayNote/nudgeWords`` —
+    /// never a word that names a body part, and none from a note that reads as a complaint).
+    private static func selectionTokens(profile: WorkoutProfile, note: WorkoutDayNote) -> Set<String> {
         var tokens: Set<String> = []
         for interest in profile.interests { tokens.formUnion(interest.lowercased().split(separator: " ").map(String.init)) }
         tokens.formUnion(profile.sport.lowercased().split(separator: " ").map(String.init))
-        tokens.formUnion(context.lowercased().split(separator: " ").map(String.init))
-        return tokens.filter { $0.count >= 3 }
+        return tokens.filter { $0.count >= 3 }.union(note.nudgeWords)
     }
 
     private static func notes(
         inputs: SlotInputs,
-        context: String,
         dropped: [String],
-        includeContext: Bool,
         progressNotes: [String],
         hiddenDropped: [String] = [],
         namesLimits: Bool = false
@@ -2430,10 +2445,7 @@ public nonisolated enum WorkoutProgram {
         // drawn name and the dropped slots by theirs. `dropped` itself stays the frozen labels.
         var parts: [String] = [inputs.location.displayedName]
         parts += progressNotes
-        if includeContext, context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            parts.append(WorkoutPlannerCopy.noted(context.trimmingCharacters(in: .whitespacesAndNewlines)))
-        }
-        if !inputs.limits.isEmpty, !namesLimits {
+        if !inputs.limits.isEmpty, !namesLimits, !inputs.limitsAreTodaysOnly {
             parts.append(WorkoutPlannerCopy.workedAroundLimits)
         }
         if dropped.isEmpty == false {

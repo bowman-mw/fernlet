@@ -618,6 +618,19 @@ hip rules walking out (``InjuryLimits/barsWalking``), which also turns a cardio 
 left into seated mobility. ``WorkoutProgram/suggestablePool(in:location:profile:preferences:)`` is the
 one pool every surface that picks exercises reads, so a hidden exercise is hidden everywhere.
 
+**"Anything else?" is read for today only** (the owner's fix e3, 2026-11-10; ``WorkoutDayNote``). The
+plan sheet's free text used to add a few points to exercises whose name shared a word with it, under a
+note that said "Noted: …". `WorkoutProgram.dayPlan` now reads it with ``InjuryNoteMatcher``: a body
+area it names is trained around today (the Mild treatment, a muscle word counting as its nearest area)
+on top of the saved limits (``InjuryLimits/applying(_:)`` — a saved Severe is never weakened, and
+nothing is written to the profile); a time phrase ("short on time", "only 30 minutes") picks a shorter
+``WorkoutSessionLength`` unless the caller passes `noteMayShorten: false` because the person chose a
+length for this plan; and the name-word nudge stays only where it cannot contradict that (never a word
+naming a body part, and nothing from a note that reads as a complaint). The first session's note then
+says each thing applied, a sentence each, or that nothing could be applied and where lasting limits are
+set (`WorkoutPlannerCopy+DayNote.swift`). The vocabulary is frozen English matching input, like the
+saved note's.
+
 The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
 (``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
 those primary muscles hard again it moves to the next split day that spares them — unless the
@@ -710,6 +723,7 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``InjuryEasing``
 - ``InjuryEasingState``
 - ``InjuryNoteMatcher``
+- ``WorkoutDayNote``
 - ``WorkoutRecoveryGuard``
 - ``WorkoutSessionOptions``
 - ``WorkoutSessionLength``
