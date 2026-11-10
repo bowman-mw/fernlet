@@ -155,11 +155,14 @@ struct WorkoutInjuryAreaTests {
         #expect(lower.exercises.contains { $0.block == .warmUp && $0.name == "Low lunge stretch" }, "stretches stay")
     }
 
-    /// The spine areas also leave out a loaded bar's squats, hinges, lunges and carries.
+    /// The spine areas also leave out a loaded bar's squats, hinges, lunges and carries — and, by
+    /// the reviewed area-load records (2026-11-10), a weight carried in front of the spine: the
+    /// goblet squat this test used to keep. The back-supported leg press stays.
     @Test func severeLowerBackLeavesBarbellSquatsOut() {
         let names = feasibleNames(WorkoutProfile(injuryAreas: [.lowerBack: .severe]))
-        #expect(!names.contains("Back squat") && !names.contains("Romanian deadlift"))
-        #expect(names.contains("Leg press") && names.contains("Goblet squat"))
+        #expect(!names.contains("Back squat") && !names.contains("Romanian deadlift") && !names.contains("Goblet squat"))
+        #expect(names.contains("Leg press") && names.contains("Leg extension"))
+        #expect(feasibleNames(WorkoutProfile(injuryAreas: [.lowerBack: .mild])).contains("Goblet squat"))
         // The old Lower back chip (avoided sets only) now reads as the same area.
         let legacy = WorkoutProfile(avoidedMuscles: [.lowerBack], avoidedMovements: [.hinge])
         #expect(legacy.injuryLimits.severeAreas == [.lowerBack])

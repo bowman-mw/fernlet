@@ -17,6 +17,15 @@
 //   lift that loads the area is prescribed as accessory work — the higher rep range at a lighter
 //   weight, the accessory set count, and never a calibration.
 //
+// Those rules read only muscle tags, patterns and a bar on the spine, so they are the FLOOR. On top
+// of them every bundled exercise carries a reviewed record of the areas it loads
+// (``ExerciseAreaLoads``, WorkoutAreaLoads.swift; the owner's fix e1, 2026-11-10): weight on the
+// hands or a hard grip for the wrist, hanging and overhead work for the shoulder, bent-over and
+// carried loads for the lower back, jumping for the ankle and knee. Severe leaves out every exercise
+// the record says loads the area at all; mild leaves out the ones it loads hard and keeps the light,
+// supported ones. The record never lifts a limit the floor sets, and an exercise without a record
+// (a person's or a coach's own) gets the floor alone.
+//
 // Not medical advice: these are coarse, user-supplied limits, applied conservatively.
 
 import Foundation
@@ -111,6 +120,9 @@ public nonisolated enum BodyArea: String, Codable, CaseIterable, Identifiable, S
     /// Whether `exercise` loads this area: it works one of the area's muscles (only its primary
     /// muscles count when `primaryOnly`), uses one of its patterns, or — for a spine area — is a
     /// squat, hinge, lunge or carry with a bar on the body (``carriesABar(_:)``).
+    ///
+    /// This is the floor, read from the exercise's tags alone. A bundled exercise's reviewed record
+    /// (``ExerciseAreaLoads``) can name more areas; ``InjuryLimits`` combines the two.
     public func isLoaded(by exercise: ExerciseTarget, primaryOnly: Bool) -> Bool {
         let worked = primaryOnly ? exercise.primaryMuscles : exercise.primaryMuscles.union(exercise.secondaryMuscles)
         if !worked.isDisjoint(with: muscles) { return true }
@@ -161,6 +173,11 @@ public nonisolated enum InjurySeverity: String, Codable, CaseIterable, Sendable 
 ///
 /// ``WorkoutSafetyFilter`` asks ``allows(_:)``; the slot scorer and the prescription ask
 /// ``eases(_:)``. Built once per plan from ``WorkoutProfile/injuryLimits``.
+///
+/// Two layers decide what an area leaves out: the muscle, pattern and spine rules on ``BodyArea``
+/// (the floor, and all a custom exercise has), and the bundled exercise's reviewed record
+/// (``ExerciseAreaLoads``). The `loads:` forms take the record as an argument and are pure; the
+/// forms without it look the record up by the exercise's frozen name.
 public nonisolated struct InjuryLimits: Equatable, Sendable {
     /// Areas whose work is left out entirely.
     public var severeAreas: Set<BodyArea>
@@ -190,18 +207,63 @@ public nonisolated struct InjuryLimits: Equatable, Sendable {
     }
 
     /// Whether the planner may prescribe `exercise` at all: it works no avoided muscle, uses no
-    /// avoided pattern, loads no severe area, and is not the heavy end of a mild area's work.
+    /// avoided pattern, loads no severe area, and is not the heavy end of a mild area's work — by
+    /// the muscle and pattern rules and by the exercise's reviewed record, when it has one.
     public func allows(_ exercise: ExerciseTarget) -> Bool {
+        allows(exercise, loads: record(for: exercise))
+    }
+
+    /// ``allows(_:)`` with the exercise's reviewed record passed in (nil for an exercise that has
+    /// none, which then meets the muscle and pattern rules alone).
+    public func allows(_ exercise: ExerciseTarget, loads: ExerciseAreaLoads?) -> Bool {
         let worked = exercise.primaryMuscles.union(exercise.secondaryMuscles)
         guard worked.isDisjoint(with: avoidedMuscles), !avoidedMovements.contains(exercise.movementPattern) else {
             return false
         }
-        guard !severeAreas.contains(where: { $0.isLoaded(by: exercise, primaryOnly: false) }) else { return false }
-        return !(Self.isHeavyLoading(exercise) && eases(exercise))
+        guard severeAreas(loadedBy: exercise, loads: loads).isEmpty else { return false }
+        return mildAreas(loadedHardBy: exercise, loads: loads).isEmpty
+    }
+
+    /// The severe areas `exercise` loads, each of which leaves it out: an area loaded by the muscle
+    /// and pattern rules (``BodyArea/isLoaded(by:primaryOnly:)``), or one its reviewed record names
+    /// at any strength.
+    public func severeAreas(loadedBy exercise: ExerciseTarget) -> Set<BodyArea> {
+        severeAreas(loadedBy: exercise, loads: record(for: exercise))
+    }
+
+    /// ``severeAreas(loadedBy:)`` with the reviewed record passed in.
+    public func severeAreas(loadedBy exercise: ExerciseTarget, loads: ExerciseAreaLoads?) -> Set<BodyArea> {
+        severeAreas.filter { area in
+            area.isLoaded(by: exercise, primaryOnly: false) || loads?.load(on: area) != nil
+        }
+    }
+
+    /// The mild areas `exercise` loads too hard to keep: the heavy end of an area's own work
+    /// (``isHeavyLoading(_:)`` on a lift ``eases(_:)`` would ease), or an area its reviewed record
+    /// marks ``AreaLoad/hard``. A mild area the record marks ``AreaLoad/light`` keeps the exercise.
+    public func mildAreas(loadedHardBy exercise: ExerciseTarget) -> Set<BodyArea> {
+        mildAreas(loadedHardBy: exercise, loads: record(for: exercise))
+    }
+
+    /// ``mildAreas(loadedHardBy:)`` with the reviewed record passed in.
+    public func mildAreas(loadedHardBy exercise: ExerciseTarget, loads: ExerciseAreaLoads?) -> Set<BodyArea> {
+        let heavy = Self.isHeavyLoading(exercise)
+        return mildAreas.filter { area in
+            (heavy && area.isLoaded(by: exercise, primaryOnly: true)) || loads?.load(on: area) == .hard
+        }
+    }
+
+    /// The reviewed record the area checks read for `exercise` — not looked up at all when no area
+    /// is limited, so a person without limits pays nothing for it.
+    private func record(for exercise: ExerciseTarget) -> ExerciseAreaLoads? {
+        guard !severeAreas.isEmpty || !mildAreas.isEmpty else { return nil }
+        return WorkoutExerciseCatalog.areaLoads(for: exercise)
     }
 
     /// Whether `exercise` puts its main load on an area being trained around (a mild area, through
     /// a primary muscle or a pattern) — it is then prescribed lighter and supported variants win.
+    /// Reads the muscle and pattern rules only: the reviewed record decides what a mild area leaves
+    /// out (``mildAreas(loadedHardBy:)``), not how what stays is prescribed.
     public func eases(_ exercise: ExerciseTarget) -> Bool {
         mildAreas.contains { $0.isLoaded(by: exercise, primaryOnly: true) }
     }

@@ -576,6 +576,18 @@ prescribes the area's main lift as accessory work. A Smith machine row is a mach
 end, by the owner's call of 2026-10-21 — but its bar still sits on the spine, so a spine area counts a
 Smith squat as loading it, as it counts a back squat.
 
+Those rules read only tags, so they are the floor. Every bundled exercise also carries a reviewed
+record of the areas it loads (``ExerciseAreaLoads``; the catalogue rows' `areaLoads` map of frozen
+area token → ``AreaLoad`` token, with one phrase of reasoning each in `areaLoadNotes`, which the app
+never reads): weight on the hands or a hard grip for the wrist, hanging and overhead work for the
+shoulder, bent-over and carried loads for the lower back, jumping for the ankle and knee. Severe
+leaves out every exercise the record names for the area; mild leaves out the ones it marks hard and
+keeps the light, supported ones. The record only adds — nothing the floor leaves out comes back — and
+an exercise without one (a person's or a coach's own) gets the floor alone, never "loads nothing".
+``WorkoutExerciseCatalog/areaLoads(for:)`` finds the record by the frozen name, so ``ExerciseTarget``'s
+persisted shape is unchanged. A new catalogue row must ship with a record: `ExerciseAreaLoadTests`
+fails without one, and fails when a record says less than the floor.
+
 The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
 (``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
 those primary muscles hard again it moves to the next split day that spares them — unless the
@@ -659,6 +671,8 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``BodyArea``
 - ``InjurySeverity``
 - ``InjuryLimits``
+- ``AreaLoad``
+- ``ExerciseAreaLoads``
 - ``InjuryNoteMatcher``
 - ``WorkoutRecoveryGuard``
 - ``WorkoutSessionOptions``
