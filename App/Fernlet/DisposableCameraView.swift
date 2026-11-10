@@ -582,6 +582,12 @@ enum DisposableCameraOrientation {
 /// until the companion goes to sleep, which the line at the bottom says. No review, no Develop. At 0
 /// the shutter reads "No film left"; a decoy session's shots live in memory only.
 ///
+/// **On a road trip** (World-RoadTrip-Spec PR 3, `rt-photos`, owner-approved 2026-11-10), on your own with a trip
+/// on, the same camera shoots onto the trip's roll instead (`FernletStore.takeRoadTripPhoto`): titled "Road trip ·
+/// 26 of 30" (the photos left of the person's 30), no daily film and no hold, each shot sealed with its capture
+/// time, placed from the trip's road and handed to the friends on the trip at the next catch-up. In a hangout the
+/// camera stays the hangout's. A decoy has no trip on, so it never shoots onto the roll.
+///
 /// Owns a ``CameraCaptureController`` as `@State` and renders the wind-to-arm control, the shutter
 /// with a shared per-session film counter (`MeshSessionPhotos.filmRemaining`), and the develop flow:
 /// "Develop" stops the capture session and either leaves immediately (no photos — the keep-as-friend
@@ -648,6 +654,9 @@ struct DisposableCameraView: View {
     /// The roll a shot alone goes into (``SoloCameraRoll``), taken from the store when the camera
     /// opens with no session; nil in a session.
     @State private var soloRoll: SoloCameraRoll?
+    /// During a road trip on your own (World-RoadTrip-Spec PR 3, `rt-photos`), the trip roll this camera shoots onto
+    /// instead of the solo roll, read when the camera opens and after each shot; nil with no trip on.
+    @State private var tripFilm: RoadTripCameraFilm?
     /// A shot alone that could not be kept: its alert is up.
     @State private var soloShotFailed = false
     /// F10: this file is the repo's own cited exemplar for the `TimelineView(.animation(paused:))`
@@ -713,7 +722,10 @@ struct DisposableCameraView: View {
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
         }
-        .onChange(of: store.duressSessionActive) { _, decoy in soloRoll?.setDecoy(decoy) }
+        .onChange(of: store.duressSessionActive) { _, decoy in
+            soloRoll?.setDecoy(decoy)
+            tripFilm = store.roadTripCameraFilm()
+        }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .alert("Couldn't keep that photo. Try again.", isPresented: $soloShotFailed) {
             Button("OK", role: .cancel) {}
@@ -742,6 +754,7 @@ struct DisposableCameraView: View {
             let roll = store.soloCameraRoll()
             roll.refresh()
             soloRoll = roll
+            tripFilm = store.roadTripCameraFilm()
         }
         if !reviewCoordinator.isShowing { camera.startSession() }
     }
@@ -759,16 +772,23 @@ struct DisposableCameraView: View {
     /// solo roll does, once its sealed corpus can be read (until then the camera alone says "Camera
     /// off").
     private var canShootHere: Bool {
-        manager.isInSession || soloRoll?.shotsLeft(at: Date()) != nil
+        if manager.isInSession { return true }
+        if let tripFilm { return tripFilm.left != nil }
+        return soloRoll?.shotsLeft(at: Date()) != nil
     }
 
     /// Whether this camera is shooting on your own (no session): the solo film, no Develop.
     private var isSolo: Bool { !manager.isInSession }
 
-    /// Film left for the shutter: the session's shared film, or today's solo film (none while the
-    /// solo corpus cannot be read).
+    /// Whether this camera shoots onto a road trip's roll (`rt-photos`): on your own while a trip is on. In a
+    /// hangout the camera stays the hangout's (its photos are hangout photos, never on the map).
+    private var isTripRoll: Bool { isSolo && tripFilm != nil }
+
+    /// Film left for the shutter: the session's shared film, the trip roll's, or today's solo film (none while
+    /// the roll cannot be read).
     private var filmRemaining: Int {
         guard isSolo else { return features.photos.filmRemaining }
+        if let tripFilm { return tripFilm.left ?? 0 }
         return soloRoll?.shotsLeft(at: Date()) ?? 0
     }
 
@@ -835,9 +855,11 @@ struct DisposableCameraView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// "Picnic · with Sam and Rae" in a session; "Just you" (or "Just you · Oak Park") on your own.
+    /// "Picnic · with Sam and Rae" in a session; "Just you" (or "Just you · Oak Park") on your own; "Road trip · 26
+    /// of 30" on a road trip's roll (the review page's style, the photos left of the person's 30).
     private var titleText: Text {
         guard manager.isInSession else {
+            if let tripFilm { return Text(RoadTripCopy.cameraTitle(left: tripFilm.left ?? 0, limit: tripFilm.limit)) }
             guard let placeName, !placeName.isEmpty else { return Text("Just you") }
             return Text("Just you · \(placeName)")
         }
@@ -877,9 +899,13 @@ struct DisposableCameraView: View {
     /// On your own, when the photos show (`b3-camera-solo`): after the companion goes to sleep, tonight,
     /// or tomorrow night once it is already asleep (form answer 44). Read again each minute, so the line
     /// turns as bedtime passes with the camera open.
+    /// On a road trip's roll there is no line: trip photos are not held (they go on the map at once).
+    @ViewBuilder
     private var soloFooter: some View {
-        TimelineView(.everyMinute) { context in
-            soloFooterLine(at: context.date)
+        if !isTripRoll {
+            TimelineView(.everyMinute) { context in
+                soloFooterLine(at: context.date)
+            }
         }
     }
 
@@ -934,8 +960,8 @@ struct DisposableCameraView: View {
     private func filmColumn(isLandscape: Bool) -> some View {
         VStack(spacing: 8) {
             filmCounterBadge
-            if isSolo {
-                // The badge's label already says it for VoiceOver.
+            if isSolo && !isTripRoll {
+                // The badge's label already says it for VoiceOver. A trip roll's title says it instead.
                 Text("left today")
                     .font(FernletFramedFont.buttonSmall)
                     .foregroundStyle(Self.ledGreen)
@@ -973,12 +999,14 @@ struct DisposableCameraView: View {
     /// The badge's count: the session's shots left, or "7 of 10" of today's film alone.
     private var filmCountText: Text {
         guard isSolo else { return Text("\(features.photos.filmRemaining)") }
+        if let tripFilm { return Text("\(filmRemaining) of \(tripFilm.limit)") }
         return Text("\(filmRemaining) of \(SoloCameraRules.photosPerDay)")
     }
 
     /// The badge's label, with the kept-photo sentence appended when there is one — `Text`
     /// interpolating `Text`, so both halves are harvested (review T2-1). Alone, today's film.
     private var filmCounterAccessibilityLabel: Text {
+        if isSolo, let tripFilm { return Text(RoadTripCopy.cameraFilmSpoken(left: filmRemaining, limit: tripFilm.limit)) }
         if isSolo { return Text("\(filmRemaining) of \(SoloCameraRules.photosPerDay) photos left today") }
         guard let kept = RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone) else {
             return Text("Film remaining: \(features.photos.filmRemaining)")
@@ -1361,8 +1389,8 @@ struct DisposableCameraView: View {
 
     private func takePhoto() async {
         guard camera.isArmed, filmRemaining > 0, camera.canCapturePhoto, canShootHere else { return }
-        // Where this shot goes is decided at the tap: the session's film, or today's solo film.
-        let solo = isSolo
+        // Where this shot goes is decided at the tap: the session's film, a road trip's roll, or today's solo film.
+        let solo = isSolo, onTrip = isTripRoll
         camera.disarm()  // openness → 0: the viewfinder fades until the film is wound again.
         flashShutter()
         do {
@@ -1372,7 +1400,7 @@ struct DisposableCameraView: View {
             // answered the tap. Owed a device check: that this never blurs a shot.
             FernletFeedback.system.play(.shutter)
             guard !solo else {
-                keepSoloShot(data)
+                if onTrip { keepTripShot(data) } else { keepSoloShot(data) }
                 return
             }
             features.photos.addPhoto(data)
@@ -1397,13 +1425,31 @@ struct DisposableCameraView: View {
         }
         switch soloRoll.takePhoto(data) {
         case .kept:
-            // Where it was taken, only at an everyday place (World build step 5c and round 5; never a friend's photo).
+            // Where it was taken, only at an everyday place (World build step 5c and round 5). Never a friend's photo
+            // on this path: the one exception, trip photos anyone on a road trip takes (World-RoadTrip-Spec §1,
+            // owner-approved 2026-11-10), goes through `keepTripShot` and the trip roll's own places instead.
             if let id = soloRoll.lastKeptID {
                 let fix = store.worldLocation.latest
                 Task { await store.keepSoloPhotoPlace(for: id, fix: fix) }
             }
         case .noFilmLeft:
             // A used-up film shows on the badge and the shutter; nothing else to say.
+            return
+        case .notKept:
+            soloShotFailed = true
+            FernletFeedback.system.play(.failed)
+        }
+    }
+
+    /// A shot on a road trip's roll (`rt-photos`): sealed at once with its capture time, placed from the trip's road
+    /// (at once when this iPhone maps, from its reading now), shown on the map and handed to the friends on the trip at
+    /// the next catch-up. Past the person's 30 it says nothing more than the badge; a shot that could not be kept
+    /// says so.
+    private func keepTripShot(_ data: Data) {
+        let outcome = store.takeRoadTripPhoto(data, fix: store.worldLocation.latest)
+        tripFilm = store.roadTripCameraFilm()
+        switch outcome {
+        case .kept, .noFilmLeft:
             return
         case .notKept:
             soloShotFailed = true

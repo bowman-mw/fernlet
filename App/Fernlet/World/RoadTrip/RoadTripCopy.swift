@@ -87,6 +87,70 @@ nonisolated enum RoadTripCopy {
                                 comment: "World Home's note after a road trip catch-up: the trip's road on this iPhone (e.g. '84 km') and its photos (e.g. '6 photos')")
     }
 
+    // MARK: PR 3 — Photos and the map (`rt-photos`, `rt-map`)
+
+    /// "Road trip · 26 of 30": the camera's title on the trip roll, in the review page's style (`rt-photos`); the
+    /// count is the photos left of the person's 30, as the camera's film badge counts.
+    static func cameraTitle(left: Int, limit: Int) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.camera.title", defaultValue: "Road trip · \(left) of \(limit)",
+                                comment: "The disposable camera during a road trip, its title: how many photos this person can still take on the trip, of 30, e.g. 'Road trip · 26 of 30'. Keep it short")
+    }
+
+    /// "26 of 30 photos left on the road trip": VoiceOver for the camera's film badge on the trip roll (new copy).
+    static func cameraFilmSpoken(left: Int, limit: Int) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.camera.filmLeft", defaultValue: "\(left) of \(limit) photos left on the road trip",
+                                comment: "The disposable camera during a road trip, VoiceOver for the film badge: photos this person can still take on the trip, of 30, e.g. '26 of 30 photos left on the road trip'")
+    }
+
+    /// "Hide from the map": the trip photo viewer's action, for any trip photo (new copy; `rt-photos`: "any one can be
+    /// hidden later").
+    static let hideFromMap = LocalizedStringResource(
+        "roadTrip.photo.hide", defaultValue: "Hide from the map",
+        comment: "A road trip photo opened from the map: takes this photo off the map; it stays on this iPhone")
+
+    /// "Road trip to the coast · Nov 10 · Rae".
+    static func photoCaption(_ trip: String, day: String, name: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.photo.caption", defaultValue: "\(trip) · \(day) · \(name)",
+                                comment: "A road trip photo opened from the map, its caption: the trip's name (or 'Road trip'), the day the photo was taken (e.g. 'Nov 10') and the first name of who took it")
+    }
+
+    /// "Photo from Road trip to the coast, by Rae": VoiceOver for a photo of a trip with a name.
+    static func photoSpokenNamed(_ trip: String, name: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.photo.spoken", defaultValue: "Photo from \(trip), by \(name)",
+                                comment: "VoiceOver for a road trip photo opened from the map: the trip's own name (e.g. 'Road trip to the coast') and the first name of who took it")
+    }
+
+    /// "Photo from the road trip, by Rae": VoiceOver for a photo of a trip given no name.
+    static func photoSpokenUnnamed(name: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.photo.spokenUnnamed", defaultValue: "Photo from the road trip, by \(name)",
+                                comment: "VoiceOver for a road trip photo opened from the map, the trip given no name: the first name of who took it")
+    }
+
+    /// "Road trip photos here, 3": VoiceOver for a trip print on the map (new copy, after the solo print's "Your
+    /// photos here, 3").
+    static func markerSpoken(count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.marker.photos", defaultValue: "Road trip photos here, \(count)",
+                                comment: "World Home, VoiceOver: a print with a car stamp on the map where road trip photos were taken; how many")
+    }
+
+    /// A trip photo's caption: its trip's name (or "Road trip" for one given none), the day it was taken and the
+    /// first name of who took it (left out when the trip is no longer on this iPhone).
+    static func photoCaption(trip: RoadTrip?, takenAt: Date, author: String?) -> String {
+        let label = trip?.name.flatMap { $0.isEmpty ? nil : $0 } ?? AddressedCopy.plain(title)
+        let day = takenAt.formatted(.dateTime.month(.abbreviated).day())
+        guard let author else { return "\(label) · \(day)" }
+        return AddressedCopy.plain(photoCaption(label, day: day, name: author))
+    }
+
+    /// What VoiceOver says for a trip photo: "Photo from Road trip to the coast, by Rae", or for a trip given no
+    /// name "Photo from the road trip, by Rae"; the trip's name alone when who took it is not known.
+    static func photoSpoken(trip: RoadTrip?, author: String?) -> String {
+        let named = trip?.name.flatMap { $0.isEmpty ? nil : $0 }
+        guard let author else { return named ?? AddressedCopy.plain(title) }
+        guard let named else { return AddressedCopy.plain(photoSpokenUnnamed(name: author)) }
+        return AddressedCopy.plain(photoSpokenNamed(named, name: author))
+    }
+
     /// The Start sheet's title, "Road trip with Rae and Sam", and the join prompt's people, in the reader's language.
     static func names(_ names: [String]) -> String {
         Array(names.prefix(RoadTrip.maxMembers)).formatted(.list(type: .and))

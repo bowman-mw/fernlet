@@ -499,6 +499,18 @@ public nonisolated enum FernletCryptoPurpose {
         /// **World build only.** The solo camera's sealed index (`SoloCameraIndex.sealed`): each photo's
         /// id, when it was taken and when it shows, plus the day's film count.
         public static let privateSoloCameraIndexV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.index.aead.v1")
+        /// **World build only (road trip mode PR 3, owner-approved 2026-11-10).** A photo on a road trip's roll
+        /// (`RoadTripPhotoStore`): one this iPhone took during a trip, or one a friend on the trip handed over at
+        /// a catch-up. Sealed under the device-bound solo-camera media key (the same custody: device-only, never
+        /// escrowed, excluded from backup) but in its own domain, so a trip photo can never open as a solo,
+        /// session, wall or own photo, nor one of those as a trip photo.
+        public static let privateRoadTripPhotoImageV1 = CryptographicPurpose("fernlet.private-media.road-trip-photo.image.aead.v1")
+        /// **World build only.** A trip photo's thumbnail, same corpus and key as ``privateRoadTripPhotoImageV1``;
+        /// separate so a thumbnail cannot stand in for the photo.
+        public static let privateRoadTripPhotoThumbnailV1 = CryptographicPurpose("fernlet.private-media.road-trip-photo.thumbnail.aead.v1")
+        /// **World build only.** The trip photos' sealed index (`RoadTripPhotoIndex.sealed`): each photo's trip,
+        /// who took it, its id on their phone, when it was taken and whether it is hidden from the map.
+        public static let privateRoadTripPhotoIndexV1 = CryptographicPurpose("fernlet.private-media.road-trip-photo.index.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")

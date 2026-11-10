@@ -7,10 +7,19 @@ import Foundation
 /// campground has one (``PlaceClassifier/photoMayKeepPlace(_:)``; owner, round 5); a photo taken anywhere
 /// else, offline, or by a friend has no point here at all: nothing ever writes one for them.
 ///
-/// One small sealed file in the map's vault (`AEAD.worldMapPhotoPlacesV1`, the when-unlocked store key),
-/// read afresh on every use, so nothing held in memory outlives a wipe. Deleting a photo deletes its point;
-/// Delete everything, the silent wipe and the recovery lock remove it with the vault; a decoy never reads
-/// or writes it. Bounded: at most ``maxPlaces`` points, a new one past it refused.
+/// **The road trip exception** (World-RoadTrip-Spec §1, owner-approved 2026-11-10): a second store of this type,
+/// over its own file (``WorldMapVault/File/roadTripPhotoPlaces``), keeps where each road trip photo was taken,
+/// friends' trip photos included, because the owner decided "photos anyone takes on the trip may sit on each
+/// member's map where they were taken". Only trip photos: a friend's hangout or wall photo still has no point in
+/// either file. A trip photo's point is the trip's road at its capture time, so it may be anywhere on that road
+/// (the everyday-places rule is for solo photos only). The solo file is never written for a trip photo, nor the
+/// trip file for a solo one.
+///
+/// One small sealed file in the map's vault (`AEAD.worldMapPhotoPlacesV1`, the when-unlocked store key; the trip
+/// file bound to its own context), read afresh on every use, so nothing held in memory outlives a wipe. Deleting a
+/// photo deletes its point; Delete everything, the silent wipe, Delete map history and the recovery lock remove it
+/// with the vault; a decoy never reads or writes it. Bounded: at most ``maxPlaces`` points, a new one past it
+/// refused.
 @MainActor
 public final class PhotoPlaceStore {
     /// The most photo points kept (the solo corpus's own cap).
@@ -23,15 +32,22 @@ public final class PhotoPlaceStore {
     }
 
     private let vault: WorldMapVault
+    /// The sealed file the points live in.
+    private let file: WorldMapVault.File
+    /// This store's own bound (at most ``maxPlaces``).
+    private let limit: Int
 
-    /// A store over `vault`.
-    public init(vault: WorldMapVault) {
+    /// A store over `vault`: the solo photos' places (`photo-places.bin`), or, given `file` and `limit`, another
+    /// photo corpus's (the road trip photos', ``WorldMapVault/File/roadTripPhotoPlaces``).
+    public init(vault: WorldMapVault, file: WorldMapVault.File = .photoPlaces, limit: Int = PhotoPlaceStore.maxPlaces) {
         self.vault = vault
+        self.file = file
+        self.limit = max(0, min(limit, Self.maxPlaces))
     }
 
     /// Every photo's point, by photo id.
     public func all() throws -> [UUID: GeoPoint] {
-        let file = WorldMapVault.File.photoPlaces
+        let file = self.file
         let data: Data?
         do {
             data = try vault.read(file)
@@ -42,7 +58,7 @@ public final class PhotoPlaceStore {
         guard let data else { return [:] }
         do {
             let rows = try JSONDecoder().decode([Row].self, from: data)
-            return Dictionary(rows.prefix(Self.maxPlaces).filter { $0.point.isValid }.map { ($0.id, $0.point) },
+            return Dictionary(rows.prefix(limit).filter { $0.point.isValid }.map { ($0.id, $0.point) },
                               uniquingKeysWith: { first, _ in first })
         } catch {
             FernletAuditLog.log("worldMap.photoPlaces.unreadable")
@@ -59,10 +75,25 @@ public final class PhotoPlaceStore {
     /// Keeps `point` as where photo `id` was taken. Whether it was kept.
     public func setPlace(_ point: GeoPoint, for id: UUID) throws -> Bool {
         var current = try all()
-        guard point.isValid, current[id] != nil || current.count < Self.maxPlaces else { return false }
+        guard point.isValid, current[id] != nil || current.count < limit else { return false }
         current[id] = point
         try save(current)
         return true
+    }
+
+    /// Keeps each of `found` as where its photo was taken, in one write (the trip photos placed by one catch-up's
+    /// road). An invalid point, or a new one past the bound, is left out. How many were kept.
+    public func setPlaces(_ found: [UUID: GeoPoint]) throws -> Int {
+        var current = try all()
+        var kept = 0
+        // R2: bounded by this store's bound (a found place past it is refused).
+        for (id, point) in found.prefix(limit) where point.isValid && (current[id] != nil || current.count < limit) {
+            current[id] = point
+            kept += 1
+        }
+        guard kept > 0 else { return 0 }
+        try save(current)
+        return kept
     }
 
     /// Removes the points of the photos in `ids` (deleting a photo deletes its place).
@@ -76,7 +107,7 @@ public final class PhotoPlaceStore {
 
     /// Removes every photo's point. Keyless. Whether the file is gone.
     public func removeAll() -> Bool {
-        vault.remove(WorldMapVault.File.photoPlaces)
+        vault.remove(file)
     }
 
     /// Seals `places` as the file.
@@ -84,6 +115,6 @@ public final class PhotoPlaceStore {
         let rows = places.map { Row(id: $0.key, point: $0.value) }.sorted { $0.id.uuidString < $1.id.uuidString }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        try vault.write(try encoder.encode(rows), to: WorldMapVault.File.photoPlaces)
+        try vault.write(try encoder.encode(rows), to: file)
     }
 }

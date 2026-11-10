@@ -19,7 +19,7 @@ nonisolated struct RoadTripCaughtUpNote: Equatable, Identifiable, Sendable {
     let id: UUID
     /// The trip's road on this iPhone after the swap, in metres.
     let metres: Double
-    /// The trip photos on this iPhone (the trip roll is PR 3: none until then).
+    /// The trip's photos on this iPhone once the swap's photos have landed (PR 3).
     let photos: Int
 }
 
@@ -50,6 +50,11 @@ nonisolated enum RoadTripCatchUpAsk {
 ///   be asked again, and one just caught up with is not (``RoadTripCatchUpAsk``). Never a notification.
 /// - **The short hangout** (``beginHandOff(member:now:)``): which member a one-tap catch-up is for, so the store
 ///   leaves the hangout once the swap with them is done, or once ``handOffSeconds`` pass without one.
+/// - **Photos settle first** (PR 3): a swap is done once its photos have landed and gone. After the road comes
+///   (``didCatchUp(with:metres:now:photos:leave:)``) the note waits until no piece has landed
+///   (``notePhotoActivity()``) and none is going (``beginSending()``, ``endSending()``) for ``settleQuiet``, at most
+///   ``settleLongest`` in all, and then says "Caught up: 84 km of road, 6 photos." with the photos counted then; a
+///   short hangout is left only after that, so leaving never cuts a photo off.
 @MainActor
 @Observable
 final class RoadTripMeshState {
@@ -58,6 +63,27 @@ final class RoadTripMeshState {
     static let handOffSeconds: TimeInterval = 90
     /// The pause between the swap and leaving the short hangout, so this phone's reply goes out first.
     static let leaveDelay: Duration = .seconds(2)
+    /// How long a swap's photos stay quiet (none landing, none going) before the swap counts as done.
+    static let settleQuiet: Duration = .seconds(5)
+    /// The longest a swap's photos hold the note and a short hangout, from the swap.
+    static let settleLongest: Duration = .seconds(120)
+    /// The most photo sends counted at once (one per member, well over a trip's).
+    static let maxSending = 16
+
+    /// A swap whose photos may still be on their way: what its note will say and whether its short hangout is left
+    /// after it.
+    private struct Settling {
+        /// The trip's road on this iPhone after the swap, in metres.
+        var metres: Double
+        /// Whether a one-tap catch-up's short hangout is left once it settles.
+        var leaves: Bool
+        /// When the first of the swaps settling now came.
+        let began: ContinuousClock.Instant
+        /// The trip's photos on this iPhone, counted when the note shows.
+        var photos: () -> Int
+        /// Leaves the short hangout.
+        var leave: @MainActor () async -> Void
+    }
 
     /// The invite waiting for Join or Not this time.
     private(set) var invite: RoadTripPendingInvite?
@@ -71,10 +97,20 @@ final class RoadTripMeshState {
     @ObservationIgnored private var caughtUpAt: [String: Date] = [:]
     /// Leaves the short hangout after the swap, or when the hand-off runs out (a timer: its handle is kept).
     @ObservationIgnored private var leaveTask: Task<Void, Never>?
+    /// The swap whose photos are settling, if any.
+    @ObservationIgnored private var settling: Settling?
+    /// How many photo sends are going now.
+    @ObservationIgnored private var sending = 0
+    /// Shows the note once the photos are quiet (a timer: its handle is kept).
+    @ObservationIgnored private var settleTask: Task<Void, Never>?
 
     isolated deinit {
         leaveTask?.cancel()
+        settleTask?.cancel()
     }
+
+    /// Whether a swap's photos are still settling (its note not shown yet).
+    var isSettling: Bool { settling != nil }
 
     /// Holds `invite` for an answer (a newer one replaces it).
     func offer(_ invite: RoadTripPendingInvite) {
@@ -111,17 +147,79 @@ final class RoadTripMeshState {
         scheduleLeave(after: .seconds(Self.handOffSeconds), leave: leave)
     }
 
-    /// A swap with `member` is done at `now`: noted for the ask, shown as `note`, and — when a one-tap catch-up opened
-    /// the hangout for them — `leave` runs after ``leaveDelay``.
-    func didCatchUp(with member: String, note: RoadTripCaughtUpNote, now: Date = Date(),
+    /// The road of a swap with `member` came at `now`, leaving `metres` of road on this iPhone: noted for the ask, and
+    /// the swap settles (its photos landing and going) before the note shows with `photos()` counted then; when a
+    /// one-tap catch-up opened the hangout for them, `leave` runs ``leaveDelay`` after that.
+    func didCatchUp(with member: String, metres: Double, now: Date = Date(), photos: @escaping () -> Int,
                     leave: @escaping @MainActor () async -> Void) {
         if caughtUpAt.count >= RoadTripPayload.maxMembers * 4 { caughtUpAt.removeAll() }
         caughtUpAt[member] = now
         if question == member { question = nil }
-        caughtUp = note
-        guard let handOff, handOff.member == member else { return }
-        self.handOff = nil
-        scheduleLeave(after: Self.leaveDelay, leave: leave)
+        let leaves = handOff?.member == member
+        if leaves {
+            handOff = nil
+            leaveTask?.cancel()   // the hand-off's own timeout: the settle leaves instead
+            leaveTask = nil
+        }
+        settling = Settling(metres: metres, leaves: leaves || (settling?.leaves ?? false),
+                            began: settling?.began ?? ContinuousClock.now, photos: photos, leave: leave)
+        scheduleSettle()
+    }
+
+    /// A piece of a friend's photo landed: the swap is still under way.
+    func notePhotoActivity() {
+        guard let settled = settling else { return }
+        guard ContinuousClock.now - settled.began < Self.settleLongest else {
+            settleNow()
+            return
+        }
+        scheduleSettle()
+    }
+
+    /// This iPhone began sending a friend its photos.
+    func beginSending() {
+        sending = min(sending + 1, Self.maxSending)
+    }
+
+    /// A send of this iPhone's photos is over.
+    func endSending() {
+        sending = max(0, sending - 1)
+        if sending == 0, settling != nil { scheduleSettle() }
+    }
+
+    /// The settling swap is done: its note shows now, and its short hangout, if one is owed a leave, is left after
+    /// ``leaveDelay``.
+    func settleNow() {
+        guard let settled = settling else { return }
+        settling = nil
+        settleTask?.cancel()
+        settleTask = nil
+        caughtUp = RoadTripCaughtUpNote(id: UUID(), metres: settled.metres, photos: settled.photos())
+        guard settled.leaves else { return }
+        scheduleLeave(after: Self.leaveDelay, leave: settled.leave)
+    }
+
+    /// Checks the swap again after ``settleQuiet``, replacing a check already waiting.
+    private func scheduleSettle() {
+        settleTask?.cancel()
+        settleTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: Self.settleQuiet)
+            } catch {
+                return   // cancelled: newer activity, or a forget
+            }
+            self?.settleIfQuiet()
+        }
+    }
+
+    /// The quiet check: the swap settles unless photos are still going and it has not waited ``settleLongest``.
+    private func settleIfQuiet() {
+        guard let settled = settling else { return }
+        guard sending > 0, ContinuousClock.now - settled.began < Self.settleLongest else {
+            settleNow()
+            return
+        }
+        scheduleSettle()
     }
 
     /// The note with `id` has shown.
@@ -139,6 +237,10 @@ final class RoadTripMeshState {
         caughtUpAt = [:]
         leaveTask?.cancel()
         leaveTask = nil
+        settling = nil
+        sending = 0
+        settleTask?.cancel()
+        settleTask = nil
     }
 
     /// Runs `leave` after `delay`, replacing any leave already waiting.

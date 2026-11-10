@@ -16,7 +16,8 @@ import WorldMapStore
 /// written into the fog). The person's own **solo photos** taken at one of them sit on its icon as a small
 /// print, newest on top with a count; photos taken anywhere else keep their own marker
 /// (``WorldPhotoMarkerView``, step 5c). Places friends shared and named trail starts wait for the data behind
-/// them. Never friends' photos.
+/// them. Never friends' photos (a road trip's photos, friends' included, are their own prints with a car stamp,
+/// `RoadTripPhotoMarkerView`, never on a kept place's icon).
 nonisolated struct WorldMapMarker: Equatable, Identifiable, Sendable {
     /// How far around a kept place the map is uncovered, in metres ("not as much as a home or hotel").
     static let uncoverRadius = 300.0

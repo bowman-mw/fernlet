@@ -35,6 +35,9 @@ extension FernletStore {
         exchange.onInvite = { [weak self] fingerprint, invite in self?.receiveRoadTripInvite(invite, from: fingerprint) }
         exchange.onJoinAnswer = { [weak self] fingerprint, answer in self?.receiveRoadTripAnswer(answer, from: fingerprint) }
         exchange.onCatchUp = { [weak self] fingerprint, catchUp in self?.receiveRoadTripCatchUp(catchUp, from: fingerprint) }
+        // PR 3: a friend's trip photo, whole and checked; every piece that lands holds Home's note for the transfer.
+        exchange.onPhoto = { [weak self] fingerprint, photo in self?.receiveRoadTripPhoto(photo, from: fingerprint) }
+        exchange.onPhotoActivity = { [weak self] _ in self?.roadTripMesh.notePhotoActivity() }
     }
 
     /// This iPhone's member id: its mesh signing fingerprint, lowercased like every member id.

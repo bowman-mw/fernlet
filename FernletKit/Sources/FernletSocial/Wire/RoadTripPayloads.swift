@@ -3,8 +3,9 @@
 //
 // Road trip mode, PR 2 "Mesh exchange" (Docs/World-RoadTrip-Spec.md, owner-approved 2026-11-10): the wire
 // types of the one road trip token (`PayloadType.roadTrip`), sealed and sent over the direct, phone-to-phone
-// feature send, never as a routed row. Three kinds share it, told apart by `kind`: the invite a hangout member
-// sends when they start a trip, each friend's Join or Not this time, and the catch-up swap at a stop.
+// feature send, never as a routed row. Four kinds share it, told apart by `kind`: the invite a hangout member
+// sends when they start a trip, each friend's Join or Not this time, the catch-up swap at a stop, and (PR 3,
+// "Photos") the pieces of a trip photo sent after the swap.
 //
 // This module may not import WorldMapStore (the S3 wall), so a point is carried as whole units of 1e-5° (about
 // 1.1 m) and whole seconds since 1970 — the app's own line keeps the same units at rest — and the app converts.
@@ -206,7 +207,12 @@ public nonisolated struct RoadTripJoinPayload: Codable, Equatable, Sendable {
 /// The catch-up swap at a stop (`rt-catchup`): the road the sender holds that the receiver was there for (since
 /// their last catch-up together, by the proof-of-presence rule), the sender's mapper state, and when the trip
 /// ended if it did. An offer is answered by one reply, so the swap does not depend on which phone committed
-/// first. Frozen: `tripID`, `isReply`, `segments`, `mapper` and `endedAt` are field names.
+/// first. Frozen: `tripID`, `isReply`, `segments`, `mapper`, `endedAt` and `heldPhotos` are field names.
+///
+/// **Photos** (PR 3, `rt-photos`): ``heldPhotos`` lists the receiver's own trip photos the sender already holds
+/// (their ids on the receiver's phone, at most ``RoadTripPayload/maxPhotosPerMember``), so the receiver sends only
+/// the ones missing, as ``RoadTripPhotoChunkPayload``s after it. Nil and empty mean the same: none yet. It names
+/// only the receiver's own photos, so a catch-up never tells one friend what another took.
 public nonisolated struct RoadTripCatchUpPayload: Codable, Equatable, Sendable {
     /// The trip.
     public let tripID: UUID
@@ -219,25 +225,30 @@ public nonisolated struct RoadTripCatchUpPayload: Codable, Equatable, Sendable {
     public let mapper: RoadTripWireMapperState
     /// When the trip ended on the sender's phone (End the road trip, there or relayed), in seconds since 1970.
     public let endedAt: Int64?
+    /// The receiver's own trip photos the sender already holds, by their ids on the receiver's phone (PR 3).
+    public let heldPhotos: [UUID]?
 
     /// A catch-up.
     public init(tripID: UUID, isReply: Bool, segments: [RoadTripWireSegment], mapper: RoadTripWireMapperState,
-                endedAt: Int64?) {
+                endedAt: Int64?, heldPhotos: [UUID]? = nil) {
         self.tripID = tripID
         self.isReply = isReply
         self.segments = segments
         self.mapper = mapper
         self.endedAt = endedAt
+        self.heldPhotos = heldPhotos
     }
 
     /// How many points it carries in all.
     public var pointCount: Int { segments.prefix(RoadTripPayload.maxSegments).reduce(0) { $0 + $1.points.count } }
 
     /// Whether its stretches are within their bounds, each well formed and none starting before the one before
-    /// ended, its takeover well formed and its end in range.
+    /// ended, its takeover well formed, its end in range and its held photos at most one roll, none twice.
     public var isWellFormed: Bool {
         guard segments.count <= RoadTripPayload.maxSegments, pointCount <= RoadTripPayload.maxPoints,
               mapper.takeover?.isWellFormed ?? true, endedAt.map(RoadTripPayload.isTime) ?? true else { return false }
+        let held = heldPhotos ?? []
+        guard held.count <= RoadTripPayload.maxPhotosPerMember, Set(held).count == held.count else { return false }
         var previous = Int64.min
         // R2: bounded by the count checked above.
         for segment in segments {
@@ -249,13 +260,89 @@ public nonisolated struct RoadTripCatchUpPayload: Codable, Equatable, Sendable {
     }
 }
 
+/// One piece of a trip photo (PR 3, `rt-photos`): a photo the sender took on the trip, sent after a catch-up in
+/// pieces of ``chunkBytes`` image bytes, because a whole photo, base64'd, sealed and base64'd again, would not fit the
+/// mesh's 16 MiB frame. Every piece carries the whole photo's description (its trip, its id on the sender's phone,
+/// when it was taken, its byte count and SHA-256), so the receiver can check each piece against the first and the
+/// reassembled bytes against the digest (`RoadTripPhotoAssembler`). Who took it is never a field: it is the
+/// transport-verified sender, so a friend's photo can't be passed on as someone else's.
+///
+/// Frozen: `tripID`, `photoID`, `takenAt`, `byteCount`, `sha256`, `index`, `count` and `bytes` are field names.
+public nonisolated struct RoadTripPhotoChunkPayload: Codable, Equatable, Sendable {
+    /// The image bytes in every piece but the last (1 MiB).
+    public static let chunkBytes = 1_024 * 1_024
+    /// The largest photo carried (the photo corpora's own byte cap, 10 MiB).
+    public static let maxPhotoBytes = 10 * 1_024 * 1_024
+    /// The most pieces one photo has.
+    public static let maxChunks = maxPhotoBytes / chunkBytes
+    /// The length of a hex SHA-256 digest.
+    public static let digestLength = 64
+
+    /// The trip.
+    public let tripID: UUID
+    /// The photo's id on the sender's phone.
+    public let photoID: UUID
+    /// When it was taken, in seconds since 1970.
+    public let takenAt: Int64
+    /// The whole photo's length in bytes.
+    public let byteCount: Int
+    /// The whole photo's SHA-256, lowercase hex.
+    public let sha256: String
+    /// This piece's place, from 0.
+    public let index: Int
+    /// How many pieces the photo has.
+    public let count: Int
+    /// This piece's bytes.
+    public let bytes: Data
+
+    /// A piece.
+    public init(tripID: UUID, photoID: UUID, takenAt: Int64, byteCount: Int, sha256: String, index: Int, count: Int,
+                bytes: Data) {
+        self.tripID = tripID
+        self.photoID = photoID
+        self.takenAt = takenAt
+        self.byteCount = byteCount
+        self.sha256 = sha256
+        self.index = index
+        self.count = count
+        self.bytes = bytes
+    }
+
+    /// How many pieces a photo of `byteCount` bytes is sent in; 0 outside 1 to ``maxPhotoBytes``.
+    public static func chunkCount(forBytes byteCount: Int) -> Int {
+        guard byteCount > 0, byteCount <= maxPhotoBytes else { return 0 }
+        return (byteCount + chunkBytes - 1) / chunkBytes
+    }
+
+    /// The bytes piece `index` of a photo of `byteCount` bytes carries.
+    public static func pieceLength(index: Int, byteCount: Int) -> Int {
+        let count = chunkCount(forBytes: byteCount)
+        guard index >= 0, index < count else { return 0 }
+        return index < count - 1 ? chunkBytes : byteCount - chunkBytes * (count - 1)
+    }
+
+    /// Whether the photo's size, the count, the index, this piece's length, the digest and the time agree.
+    public var isWellFormed: Bool {
+        let expected = Self.chunkCount(forBytes: byteCount)
+        guard expected > 0, count == expected, index >= 0, index < count,
+              bytes.count == Self.pieceLength(index: index, byteCount: byteCount), RoadTripPayload.isTime(takenAt) else { return false }
+        return sha256.count == Self.digestLength && sha256.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+    }
+
+    /// Whether `other` describes the same photo (every field but the piece's own).
+    public func describesSamePhoto(as other: RoadTripPhotoChunkPayload) -> Bool {
+        tripID == other.tripID && photoID == other.photoID && takenAt == other.takenAt && byteCount == other.byteCount
+            && sha256 == other.sha256 && count == other.count
+    }
+}
+
 // MARK: - The envelope body
 
 /// The road trip token's one body (`PayloadType.roadTrip`): a version, the kind, and exactly that kind's part.
-/// Frozen: `version`, `kind`, `invite`, `join` and `catchUp` are field names, and the kinds' raw values are wire
-/// tokens.
+/// Frozen: `version`, `kind`, `invite`, `join`, `catchUp` and `photo` are field names, and the kinds' raw values are
+/// wire tokens. PR 3 appended ``Kind/photo`` (unshipped PR 2 builds drop it as malformed), keeping version 1.
 public nonisolated struct RoadTripPayload: Codable, Equatable, Sendable {
-    /// Which of the three messages this is. Frozen raw values.
+    /// Which of the four messages this is. Frozen raw values.
     public enum Kind: String, Codable, Sendable {
         /// ``RoadTripInvitePayload``.
         case invite
@@ -263,6 +350,8 @@ public nonisolated struct RoadTripPayload: Codable, Equatable, Sendable {
         case join
         /// ``RoadTripCatchUpPayload``.
         case catchUp
+        /// ``RoadTripPhotoChunkPayload`` (PR 3).
+        case photo
     }
 
     /// The format this build writes and reads.
@@ -275,10 +364,13 @@ public nonisolated struct RoadTripPayload: Codable, Equatable, Sendable {
     public static let maxSegments = 16
     /// The most points in one catch-up: a whole trip's line on one phone (about 2,500 km at 25 m apart).
     public static let maxPoints = 100_000
-    /// The most bytes a body may have before it is decoded: room for ``maxPoints`` points.
+    /// The most bytes a body may have before it is decoded: room for ``maxPoints`` points (and for one photo piece,
+    /// whose 1 MiB is about 1.4 MB as JSON).
     public static let maxPlaintextBytes = 6 * 1024 * 1024
     /// The latest time a field may carry (the year 9999).
     public static let maxSeconds: Int64 = 253_402_300_799
+    /// The most photos one person may take on one trip (`rt-photos`: "up to 30 per person").
+    public static let maxPhotosPerMember = 30
 
     /// The format.
     public let version: Int
@@ -290,42 +382,49 @@ public nonisolated struct RoadTripPayload: Codable, Equatable, Sendable {
     public let join: RoadTripJoinPayload?
     /// The catch-up, for ``Kind/catchUp``.
     public let catchUp: RoadTripCatchUpPayload?
+    /// A photo's piece, for ``Kind/photo``.
+    public let photo: RoadTripPhotoChunkPayload?
 
-    private init(kind: Kind, invite: RoadTripInvitePayload?, join: RoadTripJoinPayload?, catchUp: RoadTripCatchUpPayload?) {
+    private init(kind: Kind, invite: RoadTripInvitePayload? = nil, join: RoadTripJoinPayload? = nil,
+                 catchUp: RoadTripCatchUpPayload? = nil, photo: RoadTripPhotoChunkPayload? = nil) {
         self.version = Self.currentVersion
         self.kind = kind
         self.invite = invite
         self.join = join
         self.catchUp = catchUp
+        self.photo = photo
     }
 
     /// An invite's body.
     public static func invite(_ invite: RoadTripInvitePayload) -> RoadTripPayload {
-        RoadTripPayload(kind: .invite, invite: invite, join: nil, catchUp: nil)
+        RoadTripPayload(kind: .invite, invite: invite)
     }
 
     /// An answer's body.
     public static func join(_ join: RoadTripJoinPayload) -> RoadTripPayload {
-        RoadTripPayload(kind: .join, invite: nil, join: join, catchUp: nil)
+        RoadTripPayload(kind: .join, join: join)
     }
 
     /// A catch-up's body.
     public static func catchUp(_ catchUp: RoadTripCatchUpPayload) -> RoadTripPayload {
-        RoadTripPayload(kind: .catchUp, invite: nil, join: nil, catchUp: catchUp)
+        RoadTripPayload(kind: .catchUp, catchUp: catchUp)
+    }
+
+    /// A photo piece's body.
+    public static func photo(_ photo: RoadTripPhotoChunkPayload) -> RoadTripPayload {
+        RoadTripPayload(kind: .photo, photo: photo)
     }
 
     /// Whether it is this build's version and carries exactly its kind's part, well formed.
     public var isWellFormed: Bool {
         guard version == Self.currentVersion else { return false }
+        let parts = [invite != nil, join != nil, catchUp != nil, photo != nil].filter { $0 }.count
+        guard parts == 1 else { return false }
         switch kind {
-        case .invite:
-            guard join == nil, catchUp == nil, let invite else { return false }
-            return invite.isWellFormed
-        case .join:
-            return invite == nil && catchUp == nil && join != nil
-        case .catchUp:
-            guard invite == nil, join == nil, let catchUp else { return false }
-            return catchUp.isWellFormed
+        case .invite: return invite?.isWellFormed ?? false
+        case .join: return join != nil
+        case .catchUp: return catchUp?.isWellFormed ?? false
+        case .photo: return photo?.isWellFormed ?? false
         }
     }
 

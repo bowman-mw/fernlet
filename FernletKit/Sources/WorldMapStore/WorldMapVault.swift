@@ -173,6 +173,13 @@ public final class WorldMapVault {
         /// Where each solo camera photo was taken (`PhotoPlaceStore`), by photo id.
         public static let photoPlaces = File(name: "photo-places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
                                              role: .store)
+        /// Where each road trip photo was taken (World-RoadTrip-Spec PR 3, owner-approved 2026-11-10; a
+        /// `PhotoPlaceStore` over this file), by the photo's id on this iPhone: the trip's road at its capture time.
+        /// The solo photos' places' purpose and the when-unlocked store key (photos are taken and caught up with the
+        /// app open), bound to its own context, so neither file ever opens as the other.
+        public static let roadTripPhotoPlaces = File(name: "road-trip-photo-places.bin",
+                                                     purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
+                                                     role: .store, context: Data("roadTripPhotos".utf8))
         /// The World passport (`PassportStore`, round 7): each first visit by kind and token, with its date.
         public static let passport = File(name: "passport.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPassportV1,
                                           role: .store)

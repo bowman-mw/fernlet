@@ -14,6 +14,11 @@ import WorldMapStore
 /// two shared (``RoadTripPresence/sendWindow(to:in:now:)``), and this phone keeps only road from its own first
 /// presence (``RoadTripPresence/acceptWindow(in:now:)``). **Road** received is added to the line by its own rules and
 /// lifts this phone's fog along it as driven cells, never walked, never in a decoy.
+///
+/// **Photos** (PR 3, `rt-photos`): each catch-up names the member's own photos this iPhone already holds
+/// (`heldPhotos`); once a member's catch-up is applied, the trip's photos with no place yet are placed from the road
+/// that came, and this iPhone's own photos the member was there for and lacks go to them in pieces
+/// (`FernletStore+RoadTripPhotos.swift`). Home's note waits for the photos to settle and counts them.
 extension FernletStore {
 
     /// The catch-up for `fingerprint`'s member: at a commit or Catch up now (`tripID` nil), or in answer to their
@@ -30,12 +35,14 @@ extension FernletStore {
         }
         return RoadTripCatchUpPayload(tripID: trip.id, isReply: isReply, segments: segments,
                                       mapper: RoadTripWire.mapperState(own: roadTripDeviceState(), takeover: trip.mapperOverride),
-                                      endedAt: trip.endedAt.map(RoadTripPayload.seconds))
+                                      endedAt: trip.endedAt.map(RoadTripPayload.seconds),
+                                      heldPhotos: roadTripHeldPhotos(of: trip, from: member))
     }
 
     /// A member's catch-up: the road this phone was there for joins its line and lifts its fog as driven cells, the
-    /// catch-up is recorded, who maps is decided from every member's state, a friend's end ends the trip here, and
-    /// Home says "Caught up". An offer for a trip this phone is not on (it left, or never joined) is answered Not this
+    /// catch-up is recorded, who maps is decided from every member's state, a friend's end ends the trip here, photos
+    /// are placed from the new road and this iPhone's photos the member is owed go to them, and Home says "Caught up"
+    /// once those settle. An offer for a trip this phone is not on (it left, or never joined) is answered Not this
     /// time, so their copy drops this phone; one for an invite still waiting here is not.
     func receiveRoadTripCatchUp(_ catchUp: RoadTripCatchUpPayload, from fingerprint: String, now: Date = Date()) {
         guard !duressSessionActive else { return }
@@ -54,11 +61,17 @@ extension FernletStore {
         let applied = keeper.change(trip.id) {
             $0 = RoadTripCatchUpRules.applying(received, from: member, to: $0, own: own, now: now)
         }
+        let placed = resolveRoadTripPhotoPlaces(in: trip)
+        let photos = sendRoadTripPhotos(of: keeper.trip(sharedWith: member, id: trip.id) ?? trip, to: fingerprint,
+                                        held: catchUp.heldPhotos ?? [], now: now)
         FernletAuditLog.log("worldMap.roadTrip.caughtUp", context: [
-            "points": "\(road.count)", "kept": "\(kept)", "cells": "\(lifted)", "saved": "\(applied)"
+            "points": "\(road.count)", "kept": "\(kept)", "cells": "\(lifted)", "saved": "\(applied)",
+            "placed": "\(placed)", "photosOut": "\(photos)"
         ])
-        let note = RoadTripCaughtUpNote(id: UUID(), metres: metres, photos: 0)
-        roadTripMesh.didCatchUp(with: member, note: note, now: now) { [weak self] in await self?.leaveRoadTripHangout() }
+        let tripID = trip.id
+        roadTripMesh.didCatchUp(with: member, metres: metres, now: now,
+                                photos: { [weak self] in self?.roadTripPhotoCount(of: tripID) ?? 0 },
+                                leave: { [weak self] in await self?.leaveRoadTripHangout() })
     }
 
     /// The road in `catchUp` this phone keeps for `trip` at `now`: valid points within its own presence.

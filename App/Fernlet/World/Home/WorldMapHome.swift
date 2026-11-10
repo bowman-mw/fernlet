@@ -95,6 +95,10 @@ struct WorldMapHome: View {
     /// the front, and the one whose photos are open.
     @State private var photoPlaces: [WorldPhotoPlace] = []
     @State private var openPhotoPlace: WorldPhotoPlace?
+    /// Where road trip photos were taken, this iPhone's and friends' (`rt-map`, World-RoadTrip-Spec PR 3), read with
+    /// the places and whenever the trip roll changes, and the print whose photos are open.
+    @State private var tripPhotoPlaces: [WorldPhotoPlace] = []
+    @State private var openTripPhotos: WorldPhotoPlace?
     /// DEBUG `photo`: whether a photo taken where the person stands would keep its place.
     @State private var testPhotoKept = false
     /// Whether the one-time "Tap me to say hi!" hint is showing (`ref-hint`, ``WorldCompanionHint``).
@@ -163,6 +167,9 @@ struct WorldMapHome: View {
         .modifier(WorldLocationIntroPresenter(store: store, isFrontmost: isFrontmost, isUp: $isLocationIntroUp))
         // A photo place's marker opens the photos taken there (World build step 5c).
         .modifier(WorldPhotoPlacePresenter(store: store, place: $openPhotoPlace))
+        // Road trip photos (World-RoadTrip-Spec PR 3, `rt-map`): a trip print opens its photos with their caption.
+        .modifier(RoadTripPhotoPresenter(store: store, place: $openTripPhotos))
+        .onChange(of: store.roadTripPhotos.revision) { if isFrontmost { readTripPhotos() } }
         // Round 6: Remember this place, and a place to eat's menu search.
         .modifier(WorldPlacesPresenter(store: store, placeSheet: $placeSheet, menuSearch: $menuSearch, onMealsLogged: onMealsLogged))
         // Round 7: a found landmark's card and a found city's card (World-Exploration-Spec §2).
@@ -268,6 +275,11 @@ struct WorldMapHome: View {
             }
             ForEach(shownPhotoPlaces) { place in
                 WorldPhotoMarkerView(place: place) { openPhotoPlace = place }
+                    .fixedSize()
+                    .position(viewport.screenPoint(for: place.point, in: size))
+            }
+            ForEach(tripPhotoPlaces) { place in
+                RoadTripPhotoMarkerView(place: place) { openTripPhotos = place }
                     .fixedSize()
                     .position(viewport.screenPoint(for: place.point, in: size))
             }
@@ -844,6 +856,14 @@ extension WorldMapHome {
         uncovered = store.worldUncoveredCells(markers: placed.markers)
         if let greeting = store.takeWorldHomeGreeting() { homeGreeting = greeting }
         Task { await store.worldPlaces.resolveEatingNames() }
+        readTripPhotos()
+    }
+
+    /// The road trip prints (`rt-map`): the trip on now's photos still without a place looked for on its line once
+    /// more, then every shown trip photo with a place, grouped within 40 m. None in a decoy.
+    private func readTripPhotos() {
+        store.resolveActiveRoadTripPhotoPlaces()
+        tripPhotoPlaces = store.roadTripPhotoMarkers(near: store.worldLocation.latest)
     }
 
     /// Moves Sprout and, while it follows the person, the camera to a new reading: a glide on the map in front
@@ -947,7 +967,7 @@ extension WorldMapHome {
     /// rendezvous listens only then (World Friends §1.4).
     private var isTapFrontPage: Bool {
         isMapFrontPage && scenePhase == .active && guidedSession == nil && cameraMode == nil && !isLocationIntroUp
-            && openPhotoPlace == nil && placeSheet == nil && menuSearch == nil && explore.openCity == nil
+            && openPhotoPlace == nil && openTripPhotos == nil && placeSheet == nil && menuSearch == nil && explore.openCity == nil
             && explore.openLandmark == nil
     }
 

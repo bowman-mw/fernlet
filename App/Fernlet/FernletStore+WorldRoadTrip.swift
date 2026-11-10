@@ -43,7 +43,7 @@ extension FernletStore {
         let reach = roadTripCatchUpMembers()
         return RoadTripInfo(title: RoadTripCopy.name(of: trip), mapperName: trip.mapper?.firstName,
                             lastCatchUp: trip.lastCatchUp, metres: keeper.lineMetres(),
-                            photos: RoadTripTestScenes.photoCount ?? 0, isMapping: trip.isMapping,
+                            photos: RoadTripTestScenes.photoCount ?? roadTripPhotoCount(of: trip.id), isMapping: trip.isMapping,
                             canCatchUp: !reach.linked.isEmpty || !reach.nearby.isEmpty)
     }
 
