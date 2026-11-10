@@ -102,6 +102,9 @@
      text on 2026-11-09, and this wording is drafted for their review with it: §6's background mapping
      adds that Fernlet asks iOS to tell it when you leave a place and then checks for a couple of
      minutes, and motion data is read with background mapping as well as with Log my bike rides.
+     With car signals (also 2026-11-09, drafted the same way), §6 adds that Fernlet notes the
+     Bluetooth audio devices connected during a drive, keeping a scrambled tag for each and the
+     names only of the person's cars.
      Everything stays on the device; nothing new is sent to the developer and no promise is weakened
      under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
@@ -432,7 +435,10 @@ you're driving or riding, the road you take; to notice a trip starting, it asks 
 you leave a place, then checks for a couple of minutes. If you turn on background mapping or Log my bike
 rides, Fernlet uses your iPhone's motion data to tell when you're riding in a car or cycling, on this
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
-exercise; it never keeps the motion data itself. The map itself is drawn by Apple Maps,
+exercise; it never keeps the motion data itself. To tell when you're driving, it also notes
+the Bluetooth audio devices your iPhone is connected to during a drive, on this iPhone only: it keeps a
+scrambled tag for each, and the name only of a car it learns or you confirm is yours. The map itself is
+drawn by Apple Maps,
 which receives the area on your screen in order to send its map images, under Apple's privacy terms;
 it never receives your map history or your walks. Location is never attached to your identity for
 us.

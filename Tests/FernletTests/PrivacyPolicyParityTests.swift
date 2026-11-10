@@ -210,7 +210,9 @@ struct PrivacyPolicyParityTests {
         "If you turn on background mapping or Log my bike",
         "never keeps the motion data itself",
         "to notice a trip starting",
-        "so your trips map properly"
+        "so your trips map properly",
+        // Car signals (2026-11-09): what the car book keeps of the Bluetooth devices seen on drives.
+        "scrambled tag for each"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

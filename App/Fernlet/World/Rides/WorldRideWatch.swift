@@ -38,6 +38,14 @@ import WorldMapStore
 ///   ride carries them). Like the odometer it reaches back ``markLookBack`` while not cycling, because a
 ///   ride's start sample arrives late; bounded at ``maxLinePoints``.
 ///
+/// - **A car connected** (``carLinked``, owner 2026-11-09: CarPlay or a car `WorldCarKeeper` knows): readings surely
+///   above walking pace spanning ``resumeHold`` start the drive, Motion's walking never ends it and nor does the foot
+///   rule, and parking takes ``linkedParkTime``. The car going while the readings have been quiet ``unlinkQuiet``
+///   ends it parked (``carUnlinked(at:)``).
+/// - **A hint** (``hint(until:)``: Driving Focus or the Start a drive action) shortens the start to a car's speed for
+///   ``resumeHold`` until it runs out, Motion still heard, but holds nothing (iOS may never say a Focus ended, or say
+///   it late); its end, or End a drive, ends a quiet drive (``endHint(at:)``).
+///
 /// A good reading's speed is CoreLocation's own when it gave one, otherwise the pace from the pace anchor
 /// (unknown across a gap longer than ``maxGap``). Low-confidence samples decide nothing. Samples arrive
 /// after the readings they cover (the keeper asks for them every half minute), so a sample from before the
@@ -76,6 +84,17 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     static let resumeWindow: TimeInterval = 5 * 60
     /// How long readings at a car's speed must span to resume a drive that ended on foot within ``resumeWindow``.
     static let resumeHold: TimeInterval = 10
+    /// How long a drive with a car connected may stand still before it ends parked (sitting in a car at a long
+    /// crossing, or in a queue with the engine on).
+    static let linkedParkTime: TimeInterval = 15 * 60
+    /// How long the readings must have been quiet (nothing faster than walking, nor far) when the car goes, or a hint
+    /// ends, for the drive to end there: a car's Bluetooth dropping at speed is no parking.
+    static let unlinkQuiet: TimeInterval = 20
+
+    /// Whether a car is connected now (CarPlay or a car the car book knows); the keeper sets it before each reading.
+    var carLinked = false
+    /// When a hint (Driving Focus, the Start a drive action) runs out; nil without one.
+    private(set) var hintUntil: Date?
     /// How long something other than cycling must hold to end a ride (a stop at a light is shorter).
     static let rideGap: TimeInterval = 3 * 60
     /// The shortest ride that logs.
@@ -253,7 +272,39 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         automotiveUntil = nil
         fastSince = nil
         fastAt = nil
+        hintUntil = nil
         return events
+    }
+
+    /// Driving Focus turned on, or the Start a drive action ran: until `date`, a short run above walking pace starts
+    /// a drive (it holds nothing; a Focus may never say it ended).
+    mutating func hint(until date: Date) {
+        hintUntil = max(hintUntil ?? date, date)
+    }
+
+    /// The hint ended (Driving Focus off, or the End a drive action) at `date`: a drive without a car connected whose
+    /// readings have been quiet ``unlinkQuiet`` ends there, parked; what changed.
+    mutating func endHint(at date: Date) -> [WorldRideEvent] {
+        hintUntil = nil
+        guard !carLinked else { return [] }
+        return endQuietDrive(at: date)
+    }
+
+    /// The connected car went at `date` (``carLinked`` already false): a drive whose readings have been quiet
+    /// ``unlinkQuiet`` ends there, parked; what changed.
+    mutating func carUnlinked(at date: Date) -> [WorldRideEvent] {
+        endQuietDrive(at: date)
+    }
+
+    /// Ends the drive at `date`, parked, when its readings have been quiet ``unlinkQuiet``.
+    private mutating func endQuietDrive(at date: Date) -> [WorldRideEvent] {
+        guard isDriving, let movingAt, date.timeIntervalSince(movingAt) >= Self.unlinkQuiet else { return [] }
+        return endDrive(at: date, because: .parked)
+    }
+
+    /// Whether a hint is on at `date`: given, and not yet run out.
+    private func isHinted(at date: Date) -> Bool {
+        hintUntil.map { date <= $0 } ?? false
     }
 
     /// The bike rides in a stretch of motion history (the app was closed through them), oldest first: rides
@@ -281,21 +332,25 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
 
     /// Starts a drive from a reading's speed once readings surely at a car's speed (`surely`), each within
     /// ``pairTime`` of the last, span ``carHold`` (``resumeHold`` just after a drive ended on foot, ``holdNeeded(at:)``);
-    /// a reading at walking pace ends the run. Never while Motion says on foot or bike.
+    /// a reading at walking pace ends the run. Never while Motion says on foot or bike. With a car connected, surely
+    /// above walking pace is enough, for ``resumeHold``, whatever Motion said; with a hint (``isHinted(at:)``), a car's
+    /// speed for ``resumeHold``, Motion still heard (a hint may come late, as the person walks away from the car).
     private mutating func startBySpeed(_ speed: Double?, surely: Double?, at date: Date) -> [WorldRideEvent] {
         if let speed, Self.isWalkingPace(speed) {
             fastSince = nil
             fastAt = nil
             return []
         }
-        guard let surely, surely > Self.carSpeed, speedMayStartDrive else { return [] }
+        guard let surely, surely > (carLinked ? Self.walkingSpeed : Self.carSpeed),
+              carLinked || speedMayStartDrive else { return [] }
         guard let fastSince, let fastAt, date.timeIntervalSince(fastAt) <= Self.pairTime else {
             self.fastSince = date
             self.fastAt = date
             return []
         }
         self.fastAt = date
-        return date.timeIntervalSince(fastSince) >= holdNeeded(at: fastSince) ? startDrive(at: fastSince) : []
+        let hold = carLinked || isHinted(at: date) ? Self.resumeHold : holdNeeded(at: fastSince)
+        return date.timeIntervalSince(fastSince) >= hold ? startDrive(at: fastSince) : []
     }
 
     /// How long a run at a car's speed beginning at `start` must span to start a drive: ``resumeHold`` when the
@@ -360,7 +415,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
             self.footFrom = Self.anchor(fix)
             return []
         }
-        guard !(usesMotion && automotive(since: footSince)) else { return [] }
+        guard !carLinked, !(usesMotion && automotive(since: footSince)) else { return [] }
         return endDrive(at: fix.at, because: .onFoot)
     }
 
@@ -408,9 +463,10 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     }
 
     /// Whether, as of `date`, the car has been parked long enough: nothing faster than walking, nor ``parkRadius``
-    /// from where it last moved, for ``parkTime`` and, with Motion, no automotive activity in that time.
+    /// from where it last moved, for ``parkTime`` (``linkedParkTime`` with a car connected) and, with Motion, no
+    /// automotive activity in that time.
     private func isParked(at date: Date) -> Bool {
-        guard let movingAt, date.timeIntervalSince(movingAt) >= Self.parkTime else { return false }
+        guard let movingAt, date.timeIntervalSince(movingAt) >= (carLinked ? Self.linkedParkTime : Self.parkTime) else { return false }
         return !(usesMotion && automotive(since: date.addingTimeInterval(-Self.parkTime)))
     }
 
@@ -457,7 +513,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         case (.cycling, .onFoot) where fresh:
             return startRide(at: at)
         case (.walking, .driving(let since)), (.running, .driving(let since)):
-            return at > since ? endDrive(at: at, because: .onFoot) : []
+            return at > since && !carLinked ? endDrive(at: at, because: .onFoot) : []
         default:
             return []
         }

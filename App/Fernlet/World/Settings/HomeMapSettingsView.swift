@@ -12,6 +12,8 @@ import WorldMapStore
 ///   (round 7: a detected drive is traced in full). Turning it on asks iOS to change location to Always (or,
 ///   once iOS has used its one prompt, opens Fernlet's page in the Settings app); it runs once Always is
 ///   allowed, and allowing Always there later turns it on (W-09).
+/// - **Your car** (``HomeMapCarSection``, owner 2026-11-09): the cars Fernlet knows from their Bluetooth, and how
+///   Driving Focus and Shortcuts start a drive.
 /// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), "Log my bike
 ///   rides" (off by default; round 7), how many routes are stored on this iPhone, and Delete all stored
 ///   routes (the walks and runs stay in Move).
@@ -58,6 +60,7 @@ struct HomeMapSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 locationSection
+                HomeMapCarSection(cars: store.worldLocation.cars)
                 mapSection
                 HomesAndHotelsSection(store: store)
                 placesSection

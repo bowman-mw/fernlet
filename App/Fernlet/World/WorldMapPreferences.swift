@@ -28,6 +28,9 @@ import Foundation
 /// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
 ///   location and Not now both answer it.
 /// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
+/// - **The car book and its salt** (owner 2026-11-09, car signals): which Bluetooth devices are the person's cars
+///   (``WorldCarBook``, kept by ``WorldCarKeeper``), and the random salt their scrambled tags are made with, so a wipe
+///   makes every old tag meaningless as well as deleting it.
 ///
 /// Device-only `UserDefaults`, never in the synced settings: they describe this phone's location
 /// behaviour. Every key is cleared by the delete funnel (``clearAll(in:)``,
@@ -47,6 +50,26 @@ nonisolated enum WorldMapPreferences {
         static let bikeRidesCheckedThrough = "fernlet.worldMap.bikeRidesCheckedThrough"
         static let airportsAndFlights = "fernlet.worldMap.airportsAndFlights"
         static let flightsFromCalendar = "fernlet.worldMap.flightsFromCalendar"
+        static let carBook = "fernlet.worldMap.carBook"
+        static let carTagSalt = "fernlet.worldMap.carTagSalt"
+    }
+
+    /// The car book's saved bytes (``WorldCarKeeper``); nil before the first car or sighting.
+    static func carBookData(in defaults: UserDefaults = .standard) -> Data? {
+        defaults.data(forKey: Key.carBook)
+    }
+
+    /// Saves the car book's bytes.
+    static func setCarBookData(_ data: Data, in defaults: UserDefaults = .standard) {
+        defaults.set(data, forKey: Key.carBook)
+    }
+
+    /// The salt the car book's tags are made with, created once on this iPhone (a wipe makes a new one).
+    static func carTagSalt(in defaults: UserDefaults = .standard) -> String {
+        if let salt = defaults.string(forKey: Key.carTagSalt), !salt.isEmpty { return salt }
+        let salt = UUID().uuidString
+        defaults.set(salt, forKey: Key.carTagSalt)
+        return salt
     }
 
     /// Whether "Airports and flights" is on (default on).
@@ -194,5 +217,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.bikeRidesCheckedThrough)
         defaults.removeObject(forKey: Key.airportsAndFlights)
         defaults.removeObject(forKey: Key.flightsFromCalendar)
+        defaults.removeObject(forKey: Key.carBook)
+        defaults.removeObject(forKey: Key.carTagSalt)
     }
 }
