@@ -104,7 +104,12 @@
      minutes, and motion data is read with background mapping as well as with Log my bike rides.
      With car signals (also 2026-11-09, drafted the same way), §6 adds that Fernlet notes the
      Bluetooth audio devices connected during a drive, keeping a scrambled tag for each and the
-     names only of the person's cars.
+     names only of the person's cars. And 2026-11-10 (road trip mode, every piece approved by the owner
+     on its review page that day, this sentence word for word): §6 adds that a road trip you start or
+     join shares its road and its photos with the people on it, in person only, each getting only the
+     stretch they were there for, and the map's "never shared with friends" names that one exception.
+     It is new data shared only after each person's own Join, which is the fresh, affirmative consent
+     §13 asks for; nothing goes to the developer or a server.
      Everything stays on the device; nothing new is sent to the developer and no promise is weakened
      under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
@@ -112,7 +117,7 @@
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** November 9, 2026
+**Effective date:** November 10, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -426,7 +431,8 @@ weather-based prompts and, if you choose, to tag an in-person group activity. Wh
 a coarse record of the parts of the map you have uncovered (cells about 35 m across) and, while
 "Save new routes" is on, the line of each walk you record yourself, plus where your workout spaces
 are if you ask it to remember them. All of it is encrypted on this iPhone only: never synced, backed
-up, exported, shared with friends, given to the AI or sent to us, and you can delete it at any time
+up, exported, shared with friends (apart from a road trip's road, below), given to the AI or sent to us,
+and you can delete it at any time
 in Settings → Home map.
 The one exception is your passport: its stamps, trips and flights go in the passport's own sealed backup if you use it.
 Fernlet uses location in the background only during a walk you started, or
@@ -437,8 +443,12 @@ rides, Fernlet uses your iPhone's motion data to tell when you're riding in a ca
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
 exercise; it never keeps the motion data itself. To tell when you're driving, it also notes
 the Bluetooth audio devices your iPhone is connected to during a drive, on this iPhone only: it keeps a
-scrambled tag for each, and the name only of a car it learns or you confirm is yours. The map itself is
-drawn by Apple Maps,
+scrambled tag for each, and the name only of a car it learns or you confirm is yours.
+If you start or join a road trip with friends you're with, Fernlet shares with them, in person over the
+same direct connection as a hangout, the road you drove together and the photos you took on the trip,
+and their phones share theirs with you. Each person gets only the stretch they were there for. It's kept
+on each iPhone like the rest of your map and photos, and a friend's trip photos sit on your map where
+they were taken. Nothing goes through a server. The map itself is drawn by Apple Maps,
 which receives the area on your screen in order to send its map images, under Apple's privacy terms;
 it never receives your map history or your walks. Location is never attached to your identity for
 us.

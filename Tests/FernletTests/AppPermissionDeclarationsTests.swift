@@ -17,7 +17,7 @@ struct AppPermissionDeclarationsTests {
     private static let approvedTexts: [String: String] = [
         // A session is a hangout to the person (owner's form answer 33, "Start a hangout with Sam"; World
         // Friends spec §2, approved 2026-10-31): the Local Network and camera texts say so.
-        "NSLocalNetworkUsageDescription": "Fernlet connects directly with nearby friends to share recipes and, during a hangout you start, photos, short-lived messages and hearts. A hangout may continue in the background.",
+        "NSLocalNetworkUsageDescription": "Fernlet connects directly with nearby friends to share recipes and, during a hangout or road trip you start, photos, short-lived messages, hearts and the road you drove together. A hangout may continue in the background.",
         "NSNearbyInteractionUsageDescription": "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect.",
         "NSCameraUsageDescription": "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during hangouts with friends.",
         // The World map's location (owner, 2026-10-24; World build step 5c): `b1-loc-prompt`'s purpose
