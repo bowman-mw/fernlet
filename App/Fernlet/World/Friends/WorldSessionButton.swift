@@ -23,6 +23,10 @@ import FernletProximityUI
 /// active, a best-effort notification while not) — the camera and the Friends panel host the same
 /// prompts while they are the surface on screen. Draws nothing outside a session.
 ///
+/// A road trip (World-RoadTrip-Spec PR 2, owner-approved 2026-11-10): the card gains **Start a road trip** while every
+/// other person in the hangout is a kept friend linked with this phone (one to four of them) and no trip is on; it
+/// opens the approved Start dialog. A friend's invite is asked here too, as the Join dialog, while the map is in front.
+///
 /// Layout: it fills the frame it is given and anchors the button to that frame's bottom-left corner;
 /// the shell lays it over the map so the button sits beside the item bar's left end, level with the
 /// blue button on the right (lane HOME's insertion).
@@ -38,6 +42,8 @@ struct WorldSessionButton: View {
     /// Hangout info's End hangout closed the sheet; ask "End hangout?" once it has gone.
     @State private var endAfterInfo = false
     @State private var activeRemovalProposal: MeshRemovalProposalPayload?
+    /// The friends Start a road trip invites, while its dialog is up.
+    @State private var roadTripStart: [RoadTripMember]?
     /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
     @State private var messageNotificationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
@@ -66,6 +72,14 @@ struct WorldSessionButton: View {
         }
         .fullScreenCover(isPresented: $leaveConfirm) {
             SessionLeaveDialog(onEnd: endSession, onCancel: { leaveConfirm = false })
+                .presentationBackground(.clear)
+        }
+        .fullScreenCover(isPresented: Binding(get: { roadTripStart != nil }, set: { if !$0 { roadTripStart = nil } })) {
+            RoadTripStartDialog(store: store, members: roadTripStart ?? []) { roadTripStart = nil }
+                .presentationBackground(.clear)
+        }
+        .fullScreenCover(item: Binding(get: { joinAsked }, set: { _ in })) { pending in
+            RoadTripJoinDialog(store: store, pending: pending) {}
                 .presentationBackground(.clear)
         }
         .modifier(SessionPromptsModifier(
@@ -153,11 +167,20 @@ struct WorldSessionButton: View {
                 onMessages: { menuOpen = false; showChat = true },
                 onInfo: { menuOpen = false; showInfo = true },
                 onLeave: { menuOpen = false; leaveConfirm = true },
-                onClose: { menuOpen = false }
+                onClose: { menuOpen = false },
+                onRoadTrip: store.roadTripStartCandidates().map { members in
+                    { menuOpen = false; roadTripStart = members }
+                }
             )
             .padding(.horizontal, 14)
             .padding(.bottom, 76)
         }
+    }
+
+    /// A friend's road trip invite, asked while the map is in front and nothing else of the hangout's is up.
+    private var joinAsked: RoadTripPendingInvite? {
+        guard isFrontmost, !showInfo, !showChat, !leaveConfirm, roadTripStart == nil, !store.duressSessionActive else { return nil }
+        return store.roadTripMesh.invite
     }
 
     /// "Picnic · 3 people", or the count alone before the session has a name.
@@ -250,6 +273,8 @@ struct SessionMenuCard: View {
     let onInfo: () -> Void
     let onLeave: () -> Void
     let onClose: () -> Void
+    /// Start a road trip (World-RoadTrip-Spec PR 2); nil hides the row.
+    var onRoadTrip: (() -> Void)?
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -295,6 +320,11 @@ struct SessionMenuCard: View {
             menuRow(sprite: FriendsSprites.info, title: Text("Hangout info"),
                     detail: Text("Who's here, rename, open or closed"), highlighted: false, action: onInfo)
                 .accessibilityIdentifier("world.session.info")
+            if let onRoadTrip {
+                menuRow(sprite: WorldSprites.rideCar, title: Text(RoadTripCopy.startRow), detail: nil,
+                        highlighted: false, action: onRoadTrip)
+                    .accessibilityIdentifier("world.session.roadTrip")
+            }
             menuRow(sprite: FriendsSprites.prints, title: Text("Leave hangout"),
                     detail: Text("Asks first; your photos develop as they would"), highlighted: false, action: onLeave)
                 .accessibilityIdentifier("world.session.leave")
@@ -310,7 +340,7 @@ struct SessionMenuCard: View {
     /// One row, drawn as the blue button's card draws its choices (`b3-session-menu` is that card on the
     /// left): its icon in a teal square, an approved exception to the frame rule's bare tiles (owner's
     /// form answer 45, 2026-10-25); Messages with new ones leads in teal, its square the deeper teal.
-    private func menuRow(sprite: WorldSprite, title: Text, detail: Text, highlighted: Bool,
+    private func menuRow(sprite: WorldSprite, title: Text, detail: Text?, highlighted: Bool,
                          action: @escaping () -> Void) -> some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return Button(action: action) {
@@ -323,9 +353,11 @@ struct SessionMenuCard: View {
                     title
                         .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(highlighted ? WorldQuickStartPalette.onTeal : WorldPalette.bark)
-                    detail
-                        .font(FernletFramedFont.rowDetail)
-                        .foregroundStyle(highlighted ? WorldQuickStartPalette.onTeal : WorldPalette.dim)
+                    if let detail {
+                        detail
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(highlighted ? WorldQuickStartPalette.onTeal : WorldPalette.dim)
+                    }
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)

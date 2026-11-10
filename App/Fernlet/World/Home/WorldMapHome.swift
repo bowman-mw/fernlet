@@ -324,6 +324,8 @@ struct WorldMapHome: View {
             }
             // A road trip (`rt-home`, owner-approved 2026-11-10): "Road trip · 3" under the status plate, Trip info on a tap.
             RoadTripChip(store: store)
+            // Its catch-up (`rt-catchup`, PR 2): "Rae is here. Catch up the road trip?", asked once, and "Caught up: …".
+            RoadTripHomeNotes(store: store)
             if isWalking {
                 WorldWalkBar(metres: walkMetres, kind: store.worldWalk.kind, onEnd: endWalk)
             }
@@ -335,6 +337,7 @@ struct WorldMapHome: View {
             if airportHome.banner == nil { WorldLayoverPlate(store: store, date: date) }
             TapToConnectPlate()
         }
+        .modifier(RoadTripQuestionRefresh(store: store, isFrontmost: isFrontmost && scenePhase == .active))
         .padding(.top, 6)
         .padding(.horizontal, 12)
     }

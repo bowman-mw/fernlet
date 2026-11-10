@@ -6,8 +6,8 @@
 // the mesh engine through its capability-list provider, which advertises the list verbatim.
 //
 // The ORDER is a signed wire byte: the coordinator carries the array verbatim into the introduction and
-// its acknowledgement, so the composer below appends its nine tokens in one fixed order, the order
-// every device in the field already signs. The switches it reads are read where
+// its acknowledgement, so the composer below appends its ten tokens in one fixed order, the order
+// every device in the field already signs — `roadTrip` (2026-11-10) appended last, so no earlier token moved. The switches it reads are read where
 // they live: the clothing shop's sharing gate on the composition's shop, the chat age gate on the
 // composition's chat (since plan step A0.5.9), the friend-state opt-in on the composition's
 // friend-state exchange, the in-person hearts opt-in on the host, the away-hearts consent on this
@@ -76,7 +76,7 @@ public final class FernletMeshCapabilities {
 
     /// The capability tokens advertised in this device's identity introduction, in their frozen order:
     /// photos, the host's wire2 token, then each switched token in place around moderation and
-    /// activities, hearts last.
+    /// activities, then hearts, and road trips last.
     ///
     /// The mesh it reads is the one that calls this through its provider, so it is always alive when
     /// asked; were it gone, the list would be the engine's own, the wire2 token alone.
@@ -131,6 +131,11 @@ public final class FernletMeshCapabilities {
         if meshHost.host.allowNearbyHearts {
             capabilities.append(ProximityCapability.hearts.rawValue)
         }
+        // Road trips (World-RoadTrip-Spec PR 2, owner-approved 2026-11-10): a capability of the build, not a
+        // user opt-in — the invite asks each friend, and only kept friends are ever sent one — so it is
+        // advertised unconditionally, like moderation and activities. APPENDED LAST, after hearts: the array
+        // is signed, and every token before it keeps its place in every state.
+        capabilities.append(ProximityCapability.roadTrip.rawValue)
         return capabilities
     }
 }

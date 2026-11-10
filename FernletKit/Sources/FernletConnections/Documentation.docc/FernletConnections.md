@@ -128,8 +128,9 @@ wire tokens and the rules that hang on them, each part `.fernlet`:
   ("Hello"), its acknowledgement ("Identity acknowledged") and the session heartbeat ("Heartbeat",
   answered by "Heartbeat ack"), each with its `PayloadType` token. A title is signed into its
   envelope, so it is a wire token like the payload type: frozen English, never localized.
-- `PayloadRules.fernlet`, every `PayloadType` token (the 55 the host dispatches; any other token
-  authenticates but is parked) and the seventeen whose payload must arrive sealed.
+- `PayloadRules.fernlet`, every `PayloadType` token (the 56 the host dispatches; any other token
+  authenticates but is parked) and the eighteen whose payload must arrive sealed (the road trip's,
+  2026-11-10, the eighteenth: it carries where the car went).
 - `Capabilities.fernlet`, every `ProximityCapability` token in declaration order, `wire2` as the
   wire2 framing's token, and photos alone for a peer whose introduction lists no capabilities.
 - `MembershipRecordKinds.fernlet`, the four record kinds the inventory digest hashes, each the

@@ -3,7 +3,7 @@
 //
 // Fernlet's payload vocabulary as ONE `ProximityNamespace.Vocabulary` value, `.fernlet`, which
 // `ProximityNamespace.Family.fernlet` carries: the coordinator's three session messages, every payload
-// token and the seventeen whose payload must arrive sealed, the capability tokens, the membership
+// token and the eighteen whose payload must arrive sealed, the capability tokens, the membership
 // record kinds, the routed-type tokens and the mesh engine's thirty messages. Payload and capability
 // tokens are read off FernletDomainModel's `PayloadType` and `ProximityCapability`, and so are the
 // record kinds (a record kind IS the payload token of the frame that carries its record) and the mesh
@@ -61,15 +61,17 @@ nonisolated extension ProximityNamespace.SessionMessages {
 
 nonisolated extension ProximityNamespace.PayloadRules {
 
-    /// Every `PayloadType` token, and the seventeen whose payload must arrive sealed: the verify
-    /// ceremony, the trainer channel, and the friend features that carry personal content.
+    /// Every `PayloadType` token, and the eighteen whose payload must arrive sealed: the verify
+    /// ceremony, the trainer channel, and the friend features that carry personal content — since
+    /// road trip mode (2026-11-10) the road trip's invite, join answer and catch-up too, which carry
+    /// where the car went.
     public nonisolated static let fernlet = ProximityNamespace.PayloadRules(
         known: Set(PayloadType.allCases.map(\.rawValue)),
         sealingRequired: Set([
             PayloadType.friendPhoto, .recipeShare, .clothingCatalog, .friendHeart, .tempMessage, .itemReport,
             .friendState, .activityOffer, .activityJoinGrant, .activityRosterSnapshot, .activitySync,
             .trainerPlan, .trainerPlanDelta, .workoutCompletion, .workoutLiveUpdate,
-            .verifyChallenge, .verifyResponse
+            .verifyChallenge, .verifyResponse, .roadTrip
         ].map(\.rawValue))
     )
 }

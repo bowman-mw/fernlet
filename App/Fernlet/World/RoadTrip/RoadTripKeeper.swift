@@ -15,10 +15,12 @@ import WorldMapStore
 ///   behind (`saveNow`), at once, since iOS may end a suspended app.
 /// - **Passengers** (``isPassenger``): a trip on that another member's iPhone maps. ``onPassengerChanged`` tells the
 ///   location source, which then traces no drive (`WorldLocationSource.setRoadTripPassenger(_:)`).
-/// - **Who maps** (``mapFromThisPhone(states:now:)``, ``applyMapperRule(states:)``): ``RoadTripMapperRule``. PR 1 knows
-///   only this iPhone's state; PR 2's catch-up feeds the others'.
-/// - **Leave and End** (``leave(now:)``, ``end(now:)``): local in PR 1. The record and its line stay, sealed, for the
-///   passport's trips (PR 4), until map history is deleted.
+/// - **Who maps** (``mapFromThisPhone(states:now:)``, ``applyMapperRule(states:)``): ``RoadTripMapperRule``. A
+///   catch-up (PR 2) feeds the other members' states through ``change(_:_:)`` and ``RoadTripCatchUpRules``.
+/// - **Leave and End** (``leave(now:)``, ``end(now:)``): the record and its line stay, sealed, for the passport's trips
+///   (PR 4), until map history is deleted. An end is owed to every other member until a catch-up tells them (PR 2).
+/// - **The swap** (PR 2): ``trip(sharedWith:id:)`` finds the trip a catch-up is about, ``linePoints(of:after:through:)``
+///   reads the road to send, and ``appendReceived(_:to:)`` adds received road to the line by its own rules.
 /// - **Duress:** a decoy (``setDecoy(_:)``) shows no trip, records nothing and reads or writes no file; the real book
 ///   is dropped from memory while it lasts.
 /// - **Wipes:** ``forget()`` drops everything in memory, unsaved points included; the vault's ``WorldMapVault/clearAll()``
@@ -116,8 +118,8 @@ final class RoadTripKeeper {
         flush()
     }
 
-    /// Adds `points` to the trip's line, by the same rules as a reading, and writes them; how many were kept. Used to
-    /// stage a trip (DEBUG); a decoy or no trip keeps none.
+    /// Adds `points` to the trip's line, by the same rules as a reading, and writes them; how many were kept. Used for
+    /// a catch-up's road (``appendReceived(_:to:)``) and to stage a trip (DEBUG); a decoy or no trip keeps none.
     func appendLine(_ points: [RoadTripPoint]) -> Int {
         guard !isDecoy, let trip = active else { return 0 }
         var kept = 0
@@ -176,13 +178,69 @@ final class RoadTripKeeper {
         return true
     }
 
-    /// "End the road trip": it ends on this iPhone now (PR 2 carries the end to the others at their next catch-up).
+    /// "End the road trip": it ends on this iPhone now, owed to every other member until a catch-up tells them.
     /// Whether it was written.
     func end(now: Date = Date()) -> Bool {
         flush()
-        guard changeActive({ $0.endedAt = max(now, $0.startedAt) }) else { return false }
+        guard changeActive({ $0 = RoadTripCatchUpRules.ending($0, now: now) }) else { return false }
         line = OpenLine()
         return true
+    }
+
+    // MARK: The swap (PR 2)
+
+    /// The trip a catch-up with `member` is about (``RoadTripBook/trip(sharedWith:id:)``); nil in a decoy and before
+    /// the book can be read.
+    func trip(sharedWith member: String, id: UUID? = nil) -> RoadTrip? {
+        guard !isDecoy else { return nil }
+        load()
+        guard isLoaded else { return nil }
+        return book.trip(sharedWith: member, id: id)
+    }
+
+    /// Changes the trip `id` with `change` and writes the book; whether it was written (refused in a decoy, without
+    /// the trip, or when the change leaves it invalid). A trip on now that the change ends has its line written and
+    /// closed first, and the passenger gate follows the change.
+    func change(_ id: UUID, _ change: (inout RoadTrip) -> Void) -> Bool {
+        guard !isDecoy else { return false }
+        load()
+        let wasOn = book.active?.id == id
+        if wasOn { flush() }
+        guard isLoaded, let next = book.changing(id, change), store.saveBook(next) else { return false }
+        book = next
+        if wasOn, book.active?.id != id { line = OpenLine() }
+        tellPassenger()
+        return true
+    }
+
+    /// The points of `trip`'s line on this iPhone after `after` and through `through`, oldest first, at most
+    /// ``RoadTripLine/maxPoints``: the open piece as it is in memory, the others read. Pieces wholly before `after` are
+    /// skipped. Nil in a decoy and when a piece can't be read right now.
+    func linePoints(of trip: RoadTrip, after: Date, through: Date) -> [RoadTripPoint]? {
+        guard !isDecoy, isLoaded else { return nil }
+        flush()
+        do {
+            var points: [RoadTripPoint] = []
+            // R2: bounded by the line's pieces.
+            for chunk in try store.chunks(of: trip.id).prefix(RoadTripLine.maxChunks) {
+                let piece: [RoadTripPoint]
+                if line.trip == trip.id, chunk == line.chunk { piece = line.tail } else { piece = try store.readChunk(chunk, of: trip.id) }
+                guard let last = piece.last, last.at > after else { continue }
+                points += RoadTripPresence.points(piece, after: after, through: through)
+                    .prefix(RoadTripLine.maxPoints - points.count)
+            }
+            return points
+        } catch {
+            FernletAuditLog.log("worldMap.roadTrip.readDeferred")
+            return nil
+        }
+    }
+
+    /// Received road for the trip `id`: added to the trip on now's line by the line's own rules (in time order, 25 m
+    /// apart, none before the start) and written. How many points were kept; none in a decoy or for another trip.
+    func appendReceived(_ points: [RoadTripPoint], to id: UUID) -> Int {
+        guard !isDecoy, active?.id == id else { return 0 }
+        return appendLine(points)
     }
 
     /// The length of the trip's line on this iPhone, in metres: the earlier pieces read once, then the open one.

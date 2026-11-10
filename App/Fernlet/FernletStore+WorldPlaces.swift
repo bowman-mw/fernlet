@@ -124,6 +124,8 @@ extension FernletStore {
     func deleteWorldMapHistory() -> Bool {
         guard !duressSessionActive else { return true }
         worldPlaces.forget()
+        // A road trip's invite and catch-up note go with the trips (World-RoadTrip-Spec PR 2).
+        roadTripMesh.forget()
         return worldFog.clearAll()
     }
 
@@ -133,6 +135,8 @@ extension FernletStore {
     /// fence iOS holds round the last place the person was seen comes down too (owner 2026-11-09).
     func forgetWorldPlacesCarsAndBackgroundMapping() {
         worldPlaces.forget()
+        // A road trip's waiting invite, catch-up note and short hangout (World-RoadTrip-Spec PR 2): memory only.
+        roadTripMesh.forget()
         worldLocation.cars.forgetAll()
         worldLocation.setLowPowerAlways(false)
     }

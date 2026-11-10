@@ -208,7 +208,9 @@ struct SealedPayloadFramingTests {
             ("activitySync", ActivitySyncPayload(held: [])),
             ("workoutCompletion", TrainerExportPayload(bundle: Data([0x7B, 0x7D]))),
             ("verifyChallenge", VerifyChallengePayload(qrNonce: Data([1]), challengeNonce: Data([2]))),
-            ("verifyResponse", VerifyResponsePayload(challengeNonce: Data([2]), signature: Data([3])))
+            ("verifyResponse", VerifyResponsePayload(challengeNonce: Data([2]), signature: Data([3]))),
+            // Road trips (World-RoadTrip-Spec PR 2, 2026-11-10): the one body every kind rides in.
+            ("roadTrip", RoadTripPayload.join(RoadTripJoinPayload(tripID: UUID(), joins: true)))
         ]
     }
 

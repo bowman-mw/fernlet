@@ -33,7 +33,7 @@ import ProximityKit
 /// then the session photos, whose wall, pending corpus and reconcile load as they are built), then
 /// the installations on the mesh — the
 /// capability provider, the vouch-list exchange, the clothing shop's two payload handlers, the
-/// moderation report's, the friend state's, the activity manager's five and its two mesh seams, the
+/// moderation report's, the friend state's, the road trip's, the activity manager's five and its two mesh seams, the
 /// chat's projection handler, the photos' projection handler, the hearts' ledger judge and, last, the
 /// session observer — all before the initializer returns. The mesh is reachable by no other code until
 /// then.
@@ -41,7 +41,7 @@ import ProximityKit
 /// **Ownership.** This object holds the mesh and every feature strongly, and the session observer, a
 /// private adapter that holds this object `unowned`. The mesh retains only what it calls: the capability
 /// provider's closure, which captures ``capabilities`` alone, the vouch-list exchange, a private adapter
-/// that holds ``vouchList``, the nine payload handlers, which hold their features weakly (the activity
+/// that holds ``vouchList``, the ten payload handlers, which hold their features weakly (the activity
 /// manager's hold the features' host holder too), the chat's and the photos' projection handlers,
 /// private adapters that hold ``chat`` and ``photos``, and the hearts' ledger judge, a private adapter
 /// that holds ``hearts``; it holds the session observer weakly, so the adapter lives exactly as long as
@@ -78,6 +78,11 @@ public final class FernletMeshFeatures {
     /// The fuzzy friend state (Phase 4): this device's state + appearance, shared with a committed friend
     /// kept in person while the user opts in, and such a friend's state, handed to the app.
     public let friendState: FriendStateExchange
+
+    /// Road trips (World-RoadTrip-Spec PR 2, owner-approved 2026-11-10): the invite, the join answer and the
+    /// catch-up swap with a committed kept friend, over the direct feature send. The app wires its gate, its
+    /// catch-up provider and its three sinks; its commit leg runs last at every slot commit.
+    public let roadTrip: RoadTripExchange
 
     /// Phase 6 (Group Activities): the state + host-authoritative roster/token brain. Rides this friend
     /// mesh (no new radio); constructed first among the features and attached to the mesh in `init`.
@@ -181,6 +186,7 @@ public final class FernletMeshFeatures {
         )
         let clothingShop = MeshClothingShop()
         let friendState = FriendStateExchange(mesh: mesh, meshHost: meshHost)
+        let roadTrip = RoadTripExchange(mesh: mesh, meshHost: meshHost)
         let chat = MeshSessionChat(mesh: mesh, meshHost: meshHost, textToken: routedRows.text.token)
         let hearts = MeshSessionHearts(mesh: mesh, meshHost: meshHost, heartToken: routedRows.heart.token)
         self.identity = identity
@@ -190,6 +196,7 @@ public final class FernletMeshFeatures {
         self.clothingShop = clothingShop
         self.moderation = ModerationReportExchange(mesh: mesh, meshHost: meshHost, identity: identity)
         self.friendState = friendState
+        self.roadTrip = roadTrip
         self.activities = activities
         self.chat = chat
         self.hearts = hearts
@@ -204,7 +211,7 @@ public final class FernletMeshFeatures {
     /// Installs every engine role a feature plays on the mesh, before the initializer returns: the
     /// capability provider, in a closure that captures the capability list alone, the vouch-list
     /// exchange, the payload handlers (the clothing shop's two, then the moderation report's, the
-    /// friend state's and the activity manager's five),
+    /// friend state's, the road trip's and the activity manager's five),
     /// the activity manager's two mesh seams, the chat's projection handler under the text row's token
     /// (plan step A0.5.9), the photos' projection handler under the photo row's token (plan step
     /// A0.5.11), the hearts' ledger judge under the heart row's token (plan step A0.5.10) and, last, the
@@ -217,6 +224,7 @@ public final class FernletMeshFeatures {
         shopExchange.registerHandlers(on: mesh)
         moderation.registerHandler(on: mesh)
         friendState.registerHandler(on: mesh)
+        roadTrip.registerHandler(on: mesh)
         activities.attach(to: mesh, meshHost: meshHost)
         registerProjector(chat.makeProjector(), forToken: routedRows.text.token)
         registerProjector(photos.makeProjector(), forToken: routedRows.photo.token)
@@ -285,8 +293,9 @@ public final class FernletMeshFeatures {
         /// transcript's drop and the shop's send tracking cleared (the mesh advanced its
         /// session-content generation just before this call); then the shop's
         /// catalog offer to this slot, this device's own moderation reports and its friend state, each
-        /// send spawned in that order; and, last, the activities this device hosts, offered to this
-        /// peer with a roster version digest, their sends spawned after the others.
+        /// send spawned in that order; then the activities this device hosts, offered to this
+        /// peer with a roster version digest, their sends spawned after the others; and, last, a road
+        /// trip's catch-up offer when this peer shares a trip with this device (World-RoadTrip-Spec PR 2).
         ///
         /// - Parameter commit: The committed slot, its peer and whether it formed the session.
         func meshSlotDidCommit(_ commit: MeshSlotCommit) {
@@ -305,6 +314,7 @@ public final class FernletMeshFeatures {
                                     in: features.meshHost.namespace.family.vocabulary.capabilities) {
                 features.activities.onPeerCommitted(fingerprint: commit.peer.fingerprint)
             }
+            features.roadTrip.offerCatchUp(to: commit.slot, peer: commit.peer)
         }
 
         /// A slot was dropped: the shop forgets it sent to that slot, so a rejoining friend
@@ -323,7 +333,8 @@ public final class FernletMeshFeatures {
         /// The session ended: first the review promotion — the roster the mesh drained merges into the
         /// pending review and the session's unreviewed photos move in with it — then the shop's one-hour
         /// browse window opens over the catalogs it holds, then the chat transcript is dropped (messages
-        /// vanish), then, last, the in-session heart's feedback and its in-flight claims go; the mesh
+        /// vanish), then the in-session heart's feedback and its in-flight claims go, and, last, the road
+        /// trip's reply clock is forgotten, so the next stop's swap is answered at once; the mesh
         /// drained its roster, ended the formed-session epoch and advanced its session-content
         /// generation just before this call, none of which the promotion reads.
         ///
@@ -333,6 +344,7 @@ public final class FernletMeshFeatures {
             features.clothingShop.openWindowAtSessionEnd()
             features.chat.clearTranscript()
             features.hearts.resetSessionHeartState()
+            features.roadTrip.forgetReplies()
         }
 
         /// A privacy wipe began: the chat transcript is dropped. The mesh raised its projection

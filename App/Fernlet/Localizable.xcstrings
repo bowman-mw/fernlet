@@ -81761,6 +81761,54 @@
         }
       }
     },
+    "roadTrip.catchUp.button" : {
+      "comment" : "World Home's note when a road trip friend is nearby: opens a short hangout that swaps the road and photos",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Catch up"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponerse al día"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponerse al día"
+          }
+        }
+      }
+    },
+    "roadTrip.catchUp.question" : {
+      "comment" : "World Home's note, asked once when a road trip friend is nearby with Fernlet open: their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is here. Catch up the road trip?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ está aquí. ¿Os ponéis al día del viaje en coche?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ está aquí. ¿Se ponen al día del viaje en carro?"
+          }
+        }
+      }
+    },
     "roadTrip.catchUpNow" : {
       "comment" : "Trip info: swaps the road and photos with another member nearby with Fernlet open",
       "extractionState" : "extracted_with_value",
@@ -81781,6 +81829,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ponerse al día ahora"
+          }
+        }
+      }
+    },
+    "roadTrip.caughtUp" : {
+      "comment" : "World Home's note after a road trip catch-up: the trip's road on this iPhone (e.g. '84 km') and its photos (e.g. '6 photos')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Caught up: %1$@ of road, %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al día: %1$@ de carretera, %2$@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al día: %1$@ de carretera, %2$@."
           }
         }
       }
@@ -81955,7 +82027,6 @@
     },
     "roadTrip.info.photos" : {
       "comment" : "Trip info: the photos taken on the road trip so far. Plural on the number",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -82009,6 +82080,102 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "roadTrip.join.button" : {
+      "comment" : "A friend started a road trip: joins it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Join"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unirme"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unirme"
+          }
+        }
+      }
+    },
+    "roadTrip.join.line" : {
+      "comment" : "The join prompt's line: the other people on the trip, first names joined, e.g. 'Mike and Sam'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Join, and Fernlet shares the road you drive together and your trip photos with %@, in person at each stop."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Únete y Fernlet compartirá con %@ la carretera por la que conduzcáis juntos y tus fotos del viaje, en persona en cada parada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Únete y Fernlet compartirá con %@ la carretera por la que manejen juntos y tus fotos del viaje, en persona en cada parada."
+          }
+        }
+      }
+    },
+    "roadTrip.join.notThisTime" : {
+      "comment" : "A friend started a road trip: says no; the hangout stays as it was",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not this time"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta vez no"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta vez no"
+          }
+        }
+      }
+    },
+    "roadTrip.join.title" : {
+      "comment" : "The join prompt's title: the first name of the friend who started the road trip",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ started a road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ha empezado un viaje en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ empezó un viaje en carro"
           }
         }
       }
@@ -82105,6 +82272,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mapear desde este iPhone"
+          }
+        }
+      }
+    },
+    "roadTrip.start.button" : {
+      "comment" : "Start a road trip sheet: starts it and asks each friend in the hangout to join",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start the road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar el viaje en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar el viaje en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.start.line" : {
+      "comment" : "Start a road trip sheet: what a road trip does; 'you' is everyone on the trip",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One phone maps the road while the others rest. At each stop, Fernlet catches everyone up: the road you drove together and the photos you took."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un teléfono mapea la carretera mientras los demás descansan. En cada parada, Fernlet pone a todos al día: la carretera por la que habéis conducido juntos y las fotos que habéis hecho."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un teléfono mapea la carretera mientras los demás descansan. En cada parada, Fernlet pone a todos al día: la carretera por la que manejaron juntos y las fotos que tomaron."
+          }
+        }
+      }
+    },
+    "roadTrip.start.notNow" : {
+      "comment" : "Start a road trip sheet: closes it; nothing starts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "roadTrip.start.row" : {
+      "comment" : "The hangout's menu on Home: starts a road trip with the friends in this hangout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start a road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar un viaje en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar un viaje en carro"
           }
         }
       }

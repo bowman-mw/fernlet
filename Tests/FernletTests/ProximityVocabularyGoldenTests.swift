@@ -16,12 +16,12 @@
 //
 // Fifteen groups:
 //
-// 1. **Payload tokens.** All 55 `PayloadType` tokens, and a table that is exactly the type's cases.
-// 2. **The sealing rule, by behaviour.** The 17 tokens an envelope must carry sealed; every one of
-//    the 55 signed unsealed under a real identity is refused exactly when it is one of them, and a
+// 1. **Payload tokens.** All 56 `PayloadType` tokens, and a table that is exactly the type's cases.
+// 2. **The sealing rule, by behaviour.** The 18 tokens an envelope must carry sealed; every one of
+//    the 56 signed unsealed under a real identity is refused exactly when it is one of them, and a
 //    token no build knows verifies unsealed, parked and empty; and the envelope seals and parks by
 //    the payload rules of its identity's namespace.
-// 3. **Capabilities.** The 9 tokens; the coordinator's receive bounds (18 kept, each cut to 32
+// 3. **Capabilities.** The 10 tokens; the coordinator's receive bounds (20 kept, each cut to 32
 //    characters) by driving it; the legacy default (no list means photos alone) where the
 //    coordinator and the mesh's seats decide it; `wire2`'s role, framing sealed bodies; and the
 //    coordinator and the mesh reading all of it off the namespace they hold.
@@ -180,14 +180,14 @@ struct ProximityVocabularyGoldenTests {
             + moderationNumbers
     }
 
-    /// The tables hold every value once, in the shape the design counts: 55 payload tokens, 9
+    /// The tables hold every value once, in the shape the design counts: 56 payload tokens, 10
     /// capabilities, 9 session-enum values, 4 record kinds, 4 routed types, 7 presentation strings,
     /// the trainer format and the name floor, and ten numbers.
     @Test func theTablesHoldEveryValueOnce() {
         let counts = [Self.payloadRows.count, Self.capabilityRows.count, Self.sessionEnumRows.count,
                       Self.recordKindRows.count, Self.routedTypeRows.count, Self.presentationRows.count,
                       Self.trainerExportRows.count, Self.moderationRows.count]
-        #expect(counts == [55, 9, 9, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
+        #expect(counts == [56, 10, 9, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
         #expect(Self.allNumbers.count == 10, "the number tables hold \(Self.allNumbers.count) rows")
         let fields = Self.allRows.map(\.field) + Self.allNumbers.map(\.field)
         #expect(Set(fields).count == fields.count, "a field appears twice")
@@ -195,7 +195,7 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 1 — the payload tokens
 
-    /// All 55 `PayloadType` tokens, in declaration order. Pieces of this table also have literal pins
+    /// All 56 `PayloadType` tokens, in declaration order. Pieces of this table also have literal pins
     /// elsewhere — the fifteen spelled like a signature label in ProximityNamespaceGoldenTests group 3,
     /// the activity tokens in `ActivityTests`, the parked tokens in `MeshNetworkManagerTests` and
     /// `MeshRoutedDrainWallTests` — but this is the one place every token meets its case. The mesh
@@ -203,6 +203,7 @@ struct ProximityVocabularyGoldenTests {
     /// holds to these rows; the features' are still read off their cases.
     static var payloadRows: [VocabularyGoldenRow] {
         handshakeAndTrainerRows + featureRows + meshControlRows + membershipRows + routedAndRotationRows
+            + roadTripRows
     }
 
     /// The handshake, verify ceremony, trainer and session tokens.
@@ -291,17 +292,26 @@ struct ProximityVocabularyGoldenTests {
         ]
     }
 
+    /// The road trip's one token (World-RoadTrip-Spec PR 2, owner-approved 2026-11-10): the invite, the join
+    /// answer and the catch-up swap, declared after the diagnostic echo, so it follows it here. Added 2026-11-10
+    /// as a NEW row with its own hand-written literal; no earlier row moved.
+    private static var roadTripRows: [VocabularyGoldenRow] {
+        [
+            payload(.roadTrip, "fernlet.road-trip.v1")
+        ]
+    }
+
     /// A payload row: the field names the case, today's accessor is the case's `rawValue`.
     private static func payload(_ type: PayloadType, _ frozen: String) -> VocabularyGoldenRow {
         VocabularyGoldenRow(field: "payloadType.\(type)", frozen: frozen, today: type.rawValue)
     }
 
-    /// The table is exactly `PayloadType`'s cases: 55 rows, 55 cases, one set. A new payload type
+    /// The table is exactly `PayloadType`'s cases: 56 rows, 56 cases, one set. A new payload type
     /// fails here until it gets a row.
     @Test func thePayloadTableIsExactlyTheTypesCases() {
         let rows = Self.payloadRows
-        #expect(rows.count == 55, "the payload table has \(rows.count) rows")
-        #expect(PayloadType.allCases.count == 55, "PayloadType has \(PayloadType.allCases.count) cases")
+        #expect(rows.count == 56, "the payload table has \(rows.count) rows")
+        #expect(PayloadType.allCases.count == 56, "PayloadType has \(PayloadType.allCases.count) cases")
         let frozen = Set(rows.map(\.frozen))
         #expect(frozen.count == rows.count, "two payload rows share a token")
         let shipped = Set(PayloadType.allCases.map(\.rawValue))
@@ -314,8 +324,8 @@ struct ProximityVocabularyGoldenTests {
     /// Every token, byte for byte, both ways: today's accessor spells the literal, and the literal
     /// decodes to the case whose row it is — what a receiver does with an envelope's `payloadType`.
     @Test func everyPayloadTokenIsItsFrozenSpelling() {
-        #expect(Self.expectFrozen(Self.payloadRows) == 55)
-        // R2: bounded by the 55 rows.
+        #expect(Self.expectFrozen(Self.payloadRows) == 56)
+        // R2: bounded by the 56 rows.
         for row in Self.payloadRows {
             let decoded = PayloadType(rawValue: row.frozen).map { "payloadType.\($0)" }
             #expect(decoded == row.field, "\(row.frozen) decodes to \(decoded ?? "no case"), not \(row.field)")
@@ -324,11 +334,11 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 2 — the sealing rule, by behaviour
 
-    /// The 17 tokens an envelope must carry sealed. The envelope's `verify` reads its sealing set off
-    /// its identity's namespace, `.fernlet`'s `family.vocabulary.payloads.sealingRequired`, which group
-    /// 13 holds equal to this set whole; this group holds the set to what `verify` does with each
-    /// token (and `SealedPayloadFramingTests` and `MeshRoutedDrainWallTests` read the same set for
-    /// their own walls).
+    /// The 18 tokens an envelope must carry sealed (the road trip's, 2026-11-10, the eighteenth, as a NEW
+    /// literal). The envelope's `verify` reads its sealing set off its identity's namespace, `.fernlet`'s
+    /// `family.vocabulary.payloads.sealingRequired`, which group 13 holds equal to this set whole; this group
+    /// holds the set to what `verify` does with each token (and `SealedPayloadFramingTests` and
+    /// `MeshRoutedDrainWallTests` read the same set for their own walls).
     static let sealingRequiredTokens: Set<String> = [
         "fernlet.verify.challenge.v1", "fernlet.verify.response.v1",
         "fernlet.trainer.plan.v1", "fernlet.trainer.plan.delta.v1",
@@ -336,21 +346,22 @@ struct ProximityVocabularyGoldenTests {
         "fernlet.friend.photo.v1", "fernlet.recipe.share.v1", "fernlet.clothing.catalog.v1",
         "fernlet.friend.heart.v1", "fernlet.message.temp.v1", "fernlet.item.report.v1",
         "fernlet.friend.state.v1", "fernlet.activity.offer.v1", "fernlet.activity.join.grant.v1",
-        "fernlet.activity.roster.v1", "fernlet.activity.sync.v1"
+        "fernlet.activity.roster.v1", "fernlet.activity.sync.v1",
+        "fernlet.road-trip.v1"
     ]
 
     /// A token no build has ever spelled.
     static let unknownToken = "example.unknown.v1"
 
-    /// The set is seventeen of the table's tokens.
-    @Test func theSealingSetIsSeventeenOfTheTablesTokens() {
-        #expect(Self.sealingRequiredTokens.count == 17)
+    /// The set is eighteen of the table's tokens.
+    @Test func theSealingSetIsEighteenOfTheTablesTokens() {
+        #expect(Self.sealingRequiredTokens.count == 18)
         let table = Set(Self.payloadRows.map(\.frozen))
         #expect(Self.sealingRequiredTokens.isSubset(of: table),
                 "sealing tokens the table does not hold: \(Self.sealingRequiredTokens.subtracting(table).sorted())")
     }
 
-    /// For every one of the 55 tokens, an envelope signed UNSEALED under a real identity is refused
+    /// For every one of the 56 tokens, an envelope signed UNSEALED under a real identity is refused
     /// with `.sealingRequired` exactly when its token is in the set, and otherwise verifies and hands
     /// back its payload: the rule's members and the point that enforces it, pinned together.
     @Test func anUnsealedEnvelopeIsRefusedExactlyWhenItsTokenRequiresSealing() throws {
@@ -360,7 +371,7 @@ struct ProximityVocabularyGoldenTests {
         try identity.ensureProvisioned()
         let cache = ReplayCache()
         var refused: Set<String> = []
-        // R2: bounded by the 55 rows.
+        // R2: bounded by the 56 rows.
         for row in Self.payloadRows {
             let type = try #require(PayloadType(rawValue: row.frozen), "\(row.field) decodes to no case")
             let payload = Data(row.field.utf8)
@@ -492,7 +503,7 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 3 — the capabilities
 
-    /// The nine capability tokens, implicit case names with no literal in their declaration — so a
+    /// The ten capability tokens, implicit case names with no literal in their declaration — so a
     /// renamed case silently renames a wire token, which these rows refuse. Today's accessor is each
     /// case's raw value, which the features' gates and advertisements read, but for `wire2`: the
     /// coordinator and the mesh read that token off `.fernlet`'s `family.vocabulary.capabilities`.
@@ -507,15 +518,18 @@ struct ProximityVocabularyGoldenTests {
             capability(.activities, "activities"),
             VocabularyGoldenRow(field: "capability.wire2", frozen: "wire2",
                                 today: ProximityNamespace.fernlet.family.vocabulary.capabilities.wire2),
-            capability(.heartsAway, "heartsAway")
+            capability(.heartsAway, "heartsAway"),
+            // Road trips (World-RoadTrip-Spec PR 2, 2026-11-10): a NEW row, declared last.
+            capability(.roadTrip, "roadTrip")
         ]
     }
 
     /// The coordinator's receive bounds on a peer's capability list: twice the count of
-    /// `.fernlet`'s capability tokens, and its own cut.
+    /// `.fernlet`'s capability tokens, and its own cut. The count moved 18 -> 20 on 2026-11-10, a decision and not
+    /// a re-pin: ProximityKit's coordinator keeps twice its host's known tokens, and road trips made them ten.
     static var capabilityBoundNumbers: [VocabularyGoldenNumber] {
         [
-            VocabularyGoldenNumber(field: "capability.maxAdvertised", frozen: 18,
+            VocabularyGoldenNumber(field: "capability.maxAdvertised", frozen: 20,
                                    today: ProximityCoordinator.maxAdvertisedCapabilities(
                                        in: ProximityNamespace.fernlet.family.vocabulary.capabilities)),
             VocabularyGoldenNumber(field: "capability.maxTokenLength", frozen: 32,
@@ -533,8 +547,8 @@ struct ProximityVocabularyGoldenTests {
         let rows = Self.capabilityRows
         #expect(rows.count == ProximityCapability.allCases.count, "\(ProximityCapability.allCases.count) capabilities")
         #expect(Set(rows.map(\.frozen)) == Set(ProximityCapability.allCases.map(\.rawValue)))
-        #expect(Self.expectFrozen(rows) == 9)
-        // R2: bounded by the nine rows.
+        #expect(Self.expectFrozen(rows) == 10)
+        // R2: bounded by the ten rows.
         for row in rows {
             #expect(ProximityCapability(rawValue: row.frozen).map { "capability.\($0)" } == row.field,
                     "\(row.frozen) does not decode to \(row.field)")
@@ -542,8 +556,8 @@ struct ProximityVocabularyGoldenTests {
     }
 
     /// The bounds' two numbers, and by behaviour the cut: an introduction listing 30 tokens of 40
-    /// characters leaves the coordinator holding the first 18, each cut to its first 32 characters.
-    @Test func theCoordinatorKeepsEighteenTokensEachCutToThirtyTwoCharacters() async throws {
+    /// characters leaves the coordinator holding the first 20, each cut to its first 32 characters.
+    @Test func theCoordinatorKeepsTwentyTokensEachCutToThirtyTwoCharacters() async throws {
         #expect(Self.expectFrozen(Self.capabilityBoundNumbers) == 2)
         let kept = Self.frozenNumber("capability.maxAdvertised")
         let length = Self.frozenNumber("capability.maxTokenLength")
@@ -569,7 +583,7 @@ struct ProximityVocabularyGoldenTests {
         let fernlet = ProximityNamespace.fernlet.family.vocabulary.capabilities
         let legacy = Self.peerIdentity(capabilities: nil)
         let empty = Self.peerIdentity(capabilities: [])
-        // R2: bounded by the nine capabilities.
+        // R2: bounded by the ten capabilities.
         for capability in ProximityCapability.allCases {
             #expect(legacy.supports(capability, in: fernlet) == (capability.rawValue == photos),
                     "a legacy peer and \(capability)")
@@ -584,7 +598,7 @@ struct ProximityVocabularyGoldenTests {
         #expect(built.capabilities == nil, "an introduction with no list built \(built.capabilities ?? [])")
         let mesh = MeshNameWithholdingRig()
         #expect(!mesh.manager.slots.isEmpty, "the mesh rig seats its peers")
-        // R2: bounded by the rig's three seats × nine capabilities.
+        // R2: bounded by the rig's three seats × ten capabilities.
         for slot in mesh.manager.slots {
             #expect(slot.peerCapabilities == nil, "the rig's seats carry no list")
             for capability in ProximityCapability.allCases {
@@ -2272,19 +2286,19 @@ struct ProximityVocabularyGoldenTests {
         }
     }
 
-    /// `.fernlet`'s token sets and lists are the frozen tables whole: `known` is the 55 payload tokens,
-    /// exactly `PayloadType`'s cases; the sealing set is the 17; the capabilities are the nine in
+    /// `.fernlet`'s token sets and lists are the frozen tables whole: `known` is the 56 payload tokens,
+    /// exactly `PayloadType`'s cases; the sealing set is the 18; the capabilities are the ten in
     /// declaration order, photos alone assumed for a legacy peer; and twice their count is the
     /// coordinator's receive bound.
     @Test func fernletsTokenSetsAndListsAreTheFrozenTablesWhole() {
         let vocabulary = ProximityNamespace.fernlet.family.vocabulary
         let payloads = Set(Self.payloadRows.map(\.frozen))
-        #expect(payloads.count == 55, "the frozen payload table holds \(payloads.count) tokens")
+        #expect(payloads.count == 56, "the frozen payload table holds \(payloads.count) tokens")
         #expect(vocabulary.payloads.known == payloads,
                 "known and the frozen table differ by \(vocabulary.payloads.known.symmetricDifference(payloads).sorted())")
         #expect(vocabulary.payloads.known == Set(PayloadType.allCases.map(\.rawValue)), "known is not PayloadType's cases")
         #expect(vocabulary.payloads.sealingRequired == Self.sealingRequiredTokens, """
-            the sealing set and the frozen 17 differ by \
+            the sealing set and the frozen 18 differ by \
             \(vocabulary.payloads.sealingRequired.symmetricDifference(Self.sealingRequiredTokens).sorted())
             """)
         let capabilities = Self.capabilityRows.map(\.frozen)

@@ -154,7 +154,7 @@
 //
 // Groups 15 to 29 cite the same way: the capability tokens' spellings and the coordinator's receive
 // bounds (`ProximityVocabularyGoldenTests.everyCapabilityIsItsFrozenSpelling` and
-// `theCoordinatorKeepsEighteenTokensEachCutToThirtyTwoCharacters`), the routed-type tokens and the heart
+// `theCoordinatorKeepsTwentyTokensEachCutToThirtyTwoCharacters`), the routed-type tokens and the heart
 // row's cap (`ProximityVocabularyGoldenTests.everyRoutedTypeTokenAndTheHeartCapIsFrozen`), every column
 // of the three routed rows (`MeshRoutedTypeRegistryTests.everyFieldOfEveryEntryIsSet`,
 // `theForegroundDecryptRequirementIsDerivedFromTheStage`), the photo row's cap and payload bound
@@ -1264,46 +1264,55 @@ struct FernletFeatureGoldenTests {
     /// A state's id is five characters, `1` for on, in the order the function reads the switches: the
     /// away-hearts consent, clothing-shop sharing, the 13+ chat gate, the friend-state opt-in and the
     /// hearts opt-in. `photos` and the host's `wire2` lead; each switched token keeps its place around
-    /// `moderation` and `activities`; `hearts` closes.
+    /// `moderation` and `activities`; `hearts` follows, and `roadTrip` closes every state.
     ///
     /// The ORDER is a signed wire byte: the coordinator carries the array verbatim into the introduction
     /// and its acknowledgement. `.fernlet`'s declared capability order would reorder every state.
+    ///
+    /// **2026-11-10, road trip mode (World-RoadTrip-Spec PR 2, owner-approved): a wire decision, not a re-pin.**
+    /// The `roadTrip` capability is advertised unconditionally and APPENDED LAST, after `hearts`, so every
+    /// token that was in a state's array keeps its place; each array below gained `"roadTrip"` at its end,
+    /// written by hand from that rule. A device on an older build keeps a newer peer's list up to its own
+    /// receive bound and ignores a token it does not know.
     static let advertisedCapabilityArrays: [(state: String, array: [String])] = [
-        ("00000", ["photos", "wire2", "moderation", "activities"]),
-        ("00001", ["photos", "wire2", "moderation", "activities", "hearts"]),
-        ("00010", ["photos", "wire2", "moderation", "friendState", "activities"]),
-        ("00011", ["photos", "wire2", "moderation", "friendState", "activities", "hearts"]),
-        ("00100", ["photos", "wire2", "messages", "moderation", "activities"]),
-        ("00101", ["photos", "wire2", "messages", "moderation", "activities", "hearts"]),
-        ("00110", ["photos", "wire2", "messages", "moderation", "friendState", "activities"]),
-        ("00111", ["photos", "wire2", "messages", "moderation", "friendState", "activities", "hearts"]),
-        ("01000", ["photos", "wire2", "shop", "moderation", "activities"]),
-        ("01001", ["photos", "wire2", "shop", "moderation", "activities", "hearts"]),
-        ("01010", ["photos", "wire2", "shop", "moderation", "friendState", "activities"]),
-        ("01011", ["photos", "wire2", "shop", "moderation", "friendState", "activities", "hearts"]),
-        ("01100", ["photos", "wire2", "shop", "messages", "moderation", "activities"]),
-        ("01101", ["photos", "wire2", "shop", "messages", "moderation", "activities", "hearts"]),
-        ("01110", ["photos", "wire2", "shop", "messages", "moderation", "friendState", "activities"]),
-        ("01111", ["photos", "wire2", "shop", "messages", "moderation", "friendState", "activities", "hearts"]),
-        ("10000", ["photos", "wire2", "heartsAway", "moderation", "activities"]),
-        ("10001", ["photos", "wire2", "heartsAway", "moderation", "activities", "hearts"]),
-        ("10010", ["photos", "wire2", "heartsAway", "moderation", "friendState", "activities"]),
-        ("10011", ["photos", "wire2", "heartsAway", "moderation", "friendState", "activities", "hearts"]),
-        ("10100", ["photos", "wire2", "heartsAway", "messages", "moderation", "activities"]),
-        ("10101", ["photos", "wire2", "heartsAway", "messages", "moderation", "activities", "hearts"]),
-        ("10110", ["photos", "wire2", "heartsAway", "messages", "moderation", "friendState", "activities"]),
+        ("00000", ["photos", "wire2", "moderation", "activities", "roadTrip"]),
+        ("00001", ["photos", "wire2", "moderation", "activities", "hearts", "roadTrip"]),
+        ("00010", ["photos", "wire2", "moderation", "friendState", "activities", "roadTrip"]),
+        ("00011", ["photos", "wire2", "moderation", "friendState", "activities", "hearts", "roadTrip"]),
+        ("00100", ["photos", "wire2", "messages", "moderation", "activities", "roadTrip"]),
+        ("00101", ["photos", "wire2", "messages", "moderation", "activities", "hearts", "roadTrip"]),
+        ("00110", ["photos", "wire2", "messages", "moderation", "friendState", "activities", "roadTrip"]),
+        ("00111", ["photos", "wire2", "messages", "moderation", "friendState", "activities", "hearts", "roadTrip"]),
+        ("01000", ["photos", "wire2", "shop", "moderation", "activities", "roadTrip"]),
+        ("01001", ["photos", "wire2", "shop", "moderation", "activities", "hearts", "roadTrip"]),
+        ("01010", ["photos", "wire2", "shop", "moderation", "friendState", "activities", "roadTrip"]),
+        ("01011", ["photos", "wire2", "shop", "moderation", "friendState", "activities", "hearts", "roadTrip"]),
+        ("01100", ["photos", "wire2", "shop", "messages", "moderation", "activities", "roadTrip"]),
+        ("01101", ["photos", "wire2", "shop", "messages", "moderation", "activities", "hearts", "roadTrip"]),
+        ("01110", ["photos", "wire2", "shop", "messages", "moderation", "friendState", "activities", "roadTrip"]),
+        ("01111", ["photos", "wire2", "shop", "messages", "moderation", "friendState", "activities", "hearts",
+                   "roadTrip"]),
+        ("10000", ["photos", "wire2", "heartsAway", "moderation", "activities", "roadTrip"]),
+        ("10001", ["photos", "wire2", "heartsAway", "moderation", "activities", "hearts", "roadTrip"]),
+        ("10010", ["photos", "wire2", "heartsAway", "moderation", "friendState", "activities", "roadTrip"]),
+        ("10011", ["photos", "wire2", "heartsAway", "moderation", "friendState", "activities", "hearts", "roadTrip"]),
+        ("10100", ["photos", "wire2", "heartsAway", "messages", "moderation", "activities", "roadTrip"]),
+        ("10101", ["photos", "wire2", "heartsAway", "messages", "moderation", "activities", "hearts", "roadTrip"]),
+        ("10110", ["photos", "wire2", "heartsAway", "messages", "moderation", "friendState", "activities", "roadTrip"]),
         ("10111", ["photos", "wire2", "heartsAway", "messages", "moderation", "friendState", "activities",
-                   "hearts"]),
-        ("11000", ["photos", "wire2", "heartsAway", "shop", "moderation", "activities"]),
-        ("11001", ["photos", "wire2", "heartsAway", "shop", "moderation", "activities", "hearts"]),
-        ("11010", ["photos", "wire2", "heartsAway", "shop", "moderation", "friendState", "activities"]),
-        ("11011", ["photos", "wire2", "heartsAway", "shop", "moderation", "friendState", "activities", "hearts"]),
-        ("11100", ["photos", "wire2", "heartsAway", "shop", "messages", "moderation", "activities"]),
-        ("11101", ["photos", "wire2", "heartsAway", "shop", "messages", "moderation", "activities", "hearts"]),
+                   "hearts", "roadTrip"]),
+        ("11000", ["photos", "wire2", "heartsAway", "shop", "moderation", "activities", "roadTrip"]),
+        ("11001", ["photos", "wire2", "heartsAway", "shop", "moderation", "activities", "hearts", "roadTrip"]),
+        ("11010", ["photos", "wire2", "heartsAway", "shop", "moderation", "friendState", "activities", "roadTrip"]),
+        ("11011", ["photos", "wire2", "heartsAway", "shop", "moderation", "friendState", "activities", "hearts",
+                   "roadTrip"]),
+        ("11100", ["photos", "wire2", "heartsAway", "shop", "messages", "moderation", "activities", "roadTrip"]),
+        ("11101", ["photos", "wire2", "heartsAway", "shop", "messages", "moderation", "activities", "hearts",
+                   "roadTrip"]),
         ("11110", ["photos", "wire2", "heartsAway", "shop", "messages", "moderation", "friendState",
-                   "activities"]),
+                   "activities", "roadTrip"]),
         ("11111", ["photos", "wire2", "heartsAway", "shop", "messages", "moderation", "friendState",
-                   "activities", "hearts"])
+                   "activities", "hearts", "roadTrip"])
     ]
 
     /// Each of the 32 states advertises exactly its frozen array, in order. The states are driven on one

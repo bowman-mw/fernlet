@@ -45,10 +45,12 @@ struct RoadTripChip: View {
 /// Last caught up 2:14 pm · 84 km · 6 photos", and the buttons Catch up now, Map from this iPhone, Leave the road trip
 /// and End the road trip, in Hangout info's framed look.
 ///
-/// PR 1 is local: Catch up now waits for the swap (PR 2) and stays disabled; Map from this iPhone (shown while another
-/// iPhone maps) makes this one the mapper; Leave and End, each after a confirmation, end the trip on this iPhone, and
-/// the chip and this sheet go. The rows are read once the sheet opens and after each change (the length reads the
-/// line's earlier pieces once).
+/// Catch up now (PR 2) works while another member is linked in this hangout or heard nearby with Fernlet open: it
+/// swaps at once with those linked, or opens a short hangout with the one nearby, and the sheet closes for Home's
+/// "Caught up" note; Map from this iPhone (shown while another iPhone maps) makes this one the mapper; Leave and End,
+/// each after a confirmation, end the trip on this iPhone (End for everyone at their next catch-up), and the chip and
+/// this sheet go. The rows are read once the sheet opens and after each change (the length reads the line's earlier
+/// pieces once).
 struct RoadTripInfoSheet: View {
     let store: FernletStore
     let onClose: () -> Void
@@ -92,12 +94,12 @@ struct RoadTripInfoSheet: View {
         }
     }
 
-    /// Catch up now (disabled until the swap, PR 2), Map from this iPhone while another iPhone maps, Leave and End.
+    /// Catch up now while a member can be reached, Map from this iPhone while another iPhone maps, Leave and End.
     private var buttons: some View {
         VStack(spacing: 10) {
-            Button {} label: { Text(RoadTripCopy.catchUpNow).frame(maxWidth: .infinity) }
+            Button { catchUpNow() } label: { Text(RoadTripCopy.catchUpNow).frame(maxWidth: .infinity) }
                 .buttonStyle(ActionPillButtonStyle(.primary))
-                .disabled(true)
+                .disabled(info?.canCatchUp != true)
                 .accessibilityIdentifier("roadTrip.catchUp")
             if info?.isMapping == false {
                 Button { mapFromHere() } label: { Text(RoadTripCopy.mapFromHere).frame(maxWidth: .infinity) }
@@ -112,6 +114,17 @@ struct RoadTripInfoSheet: View {
                 .accessibilityIdentifier("roadTrip.end")
         }
         .padding(.top, 4)
+    }
+
+    /// Catch up now: the swap begins, and the sheet closes for Home's note.
+    private func catchUpNow() {
+        guard store.catchUpRoadTripNow() else {
+            FernletFeedback.system.play(.failed)
+            info = store.roadTripInfo()
+            return
+        }
+        FernletFeedback.system.play(.done)
+        onClose()
     }
 
     /// Map from this iPhone: this one maps, and the rows say so.
@@ -141,4 +154,6 @@ nonisolated struct RoadTripInfo: Equatable, Sendable {
     let photos: Int
     /// Whether this iPhone maps.
     let isMapping: Bool
+    /// Whether Catch up now can reach a member: linked in this hangout, or heard nearby (PR 2).
+    var canCatchUp = false
 }
