@@ -508,7 +508,9 @@ extension FernletStore {
     /// Why the profile's injury limits rule `target` out, one reason per conflict: an avoided
     /// movement, avoided muscles, a body area kept out of training (severe), or the heavy end of an
     /// area being trained around (mild). The same limits ``WorkoutSafetyFilter`` applies to the
-    /// app's own plans — the picker, the note read by whole words, and the older avoided sets.
+    /// app's own plans — the picker, the note read by whole words, and the older avoided sets — and
+    /// the same two layers: the muscle and pattern rules plus a bundled exercise's reviewed record of
+    /// the areas it loads (``ExerciseAreaLoads``), so a pasted Push-up is flagged for a resting wrist.
     ///
     /// Each reason is one whole localized clause (2026-10-20): the avoided movement is a clause per
     /// pattern rather than its `rawValue` token spliced into English, and the name lists are drawn
@@ -524,14 +526,14 @@ extension FernletStore {
             reasons.append(String(localized: "coachPlan.safety.avoidedMuscles", defaultValue: "it works \(muscles), which you avoid",
                                   comment: "Coach plan review, why an exercise is flagged, shown under its name. Argument: the muscles it works that the person avoids, e.g. 'Chest, Triceps'."))
         }
-        let severe = limits.severeAreas.filter { $0.isLoaded(by: target, primaryOnly: false) }
+        let severe = limits.severeAreas(loadedBy: target)
         if !severe.isEmpty {
             let areas = severe.map(\.displayName).sorted().joined(separator: ", ")
             reasons.append(String(localized: "coachPlan.safety.restingArea", defaultValue: "it loads your \(areas), which you're resting",
                                   comment: "Coach plan review, why an exercise is flagged. Argument: the body areas the person is keeping out of training, e.g. 'Knee'."))
         }
-        let mild = limits.mildAreas.filter { $0.isLoaded(by: target, primaryOnly: true) }
-        if InjuryLimits.isHeavyLoading(target), !mild.isEmpty {
+        let mild = limits.mildAreas(loadedHardBy: target)
+        if !mild.isEmpty {
             let areas = mild.map(\.displayName).sorted().joined(separator: ", ")
             reasons.append(String(localized: "coachPlan.safety.easingArea", defaultValue: "it loads your \(areas) heavily, which you're easing",
                                   comment: "Coach plan review, why a heavy exercise is flagged. Argument: the body areas the person is training around, e.g. 'Lower back'."))

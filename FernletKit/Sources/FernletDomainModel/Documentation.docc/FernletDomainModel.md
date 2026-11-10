@@ -576,11 +576,46 @@ prescribes the area's main lift as accessory work. A Smith machine row is a mach
 end, by the owner's call of 2026-10-21 — but its bar still sits on the spine, so a spine area counts a
 Smith squat as loading it, as it counts a back squat.
 
+Those rules read only tags, so they are the floor. Every bundled exercise also carries a reviewed
+record of the areas it loads (``ExerciseAreaLoads``; the catalogue rows' `areaLoads` map of frozen
+area token → ``AreaLoad`` token, with one phrase of reasoning each in `areaLoadNotes`, which the app
+never reads): weight on the hands or a hard grip for the wrist, hanging and overhead work for the
+shoulder, bent-over and carried loads for the lower back, jumping for the ankle and knee. Severe
+leaves out every exercise the record names for the area; mild leaves out the ones it marks hard and
+keeps the light, supported ones. The record only adds — nothing the floor leaves out comes back — and
+an exercise without one (a person's or a coach's own) gets the floor alone, never "loads nothing".
+``WorkoutExerciseCatalog/areaLoads(for:)`` finds the record by the frozen name, so ``ExerciseTarget``'s
+persisted shape is unchanged. A new catalogue row must ship with a record: `ExerciseAreaLoadTests`
+fails without one, and fails when a record says less than the floor. A mild area eases every kept
+lift its record names, however lightly (``InjuryLimits/eases(_:)``): accessory treatment, and never a
+calibration or a max test.
+
+A limit ends through one switch, "No longer an issue" (``InjuryEasing``, the owner's fix s5,
+2026-11-10). `WorkoutProfile.injuryEasingTokens` — the settings blob's top-level `workoutInjuryEasing`,
+optional, written only when a switch is on, carried verbatim for a newer build — holds one frozen token
+per area: `pending` until the next workout is logged, then that workout's day key. The area is mild
+(``InjuryEasingState/easing``) while pending and for ``InjuryEasing/days`` days from that day, then has
+no limit at all, from the picker, the note or the older avoided sets; the note's text is never edited.
+`WorkoutProfile.injuryLimits(onDayKey:)` is where all four inputs combine.
+
+**A lifting session never falls back to an unfiltered circuit** (the owner's fix s3, 2026-11-10;
+`WorkoutProgram+Fill.swift`). When fewer than ``WorkoutProgram/minimumLifts`` safe lifts remain, each
+empty slot takes a safe lift for another body area from the same filtered, non-hidden pool, in the
+slot's own role, the areas the split trains on its next day taken last, and the note says which area
+was worked around. A session still short offers a mobility flow and an easy walk instead, under the
+day's own name so the rotation moves on — seated mobility and no walk when a severe ankle, knee or
+hip rules walking out (``InjuryLimits/barsWalking``), which also turns a cardio day with no machine
+left into seated mobility. ``WorkoutProgram/suggestablePool(in:location:profile:preferences:)`` is the
+one pool every surface that picks exercises reads, so a hidden exercise is hidden everywhere.
+
 The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
 (``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
 those primary muscles hard again it moves to the next split day that spares them — unless the
 overlap is the split's own order, which moving would only push back every pass — and otherwise takes
-a set off each overlapping lift, saying why in the note. Recovery and mobility days, and the warm-up,
+a set off each overlapping lift, saying why in the note. Overlap that comes only from the previous
+split day's accessory slots does not count (``WorkoutRecoveryGuard/counted(_:split:dueIndex:)``: a Pull
+day's accessory hinge no longer lightens every Legs day), and a logged Travel-day reset is never hard
+training. Recovery and mobility days, and the warm-up,
 activation and cool-down, are exempt.
 
 A session's length follows ``WorkoutSessionOptions`` (synced settings with frozen tokens and parked
@@ -617,7 +652,8 @@ budget caps it — and become timed steps only when a guided run starts
 reads a line strictly (``TimedDescriptor``): "Easy cardio - 20 min" is one steady countdown, "Intervals -
 8 × 1 min hard / 1 min easy" is sixteen ``CardioSegment``s of a ``CardioPace`` each, every part after
 the first following straight on with no lead-in; "Mobility flow - 15 min" is a stretch session in the
-owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block), and the rest day's
+owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block), "Seated mobility - 15
+min" is sitting and lying stretches only (what stands in for a walk a limit rules out), and the rest day's
 gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
 certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
 run's log folds segments back into their line, and a cardio or mobility session logs as the matching
@@ -659,6 +695,10 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``BodyArea``
 - ``InjurySeverity``
 - ``InjuryLimits``
+- ``AreaLoad``
+- ``ExerciseAreaLoads``
+- ``InjuryEasing``
+- ``InjuryEasingState``
 - ``InjuryNoteMatcher``
 - ``WorkoutRecoveryGuard``
 - ``WorkoutSessionOptions``
@@ -964,6 +1004,7 @@ through `PlannedWorkout.displayedNotes` and `Workout.displayedNotes`.
 - ``CoachPlanEditAction``
 - ``CoachPlanStartPolicy``
 - ``CoachPlanTokens``
+- ``CoachExerciseTraits``
 - ``CoachPlanLimits``
 - ``CoachPlanIssue``
 - ``CoachPlanDecodeError``

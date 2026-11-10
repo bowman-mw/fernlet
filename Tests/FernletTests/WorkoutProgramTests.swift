@@ -858,4 +858,177 @@ struct WorkoutProgramTests {
         #expect(store.currentGuidedWorkoutPlan?.sessions.map(\.id) == p2IDs, "a stale adjustment must not clobber the reworked plan")
         #expect(store.currentGuidedWorkoutPlan?.sessions.contains { $0.suggestion.name == "StaleP1" } == false)
     }
+
+
+    // MARK: - A session left short (the owner's fix s3, 2026-11-10)
+
+    private func shortPlan(
+        _ split: TrainingSplit, day: Int = 0, profile: WorkoutProfile = WorkoutProfile(experience: .intermediate),
+        location: WorkoutLocation = .fullGym, options: WorkoutSessionOptions = WorkoutSessionOptions(),
+        preferences: WorkoutExercisePreferences = WorkoutExercisePreferences(),
+        catalog: [ExerciseTarget] = WorkoutExerciseCatalog.baseExercises
+    ) -> WorkoutProgram.DayPlan {
+        WorkoutProgram.dayPlan(goal: .strength, intensity: .moderate, profile: profile, location: location, context: "",
+                               split: split, rotationIndex: day, options: options, preferences: preferences, catalog: catalog)
+    }
+
+    private func probe(_ sessions: [WorkoutSessionTemplate]...) -> TrainingSplit {
+        TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [.strength],
+                      days: sessions.enumerated().map { WorkoutSplitDay(title: "Day \($0.offset + 1)", sessions: $0.element) })
+    }
+
+    private func lifts(_ session: WorkoutProgram.SessionSuggestion) -> [String] {
+        var names: [String] = []
+        for step in session.exercises where step.fromCatalog && step.block == .lifting && !names.contains(step.name) {
+            names.append(step.name)
+        }
+        return names
+    }
+
+    /// Every split day, with every body area at Severe: no session is the old unfiltered circuit,
+    /// every exercise in it passes the person's limits, and a lifting session holds its minimum of
+    /// safe lifts or is the mobility offer — which never offers a walk a severe ankle, knee or hip
+    /// rules out. A cardio day with no safe cardio is seated mobility, not a line telling them to do
+    /// cardio anyway.
+    @Test func noSplitDayFallsBackToACircuitWithAnyAreaSevere() throws {
+        let rows = Dictionary(WorkoutExerciseCatalog.baseExercises.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        for area in BodyArea.allCases {
+            let profile = WorkoutProfile(experience: .intermediate, injuryAreas: [area: .severe])
+            let limits = profile.injuryLimits
+            for split in WorkoutSplitCatalog.all {
+                for (index, day) in split.days.enumerated() {
+                    let plan = shortPlan(split, day: index, profile: profile)
+                    #expect(plan.sessions.count == day.sessions.count)
+                    for (session, template) in zip(plan.sessions, day.sessions) {
+                        let what = "\(area.rawValue) severe, \(split.id) day \(index + 1), \(template.title)"
+                        #expect(!session.suggestion.exercises.lowercased().contains("circuit"), "\(what)")
+                        #expect(!session.exercises.contains { $0.name.lowercased().contains("circuit") }, "\(what)")
+                        for step in session.exercises where step.fromCatalog {
+                            let row = try #require(rows[step.name], "\(what): \(step.name)")
+                            #expect(limits.allows(row), "\(what) planned \(step.name)")
+                        }
+                        let lines = session.exercises.filter { !$0.fromCatalog }.map(\.name)
+                        if limits.barsWalking {
+                            #expect(!lines.contains { $0.lowercased().contains("walk") || $0.lowercased().contains("cardio") }, "\(what): \(lines)")
+                        }
+                        guard template.kind != .cardio, template.kind != .mobility else { continue }
+                        let liftSlots = template.slots.filter { $0.role != .core }
+                        let enough = lifts(session).count >= WorkoutProgram.minimumLifts(for: liftSlots)
+                        #expect(enough || WorkoutProgram.isMobilityOffer(session), "\(what): \(lifts(session))")
+                        #expect(session.suggestion.name.hasSuffix(template.title), "the rotation still matches the day")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The owner's example: a severe elbow empties Arms day, so safe lifts for other body areas fill
+    /// it in the day's own roles, and the note says so in place of "Skipped …".
+    @Test func aShortSessionIsFilledFromOtherAreasAndSaysSo() throws {
+        let profile = WorkoutProfile(experience: .intermediate, injuryAreas: [.elbow: .severe])
+        let plan = shortPlan(WorkoutSplitCatalog.broSplit5, day: 3, profile: profile)
+        let session = try #require(plan.sessions.first)
+        #expect(session.title == "Arms" && session.kind == .strength)
+        #expect(lifts(session).count >= WorkoutProgram.minimumLifts)
+        for name in lifts(session) {
+            let row = try #require(WorkoutExerciseCatalog.exercise(named: name))
+            #expect(profile.injuryLimits.allows(row), "\(name)")
+            #expect(row.primaryMuscles.isDisjoint(with: [.biceps, .triceps]), "\(name) is arm work")
+        }
+        let note = session.suggestion.notes
+        #expect(note.contains("Arms day, worked around your elbow."), "\(note)")
+        #expect(!note.contains("Skipped") && !note.contains("Worked around your noted limits."), "\(note)")
+        #expect(plan.droppedSlots.contains("Biceps"), "the plan still records what could not be filled")
+        // A main slot's fill is a main lift: heavier sets and reps than the accessory fills.
+        let style = WorkoutGoalStyle.style(for: .strength, energy: .moderate, sport: "")
+        #expect(session.exercises.contains { $0.block == .lifting && $0.role == .main && $0.reps == style.mainReps })
+    }
+
+    /// The fill takes last the muscles the split trains on its next day: with Legs tomorrow an
+    /// emptied Arms day is filled from the upper body; with Chest tomorrow it opens on a squat.
+    @Test func theFillSparesTheMusclesTheSplitTrainsNext() throws {
+        let armWork = WorkoutExerciseCatalog.baseExercises.filter { row in
+            WorkoutSessions.arms.slots.contains { WorkoutProgram.isEligible(row, for: $0) }
+        }.map(\.name)
+        let hidden = WorkoutExercisePreferences(hidden: armWork)
+        let legPatterns: Set<MovementPattern> = [.squat, .hinge, .lunge]
+        func patterns(_ split: TrainingSplit) throws -> [MovementPattern] {
+            let session = try #require(shortPlan(split, preferences: hidden).sessions.first)
+            #expect(session.suggestion.notes.contains("Arms day, filled in with other lifts this space allows."))
+            return lifts(session).compactMap { WorkoutExerciseCatalog.exercise(named: $0)?.movementPattern }
+        }
+        let beforeLegs = try patterns(probe([WorkoutSessions.arms], [WorkoutSessions.legs]))
+        #expect(beforeLegs.count == 5 && legPatterns.isDisjoint(with: beforeLegs), "\(beforeLegs)")
+        let beforeChest = try patterns(probe([WorkoutSessions.arms], [WorkoutSessions.chest]))
+        #expect(beforeChest.first == .squat, "\(beforeChest)")
+    }
+
+    /// Fewer than three lifts even after the fill: mobility and an easy walk instead, in plain
+    /// words, under the day's own name so the rotation moves on — fitted to the time budget, with
+    /// no walk for a severe knee and none the person hid.
+    @Test func tooFewLiftsBecomesTheMobilityOffer() throws {
+        let few = WorkoutExerciseCatalog.baseExercises.filter {
+            $0.modality != .strength || ["Biceps curl", "Leg press"].contains($0.name)
+        }
+        let split = probe([WorkoutSessions.arms])
+        let offer = try #require(shortPlan(split, catalog: few).sessions.first)
+        #expect(WorkoutProgram.isMobilityOffer(offer) && offer.kind == .mobility)
+        #expect(offer.suggestion.name == "Arms")
+        #expect(offer.exercises.map(\.name) == ["Mobility flow - 15 min", "Easy walk - 20 min"])
+        #expect(offer.suggestion.exercises == "Mobility flow - 15 min\nEasy walk - 20 min")
+        #expect(offer.suggestion.notes.contains("Not enough lifts fit Arms day today, so here is a mobility flow and an easy walk instead."))
+        #expect(GuidedWorkoutAvailability.isGuidable(offer))
+        #expect(WorkoutProgram.nextDayIndex(in: WorkoutSplitCatalog.broSplit5, recentSessionNames: [[offer.suggestion.name]]) == 4)
+
+        let short = try #require(shortPlan(split, options: WorkoutSessionOptions(length: .min20), catalog: few).sessions.first)
+        #expect(short.exercises.map(\.name) == ["Mobility flow - 10 min", "Easy walk - 10 min"])
+
+        let knee = WorkoutProfile(experience: .intermediate, injuryAreas: [.knee: .severe])
+        let seated = try #require(shortPlan(split, profile: knee, catalog: few).sessions.first)
+        #expect(seated.exercises.map(\.name) == ["Seated mobility - 15 min"])
+        #expect(seated.suggestion.notes.contains("so here is some seated mobility instead."))
+        #expect(seated.suggestion.notes.contains("Worked around your noted limits."))
+
+        let noWalk = WorkoutExercisePreferences(hidden: ["Easy walk"])
+        let flowOnly = try #require(shortPlan(split, preferences: noWalk, catalog: few).sessions.first)
+        #expect(flowOnly.exercises.map(\.name) == ["Mobility flow - 15 min"])
+    }
+
+    /// A split with no days, and a cardio day whose cardio a severe hip rules out, are never the
+    /// circuit or a bare "do cardio": mobility and a walk, or seated mobility.
+    @Test func theFallbackAndABlockedCardioDayAreMobility() throws {
+        let empty = TrainingSplit(id: "none", name: "None", specificity: .minimal, goalFit: [.wellness], days: [])
+        #expect(shortPlan(empty).sessions.first?.suggestion.exercises == "Mobility flow - 15 min\nEasy walk - 20 min")
+        let hip = WorkoutProfile(experience: .intermediate, injuryAreas: [.hip: .severe])
+        #expect(shortPlan(empty, profile: hip).sessions.first?.suggestion.exercises == "Seated mobility - 15 min")
+
+        let cardio = try #require(shortPlan(WorkoutSplitCatalog.dailyMove, day: 1, profile: hip).sessions.first)
+        #expect(cardio.suggestion.exercises == "Seated mobility - 20 min")
+        #expect(cardio.suggestion.notes.contains("Seated mobility in place of cardio today, to work around your limits."))
+        #expect(cardio.workout(intensity: .light).duration == 20)
+        let usual = try #require(shortPlan(WorkoutSplitCatalog.dailyMove, day: 1).sessions.first)
+        #expect(WorkoutCardioMachines.machine(in: usual.suggestion.exercises) != nil)
+    }
+
+    /// The seated line is timed as a stretch session of sitting and lying stretches only, from the
+    /// filtered pool, and draws through the plan-line mapping.
+    @Test func seatedMobilityIsSittingAndLyingStretchesFromThePool() throws {
+        #expect(WorkoutTimedSessions.classify("Seated mobility - 15 min") == .mobilityFlow(minutes: 15))
+        #expect(WorkoutPlanLine.displayed("Seated mobility - 15 min") == "Seated mobility - 15 min")
+        #expect(WorkoutTimedSessions.activityType(forDescriptor: "Seated mobility - 15 min") == .flexibility)
+        let standing: Set<String> = ["Standing forward fold", "Low lunge stretch", "Side lunge stretch", "Standing quad stretch",
+                                     "Wide-leg forward fold", "Calf stretch", "Leg swings", "Downward dog", "Cat-cow", "Child's pose"]
+        for area in [BodyArea.knee, .hip, .ankleFoot] {
+            let profile = WorkoutProfile(injuryAreas: [area: .severe])
+            let pool = WorkoutProgram.suggestablePool(in: WorkoutExerciseCatalog.baseExercises, location: .home,
+                                                      profile: profile, preferences: WorkoutExercisePreferences())
+            let line = PrescribedExercise(name: "Seated mobility - 15 min", sets: 0, reps: "", role: .accessory, fromCatalog: false)
+            let steps = WorkoutTimedSessions.expand([line], feasible: pool)
+            #expect(steps.count > 1 && steps.allSatisfy { $0.block == .mobility && $0.holdSeconds != nil }, "\(area)")
+            for step in steps {
+                #expect(!standing.contains(step.name), "\(area): \(step.name)")
+                #expect(pool.contains { $0.name == step.name }, "\(area): \(step.name) is outside the pool")
+            }
+        }
+    }
 }

@@ -125,7 +125,13 @@ extension FernletStore {
         if let plan = currentGuidedWorkoutPlan { return plan }
         let base = commitTodaysGuidedWorkoutPlan(intensity: .light)
         guard !needsRestToday else { return base }
-        let travel = WorkoutPlanner.travelDayPlan(locationName: settings.activeWorkoutLocation.name)
+        // Through the planner's own pool: limits and hidden exercises apply to the reset too (e2).
+        let pool = WorkoutProgram.suggestablePool(
+            in: WorkoutExerciseCatalog.allExercises, location: settings.activeWorkoutLocation,
+            profile: settings.workoutProfile, preferences: settings.workoutExercisePreferences
+        )
+        let travel = WorkoutPlanner.travelDayPlan(locationName: settings.activeWorkoutLocation.name, pool: pool,
+                                                  limits: settings.workoutProfile.injuryLimits)
         replaceGuidedWorkoutPlan(travel, replacing: Set(base.sessions.map(\.id)))
         return currentGuidedWorkoutPlan ?? base
     }

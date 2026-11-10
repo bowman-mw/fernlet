@@ -3309,6 +3309,7 @@ final class FernletStore {
         if date == todayKey {
             WorkoutCalibrationDeferral.noteHandLogged(workout, plan: currentGuidedWorkoutPlan, in: calibrationDeferralDefaults)
         }
+        startInjuryEasingForLoggedWorkout(on: date)
         guard workout.healthKitUUID == nil else { return }
         let offer = offerWorkoutHealthAccessOnFirstUse()
         Task { [weak self] in
@@ -5182,13 +5183,15 @@ final class FernletStore {
     /// same data the runner's "Last time" pill reads, and none at all when no step shows them. A timed
     /// cardio or mobility line is walked as its countdown segments or stretches
     /// (``WorkoutTimedSessions/expand(_:feasible:)``), the stretches drawn from what this space and
-    /// these limits allow.
+    /// these limits allow, minus the ones the person hid.
     private func guidedRunExercises(for session: WorkoutProgram.SessionSuggestion) -> [GuidedWorkoutRunState.Exercise] {
         guard !session.exercises.isEmpty else { return [] }
         let goal = settings.selectedGoal
+        // The planner's own pool, so a hidden stretch stays hidden here too (e6).
         let stretches = WorkoutTimedSessions.needsStretches(session.exercises)
-            ? WorkoutSafetyFilter.feasibleExercises(in: WorkoutExerciseCatalog.allExercises,
-                                                    location: settings.activeWorkoutLocation, profile: settings.workoutProfile)
+            ? WorkoutProgram.suggestablePool(in: WorkoutExerciseCatalog.allExercises,
+                                             location: settings.activeWorkoutLocation, profile: settings.workoutProfile,
+                                             preferences: settings.workoutExercisePreferences)
             : []
         let steps = WorkoutTimedSessions.expand(session.exercises, feasible: stretches)
         let lastTimes = steps.contains(where: { GuidedRunLoadLog.showsLastTime($0) })

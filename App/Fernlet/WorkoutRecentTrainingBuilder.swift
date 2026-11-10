@@ -15,7 +15,7 @@ import FernletFoundation
 ///   enough; the light activation lines it carries only reach the core, which today's lifting never
 ///   trains.
 ///
-/// Holds, stretches, jumps and unknown names never count (``WorkoutRecoveryGuard/hardMuscles(ofLift:)``).
+/// A logged Travel-day reset never counts. Holds, stretches, jumps and unknown names never count (``WorkoutRecoveryGuard/hardMuscles(ofLift:)``).
 /// Today's own rows are left out, so logging today's session never moves today's plan. Pure over its
 /// inputs.
 enum WorkoutRecentTrainingBuilder {
@@ -32,8 +32,11 @@ enum WorkoutRecentTrainingBuilder {
         return WorkoutRecoveryGuard.RecentTraining(hardMuscles: hard, latestSessionNames: latestNames)
     }
 
-    /// The primary muscles one logged workout worked hard.
+    /// The primary muscles one logged workout worked hard. None for a Travel-day reset: its calf
+    /// raises and glute bridges are two light activation sets on a day of sitting, and counting them
+    /// took a set off the next day's leg work (e8.1, 2026-11-10).
     static func hardMuscles(in workout: Workout) -> Set<MuscleGroup> {
+        guard workout.name != WorkoutFallbackName.travelDayReset.rawValue else { return [] }
         if let results = workout.exerciseResults {
             return results.reduce(into: Set<MuscleGroup>()) { muscles, result in
                 guard result.calibration != .ramp, result.repsPerSet.contains(where: { $0 > 0 }) else { return }
