@@ -125,6 +125,14 @@ engine through its public seams.
   refused whole; an offer is answered by one reply computed before the offer reaches the app, at most once
   per friend every 20 s, and a reply is never answered. What a trip is and which road a member was there
   for are the app's: this module carries points as 1e-5° and whole seconds and imports no WorldMapStore.
+  **Trip photos (PR 3):** after a swap the app hands ``RoadTripExchange/sendPhotos(_:to:bytes:done:)`` the
+  photos a friend is owed, sent one at a time as ``RoadTripPhotoChunkPayload`` pieces of 1 MiB under the
+  same token (``RoadTripPhotoChunker``), at most 30 a friend and each photo once per hangout; a catch-up's
+  `heldPhotos` names the receiver's own photos the sender already holds, so only the missing go. Pieces are
+  put back together by ``RoadTripPhotoAssembler`` — each checked against its photo's first piece, the whole
+  against its length and SHA-256, at most 8 photos (2 per sender, 40 MiB) gathering, a stalled one dropped
+  after 120 s and every incomplete one when the hangout ends — before ``RoadTripReceivedPhoto`` reaches the
+  app. Who took a photo is never a field (it is the verified sender), so a received photo is never passed on.
 - ``FernletMeshCapabilities`` and ``FernletVouchList`` (`Mesh/`): the capability tokens the mesh
   advertises, composed from the features' switches in their signed order (photos, the namespace's wire2
   token, then away hearts, the shop, messages, moderation, friend state, activities and hearts, each
@@ -620,3 +628,7 @@ decode or a derivation never hops an actor.
 - ``RoadTripWireMember``
 - ``RoadTripWireMapperState``
 - ``RoadTripWireTakeover``
+- ``RoadTripPhotoChunkPayload``
+- ``RoadTripPhotoChunker``
+- ``RoadTripReceivedPhoto``
+- ``RoadTripOutgoingPhoto``

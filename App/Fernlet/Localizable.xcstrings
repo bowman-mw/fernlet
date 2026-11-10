@@ -64860,6 +64860,30 @@
         }
       }
     },
+    "deleteAll.store.roadTripPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name. The photos taken on road trips with friends, theirs included",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "photos from road trips"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "las fotos de los viajes en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "las fotos de los viajes en carro"
+          }
+        }
+      }
+    },
     "deleteAll.store.savedRecipes" : {
       "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
       "extractionState" : "extracted_with_value",
@@ -81761,6 +81785,54 @@
         }
       }
     },
+    "roadTrip.camera.filmLeft" : {
+      "comment" : "The disposable camera during a road trip, VoiceOver for the film badge: photos this person can still take on the trip, of 30, e.g. '26 of 30 photos left on the road trip'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld photos left on the road trip"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te quedan %1$lld de %2$lld fotos en el viaje"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te quedan %1$lld de %2$lld fotos en el viaje"
+          }
+        }
+      }
+    },
+    "roadTrip.camera.title" : {
+      "comment" : "The disposable camera during a road trip, its title: how many photos this person can still take on the trip, of 30, e.g. 'Road trip · 26 of 30'. Keep it short",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip · %1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en coche · %1$lld de %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en carro · %1$lld de %2$lld"
+          }
+        }
+      }
+    },
     "roadTrip.catchUp.button" : {
       "comment" : "World Home's note when a road trip friend is nearby: opens a short hangout that swaps the road and photos",
       "extractionState" : "extracted_with_value",
@@ -82272,6 +82344,126 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mapear desde este iPhone"
+          }
+        }
+      }
+    },
+    "roadTrip.marker.photos" : {
+      "comment" : "World Home, VoiceOver: a print with a car stamp on the map where road trip photos were taken; how many",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip photos here, %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos del viaje en coche aquí, %lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos del viaje en carro aquí, %lld"
+          }
+        }
+      }
+    },
+    "roadTrip.photo.caption" : {
+      "comment" : "A road trip photo opened from the map, its caption: the trip's name (or 'Road trip'), the day the photo was taken (e.g. 'Nov 10') and the first name of who took it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ · %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ · %3$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ · %3$@"
+          }
+        }
+      }
+    },
+    "roadTrip.photo.hide" : {
+      "comment" : "A road trip photo opened from the map: takes this photo off the map; it stays on this iPhone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hide from the map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar del mapa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar del mapa"
+          }
+        }
+      }
+    },
+    "roadTrip.photo.spoken" : {
+      "comment" : "VoiceOver for a road trip photo opened from the map: the trip's own name (e.g. 'Road trip to the coast') and the first name of who took it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo from %1$@, by %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto de %1$@, tomada por %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto de %1$@, tomada por %2$@"
+          }
+        }
+      }
+    },
+    "roadTrip.photo.spokenUnnamed" : {
+      "comment" : "VoiceOver for a road trip photo opened from the map, the trip given no name: the first name of who took it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo from the road trip, by %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto del viaje en coche, tomada por %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto del viaje en carro, tomada por %@"
           }
         }
       }

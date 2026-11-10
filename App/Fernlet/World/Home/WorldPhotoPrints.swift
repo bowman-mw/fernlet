@@ -15,8 +15,11 @@ import UIKit
 ///
 /// The prints are today's photo wall (`FernletStore.photowallSeeds`, chosen once per launch from the
 /// friend photos). A print with no photo yet is an empty paper print with a small pixel sprite, as the
-/// approved first-launch design draws it. Friends' photos stay in this strip and never go on the map.
-/// At accessibility text sizes the strip gives way, as Home's photo wall does, and the album stays one
+/// approved first-launch design draws it. Friends' photos stay in this strip and never go on the map,
+/// with one exception (World-RoadTrip-Spec §1, owner-approved 2026-11-10): a road trip's photos, which
+/// anyone on the trip took and which never come from this wall, sit on each member's map where they were
+/// taken, as their own prints with a car stamp (`RoadTripPhotoMarkerView`). A wall or hangout photo still
+/// never reaches the map. At accessibility text sizes the strip gives way, as Home's photo wall does, and the album stays one
 /// tap away in the item bar.
 ///
 /// **Loading (W-04, the phone test).** The four thumbnails are read once per wall, not in `body`: a

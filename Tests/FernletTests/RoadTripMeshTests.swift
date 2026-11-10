@@ -145,6 +145,9 @@ struct RoadTripMeshTests {
         let expected = store.roadTripDeviceState().mapsTheRoad ? "me" : "rae"
         #expect(keeper.active?.mapperID == expected && keeper.isPassenger == (expected == "rae"))
         #expect(store.worldLocation.isRoadTripPassenger == keeper.isPassenger, "the passenger gate follows")
+        // PR 3: the note waits for the swap's photos to settle, then says Caught up.
+        #expect(store.roadTripMesh.isSettling && store.roadTripMesh.caughtUp == nil, "the photos settle first")
+        store.roadTripMesh.settleNow()
         #expect(store.roadTripMesh.caughtUp != nil, "Home says Caught up")
     }
 

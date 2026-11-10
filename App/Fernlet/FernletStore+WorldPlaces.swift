@@ -17,7 +17,9 @@ import WorldMapStore
 ///   reference while the page is open (``worldPlaceName(for:)``) and held in memory only.
 /// - **Solo photos** keep where they were taken only at an everyday place or inside a park, beach or
 ///   campground (``keepSoloPhotoPlace(for:fix:now:)``, owner, round 5); deleting a photo deletes its
-///   place; only shown photos sit on the map (``worldPhotoMarkers(visibleAt:near:)``).
+///   place; only shown photos sit on the map (``worldPhotoMarkers(visibleAt:near:)``). Road trip photos are the
+///   exception to both rules (World-RoadTrip-Spec §1): their places come from the trip's road, anywhere on it, and
+///   friends' trip photos sit on the map too (`FernletStore+RoadTripPhotos.swift`).
 extension FernletStore {
     // MARK: Capture
 
@@ -126,7 +128,10 @@ extension FernletStore {
         worldPlaces.forget()
         // A road trip's invite and catch-up note go with the trips (World-RoadTrip-Spec PR 2).
         roadTripMesh.forget()
-        return worldFog.clearAll()
+        let cleared = worldFog.clearAll()
+        // Road trip photos (PR 3) stay, as solo photos do; their places went with the vault, so their prints go.
+        roadTripPhotos.mapHistoryDeleted()
+        return cleared
     }
 
     /// The delete funnel's (`resetAll()`) World map step between the fog and the settings: Where you've been's
@@ -298,7 +303,13 @@ nonisolated enum WorldPhotoPlaceRules {
 }
 
 /// Solo photos on the map (`b1-markers`' photo print): the photos taken at one place, newest first, at that
-/// place. Only photos that have shown (after the companion slept), never a friend's.
+/// place. Only photos that have shown (after the companion slept), never a friend's solo, hangout or wall photo.
+///
+/// **The road trip exception** (World-RoadTrip-Spec §1, owner-approved 2026-11-10): the same grouping draws a road
+/// trip's photos as their own prints with a car stamp (`FernletStore.roadTripPhotoMarkers(near:)`), friends' trip
+/// photos included, because the owner decided photos anyone takes on the trip may sit on each member's map where
+/// they were taken. Trip prints are kept apart from solo prints (``grouped(ids:places:near:)`` over each roll's own
+/// places), so a solo print never holds a friend's photo.
 nonisolated struct WorldPhotoPlace: Equatable, Identifiable, Sendable {
     /// How near photos must be to share one marker, in metres.
     static let groupRadius = 40.0
@@ -312,14 +323,20 @@ nonisolated struct WorldPhotoPlace: Equatable, Identifiable, Sendable {
     /// `photos` (shown, newest first) grouped by place: each joins the first group within ``groupRadius``.
     /// Nearest `here` first, when known.
     static func grouped(_ photos: [SoloCameraPhoto], places: [UUID: GeoPoint], near here: GeoPoint?) -> [WorldPhotoPlace] {
+        grouped(ids: photos.map(\.id), places: places, near: here)
+    }
+
+    /// The photos `ids` (newest first) grouped by their `places`: each joins the first group within ``groupRadius``.
+    /// Nearest `here` first, when known. One roll's photos at a time (the solo roll's, or the road trips').
+    static func grouped(ids: [UUID], places: [UUID: GeoPoint], near here: GeoPoint?) -> [WorldPhotoPlace] {
         var groups: [WorldPhotoPlace] = []
-        for photo in photos {
-            guard let point = places[photo.id] else { continue }
+        for id in ids {
+            guard let point = places[id] else { continue }
             if let index = groups.firstIndex(where: { $0.point.distance(to: point) <= groupRadius }) {
                 groups[index] = WorldPhotoPlace(id: groups[index].id, point: groups[index].point,
-                                                photoIDs: groups[index].photoIDs + [photo.id])
+                                                photoIDs: groups[index].photoIDs + [id])
             } else {
-                groups.append(WorldPhotoPlace(id: photo.id, point: point, photoIDs: [photo.id]))
+                groups.append(WorldPhotoPlace(id: id, point: point, photoIDs: [id]))
             }
         }
         guard let here else { return groups }

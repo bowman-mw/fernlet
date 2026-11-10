@@ -246,6 +246,8 @@ final class FernletStore {
             worldPlaces.setDecoy(duressSessionActive)
             // The solo camera's decoy keeps its shots in memory and drops them when the decoy ends.
             soloCamera.setDecoy(duressSessionActive)
+            // Road trip photos (PR 3): a decoy reads, writes and shows none.
+            roadTripPhotos.setDecoy(duressSessionActive)
             // A walk recording when the decoy opens or closes is dropped: neither side keeps the other's.
             if worldWalk.isRecording {
                 worldWalk.cancel()
@@ -850,6 +852,13 @@ final class FernletStore {
         roll.onDeleted = { [weak self] id in self?.forgetSoloPhotoPlaces([id]) }
         return roll
     }()
+    /// The road trips' photo roll (`RoadTripPhotoRoll`; `FernletStore+RoadTripPhotos`, World-RoadTrip-Spec PR 3): the
+    /// sealed `RoadTripPhotos/` corpus under this store's proximity root and the photos' places in the map's vault,
+    /// cleared with it. Follows the decoy above.
+    @ObservationIgnored private(set) lazy var roadTripPhotos = RoadTripPhotoRoll(
+        store: RoadTripPhotoStore(directory: roadTripPhotoDirectory),
+        places: PhotoPlaceStore(vault: worldMapVault, file: .roadTripPhotoPlaces, limit: RoadTripPhotoStore.maxPhotos),
+        isDecoy: duressSessionActive)
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -6874,8 +6883,8 @@ final class FernletStore {
     }
 
     /// Wipe leg 4: the three sealed own-photo corpora (meal, progress, recipe) — each `deleteAll()`
-    /// also clears that corpus's `LegacyQuarantine/` folder (W-19) — and the session photos nobody
-    /// has chosen yet (4d).
+    /// also clears that corpus's `LegacyQuarantine/` folder (W-19) — the session photos nobody
+    /// has chosen yet (4d), the solo camera's photos (4e) and the road trips' photos (4f).
     private func deletePhotoCorpora(into outcome: inout DeleteAllOutcome) {
         // Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
         // the days are gone nothing knows these files exist and they can never be reached again.
@@ -6908,6 +6917,13 @@ final class FernletStore {
         // pending row (an emptied store's key protects nothing).
         if !purgeSoloCameraForDeleteAll() {
             outcome.incompleteStores.append("photos from the camera on your own")
+        }
+        // 4f. Road trip photos (World-RoadTrip-Spec PR 3): the sealed trip roll — this iPhone's trip photos and the
+        // ones friends handed over at catch-ups, with every hidden flag — keyless. Their places are map history and
+        // go with the vault in `resetAll`. Shares the solo row, which survives like it (an emptied store's key
+        // protects nothing).
+        if !purgeRoadTripPhotosForDeleteAll() {
+            outcome.incompleteStores.append("photos from road trips")
         }
     }
 

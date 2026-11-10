@@ -113,6 +113,10 @@ struct PrivacyWipeCoverageTests {
         // live roster in the same step.
         "photos.purgeHeldSessionPhotosForDeleteAll",
         "purgeSoloCameraForDeleteAll",
+        // Leg 4f (road trip mode PR 3, 2026-11-10): the sealed trip roll — this iPhone's trip photos and the
+        // friends' trip photos a catch-up handed over, with every hidden flag. Their places are map history, in
+        // the World map vault, under the `worldFog.clearAll` row.
+        "purgeRoadTripPhotosForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
         // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in

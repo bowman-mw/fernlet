@@ -25,6 +25,10 @@ It holds four kinds of media, each with its own store type but one shared at-res
   until the companion's sleep. Built on the pending corpus's pattern and custody (its own directory,
   its own born-device-bound key, excluded from backup, never escrowed); see "The solo camera
   corpus" below.
+- ``RoadTripPhotoStore`` (World build, road trip mode PR 3, owner-approved 2026-11-10) — the **trip roll**:
+  the photos this iPhone took during a road trip and the trip photos friends handed over at a catch-up, up
+  to 30 per person per trip, shown at once. Sealed under the solo camera's device-bound row in its own
+  three domains; see "The road trip corpus" below.
 - ``MealPhotoStore`` — the user's **own photos**, keyed by caller-owned ids: meal photos
   (referenced from `Meal.photoID`) and, in a second instance, recipe photos keyed by recipe id.
   Photos are normalized on the way in (ImageIO thumbnail-path downscale to a bounded JPEG, so a
@@ -56,7 +60,7 @@ Phase 5 splits custody in two while leaving the friend wall byte-for-byte alone:
 | ``KeychainPrivateMediaKeyProvider/Role/friendWall`` | `…private-media.contentKey` (original) | `AfterFirstUnlock`, non-sync — **backup-restorable, permanently** | the friend photowall cache |
 | ``KeychainPrivateMediaKeyProvider/Role/ownPhotos`` | `…private-media.ownContentKey` (new) | minted `AfterFirstUnlock`, **re-bound in place to `AfterFirstUnlockThisDeviceOnly`** once its gate holds (step 5c) | meal, recipe, progress bytes + the progress index |
 | ``KeychainPrivateMediaKeyProvider/Role/pendingSessionPhotos`` | `…private-media.pendingContentKey` (2026-09-30) | **born `AfterFirstUnlockThisDeviceOnly`**, non-sync — no gate, because nothing pending is escrowed or meant to travel | the pending corpus: held photos, thumbnails, and its index |
-| ``KeychainPrivateMediaKeyProvider/Role/soloCameraPhotos`` | `…private-media.soloCameraContentKey` (World build, 2026-10-24) | **born `AfterFirstUnlockThisDeviceOnly`**, non-sync — the pending row's custody, for the pending row's reason | the solo camera corpus: photos, thumbnails, and its index (with the day's film count) |
+| ``KeychainPrivateMediaKeyProvider/Role/soloCameraPhotos`` | `…private-media.soloCameraContentKey` (World build, 2026-10-24) | **born `AfterFirstUnlockThisDeviceOnly`**, non-sync — the pending row's custody, for the pending row's reason | the solo camera corpus: photos, thumbnails, and its index (with the day's film count); since road trip mode PR 3 also the road trip corpus, under its own purposes |
 
 The wall keeps the original row precisely so nothing about it changes: no re-encryption, no
 migration, and the survives-delete-all / never-deleted-by-wipe properties hold verbatim. The
@@ -197,6 +201,29 @@ the friend area") keeps its photos in ``SoloCameraPhotoStore``, under
   wipe crypto-erases the row with the rest of the service; the recovery lock keeps it, as it keeps
   every sibling photo corpus. A decoy session never opens it (the app keeps a decoy's shots in
   memory).
+
+### The road trip corpus (World build)
+
+A road trip's photos (`Docs/World-RoadTrip-Spec.md` §2.7, owner-approved 2026-11-10) live in
+``RoadTripPhotoStore``, under `<proximitySupportDirectory>/RoadTripPhotos/` (`Photos/`, `Thumbnails/`,
+`RoadTripPhotoIndex.sealed` — frozen names): this iPhone's own shots on the trip's roll and the friends'
+trip photos a catch-up handed over, each with its trip, its author (the member's stable id), its id on the
+author's phone and its capture time (``RoadTripPhoto``).
+
+- **The solo row, its own domains.** It takes the solo camera's custody — the same born-device-bound row,
+  excluded from backup, never escrowed, synced, exported or handed to the AI — and the duress silent wipe's
+  sweep of the service crypto-erases it with the solo corpus. Its bytes, thumbnails and index are sealed
+  under `AEAD.privateRoadTripPhoto{Image,Thumbnail,Index}V1`, so nothing crosses between the two corpora.
+- **Bounded and once.** ``RoadTripPhotoStore/add(_:imageData:perAuthor:perTrip:)`` refuses a photo past
+  the app's per-person (30) or per-trip (150) bound, or ``RoadTripPhotoStore/maxPhotos`` in all, and a
+  second copy of one author's photo (``RoadTripPhotoStore/Add/duplicate``): a transfer re-sent at a later
+  catch-up lands once.
+- **Hidden, not deleted.** "Hide from the map" is a flag in the sealed index
+  (``RoadTripPhotoStore/setHidden(_:_:)``); it goes with the photos.
+- **No place here.** Where a trip photo was taken is map data, kept in the map's vault (the app's
+  `PhotoPlaceStore` over `road-trip-photo-places.bin`) and deleted with map history.
+- **Wipes.** ``RoadTripPhotoStore/purgeAll()`` is the Delete everything leg (4f); the recovery lock keeps
+  it, as it keeps every sibling photo corpus. A decoy session never opens it.
 
 ### The binding gate (step 5c)
 
@@ -364,6 +391,12 @@ provider instance across isolation domains.
 - ``SoloCameraIndex``
 - ``SoloCameraPhoto``
 - ``SoloCameraFilm``
+
+### Road trip photos
+
+- ``RoadTripPhotoStore``
+- ``RoadTripPhotoIndex``
+- ``RoadTripPhoto``
 
 ### At-rest key management
 
