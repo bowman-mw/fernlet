@@ -33,6 +33,21 @@ nonisolated enum WorldRideMode: Equatable, Sendable {
     case cycling(since: Date)
 }
 
+/// Why the last drive ended (owner 2026-11-09, trips dropping in the background). The location source keeps
+/// listening a few minutes after a drive that ended on foot, which a long red light can still fake, and goes
+/// straight to the leaving fence after one that parked; a drive that ended on foot resumes after a shorter run at
+/// a car's speed (``WorldRideWatch/resumeHold``).
+nonisolated enum WorldDriveEnd: Equatable, Sendable {
+    /// Walking-pace readings, or Motion's confident walking or running.
+    case onFoot
+    /// Nothing faster than walking, nor far from where the car last moved, for ``WorldRideWatch/parkTime``.
+    case parked
+    /// Motion said cycling: the drive became a bike ride.
+    case cycling
+    /// The flight gate found a flight under way.
+    case flight
+}
+
 /// A finished bike ride, ready to log as exercise.
 nonisolated struct WorldBikeRide: Equatable, Sendable {
     let started: Date

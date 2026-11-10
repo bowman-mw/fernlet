@@ -123,6 +123,15 @@ extension FernletStore {
         return worldFog.clearAll()
     }
 
+    /// The delete funnel's (`resetAll()`) World map step between the fog and the settings: Where you've been's
+    /// capture forgets its stops, and background mapping stops with the setting that goes next, so iOS's
+    /// low-power updates end and the leaving fence iOS holds round the last place the person was seen comes down
+    /// too (owner 2026-11-09).
+    func forgetWorldPlacesAndBackgroundMapping() {
+        worldPlaces.forget()
+        worldLocation.setLowPowerAlways(false)
+    }
+
     // MARK: Private's page, under the hub key
 
     /// The Private tab's hub key now, or nil (Private closed, or a decoy).

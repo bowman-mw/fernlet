@@ -31,6 +31,10 @@ final class WorldRideKeeper {
         return false
     }
 
+    /// Why the last drive ended (the location source cools a trace down only after one that ended on foot); nil
+    /// before the first.
+    var lastDriveEnd: WorldDriveEnd? { watch.lastDriveEnd }
+
     /// Whether the person is on a bike now (a catch-up waits for the live ride).
     var isCycling: Bool {
         if case .cycling = mode { return true }
