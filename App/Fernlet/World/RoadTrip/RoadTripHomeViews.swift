@@ -12,9 +12,9 @@ struct RoadTripChip: View {
 
     var body: some View {
         if let trip = store.worldFog.roadTrip.active {
-            Button { showsInfo = true } label: { label(members: trip.members.count) }
+            Button { showsInfo = true } label: { label(members: trip.onTripIDs.count) }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text(verbatim: RoadTripCopy.spokenChip(others: trip.others.map(\.firstName))))
+                .accessibilityLabel(Text(verbatim: RoadTripCopy.spokenChip(others: trip.othersOnTrip.map(\.firstName))))
                 .accessibilityInputLabels([Text(RoadTripCopy.title)])
                 .accessibilityIdentifier("roadTrip.chip")
                 .sheet(isPresented: $showsInfo) {

@@ -350,6 +350,8 @@ struct WorldMapHome: View {
             TapToConnectPlate()
         }
         .modifier(RoadTripQuestionRefresh(store: store, isFrontmost: isFrontmost && scenePhase == .active))
+        // Its end (`rt-end`, PR 4): a quiet trip ended and the numbers worked out, and the summary card shown once.
+        .modifier(RoadTripSummaryPresenter(store: store, isFrontmost: isFrontmost && scenePhase == .active))
         .padding(.top, 6)
         .padding(.horizontal, 12)
     }

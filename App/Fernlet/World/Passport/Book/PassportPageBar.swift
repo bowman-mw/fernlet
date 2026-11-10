@@ -152,8 +152,8 @@ struct PassportBarArrow: View {
 }
 
 /// The contents (World-Passport-Spec §2): Sprout 1, Your world 2, Stamps 3 to n with their date range, the Flights
-/// page when the book shows it (World-Airports-Spec §8), Index last;
-/// the current page's row marked. Tapping a row turns there.
+/// page when the book shows it (World-Airports-Spec §8), the Road trips page when it shows one (World-RoadTrip-Spec
+/// PR 4), Index last; the current page's row marked. Tapping a row turns there.
 struct PassportContents: View {
     let book: PassportBookModel
     let current: Int
@@ -167,6 +167,9 @@ struct PassportContents: View {
                 on: book.stampPageNumbers.contains(current))
             if let flights = book.flightsPage {
                 row(Text(PassportFlightsCopy.title), detail: Text(verbatim: "\(flights)"), page: flights, on: current == flights)
+            }
+            if let roadTrips = book.roadTripsPage {
+                row(Text(RoadTripCopy.passportTitle), detail: Text(verbatim: "\(roadTrips)"), page: roadTrips, on: current == roadTrips)
             }
             row(Text(PassportBookCopy.index), detail: Text(verbatim: "\(book.indexPage)"), page: book.indexPage,
                 on: current == book.indexPage)

@@ -38,8 +38,9 @@ nonisolated enum RoadTripCatchUpRules {
         next.states = states
         next.endToTell = next.endToTell.map { $0.filter { $0 != member } }
         if next.isActive {
-            next.mapperOverride = newer(next.mapperOverride, catchUp.takeover, members: next.memberIDs)
-            if let decided = RoadTripMapperRule.mapper(members: next.memberIDs, starter: next.starterID, states: states,
+            // Only the members still on the trip map (PR 4: one who left is never picked).
+            next.mapperOverride = newer(next.mapperOverride, catchUp.takeover, members: next.onTripIDs)
+            if let decided = RoadTripMapperRule.mapper(members: next.onTripIDs, starter: next.starterID, states: states,
                                                        override: next.mapperOverride) {
                 next.mapperID = decided.mapper
                 next.mapperOverride = decided.override
@@ -47,7 +48,7 @@ nonisolated enum RoadTripCatchUpRules {
         }
         if let ended = catchUp.endedAt, next.isActive {
             next.endedAt = max(ended, next.startedAt)
-            next.endToTell = next.others.map(\.id).filter { $0 != member }
+            next.endToTell = next.othersOnTrip.map(\.id).filter { $0 != member }
         }
         return next
     }
@@ -59,12 +60,13 @@ nonisolated enum RoadTripCatchUpRules {
         return known.max { $0.at < $1.at }
     }
 
-    /// "End the road trip" on this iPhone at `now`: the trip ends here and is owed to every other member.
+    /// "End the road trip" on this iPhone at `now`: the trip ends here and is owed to every other member still on it
+    /// (one known to have left is owed nothing, PR 4).
     static func ending(_ trip: RoadTrip, now: Date) -> RoadTrip {
         guard trip.isActive else { return trip }
         var next = trip
         next.endedAt = max(now, trip.startedAt)
-        next.endToTell = trip.others.map(\.id)
+        next.endToTell = trip.othersOnTrip.map(\.id)
         return next
     }
 
@@ -79,9 +81,10 @@ nonisolated enum RoadTripCatchUpRules {
         next.ledger?[member] = nil
         next.states?[member] = nil
         next.endToTell = trip.endToTell?.filter { $0 != member }
+        next.othersLeft = trip.othersLeft?.filter { $0 != member }
         if next.mapperOverride?.memberID == member { next.mapperOverride = nil }
         if next.mapperID == member {
-            next.mapperID = RoadTripMapperRule.ruleAnswer(members: next.memberIDs, starter: next.starterID,
+            next.mapperID = RoadTripMapperRule.ruleAnswer(members: next.onTripIDs, starter: next.starterID,
                                                          states: next.states ?? [:]) ?? next.starterID
             next.mapperOverride = nil
         }

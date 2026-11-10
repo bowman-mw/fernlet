@@ -151,6 +151,106 @@ nonisolated enum RoadTripCopy {
         return AddressedCopy.plain(photoSpokenNamed(named, name: author))
     }
 
+    // MARK: PR 4 — The end (`rt-end`): the summary card
+
+    /// "New tiles": the card's row label (approved mockup).
+    static let summaryNewTiles = LocalizedStringResource(
+        "roadTrip.summary.newTiles", defaultValue: "New tiles",
+        comment: "The road trip's summary card on Home, a row's label: how many tiles of the map this iPhone uncovered for the first time on the trip")
+    /// "Towns passed": the card's row label (approved mockup).
+    static let summaryTowns = LocalizedStringResource(
+        "roadTrip.summary.towns", defaultValue: "Towns passed",
+        comment: "The road trip's summary card on Home, a row's label: how many towns and cities the trip's road went through")
+    /// "Photos": the card's row label (approved mockup).
+    static let summaryPhotos = LocalizedStringResource(
+        "roadTrip.summary.photos", defaultValue: "Photos",
+        comment: "The road trip's summary card on Home, a row's label: the trip photos on this iPhone, this person's and friends'")
+    /// "Done": the card's button, also its Voice Control name (approved mockup).
+    static let summaryDone = LocalizedStringResource(
+        "roadTrip.summary.done", defaultValue: "Done",
+        comment: "The road trip's summary card on Home: closes it; it doesn't show again")
+
+    /// "3 days" / "1 day": the calendar days the trip spanned (the card's first row, and its VoiceOver line).
+    static func summaryDays(_ count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.summary.days", defaultValue: "\(count) days",
+                                comment: "The road trip's summary card on Home: how many calendar days the trip spanned, start to end. Plural on the number")
+    }
+
+    /// "1,280 new tiles" / "1 new tile" (the card's VoiceOver line); `grouped` is the count as the card writes it.
+    static func spokenNewTiles(_ count: Int, grouped: String) -> LocalizedStringResource {
+        count == 1
+            ? LocalizedStringResource("roadTrip.summary.spoken.tiles.one", defaultValue: "1 new tile",
+                                      comment: "VoiceOver, the road trip's summary card: one tile of the map uncovered for the first time on the trip")
+            : LocalizedStringResource("roadTrip.summary.spoken.tiles.other", defaultValue: "\(grouped) new tiles",
+                                      comment: "VoiceOver, the road trip's summary card: how many tiles of the map were uncovered for the first time on the trip, e.g. '1,280 new tiles' (not one)")
+    }
+
+    /// "4 towns" / "1 town" (the card's VoiceOver line).
+    static func spokenTowns(_ count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.summary.spoken.towns", defaultValue: "\(count) towns",
+                                comment: "VoiceOver, the road trip's summary card: how many towns and cities the trip's road went through. Plural on the number")
+    }
+
+    /// A count as the card and the passport write it: "1,280" ("1.280" in Spain's Spanish), the passport's own rule.
+    static func grouped(_ count: Int) -> String {
+        PassportFlightsText.grouped(count, separator: FernletLanguage.appThousandsSeparator)
+    }
+
+    /// The card's VoiceOver label, the approved one-line form: "Road trip to the coast · 3 days · 412 km · 1,280 new
+    /// tiles · 4 towns · 23 photos"; what isn't known (the tiles, the towns) is left out, as its row is.
+    static func summarySpoken(title: String, _ summary: RoadTripSummary) -> String {
+        var parts = [title, AddressedCopy.plain(summaryDays(summary.days)), distance(summary.metres)]
+        if let tiles = summary.newTiles { parts.append(AddressedCopy.plain(spokenNewTiles(tiles, grouped: grouped(tiles)))) }
+        if let towns = summary.towns { parts.append(AddressedCopy.plain(spokenTowns(towns))) }
+        parts.append(AddressedCopy.plain(photos(summary.photos)))
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: PR 4 — The passport's road trips (`rt-end`, choice "passport")
+
+    /// "Road trips": the passport page's name and header, its index row and its contents row.
+    static let passportTitle = LocalizedStringResource(
+        "roadTrip.passport.title", defaultValue: "Road trips",
+        comment: "Sprout's passport: the Road trips page's name and header (beside Flights), its index row and contents row")
+    /// "Back to Road trips" (VoiceOver: the back button in a year's road trips).
+    static let passportBack = LocalizedStringResource(
+        "roadTrip.passport.back", defaultValue: "Back to Road trips",
+        comment: "VoiceOver: the back button in a year's road trips in the passport")
+    /// "Opens this year's road trips." (VoiceOver hint: a year's row).
+    static let passportYearHint = LocalizedStringResource(
+        "roadTrip.passport.yearHint", defaultValue: "Opens this year's road trips.",
+        comment: "VoiceOver hint: a year's row on the passport's Road trips page")
+    /// "Tap a year to see its road trips." (the hint under the years).
+    static let passportTapYear = LocalizedStringResource(
+        "roadTrip.passport.tapYear", defaultValue: "Tap a year to see its road trips.",
+        comment: "Sprout's passport Road trips page: the hint under the years")
+    /// "Turns to the Road trips page." (VoiceOver hint: the index's Road trips row).
+    static let passportTurnsTo = LocalizedStringResource(
+        "roadTrip.passport.turnsTo", defaultValue: "Turns to the Road trips page.",
+        comment: "VoiceOver hint: the passport index's Road trips row turns to the Road trips page")
+
+    /// "3 road trips" / "1 road trip" (a year's row; the totals' first part).
+    static func passportCount(_ count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.passport.count", defaultValue: "\(count) road trips",
+                                comment: "Sprout's passport Road trips page: how many road trips (a year's row, the header's totals). Plural on the number")
+    }
+
+    /// "10 November 2026 to 12 November 2026" (VoiceOver: a road trip's dates on the passport).
+    static func passportSpokenDays(_ first: String, to last: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.passport.spokenDays", defaultValue: "\(first) to \(last)",
+                                comment: "VoiceOver, Sprout's passport Road trips page: a road trip's first and last days, e.g. '10 November 2026 to 12 November 2026'")
+    }
+
+    /// "3 road trips · 1,240 km" (the page's and a year's header).
+    static func passportTotals(_ count: Int, metres: Double) -> String {
+        AddressedCopy.plain(passportCount(count)) + " · " + distance(metres)
+    }
+
+    /// "3 road trips, 1,240 km" (VoiceOver: the page's heading, a year's row and heading).
+    static func passportTotalsSpoken(_ count: Int, metres: Double) -> String {
+        AddressedCopy.plain(passportCount(count)) + ", " + distance(metres)
+    }
+
     /// The Start sheet's title, "Road trip with Rae and Sam", and the join prompt's people, in the reader's language.
     static func names(_ names: [String]) -> String {
         Array(names.prefix(RoadTrip.maxMembers)).formatted(.list(type: .and))

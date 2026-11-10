@@ -20,6 +20,8 @@ extension FernletStore {
     func wireWorldRoadTrip(to source: WorldLocationSource, adopted: Bool) {
         let trip = worldFog.roadTrip
         if adopted { trip.reload() } else { trip.load() }
+        // At launch, a trip seven days without a catch-up ends at its mark (PR 4), before the gate is told.
+        trip.endIfQuiet()
         trip.onPassengerChanged = { [weak source] passenger in source?.setRoadTripPassenger(passenger) }
         source.setRoadTripPassenger(trip.isPassenger)
     }
@@ -57,10 +59,16 @@ extension FernletStore {
         return keeper.mapFromThisPhone(states: states, now: now)
     }
 
-    /// "Leave the road trip" (local in PR 1). Whether it was written.
+    /// "Leave the road trip": this iPhone leaves, and the members linked in this hangout hear it at once (PR 4: a
+    /// Not this time that says it left); the others hear it when they next offer a catch-up. Whether it was written.
     func leaveRoadTrip(now: Date = Date()) -> Bool {
-        guard !duressSessionActive else { return false }
-        return worldFog.roadTrip.leave(now: now)
+        guard !duressSessionActive, let trip = worldFog.roadTrip.active else { return false }
+        let linked = roadTripCatchUpMembers().linked
+        guard worldFog.roadTrip.leave(now: now) else { return false }
+        let told = linked.isEmpty ? 0 : meshFeatures.roadTrip.sendJoinAnswer(
+            RoadTripJoinPayload(tripID: trip.id, joins: false, left: true), to: linked)
+        FernletAuditLog.log("worldMap.roadTrip.left", context: ["told": "\(told)"])
+        return true
     }
 
     /// "End the road trip": it ends here, and for everyone at their next catch-up — at once for the members linked in

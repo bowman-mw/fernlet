@@ -103,6 +103,10 @@ extension PassportBookScreen {
             stepYear(by)
             return
         }
+        if roadTripsYear != nil {
+            stepRoadTripYear(by)
+            return
+        }
         if let detail {
             guard case .continent(let continent) = detail,
                   let position = AtlasContinentOrder.position(of: continent) else { return }
@@ -122,6 +126,7 @@ extension PassportBookScreen {
         guard target != page else { return }
         detail = nil
         flightsYear = nil
+        roadTripsYear = nil
         yearToRefocus = nil
         pageOnTop = true
         FernletFeedback.system.play(.tick)

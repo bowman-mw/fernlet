@@ -91,6 +91,9 @@ final class RoadTripMeshState {
     private(set) var question: String?
     /// The last catch-up's note, until it has shown.
     private(set) var caughtUp: RoadTripCaughtUpNote?
+    /// The trips whose summary card was closed this session although "shown" couldn't be written (PR 4), so Done always
+    /// closes it; at most ``RoadTripBook/maxTrips``.
+    private(set) var closedSummaries: Set<UUID> = []
     /// The member a one-tap catch-up opened a short hangout with, and until when.
     @ObservationIgnored private(set) var handOff: (member: String, until: Date)?
     @ObservationIgnored private var asked: Set<String> = []
@@ -227,6 +230,12 @@ final class RoadTripMeshState {
         if caughtUp?.id == id { caughtUp = nil }
     }
 
+    /// The summary card of trip `id` was closed though "shown" wasn't written: it stays closed this session.
+    func closeSummary(_ id: UUID) {
+        if closedSummaries.count >= RoadTripBook.maxTrips { closedSummaries.removeAll() }
+        closedSummaries.insert(id)
+    }
+
     /// A decoy began or ended, or a wipe: everything here goes.
     func forget() {
         invite = nil
@@ -241,6 +250,7 @@ final class RoadTripMeshState {
         sending = 0
         settleTask?.cancel()
         settleTask = nil
+        closedSummaries = []
     }
 
     /// Runs `leave` after `delay`, replacing any leave already waiting.

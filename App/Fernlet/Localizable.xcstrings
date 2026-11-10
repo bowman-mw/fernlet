@@ -82832,6 +82832,209 @@
         }
       }
     },
+    "roadTrip.passport.back" : {
+      "comment" : "VoiceOver: the back button in a year's road trips in the passport",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to Road trips"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a Viajes en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a Viajes en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.passport.count" : {
+      "comment" : "Sprout's passport Road trips page: how many road trips (a year's row, the header's totals). Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld road trip"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld road trips"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viaje en coche"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viajes en coche"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viaje en carro"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viajes en carro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "roadTrip.passport.spokenDays" : {
+      "comment" : "VoiceOver, Sprout's passport Road trips page: a road trip's first and last days, e.g. '10 November 2026 to 12 November 2026'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ to %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "del %1$@ al %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "del %1$@ al %2$@"
+          }
+        }
+      }
+    },
+    "roadTrip.passport.tapYear" : {
+      "comment" : "Sprout's passport Road trips page: the hint under the years",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap a year to see its road trips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca un año para ver sus viajes en coche."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca un año para ver sus viajes en carro."
+          }
+        }
+      }
+    },
+    "roadTrip.passport.title" : {
+      "comment" : "Sprout's passport: the Road trips page's name and header (beside Flights), its index row and contents row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trips"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viajes en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viajes en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.passport.turnsTo" : {
+      "comment" : "VoiceOver hint: the passport index's Road trips row turns to the Road trips page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turns to the Road trips page."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasa a la página de Viajes en coche."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasa a la página de Viajes en carro."
+          }
+        }
+      }
+    },
+    "roadTrip.passport.yearHint" : {
+      "comment" : "VoiceOver hint: a year's row on the passport's Road trips page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens this year's road trips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre los viajes en coche de este año."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre los viajes en carro de este año."
+          }
+        }
+      }
+    },
     "roadTrip.photo.caption" : {
       "comment" : "A road trip photo opened from the map, its caption: the trip's name (or 'Road trip'), the day the photo was taken (e.g. 'Nov 10') and the first name of who took it",
       "extractionState" : "extracted_with_value",
@@ -83020,6 +83223,268 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empezar un viaje en carro"
+          }
+        }
+      }
+    },
+    "roadTrip.summary.days" : {
+      "comment" : "The road trip's summary card on Home: how many calendar days the trip spanned, start to end. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld days"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld día"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld días"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld día"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld días"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "roadTrip.summary.done" : {
+      "comment" : "The road trip's summary card on Home: closes it; it doesn't show again",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Done"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
+    },
+    "roadTrip.summary.newTiles" : {
+      "comment" : "The road trip's summary card on Home, a row's label: how many tiles of the map this iPhone uncovered for the first time on the trip",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New tiles"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Casillas nuevas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Casillas nuevas"
+          }
+        }
+      }
+    },
+    "roadTrip.summary.photos" : {
+      "comment" : "The road trip's summary card on Home, a row's label: the trip photos on this iPhone, this person's and friends'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos"
+          }
+        }
+      }
+    },
+    "roadTrip.summary.spoken.tiles.one" : {
+      "comment" : "VoiceOver, the road trip's summary card: one tile of the map uncovered for the first time on the trip",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 new tile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 casilla nueva"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 casilla nueva"
+          }
+        }
+      }
+    },
+    "roadTrip.summary.spoken.tiles.other" : {
+      "comment" : "VoiceOver, the road trip's summary card: how many tiles of the map were uncovered for the first time on the trip, e.g. '1,280 new tiles' (not one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ new tiles"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ casillas nuevas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ casillas nuevas"
+          }
+        }
+      }
+    },
+    "roadTrip.summary.spoken.towns" : {
+      "comment" : "VoiceOver, the road trip's summary card: how many towns and cities the trip's road went through. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld town"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld towns"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pueblo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pueblos"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pueblo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pueblos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "roadTrip.summary.towns" : {
+      "comment" : "The road trip's summary card on Home, a row's label: how many towns and cities the trip's road went through",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Towns passed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pueblos por el camino"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pueblos por el camino"
           }
         }
       }

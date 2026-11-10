@@ -3,20 +3,23 @@ import Foundation
 import WorldMapStore
 
 /// One page of Sprout's passport (World-Passport-Spec §2): Sprout's own page, Your world, a stamp page (by its
-/// place among the stamp pages, from 0), the Flights page (World-Airports-Spec §8) or the index at the back.
+/// place among the stamp pages, from 0), the Flights page (World-Airports-Spec §8), the Road trips page
+/// (World-RoadTrip-Spec PR 4) or the index at the back.
 nonisolated enum PassportBookPage: Hashable, Sendable {
     case sprout
     case world
     case stamps(Int)
     case flights
+    case roadTrips
     case index
 }
 
 /// The book's pages, worked out from the stamps it holds (World-Passport-Spec §2, §6): page 1 Sprout, page 2 Your
 /// world, then the stamp pages, six stamps each in visit order (at least one: a fresh passport's page 3 says "No
 /// stamps yet"), then the one Flights page when the book shows it (World-Airports-Spec §8: between the last stamp
-/// page and the index; none in a decoy), then the index. A fresh passport has 4 pages and no ribbon, 5 with its
-/// Flights page.
+/// page and the index; none in a decoy), then the one Road trips page when the book shows it (World-RoadTrip-Spec
+/// PR 4: next to Flights; none in a decoy, the demo, or before a trip is over), then the index. A fresh passport has
+/// 4 pages and no ribbon, 5 with its Flights page.
 ///
 /// A value built from a plain list of entries (the screens hand it `store.worldFog.atlas.book.stamps`, empty in a
 /// decoy). Page numbers are 1-based, as the page bar prints them. Bounded by
@@ -30,14 +33,18 @@ nonisolated struct PassportBookModel: Equatable, Sendable {
     private let pageOfStamp: [PassportStampKey: Int]
     /// Whether the book shows the Flights page.
     let showsFlights: Bool
+    /// Whether the book shows the Road trips page.
+    let showsRoadTrips: Bool
 
     /// The first stamp page's number.
     static let firstStampPage = 3
 
     /// The book for `entries`, ordered by `calendar`'s days, with the Flights page before the index when
-    /// `showsFlights`.
-    init(entries: [PassportStampEntry], showsFlights: Bool = false, calendar: Calendar = .current) {
+    /// `showsFlights`, and the Road trips page after it when `showsRoadTrips`.
+    init(entries: [PassportStampEntry], showsFlights: Bool = false, showsRoadTrips: Bool = false,
+         calendar: Calendar = .current) {
         self.showsFlights = showsFlights
+        self.showsRoadTrips = showsRoadTrips
         let ordered = PassportStampEntry.ordered(entries, calendar: calendar)
         self.ordered = ordered
         stampPages = stride(from: 0, to: ordered.count, by: PassportStampEntry.perPage).map {
@@ -55,14 +62,17 @@ nonisolated struct PassportBookModel: Equatable, Sendable {
     var isFresh: Bool { ordered.isEmpty }
     /// How many stamp pages the book shows (a fresh one shows one, empty).
     var stampPageCount: Int { max(stampPages.count, 1) }
-    /// How many pages in all: Sprout, Your world, the stamp pages, the Flights page, the index.
-    var pageCount: Int { 2 + stampPageCount + (showsFlights ? 1 : 0) + 1 }
+    /// How many pages in all: Sprout, Your world, the stamp pages, the Flights page, the Road trips page, the index.
+    var pageCount: Int { 2 + stampPageCount + (showsFlights ? 1 : 0) + (showsRoadTrips ? 1 : 0) + 1 }
     /// The index's page number (the last).
     var indexPage: Int { pageCount }
     /// The stamp pages' numbers.
     var stampPageNumbers: ClosedRange<Int> { Self.firstStampPage ... Self.firstStampPage + stampPageCount - 1 }
     /// The Flights page's number, or nil where the book shows none.
     var flightsPage: Int? { showsFlights ? stampPageNumbers.upperBound + 1 : nil }
+    /// The Road trips page's number (right after Flights, or after the stamps without it), or nil where the book shows
+    /// none.
+    var roadTripsPage: Int? { showsRoadTrips ? (flightsPage ?? stampPageNumbers.upperBound) + 1 : nil }
 
     /// Page `number`, clamped into the book.
     func page(at number: Int) -> PassportBookPage {
@@ -72,6 +82,7 @@ nonisolated struct PassportBookModel: Equatable, Sendable {
         case 2: return .world
         case indexPage: return .index
         case flightsPage: return .flights
+        case roadTripsPage: return .roadTrips
         default: return .stamps(number - Self.firstStampPage)
         }
     }
