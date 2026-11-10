@@ -376,6 +376,16 @@ struct WorldMapHome: View {
                     .frame(maxWidth: .infinity)
                     .transition(.opacity)
                     .task(id: loggedWalk.id) { await holdToast(loggedWalk) }
+            } else if store.worldLocation.rides.loggedRide == nil, cardContext == nil, !isRiding,
+                      let question = store.worldLocation.cars.askable {
+                // Is this Bluetooth device your car? (owner 2026-11-09): never while riding along, so never to someone moving.
+                WorldCarQuestionNote(question: question, companion: WorldRecenterCopy.companionName(store)) { isCar in
+                    store.worldLocation.cars.answer(isCar: isCar)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, WorldWalkToast.bottomLift)
+                .frame(maxWidth: .infinity)
+                .transition(.opacity)
             } else {
                 // A bike ride that logged itself (`b1-home-bike`, round 7).
                 WorldRideNote(store: store, isFrontmost: isFrontmost && scenePhase == .active)

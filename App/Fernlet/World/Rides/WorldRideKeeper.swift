@@ -113,6 +113,27 @@ final class WorldRideKeeper {
         apply(watch.takeOff(at: date))
     }
 
+    /// Whether a car is connected now (CarPlay or a car the car book knows; owner 2026-11-09): the location source
+    /// sets it from `WorldCarKeeper`. A car going ends a drive whose readings have been quiet.
+    var carLinked = false {
+        didSet {
+            guard carLinked != oldValue else { return }
+            watch.carLinked = carLinked
+            if !carLinked { apply(watch.carUnlinked(at: Date())) }
+        }
+    }
+
+    /// Driving Focus turned on, or the Start a drive action ran: a drive starts after a short run above walking pace
+    /// until `date`.
+    func hint(until date: Date) {
+        watch.hint(until: date)
+    }
+
+    /// Driving Focus turned off, or the End a drive action ran, at `date`: a quiet drive ends there.
+    func endHint(at date: Date) {
+        apply(watch.endHint(at: date))
+    }
+
     /// Takes a location reading from the map's source, and asks for the motion since the last query when
     /// it is due.
     func handle(_ fix: WorldFix) {
