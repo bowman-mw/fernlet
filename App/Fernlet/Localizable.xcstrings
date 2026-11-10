@@ -1782,6 +1782,69 @@
         }
       }
     },
+    "%@: no longer an issue" : {
+      "comment" : "Spoken and Voice Control name of the 'No longer an issue' switch for one body area; the argument is the area, e.g. Knee",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: ya no es un problema"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@: ya no es un problema"
+          }
+        }
+      }
+    },
+    "%@? Last time was %@." : {
+      "comment" : "Alert title before saving a typed set weight far above last time's. Arguments: the typed weight with its unit ('500 lb'), then last time's weight as a bare number ('50').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@? Last time was %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿%1$@? La última vez fue %2$@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿%1$@? La última vez fue %2$@."
+          }
+        }
+      }
+    },
+    "%@? Your next heaviest set is %@." : {
+      "comment" : "Alert title before saving a typed set weight far above the lift's other sets. Arguments: the typed weight with its unit ('500 lb'), then the next heaviest set's weight as a bare number ('50').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@? Your next heaviest set is %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿%1$@? Tu siguiente serie más pesada es de %2$@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿%1$@? Tu siguiente serie más pesada es de %2$@."
+          }
+        }
+      }
+    },
     "%@h" : {
       "localizations" : {
         "es" : {
@@ -3400,6 +3463,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld más en espera"
+          }
+        }
+      }
+    },
+    "%lld moves · ~%lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld moves · ~%2$lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld movimientos · ~%2$lld min"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld movimientos · ~%2$lld min"
           }
         }
       }
@@ -19639,6 +19724,23 @@
         }
       }
     },
+    "Fernlet goes easy on it for 2 weeks from your next workout: lighter, supported moves and no strength checks. Then it's back to normal." : {
+      "comment" : "Under a 'No longer an issue' switch that is on: what the planner does for the body area for the next two weeks",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet irá con cuidado 2 semanas desde tu próximo entrenamiento: movimientos más ligeros y con apoyo, sin pruebas de fuerza. Después, todo vuelve a la normalidad."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet irá con cuidado 2 semanas desde tu próximo entrenamiento: movimientos más ligeros y con apoyo, sin pruebas de fuerza. Después, todo vuelve a la normalidad."
+          }
+        }
+      }
+    },
     "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app." : {
       "localizations" : {
         "es" : {
@@ -20191,6 +20293,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet no estaba seguro de que esto coincidiera con lo que comiste, así que es una estimación aproximada. Ajusta lo que te parezca raro y luego regístrala."
+          }
+        }
+      }
+    },
+    "Fernlet will ask again in 2 weeks." : {
+      "comment" : "Guided workout: the line under 'Not now' on a strength check, saying the check comes back in two weeks.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet te lo volverá a proponer dentro de 2 semanas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet te lo volverá a preguntar en 2 semanas."
           }
         }
       }
@@ -20830,6 +20949,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Corrige cualquier serie que haya salido distinta. Fernlet planea tus próximos pesos a partir de ellas."
+          }
+        }
+      }
+    },
+    "Fix it" : {
+      "comment" : "Alert button that goes back to the set rows so a mistyped weight can be corrected.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corregirlo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corregirlo"
           }
         }
       }
@@ -25733,6 +25869,23 @@
         }
       }
     },
+    "Keep %@" : {
+      "comment" : "Alert button that saves a typed set weight as it is. Argument: the weight as a bare number ('Keep 500').",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantener %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar %@"
+          }
+        }
+      }
+    },
     "Keep Fernlet data out of device backups?" : {
       "localizations" : {
         "es" : {
@@ -26443,6 +26596,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Duración"
+          }
+        }
+      }
+    },
+    "Less help" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Menos ayuda"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Menos ayuda"
           }
         }
       }
@@ -29297,6 +29466,22 @@
         }
       }
     },
+    "More help" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más ayuda"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más ayuda"
+          }
+        }
+      }
+    },
     "More logs will make trends useful." : {
       "localizations" : {
         "es" : {
@@ -30861,6 +31046,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No hay series de pesas registradas."
+          }
+        }
+      }
+    },
+    "No longer an issue" : {
+      "comment" : "Switch under an injured body area in Workout setup: the injury has cleared",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya no es un problema"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya no es un problema"
           }
         }
       }
@@ -43732,6 +43934,22 @@
         }
       }
     },
+    "Skip strength check" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Omitir prueba de fuerza"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Omitir prueba de fuerza"
+          }
+        }
+      }
+    },
     "Skip to next exercise" : {
       "localizations" : {
         "es" : {
@@ -43823,6 +44041,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Omitidos"
+          }
+        }
+      }
+    },
+    "Skips the strength check today. Fernlet will ask again in 2 weeks." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Omite la prueba de fuerza de hoy. Fernlet te la volverá a proponer dentro de 2 semanas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Omite la prueba de fuerza de hoy. Fernlet te la volverá a preguntar en 2 semanas."
           }
         }
       }
@@ -48067,6 +48301,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Los letreros de título, la barra de objetos y los tiradores."
+          }
+        }
+      }
+    },
+    "The weight here is help. Pick the help that leaves you about 2 reps to spare." : {
+      "comment" : "Guided workout: the first-time ask on an assisted machine (assisted pull-up, assisted dip), where the weight on the stack helps the person, so a bigger number is easier.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí el peso es ayuda. Elige la ayuda que te deje unas 2 repeticiones de margen."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí el peso es ayuda. Elige la ayuda que te deje unas 2 repeticiones de margen."
           }
         }
       }
@@ -56065,6 +56316,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tus entradas del diario más recientes se agregarán a la copia de seguridad sellada la próxima vez que abras Privado."
+          }
+        }
+      }
+    },
+    "Your note still mentions %@. You marked it as no longer an issue, so the note isn't applied there." : {
+      "comment" : "Under the free-text injury note: body areas the note names that the person has marked 'No longer an issue', so the planner ignores the note for them; the argument is a list of areas",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu nota aún menciona %@. Lo has marcado como que ya no es un problema, así que la nota no se aplica ahí."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu nota aún menciona %@. Lo marcaste como que ya no es un problema, así que la nota no se aplica ahí."
           }
         }
       }

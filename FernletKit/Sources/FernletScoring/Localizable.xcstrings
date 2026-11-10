@@ -841,6 +841,30 @@
         }
       }
     },
+    "workoutFallback.note.travelDayReset.seated" : {
+      "comment" : "The reason line under the travel-day workout when an ankle, knee or hip injury rules out its walk: stretches done sitting or lying down instead",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lots of sitting today: some seated stretches, working around your limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy toca mucho asiento: unos estiramientos sentados, respetando tus límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy toca mucho asiento: unos estiramientos sentados, respetando tus límites."
+          }
+        }
+      }
+    },
     "workoutFallback.note.trySomethingSmall" : {
       "comment" : "Note on the suggested workout 'Try Something Small'",
       "extractionState" : "extracted_with_value",
