@@ -251,7 +251,8 @@ public nonisolated struct FernletSettings: Codable {
     public var didMigrateCompanionNameToSprout: Bool = true
     /// The planner's person-level context. Its injury picker (`WorkoutProfile.injuryAreas`) is
     /// encoded at THIS blob's top level (`workoutInjuryAreas` + `unknownWorkoutInjuryAreaTokens`),
-    /// not inside the nested profile, so an older build's key parking keeps it through a re-save.
+    /// not inside the nested profile, so an older build's key parking keeps it through a re-save;
+    /// its "No longer an issue" tokens ride beside them as `workoutInjuryEasing`.
     public var workoutProfile: WorkoutProfile = WorkoutProfile()
     /// Where the user trains. Each location's "Weights I have" (``WorkoutLocation/weights``) is
     /// encoded at THIS blob's top level as `workoutLocationWeights` (location id → entry, written only
@@ -615,6 +616,11 @@ public nonisolated struct FernletSettings: Codable {
             main: try container.decodeIfPresent([String: String].self, forKey: .workoutInjuryAreas) ?? [:],
             parked: try container.decodeIfPresent([String: String].self, forKey: .unknownWorkoutInjuryAreaTokens) ?? [:]
         )
+        // So does the "No longer an issue" switch (`WorkoutProfile.injuryEasingTokens`); absent in
+        // every blob written before 2026-11-10.
+        workoutProfile.adoptInjuryEasingTokens(
+            try container.decodeIfPresent([String: String].self, forKey: .workoutInjuryEasing) ?? [:]
+        )
         let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]
         // R3: user-created list, capped where it enters this build.
         workoutLocations = decodedLocations.isEmpty
@@ -733,7 +739,8 @@ public nonisolated struct FernletSettings: Codable {
         // key of its own, and its absence here is also what lets it be excluded from the parked set.
         // `workoutInjuryAreas` / `unknownWorkoutInjuryAreaTokens` are the exception the other way: no
         // stored property of their own, they carry `workoutProfile`'s injury picker at the top level,
-        // where an older build's key parking keeps them through a re-save. `workoutHiddenExercises` /
+        // where an older build's key parking keeps them through a re-save. `workoutInjuryEasing`
+        // carries the same profile's "No longer an issue" tokens the same way. `workoutHiddenExercises` /
         // `workoutExerciseAlternates` are the same kind: they carry `workoutExercisePreferences`, and
         // `workoutLocationWeights` carries each `workoutLocations` entry's weights.
         case bottleOz, hydrationTarget, showDeveloperNotes, connectionInspectorMode,
@@ -752,7 +759,7 @@ public nonisolated struct FernletSettings: Codable {
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, didMigrateCompanionNameToSprout, workoutProfile,
-             workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
+             workoutInjuryAreas, unknownWorkoutInjuryAreaTokens, workoutInjuryEasing,
              workoutLocations, workoutLocationWeights, activeWorkoutLocationID, workoutProgression,
              customExercises, workoutHiddenExercises, workoutExerciseAlternates,
              workoutSessionLength, unknownWorkoutSessionLengthToken,
@@ -883,6 +890,9 @@ public nonisolated struct FernletSettings: Codable {
         }
         if !workoutProfile.unknownInjuryAreaTokens.isEmpty {
             try container.encode(workoutProfile.unknownInjuryAreaTokens, forKey: .unknownWorkoutInjuryAreaTokens)
+        }
+        if !workoutProfile.injuryEasingTokens.isEmpty {
+            try container.encode(workoutProfile.injuryEasingTokens, forKey: .workoutInjuryEasing)
         }
         try container.encode(workoutLocations, forKey: .workoutLocations)
         // Written only when some location has weights, so a blob without any keeps its old shape.

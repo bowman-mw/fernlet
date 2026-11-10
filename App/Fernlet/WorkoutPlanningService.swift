@@ -120,9 +120,8 @@ final class WorkoutPlanningService {
         var options = host.settings.workoutSessionOptions
         if let sessionLength { options.length = sessionLength }
         let split = activeWorkoutSplit(history: history)
-        let rotation = WorkoutProgram.nextDayIndex(
-            in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
-        )
+        let recentNames = recentWorkoutNamesByDay(history: history)
+        let rotation = WorkoutProgram.nextDayIndex(in: split, recentSessionNames: recentNames)
         let load = WorkoutLoadContextBuilder.build(
             days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
             body: host.effectiveUserProfile, travelDays: host.workoutTravelDayKeys
@@ -139,7 +138,8 @@ final class WorkoutPlanningService {
             load: load,
             recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey),
             options: options,
-            preferences: host.settings.workoutExercisePreferences
+            preferences: host.settings.workoutExercisePreferences,
+            cardioSeed: WorkoutProgram.cardioSessionsLogged(in: split, recentSessionNames: recentNames)
         )
     }
 

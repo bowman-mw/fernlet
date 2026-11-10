@@ -169,17 +169,22 @@ struct WorkoutRecoveryGuardTests {
 
     // MARK: - Push / pull / legs
 
-    /// Pull yesterday (with its hinge), Legs today: the overlap is built into the split's order, so
-    /// moving would push Legs back every pass. Legs stays, lighter where it repeats the hinge.
-    @Test func pullThenLegsKeepsLegsAndLightensTheRepeatedMuscles() {
+    /// Pull yesterday (with its accessory hinge), Legs today: the split puts them back to back on
+    /// purpose, and the hinge was light accessory work. Legs is planned as it is — no set taken off
+    /// every week, and its strength check stays open (e8.2, 2026-11-10; this used to pin one set
+    /// fewer on every lift that works the glutes or hamstrings).
+    @Test func pullThenLegsLeavesLegsAlone() {
         let hardMuscles = hard(["Lat pulldown", "Barbell row", "Rear delt fly", "Biceps curl", "Romanian deadlift"])
         let recent = WorkoutRecoveryGuard.RecentTraining(hardMuscles: hardMuscles, latestSessionNames: ["Pull"])
         let guarded = plan(WorkoutSplitCatalog.ppl3, day: 2, recent: recent)
         #expect(guarded.dayTitle == "Legs")
-        #expect(guarded.recovery?.movedFrom == nil)
-        #expect(guarded.recovery?.overlap == [.glutes, .hamstrings])
-        expectLightened(guarded, against: plan(WorkoutSplitCatalog.ppl3, day: 2), hard: hardMuscles)
-        #expect(lifting(guarded).contains { primaries($0.name) == [.calves] }, "the calf work is untouched")
+        #expect(guarded.recovery == WorkoutRecoveryGuard.Decision(dayIndex: 2), "no move, and no overlap to bar a strength check")
+        expectLightened(guarded, against: plan(WorkoutSplitCatalog.ppl3, day: 2), hard: [])
+        #expect(!notes(guarded).contains("One set fewer"))
+        // A heavy leg lift logged on that Pull day is not accessory hinge work: the quads still count.
+        let squatted = WorkoutRecoveryGuard.RecentTraining(hardMuscles: hardMuscles.union(hard(["Leg extension"])),
+                                                           latestSessionNames: ["Pull"])
+        #expect(plan(WorkoutSplitCatalog.ppl3, day: 2, recent: squatted).recovery?.overlap == [.quads])
     }
 
     /// An off-plan leg session yesterday, Legs due today: Push spares those muscles, so Push comes
@@ -231,5 +236,41 @@ struct WorkoutRecoveryGuardTests {
         #expect(recent.hardMuscles == [.chest, .hamstrings])
         #expect(recent.latestSessionNames == ["Full Body A", "Extra"])
         #expect(WorkoutRecentTrainingBuilder.build(days: [:], todayKey: todayKey) == .empty)
+    }
+
+
+    // MARK: - The smaller fixes (e8, 2026-11-10)
+
+    /// A logged Travel-day reset is two light activation sets on a day of sitting: it is not hard
+    /// training, and the next day's leg work keeps its sets.
+    @Test func aLoggedTravelDayResetIsNotHardTraining() throws {
+        let todayKey = FernletDate.dayKey(for: Self.base)
+        let today = try #require(FernletDate.date(fromDayKey: todayKey))
+        let yesterday = FernletDate.dayKey(for: try #require(Calendar.current.date(byAdding: .day, value: -1, to: today)))
+        let lines = "Easy walk - 25 min\nCalf raise - 2 x 15\nGlute bridge - 2 x 12\nCalf stretch - 30 s each side"
+        let reset = Workout(name: WorkoutFallbackName.travelDayReset.rawValue, type: .cardio, exercises: lines,
+                            rpe: nil, notes: "", duration: 40, intensity: .light)
+        let recent = WorkoutRecentTrainingBuilder.build(days: [yesterday: FernletDay(date: yesterday, workouts: [reset])],
+                                                        todayKey: todayKey)
+        #expect(recent.hardMuscles.isEmpty)
+        // The same lines under any other name still count: only the reset is exempt.
+        var other = reset
+        other.name = "Hotel room"
+        #expect(WorkoutRecentTrainingBuilder.hardMuscles(in: other) == [.calves, .glutes])
+    }
+
+    /// Only the previous split day's ACCESSORY muscles are spared, and only when yesterday was that
+    /// day: Full Body A then B still overlaps on its main lifts, and an off-plan session counts whole.
+    @Test func onlyThePreviousDaysAccessoryWorkIsSpared() {
+        let pull = WorkoutRecoveryGuard.RecentTraining(hardMuscles: [.lats, .upperBack, .biceps, .hamstrings, .glutes],
+                                                       latestSessionNames: ["Pull"])
+        #expect(WorkoutRecoveryGuard.counted(pull, split: WorkoutSplitCatalog.ppl3, dueIndex: 2).hardMuscles == [.lats, .upperBack])
+        var offPlan = pull
+        offPlan.latestSessionNames = ["Gym"]
+        #expect(WorkoutRecoveryGuard.counted(offPlan, split: WorkoutSplitCatalog.ppl3, dueIndex: 2) == offPlan)
+        let fullBody = WorkoutRecoveryGuard.RecentTraining(hardMuscles: [.quads, .glutes, .chest, .hamstrings],
+                                                           latestSessionNames: ["Full Body A"])
+        #expect(WorkoutRecoveryGuard.counted(fullBody, split: WorkoutSplitCatalog.fullBody3, dueIndex: 1).hardMuscles
+                == [.quads, .glutes, .chest])
     }
 }

@@ -115,6 +115,55 @@ public nonisolated enum WorkoutPlannerCopy {
                comment: "Workout session note on the fallback session: an easy full-body circuit offered when nothing else could be planned")
     }
 
+    // MARK: - A session left short (WorkoutProgram+Fill, the owner's fix s3)
+
+    /// Body areas as a sentence names them: "elbow", "elbow and wrist or hand". The picker's own
+    /// names (``BodyArea/displayName``), lowercased for the middle of a sentence and joined by the
+    /// device's list rule. Display only.
+    static func areaList(_ areas: [BodyArea]) -> String {
+        areas.map { $0.displayName.lowercased(with: .current) }.formatted(.list(type: .and))
+    }
+
+    /// "Arms day, worked around your elbow."
+    static func filledAround(day: String, areas: String) -> String {
+        String(localized: "workoutNote.fill.around", defaultValue: "\(day) day, worked around your \(areas).", bundle: .module,
+               comment: "Workout session note: too few of this session's own lifts were safe for an injured body area, so safe lifts for other body areas fill it. Arguments: the session's name (e.g. 'Arms'), then the injured area or two areas in lowercase (e.g. 'elbow', 'elbow and wrist or hand').")
+    }
+
+    /// "Arms day, filled in with other lifts this space allows."
+    static func filledForSpace(day: String) -> String {
+        String(localized: "workoutNote.fill.space", defaultValue: "\(day) day, filled in with other lifts this space allows.", bundle: .module,
+               comment: "Workout session note: too few of this session's own lifts could be done with the equipment here (or the person hid them), so lifts for other body areas fill it. The argument is the session's name (e.g. 'Arms').")
+    }
+
+    /// "Not enough lifts fit Arms day today, so here is a mobility flow and an easy walk instead."
+    static func offerMobilityAndWalk(day: String) -> String {
+        String(localized: "workoutNote.offer.mobilityAndWalk",
+               defaultValue: "Not enough lifts fit \(day) day today, so here is a mobility flow and an easy walk instead.", bundle: .module,
+               comment: "Workout session note: fewer than three lifts were safe or possible for this session, so it offers stretching and a walk in place of lifting. The argument is the session's name (e.g. 'Arms').")
+    }
+
+    /// "Not enough lifts fit Arms day today, so here is a mobility flow instead."
+    static func offerMobility(day: String) -> String {
+        String(localized: "workoutNote.offer.mobility",
+               defaultValue: "Not enough lifts fit \(day) day today, so here is a mobility flow instead.", bundle: .module,
+               comment: "Workout session note: fewer than three lifts were safe or possible for this session, so it offers stretching in place of lifting (the person asked not to be suggested walks). The argument is the session's name (e.g. 'Arms').")
+    }
+
+    /// "Not enough lifts fit Legs day today, so here is some seated mobility instead."
+    static func offerSeatedMobility(day: String) -> String {
+        String(localized: "workoutNote.offer.seatedMobility",
+               defaultValue: "Not enough lifts fit \(day) day today, so here is some seated mobility instead.", bundle: .module,
+               comment: "Workout session note: fewer than three lifts were safe for this session and a walk is ruled out by an ankle, knee or hip injury, so it offers stretches done sitting or lying down. The argument is the session's name (e.g. 'Legs').")
+    }
+
+    /// A cardio session became seated stretching because an ankle, knee or hip rules cardio out.
+    static var cardioSwappedForSeatedMobility: String {
+        String(localized: "workoutNote.cardio.seatedMobility",
+               defaultValue: "Seated mobility in place of cardio today, to work around your limits.", bundle: .module,
+               comment: "Workout session note: a cardio session was replaced by stretches done sitting or lying down, because an ankle, knee or hip injury rules out walking and the cardio machines here")
+    }
+
     /// The rest-day plan's note (the app's ``WorkoutProgram/DayPlan`` for a day marked unwell).
     public static var restDayNote: String {
         String(localized: "workoutNote.restDay",

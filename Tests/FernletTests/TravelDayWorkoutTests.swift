@@ -162,7 +162,7 @@ struct TravelDayWorkoutTests {
         #expect(session.suggestion.name == WorkoutFallbackName.travelDayReset.rawValue)
         #expect(session.suggestion.notes == "Lots of sitting today: an easy walk and some stretches for your legs, hips and back.")
         #expect(WorkoutPlanner.travelDayMoveNames == [
-            "Easy walk", "Standing calf raise", "Glute bridge", "Low lunge stretch",
+            "Easy walk", "Calf raise", "Glute bridge", "Low lunge stretch",
             "Figure-four stretch", "Cat-cow", "Thread the needle", "Calf stretch",
         ])
         // Every move is already in the library, under its exact catalog name.
@@ -174,7 +174,11 @@ struct TravelDayWorkoutTests {
         #expect(session.catalogExerciseNames.isEmpty)
         let steps = session.exercises
         #expect(steps.first?.name == "Easy walk - 25 min")
-        #expect(steps.filter { $0.name == "Standing calf raise" }.map { "\($0.sets) x \($0.reps)" } == ["2 x 15"])
+        // The bodyweight calf raise, not the machine row (the owner's fix e2).
+        #expect(!steps.contains { $0.name == "Standing calf raise" })
+        #expect(steps.filter { $0.name == "Calf raise" }.map { "\($0.sets) x \($0.reps)" } == ["2 x 15"])
+        #expect(session.suggestion.exercises.contains("Calf raise - 2 x 15") && session.suggestion.exercises.contains("Cat-cow - 8 slow"))
+        #expect(WorkoutPlanner.travelDayMoveNames(in: session) == WorkoutPlanner.travelDayMoveNames)
         #expect(steps.filter { $0.name == "Glute bridge" }.map { "\($0.sets) x \($0.reps)" } == ["2 x 12"])
         #expect(steps.filter { $0.name == "Low lunge stretch" }.map(\.side) == [.left, .right])
         #expect(steps.filter { $0.name == "Calf stretch" }.allSatisfy { $0.holdSeconds == 30 })
@@ -209,5 +213,68 @@ struct TravelDayWorkoutTests {
         let recent = FernletDate.dayKey(for: now.addingTimeInterval(-3 * 86_400))
         let far = FernletDate.dayKey(for: now.addingTimeInterval(10 * 86_400))
         #expect(FernletStore.prunedTravelDays([old, recent, far], now: now) == [recent])
+    }
+
+
+    // MARK: - Through limits and hidden exercises (e2, 2026-11-10)
+
+    private func travelPlan(
+        _ profile: WorkoutProfile, hidden: [String] = []
+    ) -> (session: WorkoutProgram.SessionSuggestion?, pool: [ExerciseTarget]) {
+        let pool = WorkoutProgram.suggestablePool(
+            in: WorkoutExerciseCatalog.baseExercises, location: WorkoutLocation(name: "Hotel room", ownedEquipment: []),
+            profile: profile, preferences: WorkoutExercisePreferences(hidden: hidden)
+        )
+        let plan = WorkoutPlanner.travelDayPlan(locationName: "Hotel room", pool: pool, limits: profile.injuryLimits)
+        return (plan.sessions.first, pool)
+    }
+
+    /// With no limits and nothing hidden the reset is the approved list, in an empty hotel room.
+    @Test func theResetIsUnchangedWithoutLimits() throws {
+        let fitted = try #require(travelPlan(WorkoutProfile()).session)
+        let approved = try #require(WorkoutPlanner.travelDayPlan(locationName: "Hotel room").sessions.first)
+        #expect(fitted.exercises.map(\.line) == approved.exercises.map(\.line))
+        #expect(fitted.suggestion.exercises == approved.suggestion.exercises)
+    }
+
+    /// Every body area at Severe: nothing in the reset loads it, and a severe ankle, knee or hip
+    /// swaps the walk for seated mobility and says so.
+    @Test func theResetRunsThroughTheLimits() throws {
+        for area in BodyArea.allCases {
+            let profile = WorkoutProfile(injuryAreas: [area: .severe])
+            let fitted = travelPlan(profile)
+            let session = try #require(fitted.session)
+            #expect(WorkoutPlanner.isTravelDayPlan(WorkoutProgram.DayPlan(
+                splitName: "", dayTitle: "", sessions: [session], droppedSlots: [], locationName: "")))
+            for step in session.exercises where step.fromCatalog {
+                #expect(fitted.pool.contains { $0.name == step.name }, "\(area.rawValue) severe kept \(step.name)")
+            }
+            let lines = session.exercises.filter { !$0.fromCatalog }.map(\.name)
+            if profile.injuryLimits.barsWalking {
+                #expect(lines == ["Seated mobility - 15 min"], "\(area.rawValue): \(lines)")
+                #expect(session.suggestion.notes == "Lots of sitting today: some seated stretches, working around your limits.")
+            } else {
+                #expect(lines == ["Easy walk - 25 min"], "\(area.rawValue): \(lines)")
+            }
+            #expect(!session.exercises.isEmpty && session.suggestion.exercises.split(separator: "\n").count >= 2)
+        }
+        let ankle = try #require(travelPlan(WorkoutProfile(injuryAreas: [.ankleFoot: .severe])).session)
+        #expect(!ankle.exercises.contains { $0.name == "Calf raise" || $0.name == "Calf stretch" })
+    }
+
+    /// A hidden move is swapped for a safe one of the same kind — a stretch for a stretch — or
+    /// dropped; a hidden walk is not offered.
+    @Test func theResetLeavesHiddenMovesOut() throws {
+        let hidden = ["Cat-cow", "Glute bridge", "Easy walk"]
+        let fitted = travelPlan(WorkoutProfile(), hidden: hidden)
+        let session = try #require(fitted.session)
+        let names = WorkoutPlanner.travelDayMoveNames(in: session)
+        #expect(Set(names).isDisjoint(with: hidden), "\(names)")
+        #expect(!session.suggestion.exercises.contains("Cat-cow") && !session.suggestion.exercises.contains("Easy walk"))
+        let rows = Dictionary(fitted.pool.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        let stretches = session.exercises.filter { $0.holdSeconds != nil }
+        #expect(Set(stretches.map(\.name)).count == 5, "the hidden stretch was swapped for another: \(names)")
+        #expect(stretches.allSatisfy { rows[$0.name]?.modality == .mobility })
+        #expect(Set(names).count == names.count, "nothing is done twice")
     }
 }
