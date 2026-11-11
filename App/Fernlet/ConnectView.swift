@@ -145,6 +145,11 @@ struct FriendsView: View {
     @State private var soloAlbum = SoloAlbumModel()
     /// The "Just you" set opened full screen, if any.
     @State private var openSoloSetID: String?
+    /// The road trips' photos in this album (owner, 2026-11-10: "Keep the photos", "Yes, in the Album"): one set per
+    /// trip, kept after Delete map history. Empty in a decoy.
+    @State private var roadTripSets: [RoadTripAlbumSet] = []
+    /// The road trip set opened full screen, if any.
+    @State private var openRoadTripSet: RoadTripAlbumSet?
     @State private var sessionSearchText = ""
     @State private var cacheWarningDismissed = false
     /// P7 item 5: the restore card is dismissable for this instance of the surface; the value it
@@ -218,19 +223,19 @@ struct FriendsView: View {
     ///
     /// `body` hangs the celebration `fullScreenCover` (`$showConnectionAnimation`) and the album photo
     /// feed's `fullScreenCover` (`$selectedAlbumPostID`) off ONE anchor, the "Just you" set opens a
-    /// third, and the root's keep-as-friends sheet (``keepFriendsPromptIsUp``, ``KeepFriendsPromptHost``)
+    /// third, a road trip's set a fourth, and the root's keep-as-friends sheet (``keepFriendsPromptIsUp``, ``KeepFriendsPromptHost``)
     /// may be up over all of them. A commit while any is up must not request the celebration: two
     /// presentations in one transaction drop one, nothing resets `showConnectionAnimation`, and
     /// `.accessibilityHidden(showConnectionAnimation)` on the whole `ZStack` latches VoiceOver and
     /// Switch Control out of the Album until the next peer loss or session end. The celebration's own
     /// flag is deliberately absent: it is what the heal arm is deciding whether to raise.
     private var aPresentationIsUp: Bool {
-        keepFriendsPromptIsUp || selectedAlbumPostID != nil || openSoloSetID != nil
+        keepFriendsPromptIsUp || selectedAlbumPostID != nil || openSoloSetID != nil || openRoadTripSet != nil
     }
 
     /// Whether one of this view's own full-screen covers is up (reported to the root's prompt).
     private var albumCoverPresented: Bool {
-        selectedAlbumPostID != nil || openSoloSetID != nil || showConnectionAnimation
+        selectedAlbumPostID != nil || openSoloSetID != nil || openRoadTripSet != nil || showConnectionAnimation
     }
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
@@ -314,7 +319,7 @@ struct FriendsView: View {
             if !features.photos.meshPhotos.isEmpty {
                 cacheWarningBanner
             }
-            if !features.photos.meshPhotos.isEmpty || !soloAlbum.sets.isEmpty {
+            if !features.photos.meshPhotos.isEmpty || !soloAlbum.sets.isEmpty || !roadTripSets.isEmpty {
                 FriendsSearchField(prompt: "Search by friend or session name", text: $sessionSearchText)
             }
             // The solo camera's photos still held (b4-mem-solo-waiting): when they show, in the
@@ -421,7 +426,7 @@ struct FriendsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     albumHeader
                         .padding(.horizontal, 16)
-                    if features.photos.meshPhotos.isEmpty && soloAlbum.isEmpty {
+                    if features.photos.meshPhotos.isEmpty && soloAlbum.isEmpty && roadTripSets.isEmpty {
                         emptyAlbumView
                             .padding(.horizontal, 16)
                     } else {
@@ -463,6 +468,10 @@ struct FriendsView: View {
         .modifier(SoloAlbumHost(album: soloAlbum, openSetID: $openSoloSetID,
                                 refreshKey: [store.duressSessionActive],
                                 roll: { store.duressSessionActive ? nil : store.soloCameraRoll() }))
+        // The road trips' photos (owner 2026-11-10: "Yes, in the Album"), one set per trip, kept after Delete map
+        // history: read on appear and when the trip roll, the trips or the decoy change; a decoy reads nothing. A
+        // tapped set opens in the trip photo viewer.
+        .modifier(RoadTripAlbumHost(store: store, sets: $roadTripSets, openSet: $openRoadTripSet))
         // The session's prompts (join requests, the session alert, removal requests) while this
         // panel is the surface on screen; Home's session button and the camera host them otherwise.
         .modifier(SessionPromptsModifier(
@@ -671,7 +680,8 @@ struct FriendsView: View {
     ]
 
     /// The album's tiles: while solo photos are held, the "Tonight" tile first (b4-mem-solo-waiting);
-    /// then the hangouts and the "Just you" sets, newest first (b4-mem-solo-revealed).
+    /// then the hangouts, the "Just you" sets (b4-mem-solo-revealed) and the road trips' sets (owner
+    /// 2026-11-10: "Yes, in the Album"), newest first.
     private var photoGrid: some View {
         LazyVGrid(columns: columns, spacing: 2) {
             if soloAlbum.heldCount > 0, SoloAlbum.matches(sessionSearchText) {
@@ -691,17 +701,34 @@ struct FriendsView: View {
                     .accessibilityLabel(SoloSetTile.accessibilityLabel(for: photoSet))
                     .accessibilityInputLabels(SoloSetTile.inputLabels)
                     .accessibilityIdentifier("friends.soloSet")
+                case .roadTrip(let photoSet):
+                    roadTripTile(photoSet)
                 }
             }
         }
     }
 
-    /// The hangouts' posts and the "Just you" sets the search keeps, merged newest first.
+    /// One road trip's tile: a real Button like a "Just you" set's, with its spoken label and short Voice Control
+    /// names; it opens the trip's photos in the trip photo viewer.
+    private func roadTripTile(_ photoSet: RoadTripAlbumSet) -> some View {
+        Button {
+            openRoadTripSet = photoSet
+        } label: {
+            RoadTripSetTile(photoSet: photoSet, thumbnail: { store.roadTripPhotoThumbnail($0) })
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(RoadTripSetTile.accessibilityLabel(for: photoSet))
+        .accessibilityInputLabels(RoadTripSetTile.inputLabels)
+        .accessibilityIdentifier("friends.roadTripSet")
+    }
+
+    /// The hangouts' posts, the "Just you" sets and the road trips' sets the search keeps, merged newest first.
     private var albumEntries: [FriendsAlbumEntry<FriendPhotoWallPost>] {
         let sets = SoloAlbum.matches(sessionSearchText) ? soloAlbum.sets : []
+        let trips = roadTripSets.filter { RoadTripAlbum.matches(sessionSearchText, set: $0) }
         return SoloAlbum.merged(posts: filteredPhotoWallPosts,
                                 date: { $0.session?.startedAt ?? $0.coverPhoto.addedAt },
-                                sets: sets)
+                                sets: sets, trips: trips)
     }
 
     /// One hangout's tile: a real Button, not a tap gesture on a colour — VoiceOver could neither name

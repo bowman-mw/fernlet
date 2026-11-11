@@ -151,6 +151,30 @@ nonisolated enum RoadTripCopy {
         return AddressedCopy.plain(photoSpokenNamed(named, name: author))
     }
 
+    // MARK: The Album (owner, 2026-11-10: "Keep the photos", "Yes, in the Album")
+
+    /// "Road trip · Nov 10 – 12": a trip's section title in the Album once the trip itself is gone (Delete map history
+    /// keeps its photos): "Road trip" and the days its photos were taken, from their own capture times (new copy).
+    static func albumTitle(_ days: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.album.title", defaultValue: "Road trip · \(days)",
+                                comment: "The Album: the title of a road trip's photos once the trip itself was deleted with map history; 'Road trip' and the days the photos were taken, e.g. 'Nov 10 – 12', or one day, 'Nov 10'")
+    }
+
+    /// "Road trip to the coast, carousel, 6 photos": VoiceOver for a road trip's tile in the Album holding more than
+    /// one photo, after the "Just you" tile's "Just you, Oct 23, carousel, 3 photos" (new copy).
+    static func albumSpoken(_ title: String, photos: String) -> LocalizedStringResource {
+        LocalizedStringResource("roadTrip.album.spoken", defaultValue: "\(title), carousel, \(photos)",
+                                comment: "VoiceOver, the Album: a road trip's tile that opens several photos; the trip's title (its name, or 'Road trip' and the days) and how many photos, e.g. '6 photos'")
+    }
+
+    /// The days a trip's photos were taken, as the Album's fallback title writes them: "Nov 10", or "Nov 10 – 12" when
+    /// they span more than one day (the reader's own format).
+    static func albumDays(from first: Date, to last: Date, calendar: Calendar = .current) -> String {
+        let day = Date.FormatStyle.dateTime.month(.abbreviated).day()
+        guard first < last, !calendar.isDate(first, inSameDayAs: last) else { return first.formatted(day) }
+        return (first..<last).formatted(.interval.month(.abbreviated).day())
+    }
+
     // MARK: PR 4 — The end (`rt-end`): the summary card
 
     /// "New tiles": the card's row label (approved mockup).

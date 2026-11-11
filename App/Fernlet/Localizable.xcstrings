@@ -82245,6 +82245,54 @@
         }
       }
     },
+    "roadTrip.album.spoken" : {
+      "comment" : "VoiceOver, the Album: a road trip's tile that opens several photos; the trip's title (its name, or 'Road trip' and the days) and how many photos, e.g. '6 photos'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, carousel, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, carrusel, %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, carrusel, %2$@"
+          }
+        }
+      }
+    },
+    "roadTrip.album.title" : {
+      "comment" : "The Album: the title of a road trip's photos once the trip itself was deleted with map history; 'Road trip' and the days the photos were taken, e.g. 'Nov 10 – 12', or one day, 'Nov 10'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road trip · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en coche · %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaje en carro · %@"
+          }
+        }
+      }
+    },
     "roadTrip.camera.filmLeft" : {
       "comment" : "The disposable camera during a road trip, VoiceOver for the film badge: photos this person can still take on the trip, of 30, e.g. '26 of 30 photos left on the road trip'",
       "extractionState" : "extracted_with_value",

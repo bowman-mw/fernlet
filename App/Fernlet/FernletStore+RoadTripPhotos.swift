@@ -16,8 +16,9 @@ nonisolated struct RoadTripCameraFilm: Equatable, Sendable {
     let limit: Int
 }
 
-/// One trip photo as the photo viewer shows it (`rt-map`): its caption ("Road trip to the coast · Nov 10 · Rae") and
-/// what VoiceOver says ("Photo from the road trip to the coast, by Rae").
+/// One trip photo as the photo viewer shows it (`rt-map`): its caption ("Road trip to the coast · Nov 10 · Rae"), what
+/// VoiceOver says ("Photo from the road trip to the coast, by Rae"), and whether it is on the map now, so the viewer
+/// offers "Hide from the map" only then (a photo opened from the Album may have no place, or be hidden already).
 nonisolated struct RoadTripPhotoDetail: Equatable, Identifiable, Sendable {
     /// The photo's id on this iPhone.
     let id: UUID
@@ -25,6 +26,8 @@ nonisolated struct RoadTripPhotoDetail: Equatable, Identifiable, Sendable {
     let caption: String
     /// Its VoiceOver label.
     let spoken: String
+    /// Whether it sits on the map: shown, with a place.
+    let isOnMap: Bool
 }
 
 /// Road trip photos, the store's side (World-RoadTrip-Spec PR 3, owner-approved 2026-11-10: `rt-photos`, straight
@@ -176,19 +179,23 @@ extension FernletStore {
         return WorldPhotoPlace.grouped(ids: shown.map(\.id), places: places, near: fix?.point)
     }
 
-    /// What the photo viewer shows for each of `ids` still here and shown, in their order: the caption and the
-    /// VoiceOver label, from the trip the photo was taken on. None in a decoy.
-    func roadTripPhotoDetails(_ ids: [UUID]) -> [RoadTripPhotoDetail] {
+    /// What the photo viewer shows for each of `ids` still here, in their order: the caption and the VoiceOver label,
+    /// from the trip the photo was taken on (or, once its record is gone, from who took it as this iPhone still knows
+    /// them, ``roadTripPhotoAuthor(_:in:)``), and whether it is on the map. A print on the map passes only the shown
+    /// photos; the Album (`includingHidden`) every one, since hiding is from the map only. None in a decoy.
+    func roadTripPhotoDetails(_ ids: [UUID], includingHidden: Bool = false) -> [RoadTripPhotoDetail] {
         guard !duressSessionActive, let index = roadTripPhotos.index() else { return [] }
         worldFog.roadTrip.load()
         let trips = worldFog.roadTrip.book.trips
+        let places = roadTripPhotos.allPlaces()
         let byID = Dictionary(index.photos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return ids.prefix(RoadTripPhotoStore.maxPhotos).compactMap { id in
-            guard let photo = byID[id], photo.isShown else { return nil }
+            guard let photo = byID[id], includingHidden || photo.isShown else { return nil }
             let trip = trips.last { $0.id == photo.tripID }
-            let author = trip?.members.first { $0.id == photo.authorID }?.firstName
+            let author = roadTripPhotoAuthor(photo.authorID, in: trip)
             return RoadTripPhotoDetail(id: id, caption: RoadTripCopy.photoCaption(trip: trip, takenAt: photo.takenAt, author: author),
-                                       spoken: RoadTripCopy.photoSpoken(trip: trip, author: author))
+                                       spoken: RoadTripCopy.photoSpoken(trip: trip, author: author),
+                                       isOnMap: photo.isShown && places[id] != nil)
         }
     }
 
