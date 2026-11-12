@@ -4037,6 +4037,14 @@ struct LocalizationBoundaryTests {
         // World road trip mode, PR 1 (2026-11-10): Trip info's photo row, which would read "1 photos".
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "roadTrip.info.photos",
                      source: "Trip info: the road trip's photos so far ('1 photo')"),
+        // World road trip mode, PR 4 (2026-11-10): the summary card's days and towns, and the passport's road trips,
+        // which would read "1 days", "1 towns" and "1 road trips".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "roadTrip.summary.days",
+                     source: "The road trip's summary card: the days ('1 day')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "roadTrip.summary.spoken.towns",
+                     source: "The road trip's summary card, VoiceOver: the towns passed ('1 town')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "roadTrip.passport.count",
+                     source: "Sprout's passport Road trips page: the road trips ('1 road trip')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

@@ -21,6 +21,9 @@ import WorldMapStore
 ///   (PR 4), until map history is deleted. An end is owed to every other member until a catch-up tells them (PR 2).
 /// - **The swap** (PR 2): ``trip(sharedWith:id:)`` finds the trip a catch-up is about, ``linePoints(of:after:through:)``
 ///   reads the road to send, and ``appendReceived(_:to:)`` adds received road to the line by its own rules.
+/// - **The end** (PR 4): ``endIfQuiet(now:)`` ends the trip on now at its seven-day mark; ``start(_:)`` stamps how
+///   much of the map was uncovered (``uncoveredCount``); the summary and its shown flag are written through
+///   ``change(_:_:)``, into the same sealed book.
 /// - **Duress:** a decoy (``setDecoy(_:)``) shows no trip, records nothing and reads or writes no file; the real book
 ///   is dropped from memory while it lasts.
 /// - **Wipes:** ``forget()`` drops everything in memory, unsaved points included; the vault's ``WorldMapVault/clearAll()``
@@ -46,6 +49,9 @@ final class RoadTripKeeper {
     @ObservationIgnored private(set) var refusedCount = 0
     /// Called when this iPhone becomes a passenger (true) or stops being one (false).
     @ObservationIgnored var onPassengerChanged: ((Bool) -> Void)?
+    /// How many tiles of the map this iPhone has uncovered now, or nil when the map can't be read (the fog keeper's
+    /// answer; PR 4 stamps it on a trip at its start, for the summary's new tiles).
+    @ObservationIgnored var uncoveredCount: (() -> Int?)?
 
     @ObservationIgnored private let store: RoadTripStore
     @ObservationIgnored private var toldPassenger = false
@@ -134,11 +140,14 @@ final class RoadTripKeeper {
         FernletAuditLog.log("worldMap.roadTrip.flushDeferred")
     }
 
-    /// Starts `trip` on this iPhone (PR 2's Start and Join; the DEBUG scene). Whether it started: refused in a decoy,
+    /// Starts `trip` on this iPhone (PR 2's Start and Join; the DEBUG scene), stamped with how much of the map this
+    /// iPhone has uncovered now when it carries no count (PR 4's new tiles). Whether it started: refused in a decoy,
     /// while another trip is on, when the trip isn't valid or the book is full, or when it couldn't be written.
     func start(_ trip: RoadTrip) -> Bool {
         guard !isDecoy else { return false }
         load()
+        var trip = trip
+        if trip.cellsAtStart == nil { trip.cellsAtStart = uncoveredCount?() }
         guard isLoaded, let next = book.adding(trip), store.saveBook(next) else { return false }
         book = next
         openLine()
@@ -150,7 +159,7 @@ final class RoadTripKeeper {
     /// what is known of the members' phones (PR 1: this one's). Whether it changed anything.
     func mapFromThisPhone(states: [String: RoadTripDeviceState], now: Date = Date()) -> Bool {
         guard let trip = active, !trip.isMapping else { return false }
-        let answer = RoadTripMapperRule.ruleAnswer(members: trip.memberIDs, starter: trip.starterID, states: states) ?? trip.starterID
+        let answer = RoadTripMapperRule.ruleAnswer(members: trip.onTripIDs, starter: trip.starterID, states: states) ?? trip.starterID
         return changeActive { trip in
             trip.mapperID = trip.selfID
             trip.mapperOverride = RoadTripMapperOverride(memberID: trip.selfID, at: now, ruleAnswer: answer)
@@ -161,7 +170,7 @@ final class RoadTripKeeper {
     /// Whether it was written.
     func applyMapperRule(states: [String: RoadTripDeviceState]) -> Bool {
         guard let trip = active,
-              let decided = RoadTripMapperRule.mapper(members: trip.memberIDs, starter: trip.starterID, states: states,
+              let decided = RoadTripMapperRule.mapper(members: trip.onTripIDs, starter: trip.starterID, states: states,
                                                       override: trip.mapperOverride) else { return false }
         return changeActive { trip in
             trip.mapperID = decided.mapper
@@ -187,6 +196,19 @@ final class RoadTripKeeper {
         return true
     }
 
+    /// Seven days without a catch-up (PR 4, ``RoadTripEndRules/endingIfQuiet(_:now:)``): the trip on now ends at the
+    /// seven-day mark, by this iPhone's clock, when `now` is past it. Checked at launch, on every load of the map and
+    /// when Home appears; never by a timer. Whether it ended.
+    @discardableResult
+    func endIfQuiet(now: Date = Date()) -> Bool {
+        guard !isDecoy else { return false }
+        load()
+        guard let trip = active, let ended = RoadTripEndRules.endingIfQuiet(trip, now: now) else { return false }
+        guard change(trip.id, { $0 = ended }) else { return false }
+        FernletAuditLog.log("worldMap.roadTrip.endedQuiet")
+        return true
+    }
+
     // MARK: The swap (PR 2)
 
     /// The trip a catch-up with `member` is about (``RoadTripBook/trip(sharedWith:id:)``); nil in a decoy and before
@@ -196,6 +218,15 @@ final class RoadTripKeeper {
         load()
         guard isLoaded else { return nil }
         return book.trip(sharedWith: member, id: id)
+    }
+
+    /// Whether this iPhone left the trip `id` that `member` is also on (Leave the road trip, or its seven quiet days):
+    /// a catch-up for it is then answered as left (PR 4). False in a decoy and before the book can be read.
+    func hasLeft(_ id: UUID, sharedWith member: String) -> Bool {
+        guard !isDecoy else { return false }
+        load()
+        guard isLoaded, let trip = book.trips.last(where: { $0.id == id }) else { return false }
+        return trip.leftAt != nil && trip.others.contains { $0.id == member }
     }
 
     /// Changes the trip `id` with `change` and writes the book; whether it was written (refused in a decoy, without

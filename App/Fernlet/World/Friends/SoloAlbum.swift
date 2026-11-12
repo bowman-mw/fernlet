@@ -38,18 +38,29 @@ struct SoloPhotoSet: Identifiable, Equatable {
     var photoIDs: [UUID] { photos.map(\.id) }
 }
 
-/// One tile of the Friends album: a hangout's post, or a "Just you" set.
+/// One tile of the Friends album: a hangout's post, a "Just you" set, or a road trip's set (owner, 2026-11-10: "Yes,
+/// in the Album", one per trip).
 enum FriendsAlbumEntry<Post: Identifiable>: Identifiable where Post.ID == UUID {
     case post(Post)
     case solo(SoloPhotoSet)
+    case roadTrip(RoadTripAlbumSet)
 
-    /// Unique across both kinds.
+    /// Unique across every kind.
     var id: String {
         switch self {
         case .post(let post): return "post-\(post.id.uuidString)"
         case .solo(let photoSet): return photoSet.id
+        case .roadTrip(let photoSet): return photoSet.id
         }
     }
+}
+
+/// A set waiting for its slot among the hangouts' posts (``SoloAlbum/merged(posts:date:sets:trips:)``): when its
+/// newest photo was taken, its order among sets of the same moment, and its tile.
+private struct DatedAlbumSet<Post: Identifiable> where Post.ID == UUID {
+    let date: Date
+    let rank: Int
+    let entry: FriendsAlbumEntry<Post>
 }
 
 /// The solo photos' place in the Friends album (`b4-mem-solo-*`, approved 2026-10-24): grouping a
@@ -63,27 +74,41 @@ enum SoloAlbum {
             .sorted { $0.date > $1.date }
     }
 
-    /// The album's tiles: `posts` in their own order, with each set slotted in before the first post
-    /// older than it (`date`), so the album stays newest first.
+    /// The album's tiles: `posts` in their own order, with each set — "Just you" or a road trip's — slotted in before
+    /// the first post older than it (`date`), so the album stays newest first.
     ///
     /// - Parameters:
     ///   - posts: The hangouts' posts, newest first.
     ///   - date: When a post happened.
     ///   - sets: The "Just you" sets, newest first.
-    static func merged<Post: Identifiable>(posts: [Post], date: (Post) -> Date,
-                                           sets: [SoloPhotoSet]) -> [FriendsAlbumEntry<Post>] where Post.ID == UUID {
+    ///   - trips: The road trips' sets, newest first (owner, 2026-11-10: "Yes, in the Album"); placed by their newest
+    ///     photo like a "Just you" set, which comes first when both are of the same moment.
+    static func merged<Post: Identifiable>(posts: [Post], date: (Post) -> Date, sets: [SoloPhotoSet],
+                                           trips: [RoadTripAlbumSet] = []) -> [FriendsAlbumEntry<Post>] where Post.ID == UUID {
+        let waiting: [DatedAlbumSet<Post>] = datedSets(sets, trips: trips)
         var entries: [FriendsAlbumEntry<Post>] = []
         var next = 0
         // R2: bounded by the posts; each set is placed once.
         for post in posts {
             let postDate = date(post)
-            let due = sets[next...].prefix { $0.date >= postDate }
-            entries.append(contentsOf: due.map { FriendsAlbumEntry.solo($0) })
+            let due = waiting[next...].prefix { $0.date >= postDate }
+            entries.append(contentsOf: due.map(\.entry))
             next += due.count
             entries.append(.post(post))
         }
-        entries.append(contentsOf: sets[next...].map { FriendsAlbumEntry.solo($0) })
+        entries.append(contentsOf: waiting[next...].map(\.entry))
         return entries
+    }
+
+    /// The "Just you" sets and the road trips' sets as one list, newest first; of the same moment, the "Just you" sets
+    /// first, each list in its own order.
+    private static func datedSets<Post: Identifiable>(_ sets: [SoloPhotoSet],
+                                                      trips: [RoadTripAlbumSet]) -> [DatedAlbumSet<Post>] where Post.ID == UUID {
+        let solo = sets.enumerated().map { DatedAlbumSet<Post>(date: $0.element.date, rank: $0.offset, entry: .solo($0.element)) }
+        let road = trips.enumerated().map {
+            DatedAlbumSet<Post>(date: $0.element.date, rank: sets.count + $0.offset, entry: .roadTrip($0.element))
+        }
+        return (solo + road).sorted { $0.date != $1.date ? $0.date > $1.date : $0.rank < $1.rank }
     }
 
     /// Whether the album's search shows the solo sets: always with no query, else when "Just you"

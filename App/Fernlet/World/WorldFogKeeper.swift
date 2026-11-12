@@ -122,6 +122,14 @@ final class WorldFogKeeper {
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
         self.widgetMap = WorldWidgetMapFile()
         self.widgetMapReload = { WorldWidgetMap.reload() }
+        roadTrip.uncoveredCount = { [weak self] in self?.uncoveredCellCount }
+    }
+
+    /// How many tiles the history holds now (a road trip's summary counts its new tiles from it, PR 4); nil in a
+    /// decoy and before the history is read.
+    var uncoveredCellCount: Int? {
+        guard !isDecoy, store.isLoaded else { return nil }
+        return store.cells.count
     }
 
     /// Reads the lifted history (and merges the locked-phone buffer) when the phone is unlocked and no
@@ -131,8 +139,10 @@ final class WorldFogKeeper {
     /// and merges the buffer. Cells lifted under a panel are therefore never thrown back to the disk copy
     /// (location keeps running under panels, W-09), and Home coming to the front decrypts nothing.
     func load() {
-        // The road trip's book is under the buffer key, so it reads with the phone locked too (never in a decoy).
+        // The road trip's book is under the buffer key, so it reads with the phone locked too (never in a decoy), and a
+        // trip seven days without a catch-up ends here at its mark (PR 4).
         roadTrip.load()
+        roadTrip.endIfQuiet()
         guard !isDecoy, isProtectedDataAvailable() else { return }
         guard !store.isLoaded else {
             mergeWhileLoaded()

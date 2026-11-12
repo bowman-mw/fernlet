@@ -133,6 +133,9 @@ engine through its public seams.
   against its length and SHA-256, at most 8 photos (2 per sender, 40 MiB) gathering, a stalled one dropped
   after 120 s and every incomplete one when the hangout ends — before ``RoadTripReceivedPhoto`` reaches the
   app. Who took a photo is never a field (it is the verified sender), so a received photo is never passed on.
+  **A leave (PR 4):** ``RoadTripJoinPayload/left`` turns a Not this time into "I was on this trip and left it",
+  so the app can end a trip once every other member has; one optional flag on the existing kind, version 1
+  kept, and an answer without it reads as before.
 - ``FernletMeshCapabilities`` and ``FernletVouchList`` (`Mesh/`): the capability tokens the mesh
   advertises, composed from the features' switches in their signed order (photos, the namespace's wire2
   token, then away hearts, the shop, messages, moderation, friend state, activities and hearts, each

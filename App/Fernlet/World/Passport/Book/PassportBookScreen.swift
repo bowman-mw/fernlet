@@ -18,6 +18,8 @@ struct PassportBookScreen: View {
     @State var detail: PassportIndexDetail?
     /// The year whose log the Flights page has open (World-Airports-Spec §8), or nil.
     @State var flightsYear: Int?
+    /// The year whose log the Road trips page has open (World-RoadTrip-Spec PR 4), or nil.
+    @State var roadTripsYear: Int?
     /// Whether the open log's header takes VoiceOver's focus (it was opened, not stepped to from its bar).
     @State var yearTakesFocus = false
     /// The year whose row takes VoiceOver's focus again when its log closes.
@@ -54,7 +56,7 @@ struct PassportBookScreen: View {
 
     var body: some View {
         let flights = flightsModel
-        let book = PassportBookModel(entries: entries, showsFlights: flights != nil)
+        let book = PassportBookModel(entries: entries, showsFlights: flights != nil, showsRoadTrips: roadTripsModel != nil)
         NavigationStack {
             GeometryReader { proxy in
                 ZStack {
@@ -165,6 +167,9 @@ struct PassportBookScreen: View {
             } else if openLog(flights) != nil {
                 FernletBackButton(verbatim: String(localized: PassportFlightsCopy.title)) { closeYear() }
                     .accessibilityLabel(Text(PassportFlightsCopy.backToFlights))
+            } else if openRoadTripLog(roadTripsModel) != nil {
+                FernletBackButton(verbatim: String(localized: RoadTripCopy.passportTitle)) { closeRoadTripYear() }
+                    .accessibilityLabel(Text(RoadTripCopy.passportBack))
             } else if let landing, book.pageNumber(of: landing) == page, let kind = landing.stampKind {
                 PassportStatusChip(text: Text(PassportBookCopy.newStampChip(library.name(of: kind, onPage: true)))) {
                     WorldSpriteView(sprite: WorldSprites.stampMed, scale: 2, tint: nil)
@@ -192,10 +197,10 @@ struct PassportBookScreen: View {
                 PassportPageScroll(number: number, content: { content(number, in: book, flights: flights) },
                                    onTop: { pageOnTop = $0 })
                     // A new year's log starts at its top.
-                    .id(book.page(at: number) == .flights ? flightsYear ?? 0 : 0)
+                    .id(logYear(on: book.page(at: number)) ?? 0)
             }
         }
-        .id(reduceMotion ? "\(page)-\(detail.map { "\($0)" } ?? "")-\(flightsYear ?? 0)" : "book")
+        .id(reduceMotion ? "\(page)-\(detail.map { "\($0)" } ?? "")-\(flightsYear ?? 0)-\(roadTripsYear ?? 0)" : "book")
         .transition(.opacity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(pageLabel(book)))
@@ -217,6 +222,9 @@ struct PassportBookScreen: View {
             PassportContinentBar(detail: detail) { stepDetail($0) }
         } else if let flights, let log = openLog(flights), let position = flights.position(ofYear: log.year) {
             PassportFlightsYearBar(year: log.year, position: position, count: flights.years.count) { stepYear($0) }
+        } else if let roadTrips = roadTripsModel, let log = openRoadTripLog(roadTrips),
+                  let position = roadTrips.position(ofYear: log.year) {
+            PassportFlightsYearBar(year: log.year, position: position, count: roadTrips.years.count) { stepRoadTripYear($0) }
         } else {
             PassportPageBar(number: page, count: book.pageCount, name: String(localized: PassportBookCopy.name(of: book.page(at: page))),
                             onPrevious: { step(-1, in: book) }, onContents: { showsContents.toggle() },
@@ -255,6 +263,8 @@ struct PassportBookScreen: View {
                                     onOpenTrip: { openWorld(on: $0) }, onOpenYear: { openYear($0) },
                                     onAddPastFlights: addPastFlightsAction)
             }
+        case .roadTrips:
+            roadTripsContent
         case .stamps(let index):
             PassportStampsPage(book: book, index: index, library: library, landing: landing, wiggle: wiggle,
                                full: isFull(book))
@@ -286,7 +296,9 @@ struct PassportBookScreen: View {
 
     /// The index: places named as the index names them (an airport without "International"), with the Flights row.
     private func indexModel(_ book: PassportBookModel, flights: PassportFlightsModel?) -> PassportIndexModel {
-        PassportIndexModel(book: book, table: library.countryTable, flights: flights) { library.indexName(of: $0) }
+        PassportIndexModel(book: book, table: library.countryTable, flights: flights, roadTrips: roadTripsModel) {
+            library.indexName(of: $0)
+        }
     }
 
     /// Every stamp found: all 194 countries, the seven continents and the five oceans.
@@ -300,9 +312,9 @@ struct PassportBookScreen: View {
         flightsYear.flatMap { flights?.log(ofYear: $0) }
     }
 
-    /// "Sprout's passport, page 3 of 6, Stamps", or "…, Flights, 2024" in a year's log.
+    /// "Sprout's passport, page 3 of 6, Stamps", or "…, Flights, 2024" (or "…, Road trips, 2026") in a year's log.
     private func pageLabel(_ book: PassportBookModel) -> LocalizedStringResource {
         let name = String(localized: PassportBookCopy.name(of: book.page(at: page)))
-        return PassportBookCopy.page(page, of: book.pageCount, named: flightsYear.map { "\(name), \($0)" } ?? name)
+        return PassportBookCopy.page(page, of: book.pageCount, named: (flightsYear ?? roadTripsYear).map { "\(name), \($0)" } ?? name)
     }
 }

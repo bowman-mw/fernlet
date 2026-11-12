@@ -25,6 +25,7 @@ nonisolated enum PassportBookCopy {
         case .world: yourWorld
         case .stamps: stamps
         case .flights: PassportFlightsCopy.title
+        case .roadTrips: RoadTripCopy.passportTitle
         case .index: index
         }
     }

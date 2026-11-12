@@ -62,6 +62,11 @@ The owner's ask (2026-11-09): "a road trip mode. It would use a mesh session to 
    - Photos within 40 m share one print, like solo photos.
    - Tap opens the photo with "Road trip to the coast · Nov 10 · Rae". VoiceOver: "Photo from the road trip to the coast, by Rae".
    - A decoy shows none.
+   - **In the Album** (owner, 2026-11-10: "Keep the photos" / "Don't delete", and "Yes, in the Album"):
+     - Delete map history keeps the trip photos; it takes the trip's record and the photos' places, so their prints go.
+     - The Album shows one entry per trip with photos on the iPhone, holding every trip photo held (its own and friends', hidden ones too), placed by date like a "Just you" set. Tapping it opens the trip photo viewer.
+     - Its title is the trip's name while the record exists. After that it's "Road trip" and the photos' own dates, with "by Rae" where the kept-friends list still names the person who took the photo. The photo store never keeps the trip's name.
+     - The viewer leaves out "Hide from the map" for a photo that isn't on the map.
 9. **End** (`rt-end`, passport):
    - The trip ends when someone taps End the road trip, when everyone has left, or by itself after 7 days without a catch-up.
    - A summary card shows once on Home: "Road trip to the coast · 3 days · 412 km · 1,280 new tiles · 4 towns · 23 photos".

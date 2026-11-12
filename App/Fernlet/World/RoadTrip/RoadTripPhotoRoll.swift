@@ -84,6 +84,13 @@ final class RoadTripPhotoRoll {
         return true
     }
 
+    /// "Show on the map": hidden photo `id` goes back on the map at its place. Whether it is shown.
+    func show(_ id: UUID) -> Bool {
+        guard !isDecoy, store.setHidden(id, false) else { return false }
+        revision &+= 1
+        return true
+    }
+
     /// Deletes the photos in `ids` and their places. Whether they are gone.
     func delete(_ ids: Set<UUID>) -> Bool {
         guard !isDecoy, store.delete(ids) else { return false }
