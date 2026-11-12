@@ -83131,6 +83131,30 @@
         }
       }
     },
+    "roadTrip.photo.show" : {
+      "comment" : "A road trip photo hidden from the map, opened from the Album: puts this photo back on the map where it was taken",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show on the map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en el mapa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en el mapa"
+          }
+        }
+      }
+    },
     "roadTrip.photo.spoken" : {
       "comment" : "VoiceOver for a road trip photo opened from the map: the trip's own name (e.g. 'Road trip to the coast') and the first name of who took it",
       "extractionState" : "extracted_with_value",

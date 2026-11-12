@@ -52,7 +52,8 @@ struct RoadTripPhotoMarkerView: View {
 ///   with ✕; it closes itself when the last photo is hidden.
 /// - **From the Album** (``Origin/album(title:)``, owner 2026-11-10: "Yes, in the Album"): every photo of the trip
 ///   held here, hidden ones too, under the trip's title with "‹ Album" back. A photo with no place on the map (none
-///   yet, or gone with Delete map history) or already hidden has no Hide: the action would do nothing.
+///   yet, or gone with Delete map history) or already hidden has no Hide: the action would do nothing. A hidden one
+///   that still has a place offers **Show on the map** instead (owner 2026-11-12), which puts it back.
 ///
 /// Nothing in a decoy (the store hands out no detail and no byte), so it closes.
 struct RoadTripPhotoViewer: View {
@@ -152,6 +153,10 @@ struct RoadTripPhotoViewer: View {
                     Button { hide(shown.id) } label: { Text(RoadTripCopy.hideFromMap) }
                         .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                         .accessibilityIdentifier("roadTrip.photo.hide")
+                } else if Self.offersShow(shown) {
+                    Button { show(shown.id) } label: { Text(RoadTripCopy.showOnMap) }
+                        .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+                        .accessibilityIdentifier("roadTrip.photo.show")
                 }
             }
             .albumPostCard()
@@ -162,6 +167,12 @@ struct RoadTripPhotoViewer: View {
     /// place); for one with no place, or hidden already, the action would do nothing, so it is left out.
     static func offersHide(_ detail: RoadTripPhotoDetail) -> Bool {
         detail.isOnMap
+    }
+
+    /// Whether the card offers "Show on the map" for `detail`: only while it is hidden and still has a place to go
+    /// back to (a photo whose place went with Delete map history has nowhere on the map, so it is left out).
+    static func offersShow(_ detail: RoadTripPhotoDetail) -> Bool {
+        detail.isHidden && detail.hasPlace
     }
 
     /// Reads the photos' captions again (a hide, a decoy); closes when none is left. From the map only the photos on it
@@ -177,6 +188,14 @@ struct RoadTripPhotoViewer: View {
     private func hide(_ id: UUID) {
         let hidden = store.hideRoadTripPhoto(id)
         FernletFeedback.system.play(hidden ? .done : .failed)
+        read()
+    }
+
+    /// Show on the map (from the Album, where hidden photos are listed): the photo goes back on the map and the card
+    /// offers its Hide again.
+    private func show(_ id: UUID) {
+        let shownAgain = store.showRoadTripPhoto(id)
+        FernletFeedback.system.play(shownAgain ? .done : .failed)
         read()
     }
 }

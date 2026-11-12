@@ -17,8 +17,9 @@ nonisolated struct RoadTripCameraFilm: Equatable, Sendable {
 }
 
 /// One trip photo as the photo viewer shows it (`rt-map`): its caption ("Road trip to the coast · Nov 10 · Rae"), what
-/// VoiceOver says ("Photo from the road trip to the coast, by Rae"), and whether it is on the map now, so the viewer
-/// offers "Hide from the map" only then (a photo opened from the Album may have no place, or be hidden already).
+/// VoiceOver says ("Photo from the road trip to the coast, by Rae"), and where it stands with the map, so the viewer
+/// offers "Hide from the map" only while it is on the map and "Show on the map" only while it is hidden with a place
+/// (a photo opened from the Album may have no place, or be hidden).
 nonisolated struct RoadTripPhotoDetail: Equatable, Identifiable, Sendable {
     /// The photo's id on this iPhone.
     let id: UUID
@@ -26,8 +27,13 @@ nonisolated struct RoadTripPhotoDetail: Equatable, Identifiable, Sendable {
     let caption: String
     /// Its VoiceOver label.
     let spoken: String
+    /// Whether it has a place on the map (none yet, or gone with Delete map history, when not).
+    let hasPlace: Bool
+    /// Whether it was hidden from the map.
+    let isHidden: Bool
+
     /// Whether it sits on the map: shown, with a place.
-    let isOnMap: Bool
+    var isOnMap: Bool { hasPlace && !isHidden }
 }
 
 /// Road trip photos, the store's side (World-RoadTrip-Spec PR 3, owner-approved 2026-11-10: `rt-photos`, straight
@@ -195,7 +201,7 @@ extension FernletStore {
             let author = roadTripPhotoAuthor(photo.authorID, in: trip)
             return RoadTripPhotoDetail(id: id, caption: RoadTripCopy.photoCaption(trip: trip, takenAt: photo.takenAt, author: author),
                                        spoken: RoadTripCopy.photoSpoken(trip: trip, author: author),
-                                       isOnMap: photo.isShown && places[id] != nil)
+                                       hasPlace: places[id] != nil, isHidden: !photo.isShown)
         }
     }
 
@@ -209,6 +215,13 @@ extension FernletStore {
     func hideRoadTripPhoto(_ id: UUID) -> Bool {
         guard !duressSessionActive else { return false }
         return roadTripPhotos.hide(id)
+    }
+
+    /// "Show on the map" (owner 2026-11-12, "Yes, add it"): a hidden trip photo goes back on the map where it was
+    /// taken, and this iPhone's own goes to friends at a catch-up again. Whether it is shown; nothing in a decoy.
+    func showRoadTripPhoto(_ id: UUID) -> Bool {
+        guard !duressSessionActive else { return false }
+        return roadTripPhotos.show(id)
     }
 
     /// The trip's photos on this iPhone, this person's and friends' (Trip info's "6 photos", the catch-up note).

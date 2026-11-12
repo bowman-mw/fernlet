@@ -108,6 +108,12 @@ nonisolated enum RoadTripCopy {
         "roadTrip.photo.hide", defaultValue: "Hide from the map",
         comment: "A road trip photo opened from the map: takes this photo off the map; it stays on this iPhone")
 
+    /// "Show on the map": the trip photo viewer's action for a hidden photo that has a place, from the Album (new copy;
+    /// owner 2026-11-12, "Yes, add it").
+    static let showOnMap = LocalizedStringResource(
+        "roadTrip.photo.show", defaultValue: "Show on the map",
+        comment: "A road trip photo hidden from the map, opened from the Album: puts this photo back on the map where it was taken")
+
     /// "Road trip to the coast · Nov 10 · Rae".
     static func photoCaption(_ trip: String, day: String, name: String) -> LocalizedStringResource {
         LocalizedStringResource("roadTrip.photo.caption", defaultValue: "\(trip) · \(day) · \(name)",

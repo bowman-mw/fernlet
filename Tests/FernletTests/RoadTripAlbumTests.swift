@@ -112,6 +112,28 @@ struct RoadTripAlbumTests {
         #expect(store.roadTripPhotoDetails([hiddenID], includingHidden: true).map(\.id) == [hiddenID], "the Album's does")
     }
 
+    /// "Show on the map" (owner 2026-11-12): a hidden photo with a place offers it in the Album's viewer and goes back
+    /// on the map, offering Hide again; once Delete map history took its place, it offers neither.
+    @Test func aHiddenPhotoGoesBackOnTheMapUntilItsPlaceIsGone() throws {
+        let keeper = store.worldFog.roadTrip
+        keeper.load()
+        #expect(keeper.start(Self.trip(name: "Out")))
+        #expect(store.takeRoadTripPhoto(try RoadTripPhotoTests.jpeg(), fix: Self.fix(1), now: Self.at(1)) == .kept)
+        let id = try #require(store.roadTripAlbumSets().first?.photoIDs.first)
+        #expect(store.hideRoadTripPhoto(id))
+        let hidden = try #require(store.roadTripPhotoDetails([id], includingHidden: true).first)
+        #expect(RoadTripPhotoViewer.offersShow(hidden) && !RoadTripPhotoViewer.offersHide(hidden), "hidden, with a place")
+
+        #expect(store.showRoadTripPhoto(id))
+        #expect(store.roadTripPhotoMarkers().flatMap(\.photoIDs).contains(id), "back on the map")
+        let shown = try #require(store.roadTripPhotoDetails([id]).first, "a print's viewer shows it again")
+        #expect(RoadTripPhotoViewer.offersHide(shown) && !RoadTripPhotoViewer.offersShow(shown))
+
+        #expect(store.hideRoadTripPhoto(id) && store.deleteWorldMapHistory())
+        let placeless = try #require(store.roadTripPhotoDetails([id], includingHidden: true).first, "still in the Album")
+        #expect(!RoadTripPhotoViewer.offersShow(placeless) && !RoadTripPhotoViewer.offersHide(placeless), "nowhere to go")
+    }
+
     // MARK: The title, and Delete map history
 
     /// While the trip's record is here its set is titled by the trip's name and each photo says who took it from the
@@ -189,6 +211,7 @@ struct RoadTripAlbumTests {
         #expect(store.roadTripAlbumSets().isEmpty)
         #expect(store.roadTripPhotoThumbnail(set.cover) == nil)
         #expect(store.roadTripPhotoDetails(set.photoIDs, includingHidden: true).isEmpty)
+        #expect(!store.showRoadTripPhoto(set.cover), "nothing to put back in a decoy")
         store.duressSessionActive = false
         #expect(store.roadTripAlbumSets() == [set], "nothing of the real album changed")
     }
