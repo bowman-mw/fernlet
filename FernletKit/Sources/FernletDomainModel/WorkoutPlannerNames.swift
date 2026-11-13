@@ -70,6 +70,16 @@ public nonisolated enum WorkoutSessionNames {
         }
     }
 
+    /// The frozen titles of the planner's cardio sessions.
+    static let cardioTitles: Set<String> = ["Easy cardio", "Steady cardio", "Intervals"]
+
+    /// The name a cardio day takes on screen when it became seated stretches
+    /// (``WorkoutProgram/SessionSuggestion/displayedName``). Display only; never stored.
+    public static var seatedMobilityTitle: String {
+        String(localized: "workoutSession.seatedMobility", defaultValue: "Seated mobility", bundle: .module,
+               comment: "Workout session name: stretches done sitting or lying down, in place of a cardio session an injury rules out")
+    }
+
     /// The cardio and mobility sessions' titles, and the names of the planner's fallback sessions.
     static func otherTitle(_ title: String) -> String? {
         switch title {
@@ -198,7 +208,23 @@ public extension WorkoutProgram.DayPlan {
 public extension WorkoutProgram.SessionSuggestion {
     /// The session's name on screen. `suggestion.name` stays the frozen English it is logged and
     /// reconciled under.
+    ///
+    /// A cardio day whose limits turned it into seated stretches (a severe ankle, knee or hip, and no
+    /// machine the person may use) reads "Seated mobility", not "Easy cardio" over a stretch session;
+    /// its stored name stays the cardio day's, so the rotation still moves on.
     var displayedName: String {
-        WorkoutSessionNames.drawn(suggestion.name)
+        guard isSeatedCardioSwap else { return WorkoutSessionNames.drawn(suggestion.name) }
+        let time = SessionTime.timedCases.first { $0.label == timeLabel }
+        let seated = WorkoutSessionNames.seatedMobilityTitle
+        guard let time else { return seated }
+        return String(localized: "workoutSession.timed", defaultValue: "\(time.displayLabel) · \(seated)", bundle: .module,
+                      comment: "A session's name in a day with two sessions. Arguments: the time of day (e.g. 'Morning'), then the session's name (e.g. 'Easy cardio').")
+    }
+
+    /// A cardio session the planner turned into seated mobility (``displayedName``).
+    var isSeatedCardioSwap: Bool {
+        guard kind == .mobility, WorkoutSessionNames.cardioTitles.contains(title),
+              exercises.count == 1, let line = exercises.first, !line.fromCatalog else { return false }
+        return WorkoutTimedSessions.label(of: line.name) == WorkoutProgram.seatedMobilityHead
     }
 }

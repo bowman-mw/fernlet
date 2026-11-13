@@ -41,6 +41,9 @@ struct WorkoutSetupSheet: View {
     /// "Use food logs in workout notes": nil until chosen (reads as on), synced on Save.
     @State private var foodAware: Bool?
     private let initialFoodAware: Bool?
+    /// "Lighter week": this week marked as a deload week, under any goal; saved on Save.
+    @State private var deloadThisWeek: Bool
+    private let initialDeloadThisWeek: Bool
     /// The heart-rate switches' draft (device-local, like the cue switches).
     @State private var zonePreferences: WorkoutZonePreferences
     /// "My max heart rate" as typed (device-local, stored on Save; empty or unusable clears it).
@@ -103,6 +106,8 @@ struct WorkoutSetupSheet: View {
         self.initialStrengthFocus = settings.workoutStrengthFocus
         _foodAware = State(initialValue: settings.workoutFoodAware)
         self.initialFoodAware = settings.workoutFoodAware
+        _deloadThisWeek = State(initialValue: store.isDeloadThisWeek)
+        self.initialDeloadThisWeek = store.isDeloadThisWeek
         let zones = WorkoutZonePreferences.current()
         _zonePreferences = State(initialValue: zones)
         self.initialZonePreferences = zones
@@ -126,6 +131,7 @@ struct WorkoutSetupSheet: View {
             || warmUpSets != initialWarmUpSets
             || strengthFocus != initialStrengthFocus
             || foodAware != initialFoodAware
+            || deloadThisWeek != initialDeloadThisWeek
             || zonePreferences != initialZonePreferences
             || maxHeartRateText != initialMaxHeartRateText
     }
@@ -382,6 +388,8 @@ struct WorkoutSetupSheet: View {
             WarmUpSetsToggle(choice: $warmUpSets, experience: profile.experience)
 
             FoodLogsToggle(choice: $foodAware)
+
+            DeloadWeekToggle(isOn: $deloadThisWeek)
         }
     }
 
@@ -438,6 +446,7 @@ struct WorkoutSetupSheet: View {
         store.setWorkoutWarmUpSets(warmUpSets)
         store.setWorkoutStrengthFocus(strengthFocus)
         store.setWorkoutFoodAware(foodAware)
+        if deloadThisWeek != initialDeloadThisWeek { store.markDeloadWeek(start: store.todayKey, isDeload: deloadThisWeek) }
         WorkoutZonePreferences.save(zonePreferences)
         WorkoutZonePreferences.saveMaxHeartRate(WorkoutZonePreferences.maxHeartRate(typed: maxHeartRateText))
         dismiss()

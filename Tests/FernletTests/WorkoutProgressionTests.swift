@@ -574,7 +574,7 @@ extension WorkoutProgressionTests {
         #expect(!checked.suggestion.notes.localizedCaseInsensitiveContains("strength check"))
     }
 
-    /// w5: the builder reads the Bodybuilding calendar's marked week, only while that goal is on.
+    /// w5: the builder reads a marked deload week, whatever the goal (G2).
     @Test func theContextKnowsAMarkedDeloadWeek() throws {
         let calendar = BodybuildingWeeks.calendar()
         let todayKey = FernletDate.dayKey(for: day(100))
@@ -589,9 +589,11 @@ extension WorkoutProgressionTests {
         #expect(context.deloadWeek)
         let nextWeek = try #require(BodybuildingWeeks.dayKey(todayKey, addingDays: 7, calendar: calendar))
         #expect(!WorkoutLoadContextBuilder.isDeloadWeek(todayKey: nextWeek, settings: settings))
-        settings.selectedGoal = .strength
-        #expect(!WorkoutLoadContextBuilder.isDeloadWeek(todayKey: todayKey, settings: settings),
-                "the mark is only read while the calendar that shows it is on")
+        // G2: the mark is read under every goal; Workout setup's "Lighter week" shows and clears it.
+        for goal in [GoalType.strength, .weightManagement, .wellness, .sportsPrep] {
+            settings.selectedGoal = goal
+            #expect(WorkoutLoadContextBuilder.isDeloadWeek(todayKey: todayKey, settings: settings), "\(goal)")
+        }
     }
 
     /// w7 (W13): at the heaviest pair, one extra set — then the harder variation, not the line again.

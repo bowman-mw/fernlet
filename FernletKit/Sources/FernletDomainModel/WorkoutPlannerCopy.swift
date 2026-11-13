@@ -158,6 +158,21 @@ public nonisolated enum WorkoutPlannerCopy {
                comment: "Workout session note: a cardio session was replaced by stretches done sitting or lying down, because an ankle, knee or hip injury rules out walking and the cardio machines here")
     }
 
+    /// A sport session's drills, which a walk-barring injury rules out, replaced by an easy session on
+    /// a machine the person may use.
+    static var sportDrillsOnMachine: String {
+        String(localized: "workoutNote.sportDrills.machine",
+               defaultValue: "An easy machine session in place of drills today, to work around your limits.", bundle: .module,
+               comment: "Workout session note: a sport session's running and jumping drills were replaced by an easy session on a cardio machine (a bike, an elliptical or a rower), because an ankle, knee or hip injury rules them out")
+    }
+
+    /// A sport session's drills replaced by seated mobility: no machine here suits the person's limits.
+    static var sportDrillsSeated: String {
+        String(localized: "workoutNote.sportDrills.seated",
+               defaultValue: "Seated mobility in place of drills today, to work around your limits.", bundle: .module,
+               comment: "Workout session note: a sport session's running and jumping drills were replaced by stretches done sitting or lying down, because an ankle, knee or hip injury rules out the drills and the cardio machines here")
+    }
+
     /// The rest-day plan's note (the app's ``WorkoutProgram/DayPlan`` for a day marked unwell).
     public static var restDayNote: String {
         String(localized: "workoutNote.restDay",

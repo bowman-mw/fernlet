@@ -1850,12 +1850,15 @@ public nonisolated enum WorkoutProgram {
             let seated = machine == capped.text ? seatedInsteadOfCardio(machine, inputs: inputs) : nil
             let detail = seated?.text ?? machine
             let exercises = [PrescribedExercise(name: detail, sets: 0, reps: "", role: .accessory, fromCatalog: false)]
-            let suggestion = WorkoutSuggestion(
-                name: name, exercises: detail,
-                notes: notes(inputs: inputs, dropped: [],
-                             progressNotes: (capped.note.map { [$0] } ?? []) + (seated.map { [$0.note] } ?? []))
-            )
-            return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: exercises, suggestion: suggestion), [])
+            // The seated line's own note names the limits, so the general "worked around" line is not
+            // said beside it; and the session is a stretch session, drawn and logged as one, under the
+            // day's own name so the rotation still moves on (``SessionSuggestion/displayedName``).
+            let progress = ((capped.note.map { [$0] } ?? []) + (seated.map { [$0.note] } ?? []))
+                .map { WorkoutNotePart(.session, $0) }
+            let parts = noteParts(inputs: inputs, dropped: [], progress: progress, namesLimits: seated != nil)
+            let suggestion = WorkoutSuggestion(name: name, exercises: detail, notes: WorkoutNotePart.text(of: parts))
+            let kind: SessionKind = seated == nil ? session.kind : .mobility
+            return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: kind, exercises: exercises, suggestion: suggestion), [])
 
         case .strength, .fullBody, .sport:
             let built = buildBlocks(session: session, inputs: inputs, used: &used, calibrationOpen: &calibrationOpen)
@@ -1867,7 +1870,7 @@ public nonisolated enum WorkoutProgram {
             let covered = built.isOffer || built.namesLimits
             let unsafe = built.dropped.filter { !hiddenDrops.contains($0) && !(covered && built.replaced.contains($0)) }
             let parts = noteParts(inputs: inputs, dropped: unsafe, progress: built.noteParts,
-                                  hiddenDropped: hiddenDrops, namesLimits: built.namesLimits)
+                                  hiddenDropped: hiddenDrops, namesLimits: built.namesLimits || built.saysLimits)
             let suggestion = WorkoutSuggestion(
                 name: name,
                 exercises: WorkoutSessionBlocks.planText(for: built.exercises),
@@ -1970,6 +1973,9 @@ public nonisolated enum WorkoutProgram {
         /// True when a note already names the injured area, so the general "worked around your noted
         /// limits" line would only repeat it.
         var namesLimits = false
+        /// True when a note already says the plan worked around the limits (the sport drills' swap),
+        /// so the general line would repeat it; unlike ``namesLimits`` it leaves skipped slots named.
+        var saysLimits = false
     }
 
     /// A lifting session's movements in run order — warm-up, activation, lifting, cardio,
@@ -2005,9 +2011,8 @@ public nonisolated enum WorkoutProgram {
             feasible: inputs.feasible, experience: inputs.profile.experience, goal: inputs.goal,
             intensity: inputs.intensity, trainsLegs: trainsLegs
         )
-        var cardio: [PrescribedExercise] = []
-        // Sport drills are running and jumping: left out when a walk is (the note says limits applied).
-        if session.kind == .sport, !inputs.limits.barsWalking { cardio.append(descriptorStep(inputs.style.conditioningLabel)) }
+        let drills = session.kind == .sport ? sportDrills(inputs: inputs) : nil
+        var cardio = drills.map { [$0.step] } ?? []
         if let extra = session.conditioning { cardio.append(descriptorStep(extra)) }
         let mainLabels = Set(liftSlots.filter { $0.role == .main }.map(\.label)).union(lifting.fillMainLabels)
         // The finishing pass (WorkoutPlanFinisher.swift): the 48-hour guard's lighter sets, then the
@@ -2022,10 +2027,24 @@ public nonisolated enum WorkoutProgram {
         var liftNames: [String] = []
         for step in lifting.steps where step.fromCatalog && !liftNames.contains(step.name) { liftNames.append(step.name) }
         let parts = (fill.map { [WorkoutNotePart(.session, $0.text)] } ?? [])
+            + (drills?.note.map { [WorkoutNotePart(.session, $0)] } ?? [])
             + [WorkoutNotePart(.budget, settled.budget?.note ?? ""), WorkoutPlanFinisher.recoveryPart(settled.lightened)]
             + lifting.notes.map { WorkoutNotePart(.lifts, $0, lifts: liftNames) }
         return BuiltSession(exercises: settled.blocks.exercises, dropped: dropped, noteParts: parts,
-                            replaced: lifting.replaced, namesLimits: fill?.namesArea ?? false)
+                            replaced: lifting.replaced, namesLimits: fill?.namesArea ?? false, saysLimits: drills?.note != nil)
+    }
+
+    /// A sport session's drills line, or, when a walk is ruled out (the drills are running and
+    /// jumping), an easy session on a machine the person may use for the same minutes, else seated
+    /// mobility — never nothing — with the note saying so.
+    static func sportDrills(inputs: SlotInputs) -> (step: PrescribedExercise, note: String?) {
+        let line = inputs.style.conditioningLabel
+        guard inputs.limits.barsWalking else { return (descriptorStep(line), nil) }
+        let minutes = descriptorMinutes(in: line) ?? offerMobilityMinutes
+        let easy = "Easy cardio - \(minutes) min"
+        let machine = WorkoutCardioMachines.named(easy, feasible: inputs.feasible, seed: inputs.cardioSeed)
+        guard machine == easy else { return (descriptorStep(machine), WorkoutPlannerCopy.sportDrillsOnMachine) }
+        return (descriptorStep("\(seatedMobilityHead) - \(minutes) min"), WorkoutPlannerCopy.sportDrillsSeated)
     }
 
     /// A session's lifting block on its way to the plan: its steps, with the catalog rows and the
@@ -2435,12 +2454,6 @@ public nonisolated enum WorkoutProgram {
         for interest in profile.interests { tokens.formUnion(interest.lowercased().split(separator: " ").map(String.init)) }
         tokens.formUnion(profile.sport.lowercased().split(separator: " ").map(String.init))
         return tokens.filter { $0.count >= 3 }.union(note.nudgeWords)
-    }
-
-    /// A cardio or mobility session's note: the space, then `progressNotes`, then the limits line.
-    private static func notes(inputs: SlotInputs, dropped: [String], progressNotes: [String]) -> String {
-        WorkoutNotePart.text(of: noteParts(inputs: inputs, dropped: dropped,
-                                           progress: progressNotes.map { WorkoutNotePart(.session, $0) }))
     }
 
     /// A session's note as its parts (``WorkoutNotePart``), in the order it reads: the space,
