@@ -149,3 +149,74 @@ struct OwnerExerciseAdditionsTests {
         #expect(WorkoutExerciseCatalog.search("Leg curl").first?.name == "Leg curl")
     }
 }
+
+/// The additions of 2026-11-13: nine more variations (the trap-bar and sumo deadlifts, the slider
+/// curl, the landmine press, the single-leg hip thrust, the tibialis raise, the sled push and pull,
+/// and the 90/90 hip switch), two pieces of gear for them, and four more search aliases.
+@MainActor
+struct CatalogAdditions20261113Tests {
+
+    static let added = [
+        "Trap-bar deadlift", "Sumo deadlift", "Hamstring slider curl", "Landmine press", "Single-leg hip thrust",
+        "Tibialis raise", "Sled push", "Sled pull", "90/90 hip switch",
+    ]
+
+    @Test func everyAdditionIsAVariationWithItsHowToAndAnimation() throws {
+        #expect(Set(Self.added).count == 9)
+        for name in Self.added {
+            let row = try #require(WorkoutExerciseCatalog.baseExercises.first { $0.name == name }, "\(name) is not bundled")
+            #expect(row.variation, "\(name) would compete with the staples")
+            #expect(ExerciseHowToCatalog.entry(for: name) != nil, "\(name) has no how-to page")
+            #expect(ExerciseAnimationCatalog.entry(forExerciseName: name) != nil, "\(name) has no animation")
+        }
+        let gear = Dictionary(WorkoutExerciseCatalog.baseExercises.map { ($0.name, $0.requiredGear) },
+                              uniquingKeysWith: { first, _ in first })
+        #expect(gear["Trap-bar deadlift"] == [.trapBar, .weightPlates])
+        #expect(gear["Sled push"] == [.sled] && gear["Sled pull"] == [.sled])
+    }
+
+    /// Without an injury the additions never move a plan that had no gap: across every split, the
+    /// presets and three narrow spaces, each level and rotation, a plan made with them matches the
+    /// plan made without them, or drops fewer slots. A full gym's plans, cool-downs included, never
+    /// change (the 90/90 hip switch is a variation stretch, drawn only where no staple stretch is).
+    @Test func withoutAnInjuryTheAdditionsOnlyFillDroppedSlots() {
+        let all = WorkoutExerciseCatalog.allExercises
+        let before = all.filter { !Self.added.contains($0.name) }
+        let locations = LocationTemplate.all.map { $0.makeLocation() } + [
+            WorkoutLocation(name: "Park", ownedEquipment: []),
+            WorkoutLocation(name: "Bench", ownedEquipment: [.weightBench]),
+            WorkoutLocation(name: "Barbell", ownedEquipment: [.barbell, .weightPlates, .trapBar, .sled]),
+        ]
+        for split in WorkoutSplitCatalog.all {
+            for location in locations {
+                for experience in ExperienceLevel.allCases {
+                    for rotation in 0..<max(split.days.count, 1) {
+                        let profile = WorkoutProfile(trainingDaysPerWeek: 4, experience: experience)
+                        let plans = [before, all].map { catalog in
+                            WorkoutProgram.dayPlan(goal: .strength, intensity: .moderate, profile: profile, location: location,
+                                                   context: "", split: split, rotationIndex: rotation, catalog: catalog)
+                        }
+                        let old = plans[0].sessions.flatMap(\.exercises).map(\.name)
+                        let new = plans[1].sessions.flatMap(\.exercises).map(\.name)
+                        guard old != new else { continue }
+                        let what = "\(split.name), \(location.name), \(experience), day \(rotation)"
+                        #expect(location.name != "Full gym", "\(what): \(old) became \(new)")
+                        #expect(plans[1].droppedSlots.count < plans[0].droppedSlots.count, "\(what): \(old) became \(new)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The names people use find the exercise meant.
+    @Test func theNewAliasesFindTheirExercise() {
+        let meant = [
+            "lateral lunge": "Side lunge", "modified push-up": "Knee push-up",
+            "overhead dumbbell triceps extension": "Dumbbell overhead triceps extension",
+            "hex bar deadlift": "Trap-bar deadlift",
+        ]
+        for (query, name) in meant {
+            #expect(WorkoutExerciseCatalog.search(query).map(\.name).contains(name), "\"\(query)\" does not find \(name)")
+        }
+    }
+}

@@ -53,7 +53,7 @@ struct ExerciseHowToTests {
 
     @Test func everyCatalogRowHasThreeToFiveCuesOneMistakeAndOneEasierVersion() throws {
         let rows = try Self.catalogRows()
-        #expect(rows.count == 199, "the catalog changed size — write how-to text for any new row")
+        #expect(rows.count == 208, "the catalog changed size — write how-to text for any new row")
         for row in rows {
             let entry = try #require(ExerciseHowToCatalog.entry(for: row.name), "\(row.name) has no how-to entry")
             #expect(entry.name == row.name)
@@ -110,11 +110,19 @@ struct ExerciseHowToTests {
 
     // MARK: - The display lookup
 
+    /// The English names a screen draws differently from the frozen name: the bodyweight Calf raise
+    /// reads apart from the machine's Standing calf raise (2026-11-13). Display only.
+    static let englishDisplayNames = ["Calf raise": "Calf raise (body weight)"]
+
     @Test func theDisplayNameIsTheFrozenNameInEnglishAndOtherNamesDrawAsStored() throws {
         for row in try Self.catalogRows() {
-            #expect(ExerciseHowToCatalog.displayName(for: row.name) == row.name)
-            #expect(row.displayName == row.name)
+            let drawn = Self.englishDisplayNames[row.name] ?? row.name
+            #expect(ExerciseHowToCatalog.displayName(for: row.name) == drawn)
+            #expect(row.displayName == drawn)
         }
+        // The frozen name still finds the exercise, and the drawn one is searchable too.
+        #expect(ExerciseHowToCatalog.entry(for: "Calf raise")?.name == "Calf raise")
+        #expect(WorkoutExerciseCatalog.search("calf raise (body").map(\.name).contains("Calf raise"))
         // Exact match only, like StoredWorkoutName: typed text and custom exercises draw as stored.
         #expect(ExerciseHowToCatalog.displayName(for: "bench press") == "bench press")
         #expect(ExerciseHowToCatalog.entry(for: "bench press") == nil)

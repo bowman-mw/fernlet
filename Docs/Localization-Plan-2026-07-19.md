@@ -429,6 +429,13 @@ new `exercise.<keyStem>.` key carries es, fr and de machine drafts marked `needs
 search aliases (`WorkoutExerciseCatalog.searchAliases`: "ab roller" finds the Ab wheel) are matching inputs,
 not display text, so they stay English and get no keys; a translated display name is already searchable.
 
+**Addendum (2026-11-13, nine more).** The catalog grows from 199 to 208 (trap-bar and sumo deadlifts, slider
+curl, landmine press, single-leg hip thrust, tibialis raise, sled push and pull, 90/90 hip switch), with two
+gear names (`gymEquipment.trapBar`, `gymEquipment.sled`). Every new key carries es, es-MX, fr and de drafts
+marked `needs_review`. `exercise.calfRaise.name` now reads "Calf raise (body weight)" so the bodyweight row
+reads apart from the machine's Standing calf raise; the frozen name stays "Calf raise", and its four
+translations went back to `needs_review` with the new wording.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

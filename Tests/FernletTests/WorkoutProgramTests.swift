@@ -195,9 +195,10 @@ struct WorkoutProgramTests {
     }
 
     @Test func granularEquipmentMapsToEngineCapabilities() {
-        // 36 items across 5 categories: the 22 older pieces, then each machine and the three small
-        // pieces that gained a row of their own (fix e5).
-        #expect(GymEquipment.allCases.count == 36)
+        // 38 items across 5 categories: the 22 older pieces, then each machine and the three small
+        // pieces that gained a row of their own (fix e5), then the trap bar and the sled (2026-11-13).
+        #expect(GymEquipment.allCases.count == 38)
+        #expect(GymEquipment.catalogAdditionPieces == [.trapBar, .sled])
         #expect(GymEquipment.originalPieces.count == 22 && GymEquipment.itemizedMachines.count == 11)
         for category in EquipmentCategory.allCases {
             #expect(GymEquipment.allCases.contains { $0.category == category })

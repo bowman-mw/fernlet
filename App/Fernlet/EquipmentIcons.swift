@@ -57,6 +57,9 @@ enum EquipmentIconLibrary {
         .dipBars: #"<path d="M7 15h12M25 15h12"/><path d="M10 15v19M16 15v19M28 15v19M34 15v19"/><path d="M8 34h10M26 34h10"/>"#,
         .lowBar: #"<path d="M8 20h28"/><path d="M12 13v21M32 13v21"/><path d="M8 34h8M28 34h8"/>"#,
         .abWheel: #"<circle cx="22" cy="23" r="9"/><circle cx="22" cy="23" r="2.5"/><path d="M6 23h13.5M24.5 23h13.5"/>"#,
+        // The two pieces that came with the 2026-11-13 exercises.
+        .trapBar: #"<path d="M15 12h14l7 10-7 10H15l-7-10z"/><path d="M18 18v8M26 18v8"/><path d="M3 22h5M36 22h5"/>"#,
+        .sled: #"<path d="M7 31h26c3 0 4-2 4-4"/><path d="M11 31V19h18v12"/><path d="M14 19v-7M26 19v-7"/><path d="M12 12h4M24 12h4"/>"#,
     ]
 
     /// Location-template glyphs, keyed by `LocationTemplate.id`. 40×40 viewBox.
