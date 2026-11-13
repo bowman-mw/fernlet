@@ -261,7 +261,10 @@ struct IngredientSearchCorpusTests {
     /// chocolate chip 2 → 4 (the baking query and the typing prefix). The two semi-sweet judges were
     /// widened in the same commit to accept "Chocolate Chips, Semi-sweet" (see the file header);
     /// without that, "semi sweet chocolate chips" would have read 6 → 5 for a row that is plainly one.
-    static let plainRowsInSixBaseline = 455
+    /// 454 with the 2026-11-09 typed-search fixes (PR #139), whose plural stems changed the shipped
+    /// candidate set for "tomatoes": canned tomatoes 6 → 5, its #1 unchanged. #139 merged without
+    /// re-taking this pin; re-taken here.
+    static let plainRowsInSixBaseline = 454
 
     /// The description `BundledRowCorrection.rebasingBrandedNutrients` gives a branded label serving
     /// it keeps as the row's count portion — a serving, not an item.
@@ -640,7 +643,7 @@ struct IngredientSearchCorpusTests {
         .init("mayonnaise", 5, 5, plain: 1),
         .init("chicken broth", 1, 1, plain: 2),
         .init("tomato paste", 1, 1, plain: 2),
-        .init("canned tomatoes", 1, 1, plain: 6),
+        .init("canned tomatoes", 1, 1, plain: 5),
         .init("coconut milk", 1, 1, plain: 4),
         .init("water", 1, 1, plain: 4),
         .init("choc", 2, 2, plain: 4),
