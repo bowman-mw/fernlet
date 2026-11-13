@@ -72856,6 +72856,54 @@
         }
       }
     },
+    "workoutNote.sportDrills.machine" : {
+      "comment" : "Workout session note: a sport session's running and jumping drills were replaced by an easy session on a cardio machine (a bike, an elliptical or a rower), because an ankle, knee or hip injury rules them out",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "An easy machine session in place of drills today, to work around your limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, una sesión suave en máquina en lugar de ejercicios técnicos, respetando tus límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, una sesión suave en máquina en lugar de ejercicios técnicos, respetando tus límites."
+          }
+        }
+      }
+    },
+    "workoutNote.sportDrills.seated" : {
+      "comment" : "Workout session note: a sport session's running and jumping drills were replaced by stretches done sitting or lying down, because an ankle, knee or hip injury rules out the drills and the cardio machines here",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seated mobility in place of drills today, to work around your limits."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, movilidad sentada en lugar de ejercicios técnicos, respetando tus límites."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, movilidad sentada en lugar de ejercicios técnicos, respetando tus límites."
+          }
+        }
+      }
+    },
     "workoutNote.workedAroundLimits" : {
       "comment" : "Workout session note: the plan avoided the body areas or movements the person said to work around",
       "extractionState" : "extracted_with_value",
@@ -73824,6 +73872,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Descanso"
+          }
+        }
+      }
+    },
+    "workoutSession.seatedMobility" : {
+      "comment" : "Workout session name: stretches done sitting or lying down, in place of a cardio session an injury rules out",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seated mobility"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Movilidad sentada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Movilidad sentada"
           }
         }
       }

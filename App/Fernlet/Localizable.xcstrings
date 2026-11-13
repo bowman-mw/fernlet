@@ -21427,6 +21427,23 @@
         }
       }
     },
+    "For this week only: the same weights as last time and about half the sets. Nothing steps up, and next week picks up from where you were." : {
+      "comment" : "Workout setup: the note under 'Lighter week'.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo esta semana: los mismos pesos que la última vez y más o menos la mitad de las series. No sube nada, y la próxima semana sigue desde donde estabas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo esta semana: los mismos pesos que la última vez y más o menos la mitad de las series. No sube nada, y la próxima semana sigue desde donde estabas."
+          }
+        }
+      }
+    },
     "Force" : {
       "localizations" : {
         "es" : {
@@ -26941,6 +26958,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Más ligero"
+          }
+        }
+      }
+    },
+    "Lighter week" : {
+      "comment" : "Voice Control name for Workout setup's lighter-week switch.\nWorkout setup: the switch that marks this week as a deload week (a planned lighter week)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana más ligera"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana más ligera"
           }
         }
       }
