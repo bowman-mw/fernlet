@@ -299,9 +299,7 @@ public nonisolated enum FoodItemSearch {
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
                 }
                 .map { (foodItem: $0.foodItem, score: $0.score) }
-            let window = ranked.prefix(max(limit, FoodItemSearch.demotionWindow))
-            let ordered = PreparedDishHeuristic.demotingDishes(scored: Array(window), forQuery: query.normalized)
-            return Array(ordered.prefix(limit))
+            return FoodItemSearch.demotingWindow(of: ranked, limit: limit, query: query.normalized)
         }
 
         public func exactNameMatch(for normalizedName: String) -> FoodItem? {
@@ -595,10 +593,21 @@ public nonisolated enum FoodItemSearch {
         let ranked = markingIdentity(branded, query: prepared, ranking: ranking, isBrandQuery: isBrandQuery)
         .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
         .map { (foodItem: $0.foodItem, score: $0.score) }
-        let window = ranked.prefix(max(limit, demotionWindow))
-        return PreparedDishHeuristic.demotingDishes(
-            scored: Array(window), forQuery: prepared.normalized
-        ).prefix(limit).map(\.foodItem)
+        return demotingWindow(of: ranked, limit: limit, query: prepared.normalized).map(\.foodItem)
+    }
+
+    /// The first `limit` ranked rows with fix 1.7a's dish demotion applied to the first
+    /// ``demotionWindow`` of them. Rows past the window follow in ranked order, untouched: a caller
+    /// asking for more than the window (the typed surface's duplicate collapse, roadmap G1, which reads
+    /// past 60 rows when one product fills them, as 53 "Candy Corn" rows did) gets the same top 60 as
+    /// every other caller. R2: bounded by `limit`.
+    fileprivate static func demotingWindow(
+        of ranked: [(foodItem: FoodItem, score: Int)], limit: Int, query: String
+    ) -> [(foodItem: FoodItem, score: Int)] {
+        let window = Array(ranked.prefix(demotionWindow))
+        let demoted = PreparedDishHeuristic.demotingDishes(scored: window, forQuery: query)
+        let rest = ranked.dropFirst(window.count).prefix(max(0, limit - window.count))
+        return Array((demoted + rest).prefix(limit))
     }
 
     /// Exact, bounded queries the source may run after the full AND query returns zero. A one-word

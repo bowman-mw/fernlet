@@ -98,6 +98,21 @@ struct G1FoodSearchFixesTests {
         #expect(catalog.results(for: "7 up", context: .userTyped).map(\.name) == ["7UP, Flavored Soft Drink, Cherry"])
     }
 
+    // MARK: - "candy corn": one product listed dozens of times
+
+    /// 53 branded rows are named exactly "Candy Corn"; they filled the collapse's whole 60-row window,
+    /// so the typed list showed three rows. The collapse now reads 180 rows.
+    @Test func aProductListedManyTimesStillLeavesASixRowList() {
+        let twins = (0..<70).map { _ in Self.food("Candy Corn", category: "Candy", dataType: .branded) }
+        let others = ["Candy Corn Chicks", "Candy Corn Candy", "Candy Corn, Assorted", "Candy Corn Nut Mix",
+                      "Candy Corn Mallows"].map { Self.food($0, category: "Candy", dataType: .branded) }
+        let catalog = FoodCatalog(source: InMemoryBundledFoodSource(twins + others))
+        let rows = catalog.results(for: "candy corn", context: .userTyped)
+        #expect(rows.count == 6)
+        #expect(rows.first?.name == "Candy Corn")
+        #expect(Set(rows.map(\.name)).count == 6, "one row per name")
+    }
+
     // MARK: - F11: chain names are words
 
     @Test func chainNamesAreReadAsWords() {
