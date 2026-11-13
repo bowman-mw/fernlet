@@ -166,6 +166,38 @@ struct VoiceOverWalk {
         activate(button(key, timeout: timeout, file: file, line: line), file: file, line: line)
     }
 
+    /// Activates whichever of `keys` the screen carries, first match in tree order — for a control
+    /// whose identifier depends on the look: the World look's framed chrome (``fernletSheetToolbar``,
+    /// ``fernletPushedPage``) names its Done `sheet.done` and its back `plate.back`, where the
+    /// classic navigation bar named them per screen.
+    func press(anyOf keys: [String], timeout: TimeInterval = 8, file: StaticString = #file, line: UInt = #line) {
+        let element = app.buttons.matching(NSPredicate(format: "identifier IN %@", keys)).firstMatch
+        XCTAssertTrue(
+            element.waitForExistence(timeout: timeout),
+            "[\(task)] none of \(keys) is a button in the accessibility tree — VoiceOver cannot reach it as a control",
+            file: file, line: line
+        )
+        assertSpeaksWords(element, describe: "button '\(element.identifier)'", file: file, line: line)
+        activate(element, file: file, line: line)
+    }
+
+    /// From a page pushed inside Settings back to the hub: the World look's plate back button, or
+    /// the classic navigation bar's back button titled "Settings" (which carries no identifier).
+    func backToSettingsHub(file: StaticString = #file, line: UInt = #line) {
+        let plate = app.buttons["plate.back"].firstMatch
+        if plate.waitForExistence(timeout: 4) {
+            assertSpeaksWords(plate, describe: "the back button", file: file, line: line)
+            activate(plate, file: file, line: line)
+        } else {
+            activate(app.navigationBars.buttons["Settings"].firstMatch, file: file, line: line)
+        }
+    }
+
+    /// Closes Settings from its hub: `sheet.done` in the World look, `settings.done` in the classic one.
+    func closeSettings(file: StaticString = #file, line: UInt = #line) {
+        press(anyOf: ["sheet.done", "settings.done"], file: file, line: line)
+    }
+
     /// The button whose spoken label begins with `prefix` — for controls whose label carries live
     /// state ("Water, 3 bottles"), which is exactly what VoiceOver hears and so what to match on.
     @discardableResult

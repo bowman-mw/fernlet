@@ -182,8 +182,8 @@ final class VoiceOverTaskUITests: XCTestCase {
         let strength = walk.button("goalPreset.strength")
         walk.activate(strength)
         XCTAssertTrue(strength.wait(for: \.isSelected, toEqual: true, timeout: 4))
-        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
-        walk.press("settings.done")
+        walk.backToSettingsHub()
+        walk.closeSettings()
 
         walk.press("Move")
         // A run an earlier launch left live persists by design (the app-group run state), and the
@@ -215,8 +215,8 @@ final class VoiceOverTaskUITests: XCTestCase {
         let strength = walk.button("goalPreset.strength")
         walk.activate(strength)
         XCTAssertTrue(strength.wait(for: \.isSelected, toEqual: true, timeout: 4))
-        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
-        walk.press("settings.done")
+        walk.backToSettingsHub()
+        walk.closeSettings()
 
         walk.press("Move")
         guard app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) else {
@@ -376,9 +376,9 @@ final class VoiceOverTaskUITests: XCTestCase {
         let system = walk.button("System")
         walk.activate(system)
         XCTAssertTrue(system.wait(for: \.isSelected, toEqual: true, timeout: 4))
-        // Done lives on the hub; the pushed page's back button ("Settings") returns to it.
-        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
-        walk.press("settings.done")
+        // Done lives on the hub; the pushed page's back button returns to it.
+        walk.backToSettingsHub()
+        walk.closeSettings()
         XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].waitForNonExistence(timeout: 6))
     }
 
