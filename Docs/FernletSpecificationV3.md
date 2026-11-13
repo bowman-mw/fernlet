@@ -6,6 +6,8 @@ Fernlet is a tamagotchi-of-yourself iOS health app emphasizing gentle, consisten
 
 This document captures the product and architecture requirements from the v3 specification provided on 2026-05-16. Treat it as the canonical implementation reference for future work.
 
+**Last updated 2026-11-12** against `main` (`5a61baeb`). This pass reconciles the spec with what is built (the World live-map Home, gold hearts, the workout engine, food additions, localization, and the smaller surfaces in Section 12a) and adds the future direction (Section 20). Earlier dated notes are kept as the record of when each decision was made.
+
 ## 0. Prototype Decision Layer
 
 The production specification remains privacy-first and module-enforced. Current prototype and web proof-of-concept builds may use a narrower feature set and simpler storage so the product shape can be tested quickly. Prototype exceptions must be labeled as such and must not silently become production privacy policy.
@@ -14,7 +16,7 @@ Current prototype priorities:
 - Phase 0 is data model and storage: define the local domain model, replace prototype `UserDefaults` blobs where practical, and remove Notion as an implementation dependency/source of truth.
 - All logging writes (`MealLog`, `Workout`, `HygieneLog`, `HydrationLog`) must accept an explicit `date` parameter from day one — never assume "today" as a hardcoded write target. This is required for past-date backfill and Day Detail editing.
 - Integrate the new storage layer into the current SwiftUI work that came from the website before adding large new systems.
-- Add goal-based scoring for the six goal types: Wellness, Strength, Weight Management, Mental Health, Recovery, and Exploring.
+- Add goal-based scoring for the six goal types: Wellness, Strength, Weight Management, Mental Health, Recovery, and Exploring. *(Since extended to eight with Sports Prep and Bodybuilding; Section 6.)*
 - Add sickness mode with a Settings toggle, sick avatar state, exercise-weight redistribution, and hydration target bump.
 - Add all per-feature deterministic AI fallbacks before adding or expanding AI integration. Logging flows must keep working when AI is unavailable, rate-limited, disabled, or not implemented.
 - Add a meal retry queue: failed meal analyses save immediately as manual/pending entries with a tap-to-analyze-later action.
@@ -29,7 +31,7 @@ Current prototype priorities:
 - Add three to five low-cost ambient features before larger systems.
 
 Prototype implementation status as of 2026-05-28:
-- Local JSON repository is active for current app state (`LocalFernletRepository`) and persists days, settings, meals, journals, workouts, retry queue, food items, recipes, daily scores, memories, goals, and workshop data. The Core Data shell remains present, but current feature state is backed by the local repository.
+- App state persists through a `FernletRepository` chosen by `StoragePreferences`: `CoreDataFernletRepository` (Core Data, mirrored to the user's CloudKit private database when iCloud sync is on) or `LocalFernletRepository` (local JSON, this device only). Both carry days, settings, meals, journals, workouts, retry queue, food items, recipes, daily scores, memories, goals, and workshop data. *(Updated 2026-11-12; this line used to say only the local JSON repository was active.)*
 - Food and recipe work now uses a bundled USDA FoodData Central subset in `USDAFoodItems.json`, generated from Foundation Foods April 2026, SR Legacy April 2018, and a curated Branded Foods April 2026 subset. The bundled file is a reduced read-only JSON resource, not SQLite, and currently contains 13,104 foods; 13,078 include at least one micronutrient and 12,302 include USDA portion or serving gram weights. No USDA API is used at runtime.
 - Ingredient search is local and indexed in memory for the recipe sheet. It normalizes punctuation/case, token-matches out-of-order USDA names, and does not show suggestions until at least 3 characters are entered.
 - Recipe ingredient lookup supports selected USDA items with read-only macros and unmatched manual items with editable macros.
@@ -53,14 +55,14 @@ Prototype implementation status as of 2026-05-28:
 Stretch goals (not yet prioritized):
 - Historical data import from external sources (Apple Health XML export, CSV from apps such as MyFitnessPal or Cronometer, manual paste). Foundation Models maps imported rows to Fernlet data types so new users can seed historical data at setup.
 
-Deferred for current prototype builds:
-- Period tracker and period-aware scoring are deferred until data protection and sealed module boundaries exist.
-- Customization, wardrobe, milestones, background composer, and Creation Studio are deferred to v8.
-- Photowall, gallery, journal photos, and photo surfacing are deferred.
-- Coaching tone profile is deferred.
-- Avatar event reactions are deferred.
-- Historical daily snapshots can remain live-only for now.
-- Cloud-backed multi-person group sharing is deferred until local proximity handshake and file sharing work reliably.
+Deferred for prototype builds (historical, 2026-05-28; status as of 2026-11-12):
+- ~~Period tracker and period-aware scoring~~ — **shipped**: sealed `CycleRecord`s in `PrivateHealthStore`, behind `PeriodContextBridge`.
+- ~~Customization, wardrobe, background composer, and Creation Studio~~ — **shipped** (the pixel wardrobe, Customize, Studio and Your spaces). Milestones remain cumulative unlocks (Section 14).
+- ~~Photowall, gallery, journal photos~~ — **shipped** (Section 11). Memory-aware photo surfacing is still to build.
+- Coaching tone profile — still deferred; now Phase 3 AI work (Section 20).
+- Avatar event reactions — partly covered by companion feelings (Section 12a).
+- Historical daily snapshots are stored per day (`DailyHealthScore`); past days are never rewritten by live-only boosts such as gold hearts.
+- Cloud-backed multi-person group sharing — still deferred; friend features stay in person.
 
 Recommended first ambient subset:
 - Year-ago journal card.
@@ -86,8 +88,8 @@ Design axioms:
 Platform requirements:
 - iOS 26 or later for Foundation Models.
 - Full AI features require Apple Intelligence-capable hardware, with graceful degradation elsewhere.
-- Proximity features require NearbyInteraction-capable devices with UWB support.
-- Apple Watch is optional but useful for sleep stage data and continuous heart rate.
+- Proximity features use UWB (NearbyInteraction) where the hardware has it. A device without UWB still pairs: the peer waits in an `awaitingManualCommit` slot until both people confirm by hand (`commitManualProximity`), and that manual confirmation can be upgraded to ceremony grade by scanning the peer's signed QR (`VerifyQRViews`). A "Connect with a code" path for non-UWB devices is **not built**.
+- Apple Watch: Apple Health data from a watch (sleep stages, heart rate) is read through HealthKit today. A Fernlet Apple Watch companion app is **planned as part of the iOS 27 update and not built** (Section 20).
 
 Explicitly not building:
 - No general chat or messaging product. The one exception is the live-session transcript in Section 10:
@@ -191,11 +193,11 @@ Core device types:
 - `DerivedSignal`: cached derived signals such as mood trend, energy trend, progression trend, intensity readiness, eating pattern, and log trends. Prototype builds store these locally; production builds keep derived signals on-device unless a specific privacy-reviewed sync path is added.
 - `AIAnalysisRetry`: pending analysis item for meals, journals, recipes, or other AI-assisted flows that saved successfully but still need analysis retry.
 - `CoreMemory`: user-visible memory, editable and deletable.
-- `CoachingToneProfile`: bounded tone adaptation.
-- `UserCreation`, `CreationCredit`, `CustomizationItem`, `UserCustomization`, and `MilestoneProgress` for wardrobe/background systems.
+- `CustomizationItem` (`CustomItemModels.swift`) for wardrobe and Creation Studio items. *(2026-11-12: the earlier list also named `CoachingToneProfile`, `UserCreation`, `CreationCredit`, `UserCustomization` and `MilestoneProgress`; none exists in code. Coaching tone is future Phase 3 AI work, Section 20.)*
 
 Device-sealed types:
-- `PeriodEntry`, `PeriodCycleHistory`, `PeriodPrediction`, `PeriodHealthTrend` in `PrivateHealthStore`.
+- `CycleRecord` (one sealed record per cycle entry, clinical and narrative blocks in one ColumnCrypto blob) in `CycleRecordStore`, and `IntimacyLog` (`IntimacyLogRepository`), in `PrivateHealthStore`. *(Replaces the earlier `PeriodEntry` / `PeriodCycleHistory` / `PeriodPrediction` / `PeriodHealthTrend` names.)*
+- The World map's sealed vault (`WorldMapVault` in `WorldMapStore`): fog cells, walk lines, places, passport, road trips (Section 12b).
 - `SensitiveMemory` in `PrivateMemoryStore`.
 - `Photo` in `PrivateMediaStore`.
 
@@ -206,7 +208,7 @@ Cloud-minimal types:
 - `ActivityJoinToken`: ephemeral group activity trust token.
 - `HeartSent`: ephemeral, ~24h, rate-limited.
 
-Module boundaries are part of the privacy guarantee. `OHTTPProvider` must not import raw period types, period bridge signals, sensitive memory, photos, or raw journal text. `PrivateMediaStore` must not be importable by AI providers. `MemoryExtractionContext` must not import period modules.
+Module boundaries are part of the privacy guarantee. The walled `AIProviders` module (and every provider on the AI provider ladder, [AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md): on-device Foundation Models first, deterministic fallback always; Private Cloud Compute and BYOK planned with iOS 27) must not import raw period types, period bridge signals, sensitive memory, photos, or raw journal text — a hard build error via `Scripts/spm-wall-check.sh`. *(This sentence used to name an `OHTTPProvider`, which was never built.)* `PrivateMediaStore` must not be importable by AI providers. `MemoryExtractionContext` must not import period modules.
 
 ## 4. Period Context Bridge
 
@@ -243,7 +245,7 @@ Read authorization:
 
 Write authorization:
 - Fernlet writes logged workouts to HealthKit so they count in Apple Health and Apple Watch activity rings.
-- Fernlet does not write sleep, hydration, journal, mood, hygiene, or period data.
+- Fernlet does not write sleep, hydration, journal, mood, or hygiene data. Period data is written to Apple Health only as an optional mirror while cycle sharing is on (Fernlet's sealed cycle store stays the source of truth), and an intimacy log's activity fact is saved as a HealthKit sexual-activity sample only after the 16+ gate and the user's opt-in (Section 5.1).
 
 Workout sync:
 - Fernlet-created workouts are written to HealthKit and store the resulting HealthKit UUID.
@@ -257,24 +259,19 @@ Sleep quality derivation:
 
 WeatherKit is used only for gentle mood-recovery prompts and can use coarse location.
 
-### 5.1 Intimate Tracking Placeholder
+### 5.1 Intimate Tracking
 
-Intimate tracking is a planned optional HealthKit-backed capability. This section is intentionally a placeholder for future product and privacy detail.
+Intimate tracking is built as an optional, sealed log. *(Updated 2026-11-12; this section was a placeholder.)*
 
-Current guardrails:
+- **Storage:** each entry is an `IntimacyLog` in `PrivateHealthStore` (`IntimacyLogRepository`), in the sealed, never-synced private store: an id, a day key, the event date and timestamps in the clear for querying, and a free-text **note that exists only as ciphertext**. The clinical fact of the activity lives in HealthKit as a sexual-activity sample, linked by `healthKitExternalUUID`; the log carries only Fernlet's note about it.
+- **One funnel:** every write goes through the app's one intimacy funnel, which marks the encrypted backup upload owed (Section 19). Its opt-in sealed-backup payload (`intimacyLogs`) is off by default.
 - Hidden by default and not requested during onboarding.
 - Available only at **16 or older**, established by the system age check in Section 5.2 — not by the
   manual body profile age, which feeds nutrition targets and gates nothing.
 - HealthKit sexual activity access is requested only after the age gate passes and the user explicitly enables the feature.
-- Local prototype storage stays minimal; event counts are acceptable, while event details are deferred pending a privacy review.
+- Hidden, under-16 and duress sessions open, decrypt, restore and write nothing (the gate is at the decrypt seam, Section 5.2).
 - Revocation happens through iOS Health permissions; Fernlet guides the user to Settings rather than implying in-app revocation is possible.
-
-To define later:
-- Product purpose and user-facing copy.
-- Data fields, if any, beyond aggregate counts.
-- Whether any local non-HealthKit manual logging exists.
-- Retention, deletion, export, and visibility rules.
-- Interactions with cycle tracking, scoring, AI, sharing, and sensitive memory.
+- Never reaches AI, scoring, friends, or the trainer export.
 
 ### 5.2 Age Assurance
 
@@ -335,16 +332,20 @@ Components:
 - Hygiene.
 - Journal.
 
-Goal weight vectors (each row sums to 1.0):
+Goal weight vectors (each row sums to 1.0). The source of truth is `GoalWeights.forGoal(_:)` in `FernletKit/Sources/FernletScoring/Scoring.swift`; this table matches it as of 2026-11-12 (the earlier table had drifted from the code, and Sports Prep and Bodybuilding were missing). Eight goals:
 
 | Goal           | Food | Exercise | Sleep | Hydration | Hygiene | Journal |
 |----------------|------|----------|-------|-----------|---------|---------|
-| Wellness       | 0.20 | 0.20     | 0.20  | 0.10      | 0.10    | 0.20    |
-| Strength       | 0.25 | 0.30     | 0.20  | 0.10      | 0.05    | 0.10    |
-| Weight Mgmt    | 0.30 | 0.25     | 0.20  | 0.10      | 0.05    | 0.10    |
-| Mental Health  | 0.10 | 0.10     | 0.25  | 0.05      | 0.20    | 0.30    |
-| Recovery       | 0.10 | 0.05     | 0.30  | 0.10      | 0.25    | 0.20    |
-| Exploring      | 0.18 | 0.18     | 0.18  | 0.12      | 0.12    | 0.22    |
+| Wellness       | 0.22 | 0.18     | 0.22  | 0.12      | 0.08    | 0.18    |
+| Strength       | 0.28 | 0.28     | 0.18  | 0.12      | 0.04    | 0.10    |
+| Weight Mgmt    | 0.30 | 0.22     | 0.18  | 0.14      | 0.04    | 0.12    |
+| Mental Health  | 0.18 | 0.16     | 0.22  | 0.10      | 0.04    | 0.30    |
+| Recovery       | 0.20 | 0.08     | 0.32  | 0.16      | 0.06    | 0.18    |
+| Exploring      | 0.22 | 0.18     | 0.22  | 0.12      | 0.08    | 0.18    |
+| Sports Prep    | 0.26 | 0.30     | 0.18  | 0.12      | 0.04    | 0.10    |
+| Bodybuilding   | 0.28 | 0.26     | 0.20  | 0.12      | 0.04    | 0.10    |
+
+Bodybuilding is hypertrophy on purpose with planned deload weeks, and is the only goal that turns on Move's day calendar.
 
 Weight management goal does not involve calorie targets or deficits. User goal is persisted at storage key `user-goal`, default `wellness`.
 
@@ -467,7 +468,7 @@ Foundation Models is used for:
 - Meal suggestions.
 - Recipe parsing.
 - Day summary generation (overnight batch; see Day Detail Sheet in Section 15).
-- Coaching tone wrapper copy.
+- Coaching tone wrapper copy *(future, Phase 3 — not built; Section 20)*.
 - Mental-health diagnostic-language classifier around memory output.
 
 Every AI-assisted feature must have a deterministic fallback:
@@ -588,7 +589,7 @@ User controls:
 Prototype direction:
 - Proximity handshake should start earlier than cloud-backed friend systems.
 - First implementation goal is local identity exchange and local file sharing between two devices.
-- Cloud-backed multi-person group sharing comes after the two-device BLE/NearbyInteraction path works reliably.
+- Cloud-backed multi-person group sharing comes after the two-device QUIC/NearbyInteraction path works reliably.
 - Trainer/nutritionist sharing uses the same local-first transport and should not require cloud.
 
 Core architecture:
@@ -610,11 +611,11 @@ Handshake supports:
 
 Flow:
 1. User initiates a handshake flow.
-2. App starts BLE advertising and scanning.
+2. App starts Bonjour advertising and browsing over QUIC (Network.framework, TLS 1.3) through the external ProximityKit package. *(Was "BLE advertising"; there is no CoreBluetooth use — Section 18.)*
 3. Both users confirm.
 4. Signed handshake packets are exchanged.
 5. NearbyInteraction ranging starts.
-6. Physical confirmation at <=30 cm.
+6. Physical confirmation through the UWB proximity gate: within 15 cm, held 0.8 s. A device without UWB confirms by hand instead (optionally upgraded by a signed-QR scan); see Section 1.
 7. Side effects commit based on intent.
 8. Appearance sync always refreshes on successful friend handshake.
 9. Session ends; no persistent connection.
@@ -654,7 +655,9 @@ messages are not filtered: the sender's device filters, and the receiver can rep
 
 ### Trainer and Nutritionist Sharing
 
-Fernlet should support a local-only professional sharing mode for a personal trainer, nutritionist, coach, or similar trusted helper. The first version should use the same proximity/Bluetooth transport as the handshake system, with no cloud requirement.
+> **Direction (2026-11-12):** the professional side is **Fernlet Coach**, a separate iPhone/iPad/Mac app, paired in person over ProximityKit and fed by signed `fernlet.com` plan links. It is specified in [Plan-FernletCoach-ProximityKit-2026-10-01.md](Plan-FernletCoach-ProximityKit-2026-10-01.md), which supersedes parts of [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md); it is Phase 3 work (Section 20). The in-app trainer export (`TrainerExportBuilder`) ships today and the rules below still govern what it may carry. The "open product decision" further down is answered by this direction.
+
+Fernlet should support a local-only professional sharing mode for a personal trainer, nutritionist, coach, or similar trusted helper. The first version should use the same proximity transport as the handshake system (QUIC over Network.framework via ProximityKit), with no cloud requirement.
 
 Shared data should be explicit and reviewable before transfer. Candidate export bundles:
 - Workouts over time, including exercise names, sets, reps, weights, duration, and perceived effort.
@@ -704,6 +707,13 @@ Friends never see:
 Hearts:
 - Rate-limited to one per friend per day.
 - Receiver gets decaying health-bar bonus segments for about 24h.
+
+Gold hearts (`GoldHeartRules`, `FernletStore+GoldHearts.swift`):
+- **Given by friends in person, never earned.** A heart a friend gives in person shows as a gold heart.
+- Each lasts **12 hours**; **at most 2** show, and count, at once.
+- Each adds one half heart (1/12) to the **live** care score only. Two can lift the companion one state; a sick day still reads as sick.
+- Display only: the stored day score, the nearby-friend broadcast, exports and the trainer summary never see the boost, so a friend's visit cannot rewrite history.
+- Drawn after the six hearts (Home's status plate, widgets, Lock Screen).
 
 ## 11. Photowall
 
@@ -772,15 +782,80 @@ Prototype ambient subset:
 
 All ambient features are either dismissible or ephemeral (today only). Each has an insufficient-data path that renders nothing rather than a "no data" card.
 
+## 12a. Built Features Not Previously Specified (2026-11-12)
+
+These shipped on `main` after the last spec pass. Each module's DocC landing page and the cited code are the detail; the bullets below are the rules.
+
+### Workout engine (Move)
+- **Guided runner** (`GuidedWorkoutRunState`): a planned workout runs step by step, with rest timers, a weight picker per loadable lift, set-by-set editing (drop sets included) and a workout Live Activity. A finished run logs itself; editing a set's weight wins over the taps.
+- **Load-aware progression** (`WorkoutLoadEngine`, deterministic, no AI): estimate, confidence, prescribed weight range and next step per lift; long-trained lifters get block holds.
+- **Plateaus** (`WorkoutPlateau`) are read from a fixed lookback of sessions and answered gently — never framed as failure.
+- **Weights on hand** (`WorkoutWeightInventory`) per workout location; prescriptions use only loads the person can make.
+- **Injury lists** (`WorkoutInjuryPicker`): per body area, a severity or avoided muscles. "No longer an issue" (`InjuryEasing`) eases the area back in over **two weeks** rather than dropping the limit at once; choosing a severity again is a new injury.
+- **Exercise catalog and animations:** 199 exercises (`WorkoutExercises.json`) with search aliases; animations come from an approved motion engine in JavaScriptCore drawn by a Swift renderer (`ExerciseAnimationEngine`), the character following the profile's Sex setting.
+
+### Food
+- **Barcode scanning** against the local catalogs first; on a miss, an **Open Food Facts** lookup (`OpenFoodFactsClient`, `world.openfoodfacts.org`, read-only) only by one explicit tap behind the web-nutrition-lookup consent, through `EphemeralWebSession`. Allowlisted in [No-Tracking-Wall.md](No-Tracking-Wall.md). Data shown with "Data from Open Food Facts (ODbL)".
+- **Branded catalog:** the full branded food database (~364k products, `FoodCatalogBranded.sqlite`) is an On-Demand Resource; when absent or purged the catalog falls back to its bundled base (generics + a curated branded floor). Never fetched from a server Fernlet runs.
+- **Meal photo classification** on device (`FoodImageClassifier`, Vision) turns a photo into a meal description to confirm; photos never reach AI or the cloud.
+- **Cooking mode** with a cooking **Live Activity** (`CookingLiveActivityController`).
+- **Grocery planner** (`GroceryPlannerView`, `GroceryListComposer`): pick recipes (optionally "cook for N"), preview the combined list, share as plain text.
+
+### Localization
+- Shipped languages: **English, Spanish (Spain, `es`), Spanish (Mexico, `es-MX`)**. `es-MX` is a complete copy, because iOS has no key-by-key `es-MX` → `es` fallback.
+- **Tokens never localize** — persisted raw values, wire bytes, AI prompt vocabulary, dictionary keys, accessibility identifiers and export fields stay English forever. Inside an SPM module every lookup passes `bundle: .module`. Enforced by `LocalizationBoundaryTests`; catalogs are synced by `Scripts/sync-string-catalogs.sh`.
+
+### Smaller surfaces
+- **Silly stats** (`SillyStats`): playful counts revealed only once meaningful, with a stats page, a Home card, companion mentions and stamps. No streaks, no comparisons.
+- **Widgets** (`FernletWidgets`): companion, map and water widgets, Lock Screen widgets, and a **Control Center control** to log a bottle of water (`FernletWaterControl`).
+- **Messages extension** (`FernletMessagesExtension`): an iMessage app that shares a recipe or one day's planned workout as a Messages card and hands a received card to Fernlet for review. It links only `FernletExchange` — no repository, no store (`MessagesExtensionBoundaryTests`).
+- **App Review demo mode** (`ReviewDemo`): sample data and one pretend friend, compiled **only** in the `Demo` build configuration (`FERNLET_DEMO`) — never present in Debug or Release, never fakes the age check.
+- **Companion feelings** (`CompanionEmotion*`): the companion shows simple feelings, with a Settings card to tune them.
+- **Care tools:** First Aid, the **Worry Box** ("let it go" notes, sealed and device-only, Section 19), a **breathing** exercise, and a **crisis support card** (`CrisisResources`) whose call/text actions only render with a valid URL.
+
+## 12b. World
+
+The Home tab is a **live map** ("World"). Fernlet draws its own layers (fog, trails, Sprout, pins, stamps) over Apple's muted map; MapKit is imported in exactly one app file. `WorldMapStore` holds the geometry and the sealed stores; its DocC landing page is the detail.
+
+**Map and fog**
+- **Fog of war** on one global hex grid (`MercatorHexGrid`, cells about 35 m across): walking lifts it; coarse on purpose, so the fog says "you've been round here", never which door.
+- Coasts, lakes and rivers come from a **bundled OpenStreetMap shore pack** ([World-Shore-Pack.md](World-Shore-Pack.md)); terrain, countries, cities and seas come from the bundled atlas ([World-Atlas-Pack.md](World-Atlas-Pack.md)). Both ship in the app; nothing is fetched.
+- Fog lifts only with precise location, "Uncover the map as you go" on, and never in a decoy session. Past a cap new cells are refused, never evicting history.
+- **One new corner a week:** Sprout may point at a nearby fogged patch. No streak, no penalty.
+
+**Stamps and books**
+- **Stamps** at first reveals (countries, places, silly stats); the **stamp book** keeps them.
+- **Sprout's passport** (tap the companion): every country, continent, ocean, sea, city, landmark and terrain class first visited, plus **flights**, **planned flights** (dashed; totals count flown only) and **road trips**. Past a cap a first visit is refused and counted, never evicted.
+
+**Airports and flights**
+- Airports carry their **runways**; found airports' grounds are drawn as **translucent fog**; planes use the runways.
+- Flights keep two IATA codes, UTC times and sources only — never airline, flight number, seat or booking code. Imports (Fernlet, Flighty, Calendar) are de-duplicated and are records only: they never stamp or lift fog.
+- **Flights from Calendar** (EventKit, read-only, **off by default**) reads only flight events' date, airports and times, on device.
+- **Calendar flights can be other people's** (shared calendars, pick-ups). A calendar flight is **never acted on** — no trip started, no stamp, no fog — without proof the person was at its departure airport; it is only offered when the phone is at that airport.
+
+**Getting around**
+- **Car and bike detection** from Core Motion activity and the audio route (CarPlay or a learned Bluetooth car). Cells only **driven** past are drawn as see-through fog (`DrivenFogStore`); walking or riding a bike through them clears them for good.
+- **Road trip mode** — [World-RoadTrip-Spec.md](World-RoadTrip-Spec.md): friends on a trip share the mapping load over a direct in-person mesh session; trip photos sit on the trip's road; the trip's road is shared **only** with the people on the trip, in person, and only the stretch each was there for. No server.
+- **Friends nearby:** where an in-person hangout starts or an open one is joined (Section 9).
+
+**Privacy**
+- Everything the map remembers is in `WorldMapVault`: AES-GCM sealed per file, this-device-only keys, folder **excluded from device backups**; a store key usable only while unlocked and a small locked-phone buffer drained at next unlock.
+- **Where you've been** is a rolling **30-day** history of stops and places, sealed under the Private tab's hub key. Medical, legal and therapy places refuse the visit; only Apple's place reference is kept, never its name or data. Single places, stops and days can be deleted.
+- **Passport backup** is its own opt-in sealed iCloud payload behind its own switch; a restore merges and keeps the earliest date.
+- Map history is never shared with friends, except a road trip's road with its members (above). A decoy session reads and writes nothing; "Delete everything", the duress wipe and the recovery lock all reach the vault.
+- Location precision and Always mode are opt-in; the default is when-in-use.
+
 ## 13. Onboarding and Permissions
 
-Onboarding: 6 screens max.
-1. Welcome and privacy promise.
-2. Goal selection.
-3. Starter customization.
-4. Optional personal details, then the system age-range request (Section 5.2).
-5. Dietary pattern.
-6. HealthKit and notification permissions.
+Onboarding: 8 steps (`OnboardingCoordinatorModel.Step`; "3 of 8" caption). *(Was "6 screens max"; updated 2026-11-12.)*
+1. Welcome and privacy promise (`welcome`).
+2. App lock setup (`lockSetup`).
+3. Storage choice: Sync to iCloud or Just on this device (`storageChoice`; Section 19).
+4. Goal selection (`goal`).
+5. Starter customization (`starterCustomization`).
+6. Optional personal details, then the system age-range request (`personalDetails`; Section 5.2).
+7. Dietary pattern (`dietaryPattern`).
+8. HealthKit and notification permissions (`permissions`).
 
 The age-range request is the one place Fernlet prompts unasked. It runs on Continue from the personal-
 details screen, after on-screen copy explaining that the answer only unlocks messaging friends nearby
@@ -807,11 +882,14 @@ Never collect exact weight goals, target weight, weight history, body fat, diagn
 
 Permissions are requested at first use where practical:
 - HealthKit read/write.
-- Bluetooth.
+- Local Network (proximity; there is no Bluetooth permission — Section 18).
 - Camera.
 - Photo Library Add.
 - Notifications.
-- Coarse location for WeatherKit.
+- Location: when in use for WeatherKit and the World map; Always only as an opt-in (low-power visits, drives, road trips; Section 12b).
+- Motion & Fitness (car and bike detection).
+- Calendars, only when "Flights from Calendar" is turned on (off by default).
+- Face ID for the app lock.
 - Background App Refresh.
 
 ## 14. Milestones, Unlocks, and Customization
@@ -835,26 +913,19 @@ User-created items:
 
 ## 15. Screens and Navigation
 
-Primary screens:
-- Home / Tamagotchi.
-- Food.
-- Exercise.
-- Journal.
-- Hygiene.
-- Period.
-- Hydration.
-- Sleep.
-- Friends.
-- Photo Gallery.
-- Activities.
-- Wardrobe and Background.
-- Creation Studio.
-- Friend Shops.
-- Memory.
-- Coaching Tone.
-- Settings.
+Navigation (as built, 2026-11-12): five tabs (`FernletTab`: Home, Food, Move, Friends, Private), plus two books: Sprout's passport and the stamp book.
+- **Home** — the World live map (Section 12b): Sprout on the map, the fog, the status plate (six hearts, then any gold hearts; protein, carbs and fat bars; water), the quick-start button, and Home cards.
+- **Food** — logging, recipes, barcode, grocery planner, cooking mode (Section 12a).
+- **Move** — workouts, the guided runner, plans and progress photos (Section 12a).
+- **Friends** (`social`) — in-person friends, Connect, friends nearby, shops, shared photos.
+- **Private** (`personal`) — the locked hub: journal, cycle, intimacy, Worry Box (app lock, Section 2).
+- Settings (including Privacy & Data) opens as a sheet over the tabs (`SettingsSheet`).
+- **Sprout's passport** — tap the companion: countries, cities, airports, flights, road trips (Section 12b).
+- **The stamp book** — every stamp earned (silly stats and places).
 
-Home includes avatar, health bar with heart bonus, equipped container, photowall background, quick log row, subtle live score, preventive-care bubbles, and period prediction bubbles when enabled.
+*(The earlier 17-screen list — Home/Tamagotchi, Exercise, Journal, Hygiene, Period, Hydration, Sleep, Friends, Photo Gallery, Activities, Wardrobe and Background, Creation Studio, Friend Shops, Memory, Coaching Tone, Settings — is retired. Those surfaces now live inside the tabs above; Coaching Tone is not built.)*
+
+Home includes the companion, health bar with heart bonus, quick log row, subtle live score, preventive-care bubbles, and period prediction bubbles when enabled — all drawn over the live map.
 
 Food shows macro rings only, no calorie number or deficit goal.
 
@@ -943,7 +1014,7 @@ HealthKit:
 
 Third-party AI:
 - Explicit per-feature opt-in only.
-- Routed through OHTTP.
+- Routed through the AI provider ladder ([AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md)): on-device Foundation Models first, the deterministic fallback always; Private Cloud Compute (with first-use consent) and BYOK arrive with iOS 27, through the `AIProviders` wall, each new destination allowlisted in [No-Tracking-Wall.md](No-Tracking-Wall.md). None is built today. *(Was "Routed through OHTTP".)*
 - No raw journal text except explicit reflection action.
 - No Sensitive Memory.
 - No period data or period bridge signals.
@@ -971,7 +1042,7 @@ OHTTP architecture:
 
 Implementation is a multi-week security-sensitive task because iOS has no built-in OHTTP client.
 
-Third-party AI cannot provide period-aware meal/workout adjustments because period bridge signals are stripped and unavailable to `OHTTPProvider`.
+Third-party AI cannot provide period-aware meal/workout adjustments because period bridge signals are stripped and unavailable to any off-device provider on the ladder (Private Cloud Compute or BYOK). *(Was `OHTTPProvider`, never built.)*
 
 ## 18. App Store Compliance
 
@@ -1027,6 +1098,13 @@ Usage descriptions required:
 - `NSHealthUpdateUsageDescription`.
 - `NSLocationWhenInUseUsageDescription`.
 - `NSLocalNetworkUsageDescription` + `NSBonjourServices` (the `_fernlet-*` service families).
+- `NSLocationAlwaysAndWhenInUseUsageDescription` and `NSLocationTemporaryUsageDescriptionDictionary` — the World map's opt-in Always mode, drives and road trips, and precise location for the fog (Section 12b). `UIBackgroundModes` declares `location`, `fetch` and `remote-notification`.
+- `NSMotionUsageDescription` — car and bike detection (Core Motion activity).
+- `NSCalendarsFullAccessUsageDescription` — "Flights from Calendar" (EventKit), read-only, off by default (Section 12b).
+- `NSFaceIDUsageDescription` — biometric app-lock unlock.
+- CarPlay is read only as a car-detection signal from the audio route; Fernlet has no CarPlay app or CarPlay entitlement.
+
+Extension targets (2026-11-12): `FernletWidgets` (widgets, Live Activities, the Control Center water control), `FernletShareExtension` (recipe share), and `FernletMessagesExtension` (an iMessage app with its own `Localizable.xcstrings` and entitlements). Each ships its own copy text and must keep the no-tracking and localization walls.
 
 Entitlements required beyond HealthKit/CloudKit/App Groups:
 - `com.apple.developer.declared-age-range` — the Section 5.2 age check. A public capability requiring no
@@ -1132,14 +1210,14 @@ Photos reach CloudKit only through the opt-in Encrypted Photo Backup above; ther
 
 ## Prototype Guardrails
 
-These temporary decisions apply to the current test/prototype line and should be revisited before production hardening:
-- Goal-based scoring and sickness mode are immediate priorities.
-- Period tracker is deferred until data protection and sealed stores exist.
-- Customization and Creation Studio are deferred to v8.
+These temporary decisions applied to the test/prototype line. Status as of 2026-11-12: struck items are historical — they shipped or were retired; the rest still hold.
+- ~~Goal-based scoring and sickness mode are immediate priorities.~~ Shipped.
+- ~~Period tracker is deferred until data protection and sealed stores exist.~~ Shipped behind the sealed stores (Sections 3–4).
+- ~~Customization and Creation Studio are deferred to v8.~~ Shipped (wardrobe, Customize, Creation Studio).
 - Tier 2 memory may be readable in a local debug/prototype view only for test builds.
 - Derived signals and log trends are stored locally; Notion is not an active implementation dependency.
-- No photowall or coaching profile in the current prototype.
-- Score can remain live-only for now; historical snapshot rules remain production requirements.
+- ~~No photowall or coaching profile in the current prototype.~~ The photo wall shipped (Section 11); coaching tone is still not built (Phase 3, Section 20).
+- ~~Score can remain live-only for now.~~ Day scores are stored per day; historical snapshot rules apply.
 - AI failures should route to deterministic fallbacks, retry queues, and Fernlet-voice messaging.
 - Settings should show AI status as ready, sleepy, resting, or off.
 
@@ -1156,8 +1234,32 @@ These temporary decisions apply to the current test/prototype line and should be
 - Period-aware scoring softens only user-specific historically harder phases.
 - Third-party AI off by default.
 - No face recognition.
-- No Private Cloud Compute escalation assumption for third-party apps.
-- BLE plus NearbyInteraction for proximity.
+- Private Cloud Compute is planned as the default deep AI tier on iOS 27, behind first-use consent; until then no AI model runs off the device. *(Was "No Private Cloud Compute escalation assumption".)*
+- QUIC over Network.framework (TLS 1.3, via ProximityKit) plus NearbyInteraction for proximity. *(Was "BLE".)*
 - Vision plus Core ML for image analysis.
 - Foundation Models and Core ML are stateless for app data.
 - Sexual content may exist only in Sensitive Memory under the strongest privacy guarantees.
+- Gold hearts are given in person, never earned, and never change a stored score.
+- Map history stays on the device and is never shared, except a road trip's road with its members, in person.
+- A calendar flight is never acted on without proof the person was at its departure airport.
+
+## 20. Future Direction (2026-11-12)
+
+The order of work from here. Nothing in this section is built unless it says so.
+
+**Phase 1 — finish features, then a complete iOS 26.5 build.**
+- Close the open feature work and device checks, and ship one complete build on the iOS 26.5 SDK (deployment target stays 26.0).
+- Every wall stays green: S3, no-tracking, Power of 10, localization, accessibility.
+
+**Phase 2 — the iOS 27 update.**
+- **Apple Watch companion app** (not built): workouts and heart rate on the wrist.
+- **iPhone Duo foldable layout:** the tabs and the map adapt to the folding iPhone's larger screen.
+- **Other AI models** on the provider ladder ([AI-Provider-Ladder-2026-07-23.md](AI-Provider-Ladder-2026-07-23.md)): **Private Cloud Compute** as the default deep tier with first-use consent, and **BYOK** (the user's own key to a provider they choose). Both go only through the walled `AIProviders` module, never reach the sealed `Private*` stores, and each new destination is allowlisted and documented in [No-Tracking-Wall.md](No-Tracking-Wall.md) in the same commit. On-device first and the deterministic fallback stay the default.
+
+**Phase 3 — more AI, and Fernlet Coach.**
+- **Coaching tone:** bounded tone adaptation of Fernlet's copy (the old `CoachingToneProfile` idea).
+- **Two-tier journal extraction:** Core and Sensitive memories in a richer pass, still through the Memory Agent and the diagnostic-language filter (Section 8).
+- **Deep-tier suggestions:** meal and workout suggestions that may use the deep tier, with the same payload allowlists and no period or sensitive data.
+- **Fernlet Coach:** a separate iPhone/iPad/Mac app for trainers and nutritionists. Pairing is in person over ProximityKit; plans travel as signed `fernlet.com` plan links. Specified in [Plan-FernletCoach-ProximityKit-2026-10-01.md](Plan-FernletCoach-ProximityKit-2026-10-01.md), which supersedes parts of [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md). The sharing rules in Section 10 still govern what leaves Fernlet.
+
+Still not built and not scheduled: "Connect with a code" for non-UWB devices, memory-aware photo surfacing, and cloud-backed group sharing.
