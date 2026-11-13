@@ -28,7 +28,7 @@ struct ExerciseAnimationRendererTests {
 
     @Test func anUnknownExerciseDrawsNothing() throws {
         let renderer = try #require(ExerciseAnimationRenderer())
-        #expect(renderer.frame(exerciseID: "exercise-200", progress: 0, character: .female) == nil)
+        #expect(renderer.frame(exerciseID: "exercise-209", progress: 0, character: .female) == nil)
         #expect(renderer.frame(exerciseID: "", progress: 0.5, character: .male) == nil)
     }
 
@@ -38,7 +38,7 @@ struct ExerciseAnimationRendererTests {
 
     @Test func aHeldPoseDrawsTheSameFrameAtEveryProgress() throws {
         let renderer = try #require(ExerciseAnimationRenderer())
-        let ids = (1...199).map { String(format: "exercise-%03d", $0) }
+        let ids = (1...208).map { String(format: "exercise-%03d", $0) }
         let reference = try #require(ExerciseAnimationReferenceRenderer())
         let held = try #require(ids.first { id in
             reference.context.evaluateScript("movements.find(m => m.id === '\(id)').hold")?.toBool() == true

@@ -62,6 +62,11 @@ extension ExerciseHowToCatalog {
             hipAdductionMachine,
             cablePullThrough,
             donkeyKick,
+            trapBarDeadlift,
+            sumoDeadlift,
+            hamstringSliderCurl,
+            singleLegHipThrust,
+            tibialisRaise,
         ]
     }
 
@@ -536,7 +541,9 @@ extension ExerciseHowToCatalog {
     static var calfRaise: ExerciseHowTo {
         ExerciseHowTo(
             name: "Calf raise", keyStem: "calfRaise",
-            displayName: String(localized: "exercise.calfRaise.name", defaultValue: "Calf raise",
+            // Drawn as "Calf raise (body weight)" so it reads apart from the machine's Standing calf raise
+            // (2026-11-13). The frozen name stays "Calf raise".
+            displayName: String(localized: "exercise.calfRaise.name", defaultValue: "Calf raise (body weight)",
                                 bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
             cues: [
                 String(localized: "exercise.calfRaise.cue1", defaultValue: "Stand tall, holding a wall or rail for balance.",
@@ -1224,6 +1231,116 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Donkey kick: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.donkeyKick.easier", defaultValue: "Lift the foot only partway, or do glute bridges instead.",
                            bundle: .module, comment: "Donkey kick: an easier version, as a short instruction")
+        )
+    }
+
+    static var trapBarDeadlift: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Trap-bar deadlift", keyStem: "trapBarDeadlift",
+            displayName: String(localized: "exercise.trapBarDeadlift.name", defaultValue: "Trap-bar deadlift",
+                                bundle: .module, comment: "Exercise name shown on screen (barbell exercise)"),
+            cues: [
+                String(localized: "exercise.trapBarDeadlift.cue1", defaultValue: "Stand in the middle of the trap bar, feet hip-width apart.",
+                       bundle: .module, comment: "Trap-bar deadlift: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.trapBarDeadlift.cue2", defaultValue: "Bend your hips and knees and grip the handles.",
+                       bundle: .module, comment: "Trap-bar deadlift: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.trapBarDeadlift.cue3", defaultValue: "Brace your trunk and push the floor away to stand.",
+                       bundle: .module, comment: "Trap-bar deadlift: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.trapBarDeadlift.cue4", defaultValue: "Lower the bar under control the same way.",
+                       bundle: .module, comment: "Trap-bar deadlift: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.trapBarDeadlift.mistake", defaultValue: "Letting the hips shoot up before the bar leaves the floor.",
+                            bundle: .module, comment: "Trap-bar deadlift: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.trapBarDeadlift.easier", defaultValue: "Use the raised handles, or lift a lighter load.",
+                           bundle: .module, comment: "Trap-bar deadlift: an easier version, as a short instruction")
+        )
+    }
+
+    static var sumoDeadlift: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Sumo deadlift", keyStem: "sumoDeadlift",
+            displayName: String(localized: "exercise.sumoDeadlift.name", defaultValue: "Sumo deadlift",
+                                bundle: .module, comment: "Exercise name shown on screen (barbell exercise)"),
+            cues: [
+                String(localized: "exercise.sumoDeadlift.cue1", defaultValue: "Take a wide stance with toes turned out, shins near the bar.",
+                       bundle: .module, comment: "Sumo deadlift: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.sumoDeadlift.cue2", defaultValue: "Grip the bar inside your knees with straight arms.",
+                       bundle: .module, comment: "Sumo deadlift: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.sumoDeadlift.cue3", defaultValue: "Push your knees out and drive your hips forward to stand.",
+                       bundle: .module, comment: "Sumo deadlift: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.sumoDeadlift.cue4", defaultValue: "Keep the bar close and lower it with control.",
+                       bundle: .module, comment: "Sumo deadlift: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.sumoDeadlift.mistake", defaultValue: "Letting the knees cave in as the bar leaves the floor.",
+                            bundle: .module, comment: "Sumo deadlift: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.sumoDeadlift.easier", defaultValue: "Use a narrower stance, or pull from blocks with less weight.",
+                           bundle: .module, comment: "Sumo deadlift: an easier version, as a short instruction")
+        )
+    }
+
+    static var hamstringSliderCurl: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Hamstring slider curl", keyStem: "hamstringSliderCurl",
+            displayName: String(localized: "exercise.hamstringSliderCurl.name", defaultValue: "Hamstring slider curl",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.hamstringSliderCurl.cue1", defaultValue: "Lie on your back, heels on sliders or a towel on smooth floor.",
+                       bundle: .module, comment: "Hamstring slider curl: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.hamstringSliderCurl.cue2", defaultValue: "Lift your hips into a bridge.",
+                       bundle: .module, comment: "Hamstring slider curl: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.hamstringSliderCurl.cue3", defaultValue: "Slide your heels out slowly until your legs are nearly straight.",
+                       bundle: .module, comment: "Hamstring slider curl: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.hamstringSliderCurl.cue4", defaultValue: "Curl them back in, keeping your hips up.",
+                       bundle: .module, comment: "Hamstring slider curl: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.hamstringSliderCurl.mistake", defaultValue: "Letting the hips sag to the floor as the legs straighten.",
+                            bundle: .module, comment: "Hamstring slider curl: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.hamstringSliderCurl.easier", defaultValue: "Slide only partway out, or work one short range at a time.",
+                           bundle: .module, comment: "Hamstring slider curl: an easier version, as a short instruction")
+        )
+    }
+
+    static var singleLegHipThrust: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Single-leg hip thrust", keyStem: "singleLegHipThrust",
+            displayName: String(localized: "exercise.singleLegHipThrust.name", defaultValue: "Single-leg hip thrust",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.singleLegHipThrust.cue1", defaultValue: "Rest your upper back on a bench, one foot flat.",
+                       bundle: .module, comment: "Single-leg hip thrust: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.singleLegHipThrust.cue2", defaultValue: "Lift the other foot just off the floor.",
+                       bundle: .module, comment: "Single-leg hip thrust: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.singleLegHipThrust.cue3", defaultValue: "Drive through the planted heel to lift your hips level.",
+                       bundle: .module, comment: "Single-leg hip thrust: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.singleLegHipThrust.cue4", defaultValue: "Lower slowly, then switch legs.",
+                       bundle: .module, comment: "Single-leg hip thrust: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.singleLegHipThrust.mistake", defaultValue: "Letting the hips tilt toward the lifted leg.",
+                            bundle: .module, comment: "Single-leg hip thrust: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.singleLegHipThrust.easier", defaultValue: "Keep both feet down, or do a single-leg glute bridge on the floor.",
+                           bundle: .module, comment: "Single-leg hip thrust: an easier version, as a short instruction")
+        )
+    }
+
+    static var tibialisRaise: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Tibialis raise", keyStem: "tibialisRaise",
+            displayName: String(localized: "exercise.tibialisRaise.name", defaultValue: "Tibialis raise",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.tibialisRaise.cue1", defaultValue: "Lean your back against a wall, heels a foot away.",
+                       bundle: .module, comment: "Tibialis raise: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.tibialisRaise.cue2", defaultValue: "Keep your legs straight and heels on the floor.",
+                       bundle: .module, comment: "Tibialis raise: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.tibialisRaise.cue3", defaultValue: "Lift your toes toward your shins as high as you can.",
+                       bundle: .module, comment: "Tibialis raise: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.tibialisRaise.cue4", defaultValue: "Lower them slowly without slapping the floor.",
+                       bundle: .module, comment: "Tibialis raise: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.tibialisRaise.mistake", defaultValue: "Bending the knees or rocking off the wall to lift the toes.",
+                            bundle: .module, comment: "Tibialis raise: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.tibialisRaise.easier", defaultValue: "Stand with your heels closer to the wall.",
+                           bundle: .module, comment: "Tibialis raise: an easier version, as a short instruction")
         )
     }
 }

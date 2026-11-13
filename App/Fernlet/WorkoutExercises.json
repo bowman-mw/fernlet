@@ -5636,5 +5636,316 @@
       "hip": "hips work through the move",
       "knee": "kneeling on the knees"
     }
+  },
+  {
+    "name": "Trap-bar deadlift",
+    "primaryMuscles": [
+      "glutes",
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "lowerBack",
+      "upperBack",
+      "forearms",
+      "traps"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "requiredGear": [
+      "trapBar",
+      "weightPlates"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy bar hangs from the neck and traps",
+      "shoulder": "arms hang under a heavy bar",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on the trap bar handles",
+      "upperBack": "upper back holds a heavy bar",
+      "lowerBack": "heavy bar lifted by the back and hips",
+      "hip": "heavy bar lifted by the hips",
+      "knee": "heavy bar lifted through bent knees",
+      "ankleFoot": "feet and ankles bear the load"
+    }
+  },
+  {
+    "name": "Sumo deadlift",
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings",
+      "adductors"
+    ],
+    "secondaryMuscles": [
+      "quads",
+      "lowerBack",
+      "upperBack",
+      "forearms"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "hinge",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "neck": "hard",
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "hard",
+      "upperBack": "hard",
+      "lowerBack": "hard",
+      "hip": "hard",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "neck": "heavy bar hangs from the neck and traps",
+      "shoulder": "arms hang under a heavy bar",
+      "elbow": "arms hang under a heavy load",
+      "wristHand": "hard grip on a heavy bar",
+      "upperBack": "upper back holds a heavy bar",
+      "lowerBack": "heavy bar lifted by the back and hips",
+      "hip": "heavy bar lifted by the hips from a wide stance",
+      "knee": "heavy bar lifted through the legs, knees pushed out",
+      "ankleFoot": "feet and ankles bear the load"
+    }
+  },
+  {
+    "name": "Hamstring slider curl",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "hips held up off the floor",
+      "hip": "hips work through the move",
+      "knee": "heels slide out and curl back in at the knee",
+      "ankleFoot": "heels press into the sliders"
+    }
+  },
+  {
+    "name": "Landmine press",
+    "primaryMuscles": [
+      "frontDelts",
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "triceps",
+      "abs",
+      "obliques"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "push",
+    "inputKind": "strength",
+    "plane": "vertical",
+    "difficulty": 2,
+    "requiredGear": [
+      "weightPlates"
+    ],
+    "unilateral": true,
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "hard",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "bar end pressed up and forward",
+      "elbow": "elbow straightens under the load",
+      "wristHand": "bar end held in one hand",
+      "lowerBack": "trunk braced against a one-sided press",
+      "ankleFoot": "standing under a load"
+    }
+  },
+  {
+    "name": "Single-leg hip thrust",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings",
+      "quads"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "hinge",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "requiredGear": [
+      "weightBench"
+    ],
+    "unilateral": true,
+    "variation": true,
+    "areaLoads": {
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "upperBack": "upper back braced on the bench",
+      "lowerBack": "hips lift, back bridged",
+      "hip": "one hip lifts the body",
+      "knee": "hamstrings pull across the knee",
+      "ankleFoot": "one foot presses into the floor"
+    }
+  },
+  {
+    "name": "Tibialis raise",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true,
+    "areaLoads": {
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "ankleFoot": "toes lift at the ankle against body weight"
+    }
+  },
+  {
+    "name": "Sled push",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "calves",
+      "hamstrings",
+      "frontDelts",
+      "triceps"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "strength",
+    "modality": "cardio",
+    "difficulty": 2,
+    "requiredGear": [
+      "sled"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms brace against the sled",
+      "elbow": "arms hold the lean against the sled",
+      "wristHand": "hands press on the sled handles",
+      "lowerBack": "trunk leans and braces into the drive",
+      "hip": "hips drive each step",
+      "knee": "heavy drive through bent knees",
+      "ankleFoot": "feet push off the floor"
+    }
+  },
+  {
+    "name": "Sled pull",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "calves",
+      "upperBack",
+      "forearms"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "locomotion",
+    "inputKind": "strength",
+    "modality": "cardio",
+    "difficulty": 2,
+    "requiredGear": [
+      "sled"
+    ],
+    "variation": true,
+    "areaLoads": {
+      "shoulder": "light",
+      "elbow": "light",
+      "wristHand": "light",
+      "upperBack": "light",
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "hard",
+      "ankleFoot": "light"
+    },
+    "areaLoadNotes": {
+      "shoulder": "arms hold the straps out front",
+      "elbow": "arms hold the pull",
+      "wristHand": "hard grip on the straps",
+      "upperBack": "upper back holds the pull",
+      "lowerBack": "trunk braced against the pull",
+      "hip": "hips work through each step",
+      "knee": "heavy pull through bent knees, stepping backward",
+      "ankleFoot": "feet push off the floor"
+    }
+  },
+  {
+    "name": "90/90 hip switch",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "abductors",
+      "adductors"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "variation": true,
+    "areaLoads": {
+      "lowerBack": "light",
+      "hip": "light",
+      "knee": "light"
+    },
+    "areaLoadNotes": {
+      "lowerBack": "sits tall on the floor",
+      "hip": "hips rotate through their range",
+      "knee": "knees bent and turned to the side"
+    }
   }
 ]

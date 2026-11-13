@@ -265,7 +265,8 @@ public nonisolated enum EquipmentCategory: String, CaseIterable, Identifiable, S
 /// names the plates (and the rack where it needs one), and Dip, Inverted row and Ab wheel name
 /// ``dipBars``, ``lowBar`` and ``abWheel``. FROZEN tokens: a location persists them and the
 /// catalog names them. The 22 pieces before that fix are ``originalPieces``; the machines added
-/// by it are ``itemizedMachines``.
+/// by it are ``itemizedMachines``. The trap bar and the sled came with the exercises that need them
+/// (2026-11-13, ``catalogAdditionPieces``): only a space that ticks one gets those exercises.
 public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiable, Sendable {
     case treadmill, exerciseBike, rowingMachine, elliptical, stairClimber
     case dumbbells, barbell, kettlebells, weightPlates, weightBench
@@ -277,6 +278,8 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
     case shoulderPressMachine, seatedRowMachine, pecDeck, preacherCurl
     case assistedPullUpDip, hipAbductionAdduction
     case dipBars, lowBar, abWheel
+    // Added 2026-11-13 with Trap-bar deadlift, Sled push and Sled pull. Appended, like e5's.
+    case trapBar, sled
 
     /// The machines that gained a row of their own on 2026-11-10 (e5). Before that one leg press
     /// or chest press stood for all of them (``WorkoutLocation/legacyGearGrant(for:)``).
@@ -289,22 +292,26 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
     /// The three small pieces that gained a row on 2026-11-10 (e5).
     public static let itemizedSmallPieces: Set<GymEquipment> = [.dipBars, .lowBar, .abWheel]
 
+    /// The two pieces that came with the 2026-11-13 exercises: the trap bar (Trap-bar deadlift) and
+    /// the sled (Sled push, Sled pull). Only the Full gym preset ticks them.
+    public static let catalogAdditionPieces: Set<GymEquipment> = [.trapBar, .sled]
+
     /// The 22 pieces a location could tick before 2026-11-10.
     public static let originalPieces: Set<GymEquipment> =
-        Set(allCases).subtracting(itemizedMachines).subtracting(itemizedSmallPieces)
+        Set(allCases).subtracting(itemizedMachines).subtracting(itemizedSmallPieces).subtracting(catalogAdditionPieces)
 
     public var id: String { rawValue }
 
     public var category: EquipmentCategory {
         switch self {
         case .treadmill, .exerciseBike, .rowingMachine, .elliptical, .stairClimber: .cardio
-        case .dumbbells, .barbell, .kettlebells, .weightPlates, .weightBench: .freeWeights
+        case .dumbbells, .barbell, .kettlebells, .weightPlates, .weightBench, .trapBar: .freeWeights
         case .cableMachine, .latPulldown, .legPress, .smithMachine, .chestPress: .machines
         case .legExtension, .legCurl, .hackSquat, .standingCalfRaise, .seatedCalfRaise: .machines
         case .shoulderPressMachine, .seatedRowMachine, .pecDeck, .preacherCurl: .machines
         case .assistedPullUpDip, .hipAbductionAdduction: .machines
         case .pullUpBar, .squatRack, .resistanceBands, .medicineBall, .battleRopes: .functional
-        case .dipBars, .lowBar, .abWheel: .functional
+        case .dipBars, .lowBar, .abWheel, .sled: .functional
         case .yogaMat, .foamRoller: .recovery
         }
     }
@@ -340,7 +347,7 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         }
     }
 
-    /// ``displayName`` for the pieces added on 2026-11-10 (e5); an older piece falls back to its
+    /// ``displayName`` for the pieces added on 2026-11-10 (e5) and 2026-11-13; an older piece falls back to its
     /// token, which ``displayName`` never asks for.
     private var itemizedDisplayName: String {
         switch self {
@@ -358,6 +365,8 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .dipBars: String(localized: "gymEquipment.dipBars", defaultValue: "Dip bars", bundle: .module, comment: "Gym equipment: parallel bars for dips")
         case .lowBar: String(localized: "gymEquipment.lowBar", defaultValue: "Low bar for rows", bundle: .module, comment: "Gym equipment: a fixed bar at about waist height to hang under for inverted rows")
         case .abWheel: String(localized: "gymEquipment.abWheel", defaultValue: "Ab wheel", bundle: .module, comment: "Gym equipment: an ab roller wheel")
+        case .trapBar: String(localized: "gymEquipment.trapBar", defaultValue: "Trap bar", bundle: .module, comment: "Gym equipment: a hexagonal trap bar (hex bar) you stand inside to deadlift")
+        case .sled: String(localized: "gymEquipment.sled", defaultValue: "Sled", bundle: .module, comment: "Gym equipment: a weighted sled pushed or pulled along the floor")
         default: rawValue
         }
     }
@@ -393,6 +402,8 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .dipBars: "pause"
         case .lowBar: "minus"
         case .abWheel: "circle.circle"
+        case .trapBar: "hexagon"
+        case .sled: "arrow.right.to.line"
         }
     }
 
@@ -418,6 +429,7 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         case .resistanceBands: .band
         case .pullUpBar, .medicineBall, .yogaMat, .foamRoller: .bodyweight
         case .weightPlates, .squatRack, .dipBars, .lowBar, .abWheel: .bodyweight
+        case .trapBar, .sled: .bodyweight
         }
     }
 }
@@ -458,7 +470,7 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
     /// The presets, and what each ticks on the machine checklist (fix e5): Full gym ticks every
     /// piece; Hotel gym only its cable machine; Apartment gym its cable machine and leg press — and
     /// so no longer a calf-raise machine; Home setup none. Only Full gym ticks the dip bars, the low
-    /// bar and the ab wheel. A preset names what such a place reliably has: a piece it leaves
+    /// bar and the ab wheel, and the trap bar and the sled (2026-11-13). A preset names what such a place reliably has: a piece it leaves
     /// unticked is one tap for its owner, while a piece it ticked wrongly plans lifts they cannot do.
     public static let all: [LocationTemplate] = [
         LocationTemplate(id: "full-gym", name: "Full gym", subtitle: "Commercial or studio",

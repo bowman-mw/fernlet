@@ -22,7 +22,7 @@ import FernletFoundation
 /// One catalog exercise's Gym Visual media IDs, as committed in `ExerciseDemonstrations.json`.
 ///
 /// Each field is the ID Gym Visual sells the file under, or nil when it has no such version (22 of
-/// the 199 exercises exist for one sex only). An ID names a file in the drop folder,
+/// the 199 mapped exercises exist for one sex only; the nine 2026-11-13 additions await their IDs). An ID names a file in the drop folder,
 /// `<ID>.gif` for a GIF and `<ID>.png` or `<ID>.jpg` for an illustration; the ID alone is not media.
 nonisolated struct ExerciseDemonstrationIDs: Codable, Equatable, Sendable {
     var gifMale: String?

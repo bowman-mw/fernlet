@@ -37,6 +37,7 @@ extension ExerciseHowToCatalog {
             wristCircles,
             upperBackFoamRoll,
             legSwings,
+            ninetyNinetyHipSwitch,
         ]
     }
 
@@ -637,6 +638,30 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Leg swings: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.legSwings.easier", defaultValue: "Make smaller, slower swings while holding a sturdy chair.",
                            bundle: .module, comment: "Leg swings: an easier version, as a short instruction")
+        )
+    }
+
+    static var ninetyNinetyHipSwitch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "90/90 hip switch", keyStem: "9090HipSwitch",
+            displayName: String(localized: "exercise.9090HipSwitch.name", defaultValue: "90/90 hip switch",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.9090HipSwitch.cue1", defaultValue: "Sit with both knees bent to 90 degrees, legs to one side.",
+                       bundle: .module, comment: "90/90 hip switch: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.9090HipSwitch.cue2", defaultValue: "Sit tall, hands behind you if you need them.",
+                       bundle: .module, comment: "90/90 hip switch: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.9090HipSwitch.cue3", defaultValue: "Rotate both knees slowly over to the other side.",
+                       bundle: .module, comment: "90/90 hip switch: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.9090HipSwitch.cue4", defaultValue: "Feel the stretch turn deep in each hip.",
+                       bundle: .module, comment: "90/90 hip switch: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.9090HipSwitch.cue5", defaultValue: "Breathe slowly and keep switching side to side.",
+                       bundle: .module, comment: "90/90 hip switch: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.9090HipSwitch.mistake", defaultValue: "Forcing the knees down to the floor, which can strain them.",
+                            bundle: .module, comment: "90/90 hip switch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.9090HipSwitch.easier", defaultValue: "Lean back on your hands and move through a smaller range.",
+                           bundle: .module, comment: "90/90 hip switch: an easier version, as a short instruction")
         )
     }
 }

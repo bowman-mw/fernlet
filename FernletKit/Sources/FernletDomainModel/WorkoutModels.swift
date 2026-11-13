@@ -1640,6 +1640,11 @@ public nonisolated enum WorkoutExerciseCatalog {
         "Chest press machine": ["machine chest press"],
         "Chest-supported dumbbell row": ["chest-supported row"],
         "Cable overhead triceps extension": ["overhead cable triceps extension"],
+        // 2026-11-13.
+        "Side lunge": ["lateral lunge"],
+        "Knee push-up": ["modified push-up"],
+        "Dumbbell overhead triceps extension": ["overhead dumbbell triceps extension"],
+        "Trap-bar deadlift": ["hex bar deadlift", "hex-bar deadlift", "trap bar deadlift"],
     ]
 
     /// The exercises a picker query finds. An alias only ever adds results after every exercise the

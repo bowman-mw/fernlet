@@ -37,6 +37,8 @@ extension ExerciseHowToCatalog {
             easyWalk,
             marchingOnTheSpot,
             jumpingJack,
+            sledPush,
+            sledPull,
         ]
     }
 
@@ -607,6 +609,50 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Jumping jack: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.jumpingJack.easier", defaultValue: "Step one foot out at a time, or march on the spot.",
                            bundle: .module, comment: "Jumping jack: an easier version, as a short instruction")
+        )
+    }
+
+    static var sledPush: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Sled push", keyStem: "sledPush",
+            displayName: String(localized: "exercise.sledPush.name", defaultValue: "Sled push",
+                                bundle: .module, comment: "Exercise name shown on screen (sled exercise)"),
+            cues: [
+                String(localized: "exercise.sledPush.cue1", defaultValue: "Grip the sled's posts with your arms nearly straight.",
+                       bundle: .module, comment: "Sled push: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.sledPush.cue2", defaultValue: "Lean in so your body makes a straight line.",
+                       bundle: .module, comment: "Sled push: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.sledPush.cue3", defaultValue: "Drive with short, powerful steps on the balls of your feet.",
+                       bundle: .module, comment: "Sled push: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.sledPush.cue4", defaultValue: "Keep pushing steadily to the end of the lane.",
+                       bundle: .module, comment: "Sled push: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.sledPush.mistake", defaultValue: "Rounding the back or standing too upright to push.",
+                            bundle: .module, comment: "Sled push: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.sledPush.easier", defaultValue: "Take weight off the sled, or push a shorter distance.",
+                           bundle: .module, comment: "Sled push: an easier version, as a short instruction")
+        )
+    }
+
+    static var sledPull: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Sled pull", keyStem: "sledPull",
+            displayName: String(localized: "exercise.sledPull.name", defaultValue: "Sled pull",
+                                bundle: .module, comment: "Exercise name shown on screen (sled exercise)"),
+            cues: [
+                String(localized: "exercise.sledPull.cue1", defaultValue: "Hold the sled's straps or handles and face the sled.",
+                       bundle: .module, comment: "Sled pull: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.sledPull.cue2", defaultValue: "Sit your hips back slightly, arms long, chest up.",
+                       bundle: .module, comment: "Sled pull: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.sledPull.cue3", defaultValue: "Walk backward with short steps, pulling the sled along.",
+                       bundle: .module, comment: "Sled pull: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.sledPull.cue4", defaultValue: "Keep the straps tight all the way to the end.",
+                       bundle: .module, comment: "Sled pull: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.sledPull.mistake", defaultValue: "Yanking with the arms instead of stepping with the legs.",
+                            bundle: .module, comment: "Sled pull: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.sledPull.easier", defaultValue: "Take weight off the sled, or pull a shorter distance.",
+                           bundle: .module, comment: "Sled pull: an easier version, as a short instruction")
         )
     }
 }
