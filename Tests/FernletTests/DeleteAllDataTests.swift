@@ -1252,6 +1252,47 @@ struct DeleteAllDataTests {
         )
     }
 
+    /// The companion-feelings settings (owner 2026-11-13: Delete everything "really means
+    /// everything"). Kept as preferences until then; now a wiped phone's companion is back on the
+    /// standard sleep window with appetite cues on, like a fresh install.
+    @Test func deleteAllClearsTheCompanionFeelingsSettings() async {
+        let store = makeStore("delete-all-companion-feelings")
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: CompanionEmotionPreferences.appetiteCuesKey)
+        defaults.set(21 * 60, forKey: CompanionEmotionPreferences.bedtimeMinuteKey)
+        defaults.set(5 * 60, forKey: CompanionEmotionPreferences.wakeMinuteKey)
+        #expect(!CompanionEmotionPreferences.appetiteCuesEnabled(), "precondition: the cue switch was not seeded off")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        for key in [CompanionEmotionPreferences.appetiteCuesKey,
+                    CompanionEmotionPreferences.bedtimeMinuteKey,
+                    CompanionEmotionPreferences.wakeMinuteKey] {
+            #expect(defaults.object(forKey: key) == nil, "\(key) survived the wipe")
+        }
+        #expect(CompanionEmotionPreferences.appetiteCuesEnabled(), "the cues read back as a fresh install's")
+        #expect(CompanionEmotionPreferences.sleepWindow() == .standard, "the sleep window reads back as a fresh install's")
+    }
+
+    /// The three former open gaps (G3, 2026-11-13): the day-summary backfill's last-run day and the
+    /// past-day journal scrub's latch and retry counter — traces of use that outlived every day
+    /// they described.
+    @Test func deleteAllClearsTheDaySummaryAndJournalScrubRunMarkers() async throws {
+        let store = makeStore("delete-all-run-markers")
+        let scrubDefaults = try #require(UserDefaults(suiteName: "test.delete-all.scrub.\(UUID().uuidString)"))
+        store.pastDayJournalScrubDefaults = scrubDefaults
+        scrubDefaults.set(FernletStore.pastDayJournalScrubVersion, forKey: FernletStore.pastDayJournalScrubFlagKey)
+        scrubDefaults.set(2, forKey: FernletStore.pastDayJournalScrubAttemptsKey)
+        let daySummaryKey = "fernlet.daySummary.lastRunKey"
+        UserDefaults.standard.set("2026-11-12", forKey: daySummaryKey)
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(UserDefaults.standard.object(forKey: daySummaryKey) == nil, "the day-summary backfill's last-run day survived the wipe")
+        #expect(scrubDefaults.object(forKey: FernletStore.pastDayJournalScrubFlagKey) == nil, "the journal scrub's latch survived the wipe")
+        #expect(scrubDefaults.object(forKey: FernletStore.pastDayJournalScrubAttemptsKey) == nil, "the journal scrub's retry counter survived the wipe")
+    }
+
     /// The pre-Core-Data `SavedRecipes.json`: plaintext recipe names, ingredients, notes and source
     /// URLs. The migration latch survives the wipe by design, so nothing re-reads the file — but
     /// until this round nothing deleted it either.

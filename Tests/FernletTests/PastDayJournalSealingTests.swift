@@ -102,6 +102,35 @@ struct PastDayJournalSealingTests {
         #expect(store.loadDay(for: pastKey).bottleCount == 5)
     }
 
+    /// CAP-2 (G3, 2026-11-13): Home's looking-back card sits on an ungated screen, so its read hands
+    /// back sealed journal text only while the Private tab's journal is open — never before it opens
+    /// and never after it closes.
+    @Test func lookBackJournalText_staysSealedUntilTheJournalOpens() {
+        let today = Date()
+        let store = makeTestStore(date: today)
+        store.activateSealedJournals(contentKey: .journalTestKey)
+        let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-90 * 86_400))
+        store.addJournal(text: "a year of quiet", tag: .good, date: pastKey)
+        #expect(store.lookBackJournalText(for: pastKey) == "a year of quiet", "precondition: the open journal reads it")
+
+        store.deactivateSealedJournals()
+        #expect(!store.isSealedJournalOpen)
+        #expect(store.lookBackJournalText(for: pastKey) == nil, "Home read sealed journal text with the journal closed")
+
+        store.activateSealedJournals(contentKey: .journalTestKey)
+        #expect(store.isSealedJournalOpen)
+        #expect(store.lookBackJournalText(for: pastKey) == "a year of quiet", "no data loss once the gate allows it")
+    }
+
+    /// CAP-2, the never-opened case: a fresh launch whose journal has not been opened yet.
+    @Test func lookBackJournalText_isNilBeforeTheJournalEverOpens() {
+        let today = Date()
+        let store = makeTestStore(date: today)
+        let pastKey = FernletDate.dayKey(for: today.addingTimeInterval(-180 * 86_400))
+        #expect(!store.isSealedJournalOpen)
+        #expect(store.lookBackJournalText(for: pastKey) == nil)
+    }
+
     /// Pure unit test for the shared strip helper: only sealed ids are blanked; others are untouched.
     @Test func strippedIfSealed_blanksOnlySealedEntries() {
         let sealedID = UUID()

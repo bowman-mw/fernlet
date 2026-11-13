@@ -18,7 +18,8 @@ import FernletUI
 ///
 /// Each card renders only when it has something worth surfacing, so the section quietly
 /// disappears on a sparse day rather than nagging. Rendered by `HomeView`; the history reads
-/// (journal decryption, full-day scans, weather) run once in the `.task`, off the per-render path.
+/// (full-day scans, weather) run once in the `.task`, off the per-render path. The looking-back
+/// read runs on each appearance and only while the Private tab's journal is open (CAP-2).
 struct AmbientCardsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -47,7 +48,8 @@ struct AmbientCardsView: View {
     /// One resurfaced journal moment for the looking-back card: the window label ("A year ago
     /// today") plus the entry text.
     ///
-    /// Computed once per load by `computeLookBack()` from the decrypted day records.
+    /// Computed on each appearance by `computeLookBack()`, and only while the Private tab's journal
+    /// is open (CAP-2): Home is not behind the lock, so it never decrypts sealed text on its own.
     struct LookBack: Equatable { let label: String; let text: String }
 
     var body: some View {
@@ -62,11 +64,15 @@ struct AmbientCardsView: View {
             periodPredictionBubble
             micronutrientBubble
         }
+        .onAppear {
+            // CAP-2: asked again on every appearance (no decryption at all while the journal is
+            // closed), so a look-back read in one Private session is dropped once it closes.
+            lookBack = computeLookBack()
+        }
         .task {
             // History reads (decryption, full-day scan) are done once, off the per-render path.
             guard !didLoad else { return }
             didLoad = true
-            lookBack = computeLookBack()
             forgottenFavorites = computeForgottenFavorites()
             forgottenWorkout = computeForgottenWorkout()
             if store.settings.weatherPromptsEnabled {
@@ -217,7 +223,8 @@ struct AmbientCardsView: View {
 
     @ViewBuilder
     private var lookingBackCard: some View {
-        if let lookBack {
+        // CAP-2: re-checked at render, so text read while the journal was open never outlives it.
+        if let lookBack, store.isSealedJournalOpen {
             FernletCard {
                 HStack(alignment: .top, spacing: 12) {
                     RoundedRectangle(cornerRadius: 2).fill(Color.goldenrod).frame(width: 3)
@@ -250,9 +257,9 @@ struct AmbientCardsView: View {
         ]
         for (days, label) in windows {
             guard let date = Calendar.current.date(byAdding: .day, value: -days, to: Date()) else { continue }
-            let day = store.loadDayWithDecryptedJournals(for: FernletDate.dayKey(for: date))
-            if let entry = day.journals.first(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-                return LookBack(label: label, text: entry.text)
+            // CAP-2: the store answers only while the Private tab's journal is open.
+            if let text = store.lookBackJournalText(for: FernletDate.dayKey(for: date)) {
+                return LookBack(label: label, text: text)
             }
         }
         return nil
