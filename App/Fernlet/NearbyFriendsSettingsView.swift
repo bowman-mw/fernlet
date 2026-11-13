@@ -9,7 +9,7 @@ import FernletSocial
 ///
 /// The six in-person sharing consents used to sit as bare toggles inside the Settings hub's
 /// Privacy section; nobody looks under Privacy to change a friends setting. This pushed page
-/// (36pt ``ScreenHeader`` idiom — never sheet chrome) orders them by **dependency**: Presence
+/// (36pt `ScreenHeader` idiom — never sheet chrome) orders them by **dependency**: Presence
 /// first, because hearts and vibe need it, then vibe, hearts, away delivery, recipe shares,
 /// clothing shops. Each row carries its own one-line footnote instead of a shared paragraph.
 ///

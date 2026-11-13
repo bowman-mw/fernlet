@@ -107,7 +107,9 @@ public final class CycleRecordStore {
     /// The records with these ids, classified — or an empty page while hidden (nothing decrypted).
     /// What an edit reads its stored copy from.
     ///
-    /// - Parameter ids: At most `CycleRecordRepository.maxPageSize` ids.
+    /// - Parameters:
+    ///   - ids: At most `CycleRecordRepository.maxPageSize` ids.
+    ///   - contentKey: The hub key; `nil` answers an empty page.
     public func records(ids: [UUID], contentKey: SymmetricKey?) throws -> CycleRecordPage {
         guard isVisible() else { return CycleRecordPage() }
         return try repository.records(ids: ids, contentKey: contentKey)
@@ -170,7 +172,9 @@ public final class CycleRecordStore {
     /// empty would be indistinguishable from it, and an export whose key went between the pre-pass
     /// and a chunk would write a short set over the cloud copy (review C-U3-R1 / L-U3-R1).
     ///
-    /// - Parameter ids: At most `CycleRecordRepository.maxPageSize` ids.
+    /// - Parameters:
+    ///   - ids: At most `CycleRecordRepository.maxPageSize` ids.
+    ///   - contentKey: The hub key; `nil` throws `FernletLockError.locked`.
     public func backupChunk(ids: [UUID], contentKey: SymmetricKey?) throws -> CycleRecordPage {
         guard isVisible() else { throw PeriodTrackingHiddenError() }
         guard contentKey != nil else { throw FernletLockError.locked }

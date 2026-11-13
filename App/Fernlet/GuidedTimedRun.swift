@@ -45,7 +45,7 @@ enum GuidedRunTimedLog {
     /// The activity a finished cardio, mobility or sport run logs as, so Apple Health files it as what it
     /// was rather than "Other": its cardio line's type (HIIT for intervals, walking for a walk, mixed
     /// cardio otherwise), flexibility for a stretch session, and for a sport session the sport named in
-    /// Workout setup (`sport`, ``WorkoutSportActivity``) when Fernlet models it — pickleball, tennis,
+    /// Workout setup (`sport`, `WorkoutSportActivity`) when Fernlet models it — pickleball, tennis,
     /// volleyball and so on, with bare "football" read by `region` (round 2, R5). Nil for every other
     /// run, and for a sport session whose sport matches none or is a distance sport: it keeps the
     /// generic type it always had.

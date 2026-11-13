@@ -127,6 +127,7 @@ final class SillyStatsService {
     /// something newer happens — nil once a journal entry is written after it (the companion answers
     /// the latest thing), on any other day, or when no stamp has been earned since launch.
     ///
+    /// - Parameter todayKey: today's day key, matched against the stamp's day.
     /// - Parameter latestJournal: when today's last journal entry was written, if there is one.
     func stampLine(todayKey: String, latestJournal: Date?) -> String? {
         guard let latest = latestAnnouncedStamp, latest.dayKey == todayKey else { return nil }

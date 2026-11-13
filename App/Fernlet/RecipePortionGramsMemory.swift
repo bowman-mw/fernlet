@@ -71,7 +71,7 @@ enum RecipePortionGramsMemory {
     }
 
     /// Records every row of a saved recipe whose amount is counted in the person's own grams for one
-    /// (a ``RecipePortionOption/Source/personal`` portion on a bound row).
+    /// (a `RecipePortionOption/Source/personal` portion on a bound row).
     static func remember(from inputs: [ManualRecipeIngredientInput], defaults: UserDefaults = .standard) {
         let entries = inputs.compactMap { input -> RecipePortionGrams? in
             guard let foodItemID = input.selectedFoodItemId, let portion = input.portion,

@@ -90,7 +90,7 @@ public nonisolated enum WorkoutSportActivity {
     /// first sport it names is one Fernlet does not model, or it names none.
     ///
     /// Whole words only, without case or punctuation: "Tennis!" is tennis, "tennis elbow rehab" is
-    /// tennis too, but "tennisball" is nothing. Bare "football" reads by `region` (``football(inRegion:)``).
+    /// tennis too, but "tennisball" is nothing. Bare "football" reads by `region` (`football(inRegion:)`).
     public static func sport(named text: String, region: String?) -> WorkoutActivityType? {
         let words = normalized(text)
         guard words != " " else { return nil }

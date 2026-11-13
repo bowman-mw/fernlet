@@ -122,7 +122,7 @@ public nonisolated struct CalendarFlightLook: Equatable, Sendable {
     }
 
     /// `window` cut into back-to-back pieces of at most ``maxPredicateSpan``, earliest first (at most
-    /// ``maxChunks``; a longer window is cut short at its start's end).
+    /// `maxChunks`; a longer window is cut short at its start's end).
     public static func chunks(of window: DateInterval) -> [DateInterval] {
         var pieces: [DateInterval] = [], start = window.start
         // Bounded: at most maxChunks pieces.

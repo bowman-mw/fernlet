@@ -95,7 +95,7 @@ struct MonthGridModel {
 // MARK: - Card
 
 /// The shared month-calendar card chrome: paging chevrons (future months disabled) over a
-/// 7-column ``EqualColumnGrid`` of weekday symbols and caller-rendered day cells, inside a
+/// 7-column `EqualColumnGrid` of weekday symbols and caller-rendered day cells, inside a
 /// `FernletCard`.
 ///
 /// Owns only layout and paging; each calendar (journal, cycle) supplies its own

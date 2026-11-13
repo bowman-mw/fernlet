@@ -106,7 +106,7 @@ public extension FernletDay {
     /// the user (or there are none).
     ///
     /// HealthKit's hours are recognized by value: they equal the context's
-    /// ``HealthDailyContext/healthKitSleepLogHours`` marker, or — for a context written before that
+    /// `HealthDailyContext/healthKitSleepLogHours` marker, or — for a context written before that
     /// marker existed — its `body.sleepHours`. The model cannot tell a typed value that happens to
     /// equal HealthKit's reading from HealthKit's own, so such hours count as HealthKit's: the
     /// conservative direction (they stay on this device through the residue, and off iCloud).

@@ -180,7 +180,7 @@ nonisolated enum WorldMapPreferences {
         defaults.bool(forKey: Key.alwaysLowPower)
     }
 
-    /// Sets the low-power Always mode; for the app's own defaults, its marker too (``backgroundMappingMarked()``).
+    /// Sets the low-power Always mode; for the app's own defaults, its marker too (``backgroundMappingMarked(in:)``).
     static func setAlwaysLowPower(_ on: Bool, in defaults: UserDefaults = .standard) {
         defaults.set(on, forKey: Key.alwaysLowPower)
         if defaults === UserDefaults.standard { setBackgroundMarker(on) }

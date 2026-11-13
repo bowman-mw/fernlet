@@ -181,7 +181,7 @@ public struct NutritionLabelResult: Equatable, Hashable {
     ///
     /// The single most valuable property of this conversion is what it does NOT do: it never
     /// substitutes `0` for a line the OCR failed to read. `NutritionLabelResult` already keeps every
-    /// field optional for exactly that reason, and ``NutritionFacts`` keeps the same discipline, so
+    /// field optional for exactly that reason, and `NutritionFacts` keeps the same discipline, so
     /// an unread calories line reaches the gate as *missing* (named by the completeness half) rather
     /// than as a claim that the food has no energy. Anything that collapses these optionals with
     /// `?? 0` before the gate runs defeats the check it most needs to pass.

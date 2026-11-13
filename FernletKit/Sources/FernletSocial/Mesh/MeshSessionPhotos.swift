@@ -97,11 +97,11 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// two stores' key caches'.
 ///
 /// The session's moments reach it from the mesh through the composition's session observer, each at
-/// the engine position `MeshSessionObserver` names for it: a new search (``beginNewPhotoSession()``),
-/// the session's end with the roster the mesh drained (``promoteEndedSessionIntoPendingReview(drainedRoster:)``),
-/// the session left (``forgetPhotoSession()``), the three scope changes (``noteScopeChange(_:)``), a
-/// removed member (``dropRemovedMemberFromReview(fingerprint:)``) and each change of the routed access
-/// gate (``applyAccessGate(isRising:now:)``), whose value it reads from the mesh itself.
+/// the engine position `MeshSessionObserver` names for it: a new search (`beginNewPhotoSession()`),
+/// the session's end with the roster the mesh drained (`promoteEndedSessionIntoPendingReview(drainedRoster:)`),
+/// the session left (`forgetPhotoSession()`), the three scope changes (`noteScopeChange(_:)`), a
+/// removed member (`dropRemovedMemberFromReview(fingerprint:)`) and each change of the routed access
+/// gate (`applyAccessGate(isRising:now:)`), whose value it reads from the mesh itself.
 ///
 /// `@MainActor` and `@Observable`, like the mesh manager, with its bookkeeping, stores and
 /// references `@ObservationIgnored`: views observe the wall, the live roll, the review batch,
@@ -123,16 +123,16 @@ public final class MeshSessionPhotos {
     /// ``photosAwaitingAnswer(among:)``, so a photo moved out from under it is still offered).
     ///
     /// A memory projection of the sealed pending corpus (2026-09-30): every entry is HELD there
-    /// (``holdSessionPhoto(_:key:live:)``), never on the wall, and its id is the photo's local id.
+    /// (`holdSessionPhoto(_:key:live:)`), never on the wall, and its id is the photo's local id.
     /// It is emptied only by the person's choice (``finishSessionPhotos(keeping:of:)``), by the
     /// session-end promotion, which MOVES what is left into `pendingFriendReview.photos` without a
-    /// disk write (``promoteEndedSessionIntoPendingReview(drainedRoster:)``; a new search runs the
-    /// photo half unconditionally, ``beginNewPhotoSession()``), and by delete-all
+    /// disk write (`promoteEndedSessionIntoPendingReview(drainedRoster:)`; a new search runs the
+    /// photo half unconditionally, `beginNewPhotoSession()`), and by delete-all
     /// (``purgeHeldSessionPhotosForDeleteAll()``).
     public private(set) var sessionPhotos: [FriendPhotoPayload] = []
     /// The promoted, unconsumed session-end review: keep-as-friend candidates plus the ended
     /// session's photos still awaiting the keep/discard choice. Set by
-    /// ``promoteEndedSessionIntoPendingReview(drainedRoster:)`` at the session-end moment, by a held photo
+    /// `promoteEndedSessionIntoPendingReview(drainedRoster:)` at the session-end moment, by a held photo
     /// arriving while no session is live, and — photos only — by the launch rebuild from the
     /// pending corpus (a process kill loses the candidates, never the photos). Cleared only once
     /// BOTH halves are answered — the candidates by `completeFriendReview(_:)`, the photos by
@@ -148,7 +148,7 @@ public final class MeshSessionPhotos {
     ///
     /// A stored, OBSERVED mirror rather than a computed property: two of its three inputs are
     /// `@ObservationIgnored`, so a view reading a computed form would never re-render on the unlock
-    /// that opens it. Refreshed at every change of those inputs (``refreshHeldPhotosCanBeShown()``).
+    /// that opens it. Refreshed at every change of those inputs (`refreshHeldPhotosCanBeShown()`).
     public private(set) var heldPhotosCanBeShown = false
     /// A photo was exchanged with this friend in the current session (feeds the closeness photo signal).
     @ObservationIgnored public var onFriendPhotoSession: ((String) -> Void)?
@@ -476,7 +476,7 @@ public final class MeshSessionPhotos {
     ///
     /// **What the in-camera Develop review renders** (2026-09-30 fix round, findings C-F1/L-F1). That
     /// review snapshots the ids it offers at Develop and must keep offering them if the session ends
-    /// under it: door 3's five-minute give-up raises ``MeshNetworkManager/isSessionLive`` false while the mesh is still
+    /// under it: door 3's five-minute give-up raises `MeshNetworkManager/isSessionLive` false while the mesh is still
     /// held, so the camera — and its open review — stays on screen while the ending MOVES the live
     /// list into `pendingFriendReview`. Reading `sessionPhotos` alone, the grid went empty and the
     /// person's answer acted on nothing.
@@ -505,7 +505,7 @@ public final class MeshSessionPhotos {
 
     /// Answers the promoted batch's PHOTO half: of the `reviewed` photos — the ones the session-end
     /// review actually showed — the ones in `kept` are copied to the wall and the rest are deleted
-    /// for good, all through ``applyPhotoAnswers(kept:discarded:now:)``. The post-session twin of
+    /// for good, all through `applyPhotoAnswers(kept:discarded:now:)`. The post-session twin of
     /// ``finishSessionPhotos(keeping:of:)``.
     ///
     /// **Scoped to what was shown, never to the whole batch.** A photo promoted while the sheet was
@@ -648,7 +648,7 @@ public final class MeshSessionPhotos {
     /// The in-camera Develop review's answer, scoped to the photos it SHOWED (`reviewed`, snapshotted
     /// at Develop) and applied wherever each one is listed now: of those still held, the ones in
     /// `kept` are copied to the wall, the rest are deleted for good, and all of them leave the live
-    /// list AND the pending batch (``applyPhotoAnswers(kept:discarded:now:)``).
+    /// list AND the pending batch (`applyPhotoAnswers(kept:discarded:now:)`).
     ///
     /// **Held anywhere, not just live** (2026-09-30 fix round, findings C-F1/L-F1). Door 3's
     /// five-minute give-up ends the session while the mesh is still held, so the camera and its open
@@ -1069,7 +1069,7 @@ public final class MeshSessionPhotos {
     }
 
     /// Delete-all's leg for the photos nobody chose yet (wipe leg 4d): empties the live roll, the
-    /// mesh's live roster (``MeshNetworkManager/clearSessionRoster()``, in the same synchronous step)
+    /// mesh's live roster (`MeshNetworkManager/clearSessionRoster()`, in the same synchronous step)
     /// and the WHOLE pending batch — candidates too, because a
     /// keep-as-friend offer from a session the person just asked to erase would write new trust rows
     /// about it — and the mirror (tombstones included: after delete-all the routed store is wiped and

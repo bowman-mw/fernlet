@@ -18,10 +18,10 @@ import FernletUI
 #endif
 
 /// The unit menu of a recipe ingredient row bound to a catalog food: a `Menu` holding one inline
-/// `Picker` over ``RecipePortionPicker/Choices``, sectioned into the food's own portions, the person's
+/// `Picker` over `RecipePortionPicker/Choices`, sectioned into the food's own portions, the person's
 /// own sizes, USDA typical sizes (estimates) and units.
 ///
-/// The row holds a choice one of two ways (``ManualRecipeIngredientInput/portion``): a unit — including
+/// The row holds a choice one of two ways (`ManualRecipeIngredientInput/portion`): a unit — including
 /// a portion that is one of a unit, such as a banana's "medium" for "each", held as that unit so the
 /// line saves exactly as a typed "1 each" always has — or a named portion, whose amount is saved as its
 /// grams. Where nothing on the menu counts, it also asks "How many grams is one?" (report §6.3 Rung E,
@@ -241,7 +241,7 @@ struct RecipePortionGramsRow: View {
 /// The note beneath a SAVED recipe line whose household amount is a curated USDA typical size (fix
 /// round 1, finding s2-L-F4b-DT-2): the recipe page and cooking mode keep the editor's "USDA typical
 /// size, estimate" badge, so "1 fruit (136 g)" of a Hass avocado never reads like the food's own USDA
-/// portion. Worked out when the line is shown (``RecipeIngredient/isTypicalSizeEstimate(using:)``); the
+/// portion. Worked out when the line is shown (`RecipeIngredient/isTypicalSizeEstimate(using:)`); the
 /// saved line itself is unchanged.
 struct RecipeTypicalSizeEstimateNote: View {
     var body: some View {
@@ -326,9 +326,9 @@ struct RecipePortionAskGramsRow: View {
 /// choice (F4a, F4b): "Counted as 2 eggs (100.6 g)", "Counted as 2 cups, sliced (300 g)", "Counted as 2
 /// medium (236 g)". The noun agrees with the count through automatic grammar agreement
 /// (`^[…](inflect: true)`) where the label ends in one; a size word stays as it is — "2 medium", never
-/// "2 mediums" (``RecipeHouseholdMeasure/headTakesPlural``).
+/// "2 mediums" (`RecipeHouseholdMeasure/headTakesPlural`).
 enum RecipeHouseholdCaption {
-    /// The caption for a SAVED line (``RecipeIngredient/savingHouseholdAsGrams(using:)``), or nil when
+    /// The caption for a SAVED line (`RecipeIngredient/savingHouseholdAsGrams(using:)`), or nil when
     /// the line is not grams beside a household choice.
     static func caption(for line: RecipeIngredient, locale: Locale = .autoupdatingCurrent) -> AttributedString? {
         guard let measure = line.householdMeasure, measure.isValid, RecipeUnit.normalized(line.unit) == .gram,

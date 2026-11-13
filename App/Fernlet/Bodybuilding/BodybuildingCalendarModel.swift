@@ -12,7 +12,7 @@ import FernletDomainModel
 import Foundation
 
 /// One load of the Day calendar: the month grid's rows, this week's keys, every visible day and the
-/// weights read for them. Built by ``FernletStore/bodybuildingCalendarSnapshot(weights:)``.
+/// weights read for them. Built by ``FernletStore/bodybuildingCalendarSnapshot(weights:monthOffset:weekOffset:)``.
 nonisolated struct BodybuildingCalendarSnapshot: Equatable, Sendable {
     /// The month holding today.
     var layout: BodybuildingMonthLayout

@@ -60,8 +60,8 @@ public nonisolated enum ExchangeLimits {
 ///   wires where an unknown key is ignored (pasted share text, the mesh `.local` arm) and for the
 ///   exchange packet, which versions its own hash (version 2 for a recipe in parts).
 ///
-/// An ingredient whose food carries fractional grams (``FoodItem/preciseMacros``) also carries them as
-/// ``SharedRecipeIngredient/preciseMacros`` in ``componentPayload(for:foodItems:)`` — another key an
+/// An ingredient whose food carries fractional grams (`FoodItem/preciseMacros`) also carries them as
+/// `SharedRecipeIngredient/preciseMacros` in ``componentPayload(for:foodItems:)`` — another key an
 /// older paste/mesh reader ignores. The old-reader form and the hash-covered packet strip it.
 public nonisolated enum ExchangeRecipePayloadBuilder {
     public static func payload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
@@ -202,7 +202,7 @@ public nonisolated enum ExchangeWorkoutPlanBuilder {
 /// only its own shape: scheme 1's pre-image never holds `components`, scheme 2's always does, and
 /// ``decode(_:)`` refuses the two crossed even when the hash verifies.
 ///
-/// **No fractional grams (2026-09-29).** Neither version carries ``SharedRecipeIngredient/preciseMacros``:
+/// **No fractional grams (2026-09-29).** Neither version carries `SharedRecipeIngredient/preciseMacros`:
 /// an older reader of either scheme would re-hash without that key and call an honest file corrupt. The
 /// initializer strips it before hashing, and ``decode(_:)`` refuses a packet that carries it. A file,
 /// Shortcut or Messages card therefore rounds a 3.4 g ingredient to 3 g; the paste text and the mesh
@@ -437,7 +437,7 @@ public nonisolated struct ExchangeCardMetadata: Codable, Equatable, Sendable {
 /// card falls back to the `.fernletrecipe` / `.fernletplan` file workflow.
 ///
 /// **Two wire versions, both read.** Version 2, written since 2026-09-24, nests the packet as raw
-/// JSON in a small document that ``ExchangeMessageWireV2`` deflates and base64url-encodes once, and
+/// JSON in a small document that `ExchangeMessageWireV2` deflates and base64url-encodes once, and
 /// carries no card — the receiver derives it. Version 1, written by the 2026-09-23 build, is this
 /// type's own JSON (the packet base64'd into `packetData`, the card alongside) base64'd again into
 /// the URL; a card already sitting in a conversation must keep opening, so it is still read. The

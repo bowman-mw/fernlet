@@ -125,7 +125,7 @@ struct CompanionExpression: Equatable {
 extension CompanionEmotion {
     /// The breath period for this emotion, from the state's own: slower when sleepy, tired, sad or
     /// soothed, quicker when playful, happy or frazzled. Asleep ignores the state's breath entirely —
-    /// one slow sleeping rhythm whatever the day was (``CompanionEmotion/hidesTheDay``).
+    /// one slow sleeping rhythm whatever the day was (`CompanionEmotion/hidesTheDay`).
     func breathTempo(from base: Double) -> Double {
         switch self {
         case .asleep: 4.2

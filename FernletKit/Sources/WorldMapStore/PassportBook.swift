@@ -81,7 +81,7 @@ public nonisolated enum PassportEvent: Hashable, Sendable {
 ///
 /// **Versioned bytes.** ``encoded()`` and ``init(data:)`` are the one format of the sealed file on the iPhone
 /// (``PassportStore``); Fernlet's sealed iCloud backup carries the same entries one record each and rebuilds a
-/// restored book with ``init(discoveries:)`` under the same rules. The bytes are JSON with a
+/// restored book with ``init(discoveries:lastSeen:airportLastSeen:transits:flights:upcomingFlights:keptBackupRecords:)`` under the same rules. The bytes are JSON with a
 /// `version` field (``currentVersion``) and one object per kind, token to first date in seconds since 1970.
 /// A version this build does not know, a kind over its cap, or a token that is not a token is refused whole.
 /// Landmarks joined version 1 as one more kind key (`landmark`), and airports and flights as more keys (below); a

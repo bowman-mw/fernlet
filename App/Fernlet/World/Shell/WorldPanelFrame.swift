@@ -10,7 +10,7 @@ import SwiftUI
 /// **Going deeper.** A page pushed inside the panel's stack with `fernletPushedPage(_:)` keeps this
 /// plate: its Back (arrow and the name of the page it returns to, Batch 2's 7-pt gap and 13-pt end) takes
 /// the icon's place, its title takes the panel's, and the ✕ stays. The plate learns of pushes through
-/// ``FernletPlateNavigation``, which it owns and hands down. Swipe from the left edge still goes back.
+/// `FernletPlateNavigation`, which it owns and hands down. Swipe from the left edge still goes back.
 ///
 /// **The keyboard.** The plate stays put and the page ends at the keyboard's top, so a pinned save bar
 /// rides above the keyboard and nothing hides behind it.
@@ -178,7 +178,7 @@ struct WorldDoneButton: View {
 }
 
 /// A World page: parchment with a faint dot grid every 14 pt (design language, "Pages"), in the World
-/// palette whatever the environment says. FernletUI's ``FernletDottedPage`` draws it.
+/// palette whatever the environment says. FernletUI's `FernletDottedPage` draws it.
 struct WorldPageBackground: View {
     var body: some View {
         FernletDottedPage()

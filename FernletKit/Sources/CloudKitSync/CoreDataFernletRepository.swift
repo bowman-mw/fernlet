@@ -519,7 +519,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
 
     /// The entire day history like ``loadAllDays()``, naming the day rows that would not decode, and
     /// not accounting for every row under read-only recovery (the blob's fetch or decode failed), after
-    /// a day-row fetch that failed, or with a row that has no date key (see ``DayHistoryRead``). A memo
+    /// a day-row fetch that failed, or with a row that has no date key (see `DayHistoryRead`). A memo
     /// installed from a read that did not account for every row is dropped and read again — a failed
     /// fetch must not keep answering "no days" to the one caller that asked to be told.
     public func loadAllDaysWithUnreadable() -> DayHistoryRead {

@@ -86,7 +86,7 @@ enum TaskConfirmation: Equatable {
 
     /// Speaks the confirmation at once — for a log made in place, where nothing is closing.
     ///
-    /// - Parameter announcer: Test seam; `nil` (production) resolves to ``FernletAnnouncer/system``
+    /// - Parameter announcer: Test seam; `nil` (production) resolves to `FernletAnnouncer/system`
     ///   in the body, not as a default value — a default argument is evaluated off the main actor.
     @MainActor
     func announce(using announcer: FernletAnnouncer? = nil) {

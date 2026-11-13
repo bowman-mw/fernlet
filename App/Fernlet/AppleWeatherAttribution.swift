@@ -77,7 +77,7 @@ struct AppleWeatherCaption: View {
 /// them.
 ///
 /// Drawn whether the switch is on or off, so the credit sits where the feature is chosen. Its body is
-/// the two rows with no container, so ``FernletFramedSection`` splits them with its hairline.
+/// the two rows with no container, so `FernletFramedSection` splits them with its hairline.
 struct AppleWeatherNotice: View {
     var body: some View {
         FernletRowLabel(title: AppleWeatherAttribution.markText(.body),

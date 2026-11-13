@@ -80,7 +80,7 @@ nonisolated enum PassportAirportStamp {
     /// Whether the banner may say the airport was found on the ground ("Ten minutes at the airport found it",
     /// World-Airports-Spec §3): the airport's first trip, with no flight in `flights` landing at `code` from a day
     /// before `date` to an hour after it (a landing finds an airport too, and gets its own banner). Bounded by
-    /// ``PassportBook/maxFlights``.
+    /// `PassportBook/maxFlights`.
     static func foundOnTheGround(code: String, at date: Date, trip: Int, flights: [PassportFlight]) -> Bool {
         guard trip == 1 else { return false }
         let window = date.addingTimeInterval(-86_400) ... date.addingTimeInterval(3_600)

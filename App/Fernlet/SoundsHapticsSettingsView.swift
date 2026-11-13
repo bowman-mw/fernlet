@@ -16,7 +16,7 @@ import FernletUI
 /// this page is ever copied into another key. Device-local `UserDefaults`, never synced, kept by
 /// "Delete everything" (`Docs/PrivacyWipeCoverage.md`): preferences, not records.
 ///
-/// A pushed page in the ``NearbyFriendsSettingsView`` idiom (``ScreenHeader``, cream cards, one
+/// A pushed page in the ``NearbyFriendsSettingsView`` idiom (`ScreenHeader`, cream cards, one
 /// footnote per row). The level is a segmented `Picker` — a system control, so it carries no haptic of
 /// its own beyond the system's.
 struct SoundsHapticsSettingsView: View {

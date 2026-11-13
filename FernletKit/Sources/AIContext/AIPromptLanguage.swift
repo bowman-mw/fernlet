@@ -21,7 +21,7 @@ import FernletDomainModel
 ///
 /// **What it adds to a prompt, honestly declared.** The language is not personal data. The term of
 /// address is: it is derived from the body profile's Sex answer. It is sent only for a language
-/// whose grammar needs it (``gendersWordsAboutThePerson``) and only by a prose payload that is given
+/// whose grammar needs it (``gendersWordsAboutThePerson(_:)``) and only by a prose payload that is given
 /// one, and it reaches the model as a grammatical instruction ("use its feminine form"), never as
 /// the word "sex" or the profile value. Each payload carrying one appends ``includedFieldNames`` to
 /// its own, so the audit log names it.
@@ -49,7 +49,7 @@ public nonisolated struct AIPromptLanguage: Sendable, Equatable {
     /// English: every line nil, nothing added to the audit row.
     public static let english = AIPromptLanguage(language: .english)
 
-    /// The app's interface language (``FernletLanguage/app``) — what every payload builder passes.
+    /// The app's interface language (`FernletLanguage/app`) — what every payload builder passes.
     ///
     /// - Parameter address: The effective profile's `sex.termOfAddress` for a PROSE prompt; nil for a
     ///   catalog prompt, which writes nothing about the person.

@@ -32,7 +32,7 @@ import FernletFoundation
 /// everything the plan got wrong in one pass.
 struct CoachPlanImportReview {
     var plan: CoachPlan
-    /// Everything ``CoachPlan/validate(knownExerciseNames:)`` found. Blocking issues stop the import.
+    /// Everything `CoachPlan/validate(knownExerciseNames:)` found. Blocking issues stop the import.
     var issues: [CoachPlanIssue]
     /// Exercises that conflict with the user's profile or equipment.
     var safetyFlags: [CoachPlanSafetyFlag]
@@ -54,7 +54,7 @@ struct CoachPlanImportReview {
     var blockers: [CoachPlanIssue] { issues.filter(\.isBlocking) }
 }
 
-/// A ``CoachPlanEdit`` matched to the live planned workout it targets.
+/// A `CoachPlanEdit` matched to the live planned workout it targets.
 ///
 /// Holds `before` (what is on the calendar now) alongside `after` (what the edit would make it), so
 /// the review screen renders a diff from the real row rather than from the plan's description of
@@ -170,7 +170,7 @@ enum CoachPlanImportFailure: Error, Equatable {
 
 // MARK: - Importer
 
-/// Decodes, validates, and materializes a pasted ``CoachPlan``.
+/// Decodes, validates, and materializes a pasted `CoachPlan`.
 ///
 /// Split into a pure decode/review half (testable with no store) and a store-side apply half. The
 /// review half never mutates anything, which is what makes "review, then accept" a real gate rather
@@ -245,7 +245,7 @@ enum CoachPlanImporter {
 
     // MARK: Decode
 
-    /// Turns pasted text into a ``CoachPlan``, or says precisely why it couldn't.
+    /// Turns pasted text into a `CoachPlan`, or says precisely why it couldn't.
     static func decode(pastedText: String) -> Result<CoachPlan, CoachPlanImportFailure> {
         let trimmed = pastedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .failure(.empty) }
@@ -390,7 +390,7 @@ extension FernletStore {
                                      resolvedEdits: resolvedEdits)
     }
 
-    /// Matches each ``CoachPlanEdit`` to the live planned workout it targets, reporting every one
+    /// Matches each `CoachPlanEdit` to the live planned workout it targets, reporting every one
     /// that can't be applied.
     ///
     /// Refuses three things, all deliberately blocking rather than silently skipped: a target that
@@ -507,10 +507,10 @@ extension FernletStore {
 
     /// Why the profile's injury limits rule `target` out, one reason per conflict: an avoided
     /// movement, avoided muscles, a body area kept out of training (severe), or the heavy end of an
-    /// area being trained around (mild). The same limits ``WorkoutSafetyFilter`` applies to the
+    /// area being trained around (mild). The same limits `WorkoutSafetyFilter` applies to the
     /// app's own plans — the picker, the note read by whole words, and the older avoided sets — and
     /// the same two layers: the muscle and pattern rules plus a bundled exercise's reviewed record of
-    /// the areas it loads (``ExerciseAreaLoads``), so a pasted Push-up is flagged for a resting wrist.
+    /// the areas it loads (`ExerciseAreaLoads`), so a pasted Push-up is flagged for a resting wrist.
     ///
     /// Each reason is one whole localized clause (2026-10-20): the avoided movement is a clause per
     /// pattern rather than its `rawValue` token spliced into English, and the name lists are drawn
@@ -698,7 +698,7 @@ private struct CoachPlanStrikeFilter {
 
 extension FernletStore {
 
-    /// Materializes a reviewed plan into dated ``PlannedWorkout`` rows and registers its new
+    /// Materializes a reviewed plan into dated `PlannedWorkout` rows and registers its new
     /// exercises.
     ///
     /// - Parameters:
@@ -905,7 +905,7 @@ extension FernletStore {
     /// Replaces any previous import stamp rather than stacking them — a workout adjusted three times
     /// should read as "changed by X", not carry three generations of provenance.
     ///
-    /// The stamp is frozen English on every device (``CoachPlanNoteStamp``; screens draw it localized),
+    /// The stamp is frozen English on every device (`CoachPlanNoteStamp`; screens draw it localized),
     /// and the previous one is recognised by its exact shape. The strip used to drop every line
     /// starting "Day ", so a user's own "Day off, knees sore" vanished from the row on the first edit.
     static func editedNote(_ existing: String, plan: CoachPlan) -> String {

@@ -94,7 +94,7 @@ public nonisolated struct AnsweredSessionPhoto: Codable, Equatable, Sendable {
 /// a process kill the review is rebuilt from this and nothing else.
 ///
 /// Frozen at rest: `schemaVersion`, `photos` and `answered` are field names, and
-/// ``schemaVersion`` only ever rises — an older build reading a newer file defers rather than
+/// `schemaVersion` only ever rises — an older build reading a newer file defers rather than
 /// purging it (see ``PendingSessionPhotoStore/Deferral/unsupportedFormat``).
 ///
 /// Concurrency: a `Sendable` value type.

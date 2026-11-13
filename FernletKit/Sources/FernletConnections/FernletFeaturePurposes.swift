@@ -17,7 +17,7 @@ import ProximityKit
 ///
 /// ProximityKit's `IdentityService.pairSecret(with:purpose:)` derives only under a salt its
 /// identity's namespace declares, so each constant is declared in `.fernlet`'s family too
-/// (``ProximityNamespace/FeaturePurposes/fernlet``). The spellings are frozen protocol
+/// (`ProximityNamespace/FeaturePurposes/fernlet`). The spellings are frozen protocol
 /// data: a changed byte changes every heart day tag and presence tag a pair derives, and a friend's
 /// phone stops recognizing this one. The other feature labels Fernlet's features hand CryptoKit
 /// themselves stay FernletCrypto registry entries; no ProximityKit door consumes them.

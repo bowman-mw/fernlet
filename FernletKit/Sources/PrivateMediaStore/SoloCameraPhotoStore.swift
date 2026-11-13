@@ -74,7 +74,7 @@ public nonisolated struct SoloCameraFilm: Codable, Equatable, Sendable {
 /// The solo camera corpus's durable truth: every photo and the day's film count, sealed at rest as
 /// `SoloCameraIndex.sealed`.
 ///
-/// Frozen at rest: `schemaVersion`, `photos` and `film` are field names, and ``schemaVersion`` only
+/// Frozen at rest: `schemaVersion`, `photos` and `film` are field names, and `schemaVersion` only
 /// ever rises — an older build reading a newer file defers rather than purging it.
 ///
 /// Concurrency: a `Sendable` value type.

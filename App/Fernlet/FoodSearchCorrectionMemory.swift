@@ -130,7 +130,7 @@ struct FoodSearchCorrectionDraft: Equatable, Sendable {
     ///   - searchText: the text in the field at the moment of the pick — what the user actually
     ///     searched. Not the replaced item's name and not the meal's name: those are the app's words,
     ///     and neither is what they will type next time.
-    ///   - prefilledWith: the text the field was seeded with (the suspect match's name). A pick made
+    ///   - prefill: the text the field was seeded with (the suspect match's name). A pick made
     ///     WITHOUT editing the prefill is not a search the user typed — one tap would otherwise mint a
     ///     key spelled like a catalog row nobody types ("denny's mozzarella cheese sticks"), spending
     ///     a slot of the capped memory on a query that can never fire again. Compared after

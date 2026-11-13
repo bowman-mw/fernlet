@@ -136,9 +136,11 @@ public final class WorkoutHealthKitSync {
     /// without depending on what `Bundle.main` resolves to under the test host.
     private let ownBundleID: String
 
-    /// - Parameter ownBundleID: defaults to `Bundle.main.bundleIdentifier`, falling back to `""` — the
-    ///   fail-closed value, since an empty string never equals a real sample's bundle id, so an
-    ///   unresolvable `Bundle.main` degrades to "never claim authorship", never to "trust everything".
+    /// - Parameters:
+    ///   - context: the store the sync reads and writes local workouts through.
+    ///   - ownBundleID: defaults to `Bundle.main.bundleIdentifier`, falling back to `""` — the
+    ///     fail-closed value, since an empty string never equals a real sample's bundle id, so an
+    ///     unresolvable `Bundle.main` degrades to "never claim authorship", never to "trust everything".
     public init(
         context: WorkoutSyncContext,
         service: any HealthKitServicing,

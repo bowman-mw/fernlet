@@ -3,7 +3,7 @@ import FernletDomainModel
 import FernletUI
 
 /// Workout setup's session fields: how long a session may run, how much of the warm-up stretch flow
-/// it walks, and whether it ends with the cool-down (``WorkoutSessionOptions``).
+/// it walks, and whether it ends with the cool-down (`WorkoutSessionOptions`).
 ///
 /// The length and the warm-up are chip rows like Experience: each chip is a button named by its
 /// visible text ("30 min", "Short") and carries the selected trait, so VoiceOver reads "30 min,

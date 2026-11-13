@@ -385,7 +385,7 @@ private struct TuckIntoBoxView: View {
     }
 }
 
-/// The tuck theater's clock (``TuckIntoBoxView``), named once so the lid's haptic lands with the
+/// The tuck theater's clock (`TuckIntoBoxView`), named once so the lid's haptic lands with the
 /// lid and is retimed with it under Reduce Motion (report B2, §3.7).
 enum WorryTuckTiming {
     /// When the lid's spring starts, in seconds into the full ~2.2 s tuck.
@@ -482,7 +482,7 @@ private struct SealedBoxView: View {
 /// The delete waits out a short "Keep it" window behind an undo strip, on Mail's Undo Send terms:
 /// undo is available while the user is on the page, and leaving (or backgrounding) COMMITS the
 /// release rather than reverting it. Every ending — the timer, a second release, disappearing,
-/// backgrounding — funnels through ``claimPendingRelease()``, which consumes the worry exactly
+/// backgrounding — funnels through `claimPendingRelease()`, which consumes the worry exactly
 /// once, so no pair of them can delete twice.
 struct WorryBoxView: View {
     var worryBox: WorryBoxService

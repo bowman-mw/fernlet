@@ -39,8 +39,8 @@ import FernletUI
 /// they stay, but a view that is never *drawn* is never an accessibility element — so at AX5 five
 /// delete claims and three kept claims became one line each and the rest were unreachable by any
 /// means, on the one screen in the app where what the user was told is the whole point. Every
-/// claim is now single-sourced through ``WipeClaim`` and re-attached to VoiceOver:
-/// ``CollapsedClaimContent`` speaks the full list on the AX5 summary row, and ``bulletRow`` puts
+/// claim is now single-sourced through `WipeClaim` and re-attached to VoiceOver:
+/// `CollapsedClaimContent` speaks the full list on the AX5 summary row, and `bulletRow` puts
 /// each claim's full wording on the More Content rotor wherever a short form is drawn in its place.
 struct DeleteEverythingSheet: View {
     /// Which Apple Health outcome(s) to offer — see ``DeleteAllDataConfirmation/HealthSampleOffer``.

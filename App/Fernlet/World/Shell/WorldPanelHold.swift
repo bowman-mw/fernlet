@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// Holds the World panel this page sits in while `isHeld`: the plate's Back and the panel's ✕ are
-    /// off and the edge swipe does not go back (``FernletPlateNavigation/isHeld``). For a page running
+    /// off and the edge swipe does not go back (`FernletPlateNavigation/isHeld`). For a page running
     /// something the person must not walk away from halfway: Delete everything's wipe on Settings and
     /// Privacy & Data, which hid their own Back and blocked the sheet's swipe before the plate took
     /// those over. Outside a panel (the Settings sheet) it only gates the edge swipe.

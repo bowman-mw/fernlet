@@ -43,7 +43,7 @@ nonisolated enum WorldCityUncovered {
     }
 
     /// The major roads crossed inside the city (the card's "Major roads crossed"): the roads the lifted cells inside
-    /// `area` lie on (``AtlasRoadCrossings``), so a road counts for the city it was crossed in.
+    /// `area` lie on (`AtlasRoadCrossings`), so a road counts for the city it was crossed in.
     static func roadsCrossed(in area: Area, lifted: Set<HexCell>, atlas: WorldAtlas) -> Int {
         AtlasRoadCrossings(cells: insideCells(area, lifted: lifted), atlas: atlas).count
     }

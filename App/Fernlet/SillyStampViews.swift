@@ -154,7 +154,7 @@ struct SillyStampCell: View {
 /// frame with a solid drop shadow, the stamp's pixel art (``WorldStampArt``) on a gold disc.
 ///
 /// Purely presentational. ``ContentView`` decides when it shows (never over a sheet), how long it
-/// stays (``FernletDismissalWindow``), and speaks it for VoiceOver — the banner appears with no
+/// stays (`FernletDismissalWindow`), and speaks it for VoiceOver — the banner appears with no
 /// focus change, so the announcement is how a VoiceOver user hears of it. The stamp thumps down
 /// once as it lands; under Reduce Motion it is simply there.
 struct SillyStampBanner: View {

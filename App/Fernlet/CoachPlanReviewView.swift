@@ -298,7 +298,7 @@ struct CoachPlanReviewView: View {
     ///
     /// The stamp is added on apply, so showing the whole note here would preview a line the user
     /// didn't write and the coach didn't send. A stamp is matched by its exact shape
-    /// (``CoachPlanNoteStamp/isStamp(_:)``): the bare "Day " prefix this used to strip also hid a
+    /// (`CoachPlanNoteStamp/isStamp(_:)`): the bare "Day " prefix this used to strip also hid a
     /// note of the user's own such as "Day off, knees sore".
     static func lastNoteLine(_ notes: String) -> String {
         notes

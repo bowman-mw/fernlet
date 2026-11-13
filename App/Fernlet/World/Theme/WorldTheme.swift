@@ -64,7 +64,7 @@ nonisolated enum WorldType {
 }
 
 extension WorldTheme {
-    /// The design language for everything in the World build (``FernletFramedLook``, `b1-language`):
+    /// The design language for everything in the World build (`FernletFramedLook`, `b1-language`):
     /// paper in a 2-pt ink frame with a solid shadow, dotted parchment pages, wood for the sheet's
     /// grabber, in this theme's palette and the stored App colors choice. Set at the root by
     /// `worldDesignLanguage()`, which passes the choice it observes (``framedLook(for:)``).
@@ -111,7 +111,7 @@ extension WorldSprites {
 
 extension View {
     /// The one design language (`b1-language`) for everything below: framed cards, chips, buttons,
-    /// switches, fields, Forms (``FernletFormStyle``) and sheets in this theme's palette
+    /// switches, fields, Forms (`FernletFormStyle`) and sheets in this theme's palette
     /// (``WorldTheme/framedLook``), with its pixel icons (``WorldTheme/iconRenderer``), in the App
     /// colors the person chose (``WorldAppColorsSource``, outermost, so the look below reads it).
     func worldDesignLanguage() -> some View {

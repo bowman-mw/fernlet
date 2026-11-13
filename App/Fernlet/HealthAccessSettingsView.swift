@@ -27,7 +27,7 @@ import HealthKitGateway
 ///
 /// **Gates preserved**: the card list is built from `FernletStore.visibleHealthCapabilities`
 /// (cycle/intimate cards withheld while hidden) AND every action re-checks
-/// ``canUseHealthCapability(_:)`` at the point of use — the actions read HealthKit and write
+/// `canUseHealthCapability(_:)` at the point of use — the actions read HealthKit and write
 /// straight into the day's health context, which is precisely the hole the visibility gate closes.
 ///
 /// "Give access" turns the capability's preference on (audited) and runs the authorization prompt

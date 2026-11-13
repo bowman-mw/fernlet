@@ -6,7 +6,7 @@ import PrivateMediaStore
 /// this iPhone holds for the trip, its own and friends', hidden ones included (hiding is from the map only), newest
 /// first, like a "Just you" set.
 ///
-/// Built only from photos that are here (``RoadTripAlbum/sets(from:trips:author:)``), so it always has a cover: the
+/// Built only from photos that are here (``RoadTripAlbum/sets(from:trips:names:)``), so it always has a cover: the
 /// newest photo. Its title is the trip's name while the trip's record is on this iPhone; once Delete map history has
 /// taken the record, "Road trip" and the days the photos were taken (``RoadTripAlbum/title(trip:first:last:)``). The
 /// photo store keeps no trip name, so nothing of the deleted map history comes back through the Album.

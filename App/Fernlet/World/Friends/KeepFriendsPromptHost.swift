@@ -14,7 +14,7 @@ import UIKit
 ///
 /// Driven off OBSERVABLE MODEL STATE (Phase 2, "Session-end review is model-state, not
 /// view-events"): it presents whenever a promoted `pendingFriendReview` batch carries candidates and
-/// NO photos, run by the deferred check every trigger schedules (``scheduleReviewCheck()``: the
+/// NO photos, run by the deferred check every trigger schedules (`scheduleReviewCheck()`: the
 /// batch moving, the session ending, a peer lost, the root appearing, scene activation, a covering
 /// presentation going away, the launch finishing, the decoy ending, the overlay going) and confirmed
 /// by the landing watchdog. Friend candidates come from the BATCH entries; eligibility is computed at
@@ -41,7 +41,7 @@ import UIKit
 /// also waits out any sheet or cover a panel has up (Food's meal sheet, Move's runner…), read from
 /// UIKit's presentation chain in its own window (``KeepFriendsWindowAnchor``), and asks as soon as that closes,
 /// with no giving up after a few tries. A request that still does not land with nothing covering it
-/// is withdrawn unconsumed and re-asked a bounded number of times by ``confirmSessionEndSheetLanded()``.
+/// is withdrawn unconsumed and re-asked a bounded number of times by `confirmSessionEndSheetLanded()`.
 ///
 /// **A decoy never sees it**: a duress session shows and keeps nothing real, so the check refuses
 /// while one is open and a prompt that is up is withdrawn, unanswered, when one starts.

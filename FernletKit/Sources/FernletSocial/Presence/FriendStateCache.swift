@@ -155,7 +155,7 @@ public final class FriendStateCache {
     /// must not outlive "Reset everything"). Under the test runner, where XCTest and Swift Testing
     /// suites run in parallel in ONE process, a constant path means any wiping test deletes this for
     /// every concurrently-live store. Unsealed, so — unlike the heart-drop sidecars — the root is the
-    /// whole fix and no keychain scoping is needed. See ``ProximityHost/proximitySupportDirectory``.
+    /// whole fix and no keychain scoping is needed. See `ProximityHost/proximitySupportDirectory`.
     public nonisolated static func fileURL(in directory: URL) -> URL {
         JSONSidecarFile<PersistedState>.fileURL(in: directory, name: "FriendStateCache.json")
     }

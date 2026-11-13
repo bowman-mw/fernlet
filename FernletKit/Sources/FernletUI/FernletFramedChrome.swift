@@ -14,7 +14,7 @@ import SwiftUI
 
 /// The one-colour icons the framed primitives draw (✕, the back arrow, chevrons, plus, check, search,
 /// lock). The World build draws them as pixel art through the renderer it installs
-/// (``EnvironmentValues/fernletIconRenderer``), so its sprites stay in one place and take the ink token
+/// (``SwiftUICore/EnvironmentValues/fernletIconRenderer``), so its sprites stay in one place and take the ink token
 /// in dark mode; without a renderer each falls back to its SF Symbol.
 nonisolated public enum FernletFramedIcon: Sendable, CaseIterable {
     case close, back, chevron, chevronDown, plus, check, search, lock
@@ -50,7 +50,7 @@ public extension EnvironmentValues {
     /// Draws the framed primitives' icons; nil falls back to SF Symbols.
     @Entry var fernletIconRenderer: FernletIconRenderer? = nil
     /// The title plate a pushed page hands its title and Back to (a World panel's plate); nil outside
-    /// one. ``SwiftUI/View/fernletSheet()`` and ``FernletFocusedFlow`` clear it for what they present.
+    /// one. ``SwiftUICore/View/fernletSheet()`` and ``FernletFocusedFlow`` clear it for what they present.
     @Entry var fernletPlateNavigation: FernletPlateNavigation? = nil
 }
 
@@ -65,6 +65,7 @@ public struct FernletIcon: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// - Parameters:
+    ///   - icon: The sprite to draw.
     ///   - scale: Points per sprite pixel at standard sizes (2 inside controls, 3 on the plate).
     ///   - tint: One colour for every pixel; nil keeps the icon's ink.
     public init(_ icon: FernletFramedIcon, scale: CGFloat = 2, tint: Color? = nil) {
@@ -149,7 +150,7 @@ public struct FernletSheetGrabber: View {
 
 /// A sheet's paper (`.sht3`): the look's paper, used as the presentation background under
 /// ``FernletSheetPaper/cornerRadius``-pt corners. (Its 3-pt ink edge is drawn with the grabber by
-/// ``SwiftUI/View/fernletSheet()``: a presentation background's top is not the sheet's visible top.)
+/// ``SwiftUICore/View/fernletSheet()``: a presentation background's top is not the sheet's visible top.)
 public struct FernletSheetPaper: View {
     let look: FernletFramedLook
 

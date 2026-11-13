@@ -25,13 +25,13 @@ import ProximityKit
 public final class HeartPrekeyStore {
 
     /// One one-time X25519 prekey's public half plus the id senders use to name it in the drop
-    /// header: the core wire type ``ProximityPrekeyBundle/PrekeyEntry``. Sixteen of these make up a
+    /// header: the core wire type `ProximityPrekeyBundle/PrekeyEntry`. Sixteen of these make up a
     /// gossiped ``Bundle``.
     public typealias PrekeyEntry = ProximityPrekeyBundle.PrekeyEntry
 
     /// The X3DH-style medium-term signed prekey (Track B of
     /// Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md): the core wire type
-    /// ``ProximityPrekeyBundle/SignedPrekey``. What it buys: any friend not met in person within
+    /// `ProximityPrekeyBundle/SignedPrekey`. What it buys: any friend not met in person within
     /// `HeartDropPeerBundleCache.maxSealBundleAge` used to get static-sealed drops forever — one
     /// device compromise then retroactively opened every one of them. The SPK gives those drops a
     /// medium-term key instead. This is a COVERAGE win, not a window win: the private half lives
@@ -39,7 +39,7 @@ public final class HeartPrekeyStore {
     /// store's rotation deadline and `created + spkRetention` its retention deadline.
     public typealias SignedPrekey = ProximityPrekeyBundle.SignedPrekey
 
-    /// The gossiped shape — public halves only: the core wire type ``ProximityPrekeyBundle``, which
+    /// The gossiped shape — public halves only: the core wire type `ProximityPrekeyBundle`, which
     /// rides `IdentityRangingPayload` as an optional field old decoders ignore, under the same JSON
     /// this store's keychain blob and the dead-drop's sealed peer-bundle sidecar hold.
     public typealias Bundle = ProximityPrekeyBundle

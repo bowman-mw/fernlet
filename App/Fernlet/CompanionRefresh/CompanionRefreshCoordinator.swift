@@ -81,7 +81,7 @@ import Foundation
 /// `FernletNotificationDelegate.shared`): an immutable `static let`, never a mutable global, and one
 /// per process because the system delivers one task per identifier per process.
 ///
-/// ``init(scheduler:now:)`` stays internal so a test builds its own over fakes; `.shared` is what
+/// ``init(scheduler:now:pipeline:)`` stays internal so a test builds its own over fakes; `.shared` is what
 /// production touches.
 ///
 /// ## Concurrency
@@ -124,7 +124,7 @@ final class CompanionRefreshCoordinator {
     /// process while the tail keeps the chain alive.
     ///
     /// **A refused REGISTRATION is not that storm.** An unregistered coordinator's edge never reaches
-    /// the seam — ``submitNext(trigger:)`` returns before it asks — so it is charged nothing, and
+    /// the seam — `submitNext(trigger:)` returns before it asks — so it is charged nothing, and
     /// the audit trail keeps naming the real cause (`registrationRefused`, then
     /// `submitWithoutARegistration` on every edge) instead of, sixty-four edges later,
     /// `edgeSubmissionCapReached` for a budget spent on asks that never happened
@@ -299,10 +299,10 @@ final class CompanionRefreshCoordinator {
     /// **Cancel first, complete second.** The run is stopped before the task is ended so a pipeline
     /// suspended in its acquisition cannot come back and do work for a task that no longer exists.
     /// Cancelling is not by itself enough — a run already past its last cancellation check would
-    /// still return normally — which is why ``finishRun(_:for:)`` refuses a handle this coordinator
+    /// still return normally — which is why `finishRun(_:for:)` refuses a handle this coordinator
     /// is no longer holding.
     ///
-    /// Idempotent by construction — if the run already completed, ``completeHeldTask(success:)``
+    /// Idempotent by construction — if the run already completed, `completeHeldTask(success:)`
     /// finds no handle and says so instead of completing a second time.
     func taskDidExpire() {
         pipelineRun?.cancel()

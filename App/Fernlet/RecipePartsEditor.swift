@@ -79,7 +79,7 @@ struct RecipeEditorActionLabel: View {
 /// The framed card an open ingredient editor, a step and a part sit in (`b3-recipe-new`: "each
 /// ingredient is a framed card"): paper in a 2-pt ink frame with the look's solid shadow, or today's
 /// cream card without the look. Under the look it is a section of its own; inside another section (a
-/// part's card, the Share screen's ``FernletCard``) it is one of that section's rows (the frame rule,
+/// part's card, the Share screen's `FernletCard`) it is one of that section's rows (the frame rule,
 /// `ref-frames-rule`): no fill, frame or shadow, a hairline above it.
 struct RecipeEditorCardFrame: ViewModifier {
     var radius: CGFloat = FernletFramedLook.cardRadius

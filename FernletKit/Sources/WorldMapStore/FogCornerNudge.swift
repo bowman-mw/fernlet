@@ -27,7 +27,7 @@ public nonisolated struct FogCornerBearing: Equatable, Sendable {
 /// **Fogged** means not in the fog history (``FogCellStore/cells``), even where Home draws its 1 km home
 /// circle clear (``MercatorHexGrid/disc(around:radius:)`` is drawn, never written).
 ///
-/// **The rule** (``pick(home:revealed:weekStart:avoiding:)``). A candidate is a cell whose centre lies
+/// **The rule** (``pick(home:revealed:weekStart:avoiding:isWater:)``). A candidate is a cell whose centre lies
 /// between ``minimumMetres`` and ``searchMetres`` of home, that is not revealed, and at least
 /// ``minimumFoggedNeighbours`` of whose six neighbours are not revealed either: a patch, not a one-cell gap.
 /// The nearest ``bandMetres``-wide distance band wins, and within it a stable hash of the week and the cell

@@ -387,7 +387,7 @@ public nonisolated struct NutritionPlausibilityReport: Equatable, Sendable {
 ///
 /// Pure functions throughout: no I/O, no persistence, no network, no shared state. Each check is a
 /// separate `static func` so it can be tested and reasoned about on its own, and
-/// ``report(for:exemption:)`` composes them in a fixed order.
+/// ``report(for:exemption:completeness:)`` composes them in a fixed order.
 ///
 /// Read the file-header provenance block before changing any threshold — every constant here traces
 /// to a published document, and the design boundary in that block is load-bearing.

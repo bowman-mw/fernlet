@@ -9,7 +9,7 @@ import WorldMapStore
 ///   string is `NSCalendarsFullAccessUsageDescription`.
 /// - **Reading only.** Nothing here saves, changes or removes an event, and no event's URL, attendees,
 ///   organizer or calendar is read. A title goes through the caller's first pass before the event's location,
-///   notes (cut to the first 4 KB by ``CalendarFlightEvent``) and times are read; the structured location's
+///   notes (cut to the first 4 KB by `CalendarFlightEvent`) and times are read; the structured location's
 ///   coordinate is never read (the location's text alone confirms a departure, and the file needs no
 ///   CoreLocation).
 /// - **Changes** come as ``changedNotification`` (`EKEventStoreChanged`), posted while this source is alive.

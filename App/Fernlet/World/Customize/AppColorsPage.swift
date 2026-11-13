@@ -8,7 +8,7 @@ import FernletUI
 /// ``AppAccentCard``), stored through ``WorldAppColors``.
 ///
 /// Opens from Settings › Appearance (``AppColorsSettingsRow``, the approved path) and from Customize.
-/// It writes today's two stored backgrounds (``FernletThemeDefaults``), which Appearance's pickers
+/// It writes today's two stored backgrounds (`FernletThemeDefaults`), which Appearance's pickers
 /// used to.
 struct AppColorsPage: View {
     var store: FernletStore

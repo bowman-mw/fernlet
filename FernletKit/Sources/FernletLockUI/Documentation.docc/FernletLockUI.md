@@ -90,7 +90,7 @@ unit 5). `LocalizationBoundaryTests` pins the sentence to the release: present e
 can be released.
 
 **Every entry point in this module names a `FernletLockScope`, and none of them defaults it.**
-``FernletLockView(scope:onUnlocked:onResetRequested:)``, ``FernletLockSetupView(grantingScope:)``
+``FernletLockView/init(scope:onUnlocked:onResetRequested:automaticallyPromptsBiometrics:)``, ``FernletLockSetupView/init(grantingScope:)``
 and `fernletLockGate(scope:…)` each take the surface they speak for, so a newly gated screen
 cannot silently inherit another screen's unlock by forgetting to identify itself. The gate's
 `isLocked` therefore asks `isUnlocked(for: scope)` — never "is anything unlocked" — and its

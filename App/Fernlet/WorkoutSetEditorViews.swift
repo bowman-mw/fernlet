@@ -159,7 +159,7 @@ struct ExerciseSetsEditor: View {
 /// One set's row: "Set 2" with its remove button, then its reps on a stepper and its weight.
 ///
 /// The reps and the weight sit side by side at standard sizes and stack at accessibility sizes
-/// (``AdaptiveStack``), where each gets the full width and the numbers wrap rather than truncate.
+/// (`AdaptiveStack`), where each gets the full width and the numbers wrap rather than truncate.
 /// The visible "Set 2" and "8 reps" are hidden from VoiceOver because the stepper already says both
 /// ("Set 2: 8 reps").
 ///

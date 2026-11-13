@@ -32,13 +32,13 @@ nonisolated struct WorldLandmarkPixelGrid: Equatable, Sendable {
 /// Turns the approved landmark art (`WorldLandmarkArt.json`) into pixels, exactly as the mockup's `lmArt` and
 /// `haloed` do:
 ///
-/// - **found**: each palette letter its own colour (`LMPAL`), the halo ``WorldLandmarkArt/foundHalo``;
-/// - **not found**: the outline letter (`k`) ``WorldLandmarkArt/notFoundOutline``, every other drawn pixel
-///   ``WorldLandmarkArt/notFoundFill``, the halo ``WorldLandmarkArt/notFoundHalo``;
+/// - **found**: each palette letter its own colour (`LMPAL`), the halo `WorldLandmarkArt/foundHalo`;
+/// - **not found**: the outline letter (`k`) `WorldLandmarkArt/notFoundOutline`, every other drawn pixel
+///   `WorldLandmarkArt/notFoundFill`, the halo `WorldLandmarkArt/notFoundHalo`;
 /// - **the halo**: the sprite padded by one clear pixel all round, and every clear pixel with a drawn pixel
 ///   among its eight neighbours takes the halo colour.
 ///
-/// Pure and bounded: at most (``WorldLandmarkArt/maxSide`` + 2)² pixels, each reading at most eight neighbours.
+/// Pure and bounded: at most (`WorldLandmarkArt/maxSide` + 2)² pixels, each reading at most eight neighbours.
 nonisolated enum WorldLandmarkPixels {
     /// The pixels of `sprite` from `art` in `look`.
     static func grid(_ sprite: LandmarkSprite, art: WorldLandmarkArt, look: WorldLandmarkLook) -> WorldLandmarkPixelGrid {

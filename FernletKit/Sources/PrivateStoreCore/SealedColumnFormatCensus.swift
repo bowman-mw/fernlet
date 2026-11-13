@@ -57,11 +57,11 @@ public struct SealedEntityColumns: Sendable, Equatable {
     }
 }
 
-/// How many stored blobs fell into each ``ColumnCryptoStoredFormat`` bucket, plus the two
+/// How many stored blobs fell into each `ColumnCryptoStoredFormat` bucket, plus the two
 /// non-format outcomes a census must report rather than absorb.
 ///
 /// - Important: The bucket counts do **not** all mean the same kind of thing, and the difference
-///   is the entire point of the census (see ``ColumnCryptoStoredFormat``):
+///   is the entire point of the census (see `ColumnCryptoStoredFormat`):
 ///   - ``unprefixed`` is an **exact** count of definitely-legacy blobs. It is the number Phase 3's
 ///     "census = 0" gate watches.
 ///   - ``v3Marked`` and ``v2Marked`` are **upper bounds** on their generations: a legacy blob's
@@ -150,7 +150,7 @@ public struct SealedColumnFormatTally: Sendable, Equatable {
 /// ``SealedColumnFormatCensus/classify(value:readFrom:)`` for the trap it is guarding.
 public enum SealedColumnReadOutcome: Sendable, Equatable {
     /// The value was read from a row that was still there afterwards, and these are its marker
-    /// semantics (including ``ColumnCryptoStoredFormat/empty`` for a genuinely unsealed column).
+    /// semantics (including `ColumnCryptoStoredFormat/empty` for a genuinely unsealed column).
     case classified(ColumnCryptoStoredFormat)
     /// The value is worthless as evidence: its row was deleted, detached, or otherwise unable to
     /// fulfil its fault, or the attribute held something that is not `Data`. Counted in
@@ -567,7 +567,7 @@ public enum SealedColumnFormatCensus {
     ///
     /// A readability check taken BEFORE the read cannot see any of that — the row is perfectly
     /// healthy until the fault is fulfilled — so a corpus that was never actually read would be
-    /// counted as a confident pile of ``ColumnCryptoStoredFormat/empty``, which is exactly the clean
+    /// counted as a confident pile of `ColumnCryptoStoredFormat/empty`, which is exactly the clean
     /// zero the Phase 3 gate must never be handed. Taking `isDeleted` / `managedObjectContext`
     /// afterwards is what turns that silence into ``SealedColumnFormatTally/indeterminate``; the
     /// `shouldDeleteInaccessibleFaults` path sets `isDeleted`, so it is the exact discriminator.

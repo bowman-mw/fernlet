@@ -41,15 +41,15 @@ extension PeriodTemperatureUnit {
 /// `CycleRecord`, seeded losslessly from its blocks — and saves through `PeriodTrackerStore`:
 /// `logEvent`, `editRecord` (in place, under the same id), or, for an emptied edit, `deleteRecord`.
 /// A fresh log must carry something to write; an edit only has to have changed, so unsetting a
-/// mis-logged flow chip stays saveable and removes that entry (see ``canSave`` and ``save()``).
+/// mis-logged flow chip stays saveable and removes that entry (see `canSave` and `save()`).
 ///
 /// **Every field saves in Fernlet, whatever the Health switches say** (period-data design 2026-09-30,
 /// Option B; owner report 2026-09-29: "When you click save for period tracking, but you're not
 /// sharing to HealthKit, it doesn't work"). The entry is sealed into Fernlet's own store while the
 /// Private tab is open, or held until it next opens (either passcode mode — nothing is dropped), and
 /// only then copied to Apple Health, while cycle sharing is on. So the sheet never refuses for
-/// sharing: ``healthNotice`` says up front, while sharing is off, that the entry saves privately and
-/// is not copied; and ``present(_:isEdit:)`` maps the store's `PeriodLogOutcome` to an honest
+/// sharing: `healthNotice` says up front, while sharing is off, that the entry saves privately and
+/// is not copied; and `present(_:isEdit:)` maps the store's `PeriodLogOutcome` to an honest
 /// sentence — none for a clean save (the sheet dismisses), "it will be on your calendar the next time
 /// you open Private" for a held one, and what happened to the Apple Health copy when that half failed
 /// or an edit removed Fernlet's older copy. A write that fails throws before anything is saved, and
@@ -683,7 +683,7 @@ struct LogPeriodSheet: View {
     }
 
     /// Why the first-day flag cannot be saved as drafted, or nil when it can: it marks where a period
-    /// starts, so it needs a flow level beside it (see ``validatedDraft()``).
+    /// starts, so it needs a flow level beside it (see `validatedDraft()`).
     static func cycleStartProblem(isCycleStart: Bool, flowLevel: PeriodFlowLevel?) -> String? {
         guard isCycleStart, flowLevel == nil else { return nil }
         return String(localized: "logPeriod.validation.cycleStartNeedsFlow",

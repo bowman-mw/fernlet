@@ -111,7 +111,7 @@ nonisolated struct WorldKeptPlace: Codable, Equatable, Identifiable, Sendable {
     var label: String?
 }
 
-/// Seals ``WorldPlaceMarks`` in the map's vault (``WorldMapVault/File/placeMarks``: the device side's
+/// Seals ``WorldPlaceMarks`` in the map's vault (`WorldMapVault/File/placeMarks`: the device side's
 /// purpose and buffer key, its own context), read afresh on every use so nothing outlives a wipe. Every
 /// wipe and Delete map history remove it with the vault; "Delete all of it" and the app-lock reset remove
 /// it with Where you've been. A decoy never reads or writes it (the keeper's gate).

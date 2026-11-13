@@ -290,7 +290,9 @@ public nonisolated final class CycleRecordRepository: Sendable {
 
     /// The rows with these ids, classified (an id with no row is simply absent). Empty without a key.
     ///
-    /// - Parameter ids: At most ``maxPageSize`` ids.
+    /// - Parameters:
+    ///   - ids: At most ``maxPageSize`` ids.
+    ///   - contentKey: The hub key; `nil` answers an empty page.
     public func records(ids: [UUID], contentKey: SymmetricKey?) throws -> CycleRecordPage {
         guard ids.count <= Self.maxPageSize else {
             throw CycleRecordRepositoryError.batchTooLarge(count: ids.count, limit: Self.maxPageSize)

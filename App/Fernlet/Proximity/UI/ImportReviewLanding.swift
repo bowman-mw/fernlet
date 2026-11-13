@@ -60,7 +60,7 @@ enum ImportReviewOutcome: Equatable {
 
 /// Plays, shows and speaks an ``ImportReviewOutcome``: the shared ending of the import review sheets.
 ///
-/// A value with injected seams, like ``FernletFeedback`` and ``FernletAnnouncer`` themselves, so a
+/// A value with injected seams, like `FernletFeedback` and `FernletAnnouncer` themselves, so a
 /// test can record the cue, the close and the sentence, in order, with no clock.
 ///
 /// **Concurrency:** main-actor, like the sheets that call it from an unstructured `Task`. The task is
@@ -80,8 +80,8 @@ struct ImportReviewLanding {
     /// Creates a landing.
     ///
     /// - Parameters:
-    ///   - feedback: Test seam; `nil` (production) resolves in the body to ``FernletFeedback/system``.
-    ///   - announcer: Test seam; `nil` resolves to ``FernletAnnouncer/system``.
+    ///   - feedback: Test seam; `nil` (production) resolves in the body to `FernletFeedback/system`.
+    ///   - announcer: Test seam; `nil` resolves to `FernletAnnouncer/system`.
     ///   - pause: Test seam for the beat and the settle; `nil` sleeps for real.
     init(
         feedback: FernletFeedback? = nil,

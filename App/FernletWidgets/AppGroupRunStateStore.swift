@@ -43,7 +43,7 @@ protocol AppGroupRunStatePersistable: Codable {
 /// Siri). Every access runs inside an `NSFileCoordinator` block; dates are ISO-8601 with sorted
 /// keys; writes are atomic with `.completeFileProtectionUntilFirstUserAuthentication`. Reads are
 /// nil-tolerant — a missing, corrupt, or still-protected file reads as "no active run" — and no
-/// failure mode is fatal: losing one write never crashes an intent, it is logged (``log``) and the
+/// failure mode is fatal: losing one write never crashes an intent, it is logged (`log`) and the
 /// caller carries on. ``write(_:)`` re-stamps `updatedAt` so the app's reconcile can age-out an
 /// abandoned run.
 /// Self-contained (literal app-group id, own codecs) so this one file compiles identically in both

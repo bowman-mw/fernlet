@@ -79,7 +79,7 @@ extension PeriodTrackerStore {
 
     /// Runs the legacy import (§8.1) when a half is pending: awaited by the Cycle page AFTER the
     /// drain and BEFORE the load, with the hub key live. A silent no-op while hidden (G2). Held in
-    /// ``legacyImportTask`` so "Delete everything" can cancel it (``cancelBackgroundWriters()``); a
+    /// `legacyImportTask` so "Delete everything" can cancel it (``cancelBackgroundWriters()``); a
     /// second call while one runs waits for it rather than starting another.
     ///
     /// The import and the Sealed backup restore commute (the restore is an id-keyed merge), so

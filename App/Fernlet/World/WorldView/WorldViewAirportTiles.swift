@@ -51,7 +51,7 @@ nonisolated enum WorldViewAirportTiles {
         return cells
     }
 
-    /// `airports`' runways. Bounded: ``maxAirports`` airports, ``WorldAirports/maxRunways`` runways each.
+    /// `airports`' runways. Bounded: ``maxAirports`` airports, `WorldAirports/maxRunways` runways each.
     static func runways(of airports: [WorldAirport]) -> [WorldViewRunway] {
         airports.prefix(maxAirports).flatMap { airport in
             airport.runways.prefix(WorldAirports.maxRunways).map { runway in

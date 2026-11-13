@@ -4,7 +4,7 @@ import WorldMapStore
 
 /// The land at half a degree (the mockup's `LAND05`), built once when the world view opens, for the far levels' faint
 /// land and sea: 720 × 360 cells. The hexes read ``isLand(at:)``: with a shore mask a cell is land at a share of
-/// ``WorldShoreMask/landShareThreshold`` or more (so the Great Lakes and Finland's lakes read as water, and no tile is
+/// `WorldShoreMask/landShareThreshold` or more (so the Great Lakes and Finland's lakes read as water, and no tile is
 /// opened), and without one when the atlas puts land at its centre. The lines read ``atlasIsLand(at:)``, always the
 /// atlas's, whose lakes are land: a country line through Lake Superior stays where it was.
 nonisolated struct WorldViewLandRaster: Sendable {
@@ -63,7 +63,7 @@ nonisolated struct WorldViewLandRaster: Sendable {
 
 /// The world view's caches (World-Exploration-Spec §2; Power of 10: bounded, per hex detail, drawn only on screen).
 ///
-/// - the hexes each detail's grid has uncovered (``WorldViewHexGrid/uncovered(by:)`` over the lifted fog),
+/// - the hexes each detail's grid has uncovered (`WorldViewHexGrid/uncovered(by:)` over the lifted fog),
 ///   computed once off the main actor;
 /// - the land its hexes draw: the half-degree raster for World and Country, and for State and City the shore mask
 ///   (``WorldViewMapFacts/shoreLand(_:samples:x:y:)``; without a mask the atlas's own at each hex's centre), kept per hex;
@@ -72,7 +72,7 @@ nonisolated struct WorldViewLandRaster: Sendable {
 /// - each detail's hexes on found airports' grounds, and their runways (``WorldViewAirportTiles``);
 /// - each detail's city markers (``WorldViewCluster``) and where their labels stand (``WorldViewLabelPlacement``),
 ///   worked out once off the main actor;
-/// - the major roads the lifted fog has crossed (``AtlasRoadCrossings``), worked out once off the main actor and
+/// - the major roads the lifted fog has crossed (`AtlasRoadCrossings`), worked out once off the main actor and
 ///   drawn whole on the uncovered hexes (World-Exploration-Spec §2: "on the world view").
 @MainActor
 @Observable
@@ -274,7 +274,7 @@ nonisolated enum WorldViewPlaces {
     static let maxBatch = 6_000
 
     /// The place of each of `cells` of `grid`: the country alone when `countryOnly` (the Country level),
-    /// else the plate group and the country (``WorldAtlas/placeName(at:)``). Each hex is read at its centre,
+    /// else the plate group and the country (`WorldAtlas/placeName(at:)`). Each hex is read at its centre,
     /// wrapped onto the globe. Bounded: at most ``maxBatch`` cells.
     static func lookUp(_ cells: [HexCell], in grid: WorldViewHexGrid, atlas: WorldAtlas,
                        countryOnly: Bool) -> [(HexCell, AtlasPlaceName?)] {

@@ -30,11 +30,11 @@ import Foundation
 
 /// What the plan sheet's "Anything else?" asks of today's plan, read from its text.
 ///
-/// Pure and deterministic; bounded by ``InjuryNoteMatcher/maxWords``. Read once per plan
+/// Pure and deterministic; bounded by `InjuryNoteMatcher/maxWords`. Read once per plan
 /// (``WorkoutDayNote/Applied``); never stored on the profile.
 public nonisolated struct WorkoutDayNote: Equatable, Sendable {
     /// Body areas the note names — each trained around today (Mild). A muscle word counts as its
-    /// nearest area (``nearestArea(of:)``).
+    /// nearest area (`nearestArea(of:)`).
     public var areas: Set<BodyArea>
     /// The longest the session may run, in minutes, when the note asks for a short one: the number
     /// it gives, or ``shortestMinutes`` for a phrase without one. Nil when it says nothing of time.
@@ -236,7 +236,7 @@ extension WorkoutDayNote {
         }
 
         /// The lifts in `sessions` whose name shares a word with the note's nudge words — the same
-        /// test the slot score's bonus uses — as frozen names, in plan order, at most ``maxMatched``.
+        /// test the slot score's bonus uses — as frozen names, in plan order, at most `maxMatched`.
         public func matchedLifts(in sessions: [WorkoutProgram.SessionSuggestion]) -> [String] {
             guard !note.nudgeWords.isEmpty else { return [] }
             var names: [String] = []

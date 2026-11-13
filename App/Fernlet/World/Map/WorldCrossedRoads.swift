@@ -60,7 +60,7 @@ nonisolated struct WorldRoadDrawing: Equatable, Sendable {
     }
 }
 
-/// The crossed roads Home keeps, derived from the lifted fog (``AtlasRoadCrossings``): nothing is stored, so a
+/// The crossed roads Home keeps, derived from the lifted fog (`AtlasRoadCrossings`): nothing is stored, so a
 /// wipe, a decoy's own cells and a fresh history each give their own answer. Work runs off the main actor, one
 /// update at a time; a request while one runs waits, only the newest kept.
 @MainActor

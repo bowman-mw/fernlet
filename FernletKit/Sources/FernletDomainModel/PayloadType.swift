@@ -107,7 +107,7 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// is custodied and drained later instead of being dropped.
     ///
     /// It keeps its declaration, its frozen `rawValue` and its sealing-set membership,
-    /// and ``TempMessagePayload`` stays decodable, so an older peer's frame is **parked by name**
+    /// and `TempMessagePayload` stays decodable, so an older peer's frame is **parked by name**
     /// rather than mis-dispatched or failing a session. Nothing registers it in the handler
     /// registry; a wire token is never reused for a new meaning.
     ///

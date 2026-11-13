@@ -3,7 +3,7 @@ import Foundation
 import WorldMapStore
 
 /// The flight gate (World-Airports-Spec §6.1; owner 2026-10-31: "Don't track anything that the user flies over"):
-/// every reading the map's location source hears is weighed by the ``FlightDetector`` first, and only a reading it
+/// every reading the map's location source hears is weighed by the `FlightDetector` first, and only a reading it
 /// lets through goes on to car and bike detection, the fog, the passport, the route store and Private history.
 /// Owned by `WorldLocationSource` (`flights`), so the foreground, Always mode's low-power readings and a traced
 /// drive or followed ride all pass through it.
@@ -25,7 +25,7 @@ import WorldMapStore
 /// - **The passport opens only while the phone is unlocked:** what ``onEvents`` could not take (it answers false)
 ///   waits in memory, at most ``maxPendingEvents``, and is handed again with the next reading's changes (a landing
 ///   read with the phone locked still finds the airport once it is unlocked). An airport lost even so is handed again
-///   while the person is still there (``handMissedFind()``).
+///   while the person is still there (`handMissedFind()`).
 /// - **Kept across relaunches** (a phone switched off for the flight still lands): the detector's state is sealed in
 ///   the map's vault under the buffer key (readings arrive with the phone locked), at most every ``saveInterval``
 ///   or at once when something changed; never in a decoy, and every wipe removes it with the vault's folder.
@@ -59,7 +59,7 @@ final class WorldFlightKeeper {
     /// Called with what each reading changed (airports found, flights started and landed, layovers), after any
     /// it could not take before; answers whether it took them.
     @ObservationIgnored var onEvents: (([FlightEvent]) -> Bool)?
-    /// Whether the passport has the airport with this token, or wants nothing added (see ``handMissedFind()``).
+    /// Whether the passport has the airport with this token, or wants nothing added (see `handMissedFind()`).
     @ObservationIgnored var passportHolds: (String) -> Bool = { _ in true }
     /// Whether a point is at one of the person's homes (a trip ends on getting home, §7).
     @ObservationIgnored var isHome: (GeoPoint) -> Bool = { _ in false }
@@ -320,7 +320,7 @@ extension WorldFlightKeeper {
 }
 
 /// What Home reads of the flight gate at one moment (World-Airports-Spec §5, §6.2): a plain value mirrored from the
-/// ``FlightDetector`` after each reading, or made up by a DEBUG scene. No display strings; airport tokens only.
+/// `FlightDetector` after each reading, or made up by a DEBUG scene. No display strings; airport tokens only.
 nonisolated struct WorldFlightGateState: Equatable, Sendable {
     var isFlying = false
     /// The airport landed at, while still inside its grounds.

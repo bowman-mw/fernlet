@@ -142,7 +142,7 @@ struct StepTimerControl: View {
 /// screen walker with an explicit Next/Back pair and a passive per-step countdown → a finish screen
 /// that offers to log the meal to the day the cook began.
 ///
-/// The World build draws it as a focused flow (``FernletFocusedFlow``; `b3-cook-mise`, `b3-cook-step`,
+/// The World build draws it as a focused flow (`FernletFocusedFlow`; `b3-cook-mise`, `b3-cook-step`,
 /// `b3-cook-finish`, approved 2026-10-24): no grabber, the ✕ top right (it was "Close" on the left),
 /// the compact ingredient rows of the recipe page, the wooden Start cooking, pixel progress squares,
 /// and Log this meal as one meal-type menu.

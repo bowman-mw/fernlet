@@ -9,7 +9,7 @@
 import Foundation
 
 public extension MovementPattern {
-    /// The pattern's name on screen, localized. Never persisted, prompted or matched — ``rawValue``
+    /// The pattern's name on screen, localized. Never persisted, prompted or matched — `rawValue`
     /// is the token.
     var displayName: String {
         switch self {
@@ -36,7 +36,7 @@ public extension MovementPattern {
 }
 
 public extension MovementPlane {
-    /// The plane's name on screen, localized; ``rawValue`` is the token.
+    /// The plane's name on screen, localized; `rawValue` is the token.
     var displayName: String {
         switch self {
         case .horizontal: String(localized: "movementPlane.horizontal", defaultValue: "Horizontal",
@@ -48,7 +48,7 @@ public extension MovementPlane {
 }
 
 public extension ExerciseModality {
-    /// The kind of training on screen, localized; ``rawValue`` is the token.
+    /// The kind of training on screen, localized; `rawValue` is the token.
     var displayName: String {
         switch self {
         case .strength: String(localized: "exerciseModality.strength", defaultValue: "Strength",
@@ -66,7 +66,7 @@ public extension ExerciseModality {
 }
 
 public extension ExerciseDifficulty {
-    /// The skill demand on screen, localized; ``rawValue`` (1–3) is the token.
+    /// The skill demand on screen, localized; `rawValue` (1–3) is the token.
     var displayName: String {
         switch self {
         case .foundational: String(localized: "exerciseDifficulty.foundational", defaultValue: "Foundational",
@@ -80,7 +80,7 @@ public extension ExerciseDifficulty {
 }
 
 public extension ExerciseMeasure {
-    /// How a set is counted, on screen, localized; ``rawValue`` is the token.
+    /// How a set is counted, on screen, localized; `rawValue` is the token.
     var displayName: String {
         switch self {
         case .reps: String(localized: "exerciseMeasure.reps", defaultValue: "Reps",

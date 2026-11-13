@@ -170,7 +170,9 @@ public final class IntimacyLogStore {
     /// chunk is a legitimate answer (every id in it was deleted mid-export) — a hidden or keyless one
     /// that answered empty would be indistinguishable from it and write a short set over the cloud copy.
     ///
-    /// - Parameter ids: At most `IntimacyLogRepository.maxPageSize` ids.
+    /// - Parameters:
+    ///   - ids: At most `IntimacyLogRepository.maxPageSize` ids.
+    ///   - contentKey: The hub key; `nil` throws `FernletLockError.locked`.
     public func backupChunk(ids: [UUID], contentKey: SymmetricKey?) throws -> IntimacyLogPage {
         guard isVisible() else { throw IntimacyTrackingHiddenError() }
         guard contentKey != nil else { throw FernletLockError.locked }

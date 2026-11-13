@@ -48,7 +48,7 @@ struct WorkoutZonePreferences: Equatable {
     /// `Bool`, default `false`: a light tap when the heart rate drifts out of the target zone.
     static let zoneNudgesKey = "fernlet.workoutCues.zoneNudges"
     /// `Int`, unset by default: the person's own maximum heart rate in beats per minute. Only a value in
-    /// ``HeartRateZones/ownMaximumRange`` is ever read back.
+    /// `HeartRateZones/ownMaximumRange` is ever read back.
     static let maxHeartRateKey = "fernlet.workoutCues.maxHeartRate"
 
     /// Read live heart rate during guided cardio.
@@ -76,7 +76,7 @@ struct WorkoutZonePreferences: Equatable {
     // MARK: My max heart rate
 
     /// The person's own maximum heart rate, or nil when none is stored or the stored value lies outside
-    /// ``HeartRateZones/ownMaximumRange`` (a value from elsewhere is never trusted).
+    /// `HeartRateZones/ownMaximumRange` (a value from elsewhere is never trusted).
     static func maxHeartRate(in defaults: UserDefaults = .standard) -> Int? {
         guard let value = defaults.object(forKey: maxHeartRateKey) as? Int,
               HeartRateZones.ownMaximumRange.contains(value) else { return nil }
@@ -84,7 +84,7 @@ struct WorkoutZonePreferences: Equatable {
     }
 
     /// Stores `value` as the person's own maximum heart rate — the Workout setup sheet's Save. Nil, or a
-    /// value outside ``HeartRateZones/ownMaximumRange``, clears it, so the zones go back to the age
+    /// value outside `HeartRateZones/ownMaximumRange`, clears it, so the zones go back to the age
     /// estimate.
     static func saveMaxHeartRate(_ value: Int?, in defaults: UserDefaults = .standard) {
         guard let value, HeartRateZones.ownMaximumRange.contains(value) else {
@@ -100,7 +100,7 @@ struct WorkoutZonePreferences: Equatable {
     }
 
     /// The maximum heart rate `text` (what the person typed) gives: a whole number of beats per minute
-    /// in ``HeartRateZones/ownMaximumRange``, or nil — empty, not a whole number, or out of range.
+    /// in `HeartRateZones/ownMaximumRange`, or nil — empty, not a whole number, or out of range.
     static func maxHeartRate(typed text: String) -> Int? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard let number = LocaleTolerantNumber.double(from: trimmed), number == number.rounded(),

@@ -134,7 +134,7 @@ struct WorldDiscoveryPlaces {
 /// Chooses Sprout's line for one first visit (World-Exploration-Spec §4). Pure.
 ///
 /// **Once per category and place, nothing stored.** A first visit happens once per place (the passport records each
-/// token once), so a line is said only for a ``PassportEvent/firstVisit(_:)`` whose date is still the passport's own
+/// token once), so a line is said only for a `PassportEvent/firstVisit(_:)` whose date is still the passport's own
 /// first-visit date for that token: a restored or merged earlier date, or an event the book no longer holds, says
 /// nothing. **Turns** come from the passport too: the line's index is the place's place among its kind's first
 /// visits (earliest first, ties by token), modulo three, so the next new city of any size takes the next line.

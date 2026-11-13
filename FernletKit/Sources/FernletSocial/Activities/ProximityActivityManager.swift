@@ -132,7 +132,7 @@ public final class ProximityActivityManager {
     ///   - fileURL: The ledger file, which the caller always states: there is no default, so no
     ///     manager silently lands on a process-wide path. The mesh composition
     ///     (``FernletMeshFeatures``) passes ``fileURL(in:)`` of its host's
-    ///     ``ProximityHost/proximitySupportDirectory``; a test passes a file of its own.
+    ///     `ProximityHost/proximitySupportDirectory`; a test passes a file of its own.
     ///   - now: The clock it stamps, expires and rate-limits by.
     public init(
         store: any ProximityHost,
@@ -704,7 +704,7 @@ public final class ProximityActivityManager {
     /// must not outlive "Reset everything"). Under the test runner, where XCTest and Swift Testing
     /// suites run in parallel in ONE process, a constant path means any wiping test deletes this for
     /// every concurrently-live store. Unsealed, so — unlike the heart-drop sidecars — the root is the
-    /// whole fix and no keychain scoping is needed. See ``ProximityHost/proximitySupportDirectory``.
+    /// whole fix and no keychain scoping is needed. See `ProximityHost/proximitySupportDirectory`.
     public nonisolated static func fileURL(in directory: URL) -> URL {
         JSONSidecarFile<PersistedState>.fileURL(in: directory, name: "ActivityLedger.json")
     }

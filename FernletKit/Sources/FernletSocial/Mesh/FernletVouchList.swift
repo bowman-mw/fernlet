@@ -18,13 +18,13 @@ import ProximityKit
 /// the lists committed peers sent compose ("Friend of Aisha").
 ///
 /// A vouch list names the sender's whole trusted-peer graph, so both directions sit behind the Phase 2
-/// gate (``isVouchListBroadcastEnabled``), off in shipping builds: nothing is built to send, and every
+/// gate (`isVouchListBroadcastEnabled`), off in shipping builds: nothing is built to send, and every
 /// received list is dropped before it is cached. The cache is memory-only — never persisted across app
 /// launches — and every cached list expires at most two hours after it was received.
 ///
 /// Built by the composition (``FernletMeshFeatures``) over the features' host holder and the device
 /// identity the mesh holds; the mesh reaches it through a private adapter that conforms to
-/// ``MeshVouchListExchange``. `@MainActor`, like the frames that drive it.
+/// `MeshVouchListExchange`. `@MainActor`, like the frames that drive it.
 @MainActor
 public final class FernletVouchList {
 

@@ -26,7 +26,7 @@ import WorldMapStore
 ///   moments through ``roadTripMesh``'s `forget()`.
 extension FernletStore {
 
-    /// Wires ``RoadTripExchange``'s gate, provider and sinks to this store (the mesh composition's builder calls it).
+    /// Wires `RoadTripExchange`'s gate, provider and sinks to this store (the mesh composition's builder calls it).
     func wireRoadTripExchange(_ exchange: RoadTripExchange) {
         exchange.isEnabledProvider = { [weak self] in self.map { !$0.duressSessionActive } ?? false }
         exchange.catchUpProvider = { [weak self] fingerprint, tripID, isReply in

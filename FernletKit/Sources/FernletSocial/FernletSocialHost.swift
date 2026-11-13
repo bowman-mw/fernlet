@@ -15,16 +15,16 @@ import Foundation
 import FernletDomainModel
 import ProximityKit
 
-/// The host Fernlet's social features read: ProximityKit's ``ProximityHost`` and the three requirements
+/// The host Fernlet's social features read: ProximityKit's `ProximityHost` and the three requirements
 /// only those features read (plan step A0.5.10, S17).
 ///
 /// A refinement, so a host conforms once and hands the same object to the mesh engine (which takes
-/// any ``ProximityHost``) and to its features. Fernlet's app conforms `FernletStore` with members it
+/// any `ProximityHost`) and to its features. Fernlet's app conforms `FernletStore` with members it
 /// already has (`ProximityHostAdapter.swift`), and the test target's doubles that build presence or
-/// the mesh composition declare it too; a double that conforms only to ``ProximityHost`` has none of
+/// the mesh composition declare it too; a double that conforms only to `ProximityHost` has none of
 /// these members, so handing one to a feature fails to compile rather than reading a silent default.
 ///
-/// Main-actor, like ``ProximityHost`` and the features that read it.
+/// Main-actor, like `ProximityHost` and the features that read it.
 @MainActor
 public protocol FernletSocialHost: ProximityHost {
 
@@ -37,7 +37,7 @@ public protocol FernletSocialHost: ProximityHost {
 
     /// The host's durable trust records, asked the two questions Fernlet's features put to them outside
     /// a session: whether a signing key is a remembered, unrevoked peer, and whether it is blocked
-    /// (ProximityKit's ``ProximityTrustStore`` says where each feature asks).
+    /// (ProximityKit's `ProximityTrustStore` says where each feature asks).
     ///
     /// **No default, like ``trustedProximityPeers``.** Which peers a device remembers is the host's
     /// record, not the mechanism's, so neither ProximityKit nor this module keeps any of its own: a host
@@ -67,16 +67,16 @@ extension FernletSocialHost {
     /// Whether a peer is a remembered, unrevoked and unblocked one: the heart-eligibility check.
     ///
     /// Three legs, all of which must hold, asked in this order and short-circuited: the host's
-    /// ``ProximityTrustStore`` knows `signingPublicKey` as a remembered peer it has not removed, the
+    /// `ProximityTrustStore` knows `signingPublicKey` as a remembered peer it has not removed, the
     /// store does not hold that key blocked, and the host's fingerprint block list
-    /// (``ProximityHost/isBlockedFingerprint(_:)``) does not hold `fingerprint`. The block list is
+    /// (`ProximityHost/isBlockedFingerprint(_:)`) does not hold `fingerprint`. The block list is
     /// consulted with both inputs, so a peer blocked by either is refused. It reads only the host's
     /// answers at the moment it is asked and keeps nothing.
     ///
     /// One definition, two callers: a heart delivered in person over presence asks it with a
     /// handshake-verified peer's key and fingerprint, and the session hearts' ledger judge
     /// (``MeshSessionHearts``) with the admission ledger's signing key for a routed heart's origin and
-    /// the origin's signed fingerprint. Main-actor, like ``ProximityHost``.
+    /// the origin's signed fingerprint. Main-actor, like `ProximityHost`.
     ///
     /// - Parameters:
     ///   - signingPublicKey: The peer's Ed25519 signing key.

@@ -220,8 +220,8 @@ nonisolated enum ExerciseAnimationRenderOutcome: @unchecked Sendable {
 /// The renderer's home: one serial background queue and, while a loop plays, the one
 /// ``ExerciseAnimationRenderer`` on it.
 ///
-/// `@unchecked Sendable` because ``renderer`` and ``failed`` are read and written only inside
-/// blocks on ``queue`` (checked with `dispatchPrecondition`), and the renderer is made, used and
+/// `@unchecked Sendable` because `renderer` and `failed` are read and written only inside
+/// blocks on `queue` (checked with `dispatchPrecondition`), and the renderer is made, used and
 /// let go there too, as its own contract asks.
 nonisolated final class ExerciseAnimationRenderWorker: @unchecked Sendable {
     /// Every renderer call, and every touch of the state below, happens here.

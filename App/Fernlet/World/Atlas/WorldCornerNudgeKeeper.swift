@@ -8,7 +8,7 @@ import WorldMapStore
 /// penalty: a corner is done when the person walks into it, or lapses at the end of the week, and nothing
 /// counts either way. The Today card and the notification (options 2 and 3) are not built.
 ///
-/// **Who calls it.** `WorldFogKeeper` owns this keeper: Home asks ``current(home:revealed:now:)`` with the
+/// **Who calls it.** `WorldFogKeeper` owns this keeper: Home asks ``current(home:revealed:now:isWater:)`` with the
 /// person's first home (`HomeBook.homes.first`, never the hotel) and the fog keeper's loaded history (the
 /// stored cells, never an empty set before the history is read, or a decoy's cells), on appearing and each
 /// foreground, so a new week picks again. The fog keeper calls ``noteRevealed(_:)`` with every lift, so the
@@ -89,7 +89,7 @@ final class WorldCornerNudgeKeeper {
 
     /// Marks the kept corner reached when `cells` (one lift, its gap closings included) holds it, so Home
     /// stops showing it at once. Bounded by the lift's cells. Nothing in a decoy or while the phone is locked
-    /// (``current(home:revealed:now:)`` then notices the lifted corner in the history instead).
+    /// (``current(home:revealed:now:isWater:)`` then notices the lifted corner in the history instead).
     func noteRevealed(_ cells: [HexCell]) {
         guard !isDecoy, !cells.isEmpty, loadState(), let kept = state, !kept.reached,
               cells.contains(kept.cell) else { return }
@@ -106,7 +106,7 @@ final class WorldCornerNudgeKeeper {
     }
 
     /// Enters or leaves a decoy session. Either way no corner shows until the next
-    /// ``current(home:revealed:now:)``, which in a decoy stays nil.
+    /// ``current(home:revealed:now:isWater:)``, which in a decoy stays nil.
     func setDecoy(_ on: Bool) {
         guard on != isDecoy else { return }
         isDecoy = on

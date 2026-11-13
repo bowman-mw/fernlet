@@ -179,7 +179,7 @@ public nonisolated enum HeartDropSidecarFormatCensus {
     public nonisolated struct Report: Sendable, Equatable {
         /// The heart-drop root that was surveyed.
         public let directory: URL
-        /// One reading per ``Sidecar`` case, in ``Sidecar/allCases`` order.
+        /// One reading per ``Sidecar`` case, in `Sidecar/allCases` order.
         public let files: [FileReading]
 
         public init(directory: URL, files: [FileReading]) {

@@ -102,7 +102,7 @@ public extension EnvironmentValues {
     /// Whether this view sits inside a section's frame (a framed ``FernletCard``, a
     /// ``FernletFramedSection`` or a framed `Form` section): the frame rule's pieces read it to drop
     /// their own frames there. A hand-drawn section sets it on its content to join the rule;
-    /// ``SwiftUI/View/fernletSheet()``, ``FernletFocusedFlow`` and the framed Form clear it, since a sheet
+    /// ``SwiftUICore/View/fernletSheet()``, ``FernletFocusedFlow`` and the framed Form clear it, since a sheet
     /// presented from inside a card inherits the card's environment.
     @Entry var fernletInFramedSection: Bool = false
 }

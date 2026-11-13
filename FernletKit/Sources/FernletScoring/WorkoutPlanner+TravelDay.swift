@@ -160,10 +160,10 @@ extension WorkoutPlanner {
     }
 
     /// The travel-day session as today's whole plan (§13.2): one guided session, "Travel-day reset",
-    /// saved under its frozen ``WorkoutFallbackName`` with the approved reason line as its note
-    /// (``WorkoutFallbackCopy/travelDayNote``). `locationName` is the active workout space, as every
+    /// saved under its frozen `WorkoutFallbackName` with the approved reason line as its note
+    /// (`WorkoutFallbackCopy/travelDayNote`). `locationName` is the active workout space, as every
     /// plan carries. `pool` and `limits` run the list through the person's limits and hidden
-    /// exercises (``travelDayFitted(pool:limits:)``); the defaults filter nothing.
+    /// exercises (`travelDayFitted(pool:limits:)`); the defaults filter nothing.
     public static func travelDayPlan(
         locationName: String, pool: [ExerciseTarget]? = nil, limits: InjuryLimits = .empty
     ) -> WorkoutProgram.DayPlan {

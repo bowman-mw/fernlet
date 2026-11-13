@@ -14,7 +14,7 @@ import Foundation
 import HealthKit
 import HealthKitGateway
 
-/// Where the calendar's weight readings (``BodyWeightSample``, the domain model's weigh-in) come from: Health on a device, a fixture in a DEBUG
+/// Where the calendar's weight readings (`BodyWeightSample`, the domain model's weigh-in) come from: Health on a device, a fixture in a DEBUG
 /// screenshot run, a canned list in a test.
 protocol BodyWeightSampleSource {
     /// The readings taken from `start` up to `end`; empty when there are none or nothing may be read.
@@ -22,7 +22,7 @@ protocol BodyWeightSampleSource {
 }
 
 /// Health's body-mass samples, one average a day, under the body-profile read the person already
-/// granted. A transient gateway built for the one read and dropped (``HealthKitLifecycleBoundaryTests``
+/// granted. A transient gateway built for the one read and dropped (`HealthKitLifecycleBoundaryTests`
 /// lists it): no observer, no authorization request, no write.
 struct HealthBodyWeightSource: BodyWeightSampleSource {
     func samples(from start: Date, through end: Date) async -> [BodyWeightSample] {

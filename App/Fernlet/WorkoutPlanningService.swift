@@ -129,7 +129,7 @@ final class WorkoutPlanningService {
     }
 
     /// Builds today's session(s) from the active split: the day after the last split day the user
-    /// logged (``WorkoutProgram/nextDayIndex(in:recentSessionNames:)``), so every session comes
+    /// logged (`WorkoutProgram/nextDayIndex(in:recentSessionNames:)`), so every session comes
     /// round in turn whichever weekdays they train. Equipment + injuries are applied
     /// deterministically by the engine; sets, reps and weight ranges follow each lift's logged
     /// sessions (``WorkoutLoadContextBuilder``), with plateau handling and the monthly calibration.
@@ -138,8 +138,8 @@ final class WorkoutPlanningService {
     /// them. Each session is shaped by Workout setup's session options — the warm-up and cool-down
     /// switches and the time budget it is fitted into — with `sessionLength`, when given, standing in
     /// for the setup's length for this plan only. Hidden exercises are never suggested and saved
-    /// alternates are preferred where they fit (``WorkoutExercisePreferences``). `context` is the
-    /// sheet's "Anything else?", read for this plan only (``WorkoutDayNote``): a time phrase in it
+    /// alternates are preferred where they fit (`WorkoutExercisePreferences`). `context` is the
+    /// sheet's "Anything else?", read for this plan only (`WorkoutDayNote`): a time phrase in it
     /// may shorten the session only when no `sessionLength` was chosen on the sheet.
     func workoutDayPlan(
         intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil

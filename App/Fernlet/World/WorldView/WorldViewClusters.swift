@@ -3,7 +3,7 @@ import WorldMapStore
 
 /// One discovered city on the world view: its token, display name, size and Mercator position.
 nonisolated struct WorldViewCityPin: Hashable, Sendable {
-    /// The city's frozen token (``AtlasCity/token``).
+    /// The city's frozen token (`AtlasCity/token`).
     let token: String
     /// Its name in the app's language.
     let name: String

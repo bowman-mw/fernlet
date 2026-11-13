@@ -21,7 +21,7 @@ nonisolated enum RoadTripWire {
         return RoadTripPoint(point: point, at: wire.date)
     }
 
-    /// `points` (oldest first) as the wire's stretches: one, of at most ``RoadTripPayload/maxPoints``; none when empty.
+    /// `points` (oldest first) as the wire's stretches: one, of at most `RoadTripPayload/maxPoints`; none when empty.
     static func segments(_ points: [RoadTripPoint]) -> [RoadTripWireSegment] {
         let wired = points.prefix(RoadTripPayload.maxPoints).compactMap(wire)
         guard !wired.isEmpty else { return [] }

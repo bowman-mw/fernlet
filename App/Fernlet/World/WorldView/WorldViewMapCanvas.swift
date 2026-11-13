@@ -197,11 +197,11 @@ private extension WorldViewMapCanvas {
 
 /// The lines on hex edges (World-Exploration-Spec §2, "drawn on the hex edges"): each visible land hex is
 /// compared with its east, south-east and south-west neighbours (so every edge is looked at once), and an
-/// edge between two different places carries the line ``WorldAtlas/border(between:and:)`` names, when the
+/// edge between two different places carries the line `WorldAtlas/border(between:and:)` names, when the
 /// level draws it. A hex whose place is not looked up yet draws no line until it is.
 nonisolated enum WorldViewBorders {
     /// One hex edge: the hex's unwrapped Mercator centre and the two corners (indices into the grid's
-    /// ``WorldViewHexGrid/cornerOffsets``) that bound the edge.
+    /// `WorldViewHexGrid/cornerOffsets`) that bound the edge.
     typealias Edge = (x: Double, y: Double, corner: Int, next: Int)
 
     /// The forward neighbours: the axial step and the edge's corners (pointy-top, corners from 30°, y down).

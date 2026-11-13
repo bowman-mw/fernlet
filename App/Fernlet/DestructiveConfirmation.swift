@@ -88,8 +88,8 @@ struct DestructiveConfirmation: Identifiable {
     /// has already localized itself (`DeleteAllDataConfirmation.message(…)` bolts up to four
     /// sentences together depending on what the user actually has in iCloud).
     ///
-    /// The distinct `verbatimMessage:` label is the safeguard, exactly as in ``SectionLabel`` and
-    /// ``EmptyState``: a same-label `String` overload would win overload resolution for every plain
+    /// The distinct `verbatimMessage:` label is the safeguard, exactly as in `SectionLabel` and
+    /// `EmptyState`: a same-label `String` overload would win overload resolution for every plain
     /// literal and quietly un-localize all 23 production dialogs again without a single warning. Callers using
     /// this must localize their own fragments — the label says the string is finished, not that it
     /// is exempt.

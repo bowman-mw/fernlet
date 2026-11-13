@@ -142,7 +142,7 @@ public nonisolated enum FernletCryptoPurpose {
         /// hence `.lengthPrefixed`. `CryptographicPurposeBoundaryTests` holds the serializer to that
         /// declaration; changing one without the other is what broke in `91c3956`.
         public static let meshChannelIntroductionV1 = CryptographicPurpose("fernlet.mesh.channel-introduction.v1", framing: .lengthPrefixed)
-        /// **Written since P3 item 3.** A leaver's own signature over its ``SignedDepartureRecord``
+        /// **Written since P3 item 3.** A leaver's own signature over its `SignedDepartureRecord`
         /// (plan §8.3, wire token `fernlet.mesh.member-departure.v1`). The spelling is deliberately
         /// IDENTICAL to the record kind's `rawValue` and to the payload type it travels as: record
         /// kind, wire token and crypto domain are ONE vocabulary, so a reader grepping the token
@@ -150,18 +150,18 @@ public nonisolated enum FernletCryptoPurpose {
         /// `CanonicalByteWriter`, hence `.lengthPrefixed`.
         public static let meshMemberDepartureV1 = CryptographicPurpose("fernlet.mesh.member-departure.v1", framing: .lengthPrefixed)
         /// **Written since P3 item 3.** The tallier's signature over a completed
-        /// ``SignedRemovalRecord`` (plan §8.3/§10.4). The record carries its quorum evidence, so
+        /// `SignedRemovalRecord` (plan §8.3/§10.4). The record carries its quorum evidence, so
         /// this signature attests to the tally, and the receiver re-checks the arithmetic against
         /// its own merged roster rather than trusting the tallier.
         public static let meshMemberRemovalV1 = CryptographicPurpose("fernlet.mesh.member-removal.v1", framing: .lengthPrefixed)
         /// **Written since P3 item 3.** A final-pair member's signature over its
-        /// ``SignedTerminationRecord`` (plan §8.3). Distinct from the departure domain even though
+        /// `SignedTerminationRecord` (plan §8.3). Distinct from the departure domain even though
         /// the record downgrades to a departure at a receiver whose roster is larger: the downgrade
         /// is a DERIVATION over an already-verified termination, never a re-interpretation of the
         /// bytes, so the two signatures must not cross-validate.
         public static let meshTerminatedV1 = CryptographicPurpose("fernlet.mesh.terminated.v1", framing: .lengthPrefixed)
         /// **Written since P3 item 3.** The sender's signature over a
-        /// ``MeshInventoryDigestPayload`` — "here is what my ledger holds" (plan §8.3, §10.5). The
+        /// `MeshInventoryDigestPayload` — "here is what my ledger holds" (plan §8.3, §10.5). The
         /// digest itself is only a hint, but it is the input to a bounded re-gossip, so it is
         /// signed: an unsigned digest arriving on a relayed path could be forged to spend a peer's
         /// re-gossip budget, and an attributable one cannot.
@@ -170,7 +170,7 @@ public nonisolated enum FernletCryptoPurpose {
         /// epoch branch head(s) it is on (plan §10.3's union exchange). Signed, and distinct from
         /// the inventory digest's domain, because the heads decide the counter the merge's
         /// successor is minted at: an unsigned or cross-validating head set would let a peer walk a
-        /// mesh toward ``MeshEpochBounds/counterCap``, where the only legal answer is to terminate.
+        /// mesh toward `MeshEpochBounds/counterCap`, where the only legal answer is to terminate.
         /// Length-prefixed, like every other `CanonicalByteWriter` transcript.
         public static let meshEpochHeadsV1 = CryptographicPurpose("fernlet.mesh.epoch-heads.v1", framing: .lengthPrefixed)
         /// **Written since P4 item 5.** A proposer's signature over a `SignedRemovalProposal` —
@@ -307,7 +307,7 @@ public nonisolated enum FernletCryptoPurpose {
         public static let meshGroupKeyWrapV1 = CryptographicPurpose("fernlet.mesh.groupkey.v1")
         /// TLS-exporter label for the DEBUG Network.framework spike's channel binding — the value
         /// handed to `sec_protocol_metadata_create_secret`, whose SHA-256 the probe's signed
-        /// introduction commits to. An exporter label never reaches ``signingBytes(_:)``, so the
+        /// introduction commits to. An exporter label never reaches `signingBytes(_:)`, so the
         /// framing is immaterial; what matters is that it is a reviewed constant rather than a bare
         /// string literal in the probe, and that it stays distinct from ``meshTLSExporterV1``.
         public static let meshProbeTLSExporterV1 = CryptographicPurpose("fernlet.mesh.probe.tls-exporter.v1")

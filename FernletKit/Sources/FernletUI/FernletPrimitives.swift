@@ -197,6 +197,7 @@ public struct EmptyState: View {
     /// - Parameter systemImage: Optional SF Symbol drawn above the line. An SF Symbol name is a
     ///   token, never display text, so it stays a plain `String` — and it is decorative here
     ///   anyway, hidden from VoiceOver, which reads only `text`.
+    /// - Parameter text: The line, harvested into the calling target's catalog.
     public init(text: LocalizedStringKey, systemImage: String? = nil) {
         self.text = Text(text)
         self.systemImage = systemImage

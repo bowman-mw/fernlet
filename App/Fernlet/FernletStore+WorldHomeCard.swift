@@ -15,7 +15,7 @@ import WorldMapStore
 /// else. Nothing here leaves the phone.
 extension FernletStore {
     /// How near a home a workout space's pin must be to be that home's space, in metres (a pin set in the
-    /// garden or the garage still counts; the space match itself is ``SpacePinStore/matchRadius``).
+    /// garden or the garage still counts; the space match itself is `SpacePinStore/matchRadius`).
     static let worldHomeSpaceRadius = 150.0
 
     /// The home or the hotel of the stay that `fix` stands at (the close-up's own reading,

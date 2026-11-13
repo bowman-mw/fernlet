@@ -98,7 +98,7 @@ public nonisolated struct ProximityRecipeSharePayload: Codable, Equatable, Ident
     /// share carrying a hundred ten-kilobyte ingredient names cannot stall the review UI while
     /// still fitting comfortably under the wire cap. The local variant is already bounded by
     /// `SharedRecipePayload.init(from:)`; the saved variant has no custom decode, so it is clamped
-    /// here — at the door — to the same ``SharedRecipeLimits`` the import path already enforces.
+    /// here — at the door — to the same `SharedRecipeLimits` the import path already enforces.
     public func clampedForReview() -> ProximityRecipeSharePayload {
         guard case .saved = recipe.kind, var saved = recipe.saved else { return self }
         saved.name = String(saved.name.prefix(SharedRecipeLimits.maxNameCharacters))

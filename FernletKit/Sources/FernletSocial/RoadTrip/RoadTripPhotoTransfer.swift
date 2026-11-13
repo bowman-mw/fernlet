@@ -10,7 +10,7 @@
 import CryptoKit
 import Foundation
 
-/// A friend's trip photo, put back together and checked (``RoadTripPhotoAssembler``): every piece arrived, the
+/// A friend's trip photo, put back together and checked (`RoadTripPhotoAssembler`): every piece arrived, the
 /// bytes are the length the pieces said and their SHA-256 matches. Who took it is the transport-verified sender
 /// the exchange hands it over with, never a field.
 public nonisolated struct RoadTripReceivedPhoto: Equatable, Sendable {

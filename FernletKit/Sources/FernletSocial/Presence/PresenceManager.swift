@@ -91,7 +91,7 @@ private struct PresenceHeartConnection: Identifiable {
 /// tags (truncated HMACs of the 15-minute epoch under per-friend-pair static-static X25519
 /// secrets — see `IdentityService.presenceTag`), the epoch's advertised instance name and TLS
 /// identity are a fresh epoch posture that survives no boundary, worn by ProximityKit's presence
-/// engine (``ProximityPresenceSession``, whose radio advertises exactly that), and all state (nearby
+/// engine (`ProximityPresenceSession`, whose radio advertises exactly that), and all state (nearby
 /// set, connections, diagnostics) is memory-only with no identities in any log line. Matching spans
 /// ±1 epoch; three self-exclusion layers drop our own ghost advertisements (the first, by name, is
 /// the engine's); a 45 s lost-grace debounce smooths the epoch advertiser restart.
@@ -777,12 +777,12 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// First word of a friend's display name for warm copy ("Aisha" from "Aisha Bloom"). Pure, so
     /// `nonisolated`. Moved here from the deleted ProximityHeartManager.
     ///
-    /// Delegates to ``PeerNameDisplay/firstName(_:fingerprint:placeholder:in:)`` (2026-09-29): a
+    /// Delegates to `PeerNameDisplay/firstName(_:fingerprint:placeholder:in:)` (2026-09-29): a
     /// friend kept before their name arrived has their fingerprint filed AS the name, and every heart
     /// sentence built on this (this manager's own refusals, the app's session and Home copy) used to
     /// interpolate it. It now reads "Someone you met", which also replaces the English-only
     /// "your friend" this answered for an empty name. This manager's own calls pass its
-    /// ``namespace``; the app passes the namespace it hands ProximityKit.
+    /// `namespace`; the app passes the namespace it hands ProximityKit.
     ///
     /// - Parameters:
     ///   - displayName: The friend's name as stored.

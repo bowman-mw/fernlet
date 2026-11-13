@@ -350,7 +350,7 @@ public nonisolated final class IntimacyLogRepository: @unchecked Sendable {
     }
 
     /// The newest stored logs, newest first, decrypted with `contentKey` — the DISPLAY read, bounded
-    /// by ``maxDisplayedLogs`` (R3). Older rows stay reachable through the paged
+    /// by `maxDisplayedLogs` (R3). Older rows stay reachable through the paged
     /// ``logs(offset:limit:contentKey:)``, which the sealed-backup export uses.
     ///
     /// - Returns: `[]` when `contentKey` is `nil` (locked). Rows whose ciphertext fails to
@@ -519,7 +519,9 @@ nonisolated extension IntimacyLogRepository {
     /// The logs with these ids, classified (see ``IntimacyLogPage``). An id with no row is absent; an
     /// id whose rows include one that opens answers that row. Empty without a key.
     ///
-    /// - Parameter ids: At most ``maxPageSize`` ids.
+    /// - Parameters:
+    ///   - ids: At most ``maxPageSize`` ids.
+    ///   - contentKey: The hub key; `nil` answers an empty page.
     /// - Throws: ``IntimacyLogRepositoryError/batchTooLarge(count:limit:)``; a fetch error.
     public func logs(ids: [UUID], contentKey: SymmetricKey?) throws -> IntimacyLogPage {
         guard ids.count <= Self.maxPageSize else {

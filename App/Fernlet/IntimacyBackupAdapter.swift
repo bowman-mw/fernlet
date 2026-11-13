@@ -4,7 +4,7 @@ import Foundation
 import PrivateHealthStore
 
 /// The intimate-log Sealed backup's adapter for the v2 engine (journal and intimacy Sealed backup v2
-/// design 2026-09-30, §4.1, §8): the gated ``IntimacyLogStore`` funnel, mapped onto
+/// design 2026-09-30, §4.1, §8): the gated `IntimacyLogStore` funnel, mapped onto
 /// ``SealedBackupV2Adapter``.
 ///
 /// - **One instance.** The adapter works through the app's ONE intimacy funnel — `ContentView`'s,

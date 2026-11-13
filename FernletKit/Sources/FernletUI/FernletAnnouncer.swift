@@ -136,7 +136,7 @@ public struct FernletAnnouncer {
     /// result to ``announce(_:resolved:)``. `FernletAnnouncerTests.packageAnnounceCallsUseTheResolvedLabel`
     /// enforces that mechanically, because nothing else can.
     ///
-    /// Resolves through ``AddressedCopy``, never `String(localized:)`: a translation that marks a
+    /// Resolves through `AddressedCopy`, never `String(localized:)`: a translation that marks a
     /// word describing the user (`^[listo](inflect: true)`) is inflected for `address`, where
     /// `String(localized:)` would hand VoiceOver the raw markup to read aloud.
     ///
@@ -159,7 +159,7 @@ public struct FernletAnnouncer {
     /// module resolved with `bundle: .module`. Passing a bare literal here is the one way to
     /// misuse this type, and it is why the parameter is labelled `resolved:`.
     ///
-    /// **This is the only form a package module may use** — see ``announce(_:_:)`` for why.
+    /// **This is the only form a package module may use** — see ``announce(_:_:addressing:)`` for why.
     ///
     /// - Parameters:
     ///   - kind: Why the app is speaking. See ``FernletAnnouncementKind``.

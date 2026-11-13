@@ -33,7 +33,7 @@ import ProximityKit
 /// **No count is interpolated into any key**, so every literal here is a plain sentence and no plural
 /// variation is owed at all. The singular/plural fork is kept because English reads badly without it,
 /// not because a wall demands it; the number itself reaches the reader through
-/// ``MeshRoutedDeliveryHold/itemCount`` and the audit lines. If the copy should ever carry the count,
+/// `MeshRoutedDeliveryHold/itemCount` and the audit lines. If the copy should ever carry the count,
 /// that key needs a `variations.plural` block **and** an entry in `LocalizationBoundaryTests`'
 /// `pluralRuledKeys` at catalog-sync time.
 enum RoutedDeliveryHoldCopy {

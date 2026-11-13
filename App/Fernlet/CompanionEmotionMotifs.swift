@@ -8,8 +8,8 @@ import FernletUI
 /// Presentation only, drawn by ``CompanionView``'s accent layer above the equipped items. Every
 /// motif is vector (shapes plus, for the sleepy "z", the same serif glyph the settled pose already
 /// draws) and runs off the view's shared `elapsed` clock, so it pauses with Reduce Motion and when
-/// Home is offscreen, exactly like the frazzle steam and the calm motes. ``CompanionEmotion/calm``
-/// and ``CompanionEmotion/frazzled`` keep their original accents, which ``CompanionView`` draws
+/// Home is offscreen, exactly like the frazzle steam and the calm motes. `CompanionEmotion/calm`
+/// and `CompanionEmotion/frazzled` keep their original accents, which ``CompanionView`` draws
 /// itself, so they have no motif here.
 struct CompanionEmotionMotif: View {
     let emotion: CompanionEmotion

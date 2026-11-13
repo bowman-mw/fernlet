@@ -1341,7 +1341,7 @@ public enum RecipeWebImporter {
     /// - a single string → one step.
     /// Web JSON-LD steps rarely carry per-step timing, so `durationSeconds` stays nil here (manual
     /// entry supplies timers). Blank steps are dropped. Purely shape-based.
-    /// The result is capped at ``maxImportedSteps`` and the walk at ``maxInstructionNodeVisits``.
+    /// The result is capped at ``maxImportedSteps`` and the walk at `maxInstructionNodeVisits`.
     /// Public so `RecipeStepsTests` can drive it directly (plain `import AIProviders`, matching the other
     /// importer tests) — it needs no network fetch or `FoodCatalog`, unlike the full import path.
     public nonisolated static func orderedSteps(from value: Any?) -> [RecipeStep] {

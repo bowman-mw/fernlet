@@ -1094,7 +1094,7 @@ struct JournalMonthCell: Identifiable {
     var hasData: Bool = false
     /// The already-localized ABBREVIATED weekday NAME for this day ("Wed"), spoken but never drawn
     /// — see ``accessibilityLabel(addressing:)``. Empty for a blank pad cell, and for the (unreachable in
-    /// practice) day whose `Date` the layout calendar could not resolve; ``weekdaylessLabel(addressing:)`` is
+    /// practice) day whose `Date` the layout calendar could not resolve; `weekdaylessLabel(addressing:)` is
     /// the honest fallback for that case rather than a sentence with a hole in it.
     var weekdayName: String = ""
 

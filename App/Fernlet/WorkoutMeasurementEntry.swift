@@ -87,7 +87,7 @@ nonisolated enum WorkoutMeasurementEntry {
     }
 
     /// One logged or planned line as a screen draws it: the planner's frozen descriptors in the
-    /// user's language (``WorkoutPlanLine``), then every "5.5 mph" in km/h on a metric device. The
+    /// user's language (`WorkoutPlanLine`), then every "5.5 mph" in km/h on a metric device. The
     /// stored line is never changed.
     static func drawnLine(_ line: String, imperial: Bool? = nil, locale: Locale = .current) -> String {
         displayedSpeeds(in: WorkoutPlanLine.displayed(line), imperial: imperial, locale: locale)

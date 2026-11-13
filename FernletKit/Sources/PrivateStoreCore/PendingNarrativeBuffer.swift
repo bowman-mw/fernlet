@@ -251,7 +251,7 @@ public final class PendingNarrativeBuffer {
     }
 
     /// Whether the buffer holds entries that no key on this iPhone can ever open — the file is
-    /// non-empty and its key is definitively ABSENT (the state ``bufferKey()`` refuses with
+    /// non-empty and its key is definitively ABSENT (the state `bufferKey()` refuses with
     /// ``PendingNarrativeBufferError/bufferUnopenable``). READ-ONLY: it never mints, migrates or
     /// decrypts anything, so the app's "entries this iPhone can't open" check (period-data design
     /// 2026-09-30, §4.9) can ask before any key exists.

@@ -117,7 +117,7 @@ nonisolated enum MediaCorpusLabel: String, Sendable, CaseIterable {
 /// What one swept location's unprefixed bytes are, in the four-case vocabulary the residue rule
 /// needs — plus the case for a location this audit could not name.
 ///
-/// ``unopenableCandidate`` is the case that keeps the withdrawn born-sealed rule from coming back:
+/// ``unopenableCandidate(_:)`` is the case that keeps the withdrawn born-sealed rule from coming back:
 /// an unprefixed byte in a born-sealed location is a CANDIDATE for the migrator's non-blocking
 /// argument, and the row says exactly that rather than guessing in either direction. It is
 /// subtracted from ``MediaResidueAudit/unaccountedUnprefixed`` only when a live pass witness

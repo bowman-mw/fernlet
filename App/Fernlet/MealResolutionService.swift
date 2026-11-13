@@ -331,7 +331,7 @@ final class MealResolutionService {
     /// silent wrong answer fixes 1.1/1.2 closed one rung down.
     ///
     /// **Deliberately narrow.** It does not re-judge the model's pick (the doc on
-    /// ``builtResolution(from:candidates:confidence:)`` explains why that is not this fix's business);
+    /// `builtResolution(from:candidates:confidence:)` explains why that is not this fix's business);
     /// it asks only whether the picked row could have been retrieved for that item at all — so it is
     /// **a no-op for any ingredient that clears the retrieval floor against the item it is bound to**.
     ///
@@ -452,10 +452,10 @@ final class MealResolutionService {
     /// weakest one. `MealConfidence(persistedToken:)` resolves the legacy English spellings, so an
     /// older part cannot dodge the fold.
     ///
-    /// **What this deliberately does NOT decide.** ``MealConfidence`` is documented as "the provenance
+    /// **What this deliberately does NOT decide.** `MealConfidence` is documented as "the provenance
     /// stamp on a logged meal — how this row got its numbers", and most of its cases (`recipe`,
     /// `savedProduct`, `scannedLabel`, `repeated`, `corrected`…) name a SOURCE, not a rung on a
-    /// confidence ladder — that ladder is ``MealResolutionConfidence``. `MealBuilder.mealFromRecipe`
+    /// confidence ladder — that ladder is `MealResolutionConfidence`. `MealBuilder.mealFromRecipe`
     /// stamps `recipe`, and those meals do reach this fold through `MealBuilder.meals(from:)` on both
     /// the AI-selection and deterministic tiers. Ranking `recipe` against `foodMatch` would be
     /// inventing an order the enum does not define, so any part carrying a stamp outside the

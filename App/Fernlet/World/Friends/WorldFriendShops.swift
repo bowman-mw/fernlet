@@ -7,7 +7,7 @@ import ProximityKit
 /// open shops that the gold button's count, Sprout's line on Home, the switcher's row in Friend shops
 /// and the passport's Friend shops row all read, so the four never disagree.
 ///
-/// Each friend's shop has its own hour after the hangout (``MeshClothingShop/openShops(at:)``, newest
+/// Each friend's shop has its own hour after the hangout (`MeshClothingShop/openShops(at:)`, newest
 /// hangout first). The list is empty in a decoy and while nearby clothing sharing is off, and it leaves
 /// out a seller banned on this phone, as Friend shops always has.
 enum WorldFriendShops {

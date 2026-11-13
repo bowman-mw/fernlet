@@ -463,7 +463,7 @@ public nonisolated struct FernletFeedbackCue: Equatable, Sendable {
 ///   honours the ring/silent switch and mixes with other audio; each play creates its system sound and
 ///   disposes of it on completion, so nothing accumulates however long a workout runs.
 /// - *One cue, one renderer.* ``FernletHaptic/attention`` is a Core Haptics pattern where the hardware
-///   plays one (``FernletAttentionEngine``) and two generator impacts everywhere else; either way the
+///   plays one (`FernletAttentionEngine`) and two generator impacts everywhere else; either way the
 ///   closure sees one ``FernletFeedbackCue``, so a test counts "time's up" the same on a simulator
 ///   (which has no haptics) as a device would play it.
 /// - *No copy* (see the file header).

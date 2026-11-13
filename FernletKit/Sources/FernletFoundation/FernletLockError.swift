@@ -63,7 +63,7 @@ public enum FernletLockError: Error, LocalizedError, Equatable {
     /// different diagnosis with a different history. Not a bare ChaChaPoly authentication throw,
     /// which is what this branch used to degrade into and reads as "your data is corrupt".
     ///
-    /// Non-destructive by construction: it is thrown from ``FernletLockCrypto`` before any caller
+    /// Non-destructive by construction: it is thrown from `FernletLockCrypto` before any caller
     /// has written or deleted a row, so the wrap, the verifier, the salt, the enclave wrap and the
     /// biometric bypass all survive the refusal untouched.
     case contentKeyWrapFormatRetired

@@ -10,7 +10,7 @@ import FernletUI
 /// the equipment checklist. Saved rows own the first screen; presets are a step inside Add, so a
 /// space never appears twice.
 ///
-/// Chrome: Cancel + Done in the pinned ``SheetHeader``. Done commits the draft (including which
+/// Chrome: Cancel + Done in the pinned `SheetHeader`. Done commits the draft (including which
 /// space is "In use" — tapping a row only moves the badge until Done); Cancel discards the
 /// not-yet-committed active switch. Deletes still persist at their confirm — a swipe-dismiss after
 /// a delete must not silently resurrect the location — and the equipment step keeps committing on

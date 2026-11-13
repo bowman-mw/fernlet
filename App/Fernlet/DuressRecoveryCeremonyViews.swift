@@ -47,8 +47,8 @@ import ProximityKit
 
 /// One hop of the in-person recovery ceremony, as it travels between two screens.
 ///
-/// Four shapes, in the order a full recovery uses them: ``challenge`` and ``response`` complete the
-/// mutual-auth round (and are the whole of an enrollment), then ``request`` and ``reply`` carry the
+/// Four shapes, in the order a full recovery uses them: ``challenge(qrNonce:challengeNonce:senderKeyAgreementPublicKey:)`` and ``response(challengeNonce:signature:)`` complete the
+/// mutual-auth round (and are the whole of an enrollment), then `request` and ``reply(sealed:)`` carry the
 /// sealed recovery blob out and the sealed content key back.
 ///
 /// Fixed-length fields throughout, checked on decode: the coordinator's transcripts are unprefixed

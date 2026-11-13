@@ -19,7 +19,7 @@ nonisolated struct CalendarFlightsFound: Identifiable, Sendable {
 ///
 /// - **Turning it on** asks iOS for full access (iOS's own prompt, with Fernlet's usage string). Don't Allow turns
 ///   the switch back off with a note on where to allow it later. Allowed, the switch is on and Fernlet looks back
-///   once, to 2019 (``CalendarFlightLook/firstLookWindow(now:)``), off the main actor; the upcoming flights are
+///   once, to 2019 (`CalendarFlightLook/firstLookWindow(now:)`), off the main actor; the upcoming flights are
 ///   kept for their day at once, and the summary sheet's "Add 23 flights" adds the flown ones as an import
 ///   (source calendar, each with its salted event hash), with Undo.
 /// - **Turning it off** stops all reading at once (a look under way keeps nothing); the flights already found

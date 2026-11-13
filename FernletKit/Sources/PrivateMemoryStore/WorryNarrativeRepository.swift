@@ -131,7 +131,7 @@ public final class WorryNarrativeRepository: WorryStoring, Sendable {
         }
     }
 
-    /// The newest worries, newest first (capped at ``maxDisplayedWorries``). Individual
+    /// The newest worries, newest first (capped at `maxDisplayedWorries`). Individual
     /// undecryptable rows are skipped rather than failing the whole read (mirrors the
     /// journal/menstrual/intimacy repositories).
     public func worries(contentKey: SymmetricKey?) throws -> [WorryNarrative] {
@@ -255,7 +255,7 @@ public final class WorryNarrativeRepository: WorryStoring, Sendable {
     ///   as a classification decision. Rows that DO open but cannot be re-sealed are counted and
     ///   audit-logged (`worryBox.reencryptSkipped`) — they stay readable under `oldKey`, so the
     ///   caller must keep it alive until a pass reports none.
-    /// - Important: R3 — the walk is PAGED (``reencryptPageSize`` rows per transaction) so an
+    /// - Important: R3 — the walk is PAGED (`reencryptPageSize` rows per transaction) so an
     ///   unbounded table is never faulted in and saved as one transaction. Each page is atomic (a
     ///   failed save rolls that page back and rethrows); earlier pages stay migrated and the rest
     ///   migrate on the next pass, which is safe because migration is idempotent and per row.

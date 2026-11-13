@@ -61,7 +61,7 @@ extension View {
     /// A recipe sheet's frame, applied at its PRESENTER (the presenter's presentation modifiers win
     /// over anything inside the sheet): the World sheet (`b1-frame-sheet`: full height, paper, the
     /// wooden grabber) with the UX anchor, moss tint and keyboard Done that the app's other sheets get
-    /// from `fernletSheetChrome`. Never also apply ``SwiftUI/View/fernletSheet()`` inside the sheet.
+    /// from `fernletSheetChrome`. Never also apply `SwiftUI/View/fernletSheet()` inside the sheet.
     func recipeSheetFrame(anchor: String) -> some View {
         uxScreenAnchor(anchor)
             .fernletSheet()
@@ -88,7 +88,7 @@ struct RecipeEditorPageTitle: ViewModifier {
     }
 }
 
-/// The recipe screens' type sizes that the kit draws beyond ``FernletFramedFont``'s set.
+/// The recipe screens' type sizes that the kit draws beyond `FernletFramedFont`'s set.
 nonisolated enum RecipeType {
     /// A macro tag's figure (`.mtag3`): DM Sans semibold 13.
     static let tag = Font.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .footnote)

@@ -86,7 +86,7 @@ enum BodyMeasurementEntry {
     }
 
     /// A whole-number binding in display units over the stored inches. Rounds on `get` for the
-    /// same reason ``weightBinding(_:)`` does.
+    /// same reason `weightBinding(_:)` does.
     static func heightBinding(
         _ inches: Binding<Double>,
         imperial: Bool = usesImperial

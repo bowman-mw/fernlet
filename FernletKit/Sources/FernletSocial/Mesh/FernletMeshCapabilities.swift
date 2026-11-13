@@ -26,8 +26,8 @@ import ProximityKit
 /// the list once per coordinator, so a mid-session toggle affects the NEXT session's advertisement,
 /// while its send/receive effect is immediate via the provider gates.
 ///
-/// The composition (``FernletMeshFeatures``) installs ``localCapabilities()`` as the mesh's
-/// ``MeshNetworkManager/localCapabilitiesProvider`` while it is built, in a closure that captures this
+/// The composition (``FernletMeshFeatures``) installs `localCapabilities()` as the mesh's
+/// `MeshNetworkManager/localCapabilitiesProvider` while it is built, in a closure that captures this
 /// object alone; this object holds the mesh weakly, so the mesh retaining that closure forms no cycle.
 @MainActor
 public final class FernletMeshCapabilities {

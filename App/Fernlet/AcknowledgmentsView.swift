@@ -146,7 +146,7 @@ private struct FontNotice: Identifiable {
 /// notices are drawn `verbatim` from the files the bundle carries (``AcknowledgmentNotices``), word
 /// for word in English (the font licenses' hard wraps rejoined), selectable, and never a link. The one
 /// link is the weather section's Apple legal page, which Safari opens; the app fetches nothing. In the
-/// World build each section is a framed card (``FernletFramedSection``) whose label is its heading.
+/// World build each section is a framed card (`FernletFramedSection`) whose label is its heading.
 struct AcknowledgmentsView: View {
     private let cryptoSwiftLicense = AcknowledgmentNotices.bundledText(
         AcknowledgmentNotices.cryptoSwiftLicenseResource, in: .main)

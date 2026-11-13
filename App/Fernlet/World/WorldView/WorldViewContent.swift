@@ -24,7 +24,7 @@ nonisolated struct WorldViewContent: Sendable {
     /// The flights' arcs, the airports' marks and the plate's counts (World-Airports-Spec §8; none in a decoy,
     /// and none in fixed demo content unless it carries flights).
     var flights = WorldFlightMap.none
-    /// The fine land and water its hexes draw (``WorldShoreMask``), or nil to draw the atlas's land.
+    /// The fine land and water its hexes draw (`WorldShoreMask`), or nil to draw the atlas's land.
     var shore: WorldShoreMask?
 
     /// Nothing at all: no atlas, no cities, no fog.

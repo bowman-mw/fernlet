@@ -12,8 +12,8 @@ import WorldMapStore
 ///   Country in (``WorldRoadStyle``), and no county lines (answer 13).
 /// - **Zoom** is free from World to a little past City (owner, 2026-11-02): a pinch follows the fingers and the map
 ///   stays where they leave it; the framed control on the right (``WorldAtlasZoomControl``) glides to the
-///   next stop along World → Country → State → City (``AtlasZoomLevel``) and on in. Hexes step in half levels
-///   (``AtlasZoomDetail``). Reduce Motion:
+///   next stop along World → Country → State → City (`AtlasZoomLevel`) and on in. Hexes step in half levels
+///   (`AtlasZoomDetail`). Reduce Motion:
 ///   the control jumps instead of gliding, and the hexes don't fade.
 /// - **Pan** east and west all the way round; north and south clamped, the poles at the edges at World
 ///   (``WorldViewCamera``). It opens on the person's first home, else their latest fix, else 0°.

@@ -105,7 +105,7 @@ enum RecipeShareLaneOptions {
     static let labelKey = "FERNLET_RECIPE_LANE_LABEL"
 
     /// `FERNLET_RECIPE_LANE_IMAGE_BYTES=<n>` — attach a synthesized picture of at least `n` bytes
-    /// (capped by ``ProximityRecipeSharePayload/maxImageBytes``). Absent or 0 sends a text-only
+    /// (capped by `ProximityRecipeSharePayload/maxImageBytes`). Absent or 0 sends a text-only
     /// recipe, whose sealed frame stays under `MeshTransferStreamTable.bulkFloorBytes` and so rides
     /// the control stream — the negative half of the transfer-stream row.
     static let imageBytesKey = "FERNLET_RECIPE_LANE_IMAGE_BYTES"
@@ -139,7 +139,7 @@ enum RecipeShareLaneOptions {
         limit: ProximityRecipeSharePayload.maxImageBytes
     )
 
-    /// The instant the first share may go out. ``Date/distantPast`` — send as soon as there is
+    /// The instant the first share may go out. `Date/distantPast` — send as soon as there is
     /// somebody to send to — when the variable is absent.
     static let dialAt = parseInstant(ProcessInfo.processInfo.environment[dialAtKey])
 

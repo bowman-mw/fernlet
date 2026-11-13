@@ -826,7 +826,7 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
     ///
     /// The `id` arm is the same recovery for rows written before `defaultHygieneRawValue` existed,
     /// which carry a nil hygiene link. ``defaultTasks`` mints built-ins with `id: item.rawValue`
-    /// and ``custom(label:group:)`` mints user tasks with a `"custom-<UUID>"` id, so an id that
+    /// and ``custom(label:group:)-(_,CareGroup)`` mints user tasks with a `"custom-<UUID>"` id, so an id that
     /// parses as a ``HygieneItem`` identifies a built-in and cannot collide with a user's task.
     /// Deliberately confined to display: `defaultHygieneItem` keeps its stricter definition,
     /// because it also drives the day's legacy `hygiene` set and its completion mirroring.

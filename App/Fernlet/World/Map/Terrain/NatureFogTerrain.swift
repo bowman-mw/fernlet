@@ -3,10 +3,10 @@ import Synchronization
 import WorldMapStore
 
 /// The land under the fog (World-Exploration-Spec §1): which terrain set each fog hex draws, read from the
-/// bundled shore mask (``WorldShoreMask``, or the atlas's coastline mask without it), the atlas's climate bands and
-/// urban boundaries, and the season it shows today in its own hemisphere (``AtlasSeason``).
+/// bundled shore mask (`WorldShoreMask`, or the atlas's coastline mask without it), the atlas's climate bands and
+/// urban boundaries, and the season it shows today in its own hemisphere (`AtlasSeason`).
 ///
-/// An immutable, `Sendable` snapshot made on the main actor (``home(_:)``) and read anywhere after: classifying a
+/// An immutable, `Sendable` snapshot made on the main actor (``home(_:shore:)``) and read anywhere after: classifying a
 /// hex is a pure function of the snapshot, so tile drawing may run off the main actor. The atlas is public data
 /// that ships in the app, so a decoy draws the same terrain; nothing here reads the person's passport or history.
 /// With no atlas (the pack missing or unreadable) there is no snapshot and the fog is today's nature fog. The
@@ -17,7 +17,7 @@ import WorldMapStore
 nonisolated struct NatureFogTerrain: Sendable, Equatable {
     let atlas: WorldAtlas
     let classifier: AtlasTerrainClassifier
-    /// The fine land and water (``WorldShoreMask``); nil (the pack missing or unreadable) reads the atlas's `LAND`.
+    /// The fine land and water (`WorldShoreMask`); nil (the pack missing or unreadable) reads the atlas's `LAND`.
     /// The climate and the urban boundaries always come from the atlas.
     let shore: WorldShoreMask?
     /// The day whose season the map shows.

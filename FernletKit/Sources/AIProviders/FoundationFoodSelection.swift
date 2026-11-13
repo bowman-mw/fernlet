@@ -40,7 +40,7 @@ public enum FoodSelectionAvailability {
 /// cap, sleepy/resting daily budget, exactly one call charged — and every outcome is recorded in
 /// `AIAuditLog` with the payload kind and included field names, never the content. A `nil` result
 /// (gate fallback, empty candidates, or an unusable response) tells the caller to run its
-/// deterministic cascade; ``deterministicPlan(description:candidates:fallbackType:)`` is the
+/// deterministic cascade; ``deterministicPlan(description:candidates:fallbackType:personalization:)`` is the
 /// AI-free tier of the same contract. MainActor by the module's default isolation; the helpers are
 /// pure functions. Errors thrown by the model session are audited and rethrown.
 public enum FoundationFoodSelectionModel {
@@ -118,7 +118,7 @@ public enum FoundationFoodSelectionModel {
     /// binds, ending the cascade.
     ///
     /// Split items that bind to nothing are NOT silently dropped: they are carried out as
-    /// ``FoodSelectionPlan/unmatchedItems`` so the caller can demote the resolution and the review
+    /// `FoodSelectionPlan/unmatchedItems` so the caller can demote the resolution and the review
     /// sheet can name them ("2 eggs and toast" that matched only the toast).
     public static func deterministicPlan(
         description: String,

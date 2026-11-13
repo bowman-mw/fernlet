@@ -18,7 +18,7 @@ import Synchronization
 /// ProximityKit's own copy of the column seal. Since ProximityKit plan step A0.2.9 Fernlet hands
 /// it over as `FernletDeviceBindingAdapter` (FernletConnections), which answers from ``current()``
 /// for a seal and ``currentForOpen()`` for an open at each call, so this row, its cache and
-/// ``testOverride`` stay the only ones, an override flipped in the middle of an operation included.
+/// `testOverride` stay the only ones, an override flipped in the middle of an operation included.
 ///
 /// **Fail-closed on the write side (owner decision D4, Phase 3).** The binding is a GATE now,
 /// not defense-in-depth. ``current()`` still answers `nil` when the keychain cannot produce a
@@ -47,7 +47,7 @@ import Synchronization
 ///
 /// Concurrency: `nonisolated` (this module defaults to MainActor isolation, but the sealed-store
 /// repositories call ``ColumnCrypto`` from nonisolated `performAndWait` closures). The cache is a
-/// `Mutex` that owns its slot; the keychain itself is thread-safe. ``testOverride`` is a `@TaskLocal`, so
+/// `Mutex` that owns its slot; the keychain itself is thread-safe. `testOverride` is a `@TaskLocal`, so
 /// concurrent test suites can each pin their own binding without touching the real keychain.
 public nonisolated enum DeviceBindingID {
     /// Keychain service namespace for the install-binding row.

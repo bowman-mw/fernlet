@@ -14,7 +14,7 @@ import FernletUI
 ///   note's areas the picker doesn't name, the note's muscles and the rested-muscle chips — into the
 ///   avoided sets, which is all an older build reads. Mild areas are not mirrored: an older build
 ///   cannot train around an area, and the avoided sets would turn mild into severe here.
-/// - "No longer an issue" (the owner's fix s5, 2026-11-10; ``InjuryEasing``): an area with the switch
+/// - "No longer an issue" (the owner's fix s5, 2026-11-10; `InjuryEasing`): an area with the switch
 ///   on keeps its token in ``easing``. It is taken out of the mirror — the area is being eased back
 ///   in, not left out — and a limit the note gave it stops applying. Choosing a severity for the area
 ///   again turns the switch off: a new limit is a new injury. Once an area's two weeks are over it
@@ -25,7 +25,7 @@ struct WorkoutInjuryDraft: Equatable {
     var areas: [BodyArea: InjurySeverity]
     /// Muscles avoided outright through the chips beside the picker.
     var restedMuscles: Set<MuscleGroup>
-    /// The areas marked "No longer an issue", each with its stored token (``InjuryEasing``).
+    /// The areas marked "No longer an issue", each with its stored token (`InjuryEasing`).
     var easing: [BodyArea: String]
 
     /// The single-muscle chips the old sheet offered that no body area covers.

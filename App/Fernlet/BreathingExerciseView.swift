@@ -693,7 +693,7 @@ enum BreathingPacerHaptics {
     ///
     /// - Parameters:
     ///   - hapticsEnabled: The screen's own Haptics switch.
-    ///   - feedback: Test seam: the player. `nil` (production) is ``FernletFeedback/system``.
+    ///   - feedback: Test seam: the player. `nil` (production) is `FernletFeedback/system`.
     ///   - defaults: Where the app-wide level is read; tests pass a private suite.
     static func tap(hapticsEnabled: Bool, feedback: FernletFeedback? = nil, defaults: UserDefaults = .standard) {
         (feedback ?? .system).play(.pace, preferences: .resolved(haptics: hapticsEnabled, in: defaults))
@@ -704,7 +704,7 @@ enum BreathingPacerHaptics {
     ///
     /// - Parameters:
     ///   - hapticsEnabled: The screen's own Haptics switch.
-    ///   - feedback: Test seam: the player. `nil` (production) is ``FernletFeedback/system``.
+    ///   - feedback: Test seam: the player. `nil` (production) is `FernletFeedback/system`.
     ///   - defaults: Where the app-wide level is read; tests pass a private suite.
     static func finish(hapticsEnabled: Bool, feedback: FernletFeedback? = nil, defaults: UserDefaults = .standard) {
         (feedback ?? .system).play(.done, preferences: .resolved(haptics: hapticsEnabled, in: defaults))

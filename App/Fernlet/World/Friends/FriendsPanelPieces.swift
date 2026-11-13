@@ -130,7 +130,7 @@ struct FriendsSearchField: View {
 
 /// An empty section's line in the World look: a small pixel face over the sentence, centred, in the
 /// page's dim ink (`b2-activities`' "No activities yet"). Without the look it is today's
-/// ``EmptyState``.
+/// `EmptyState`.
 struct FriendsEmptyNote: View {
     let text: Text
     var systemImage: String?

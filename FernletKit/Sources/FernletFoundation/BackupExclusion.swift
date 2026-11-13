@@ -21,17 +21,6 @@ import Foundation
 /// the re-apply is idempotent, so sidecars that did not exist on an earlier pass self-heal on the
 /// next one. `nonisolated`: pure file-attribute writes, callable from any executor.
 public nonisolated enum BackupExclusion {
-    /// Sets `isExcludedFromBackupKey` to `excluded` on a Core Data store file, its `-wal`/`-shm`
-    /// sidecars, and — when `includeSupportDir` is true — the sibling `.<StoreName>_SUPPORT`
-    /// external-binary-storage directory (where attributes flagged `allowsExternalBinaryDataStorage`
-    /// spill blobs > ~100 KB). A per-URL failure (e.g. a sidecar/dir that does not exist yet) is
-    /// logged, not fatal — first-session sidecars self-heal on the next launch's idempotent re-apply.
-    ///
-    /// - Parameters:
-    ///   - storeURL: The `.sqlite` store file URL.
-    ///   - excluded: The value to write to `isExcludedFromBackupKey`.
-    ///   - includeSupportDir: Whether to also exclude the `.<StoreName>_SUPPORT` directory. Pass
-    ///     `true` for stores whose attributes use `allowsExternalBinaryDataStorage`.
     /// The sibling `.<StoreName>_SUPPORT` directory Core Data spills attributes flagged
     /// `allowsExternalBinaryDataStorage` into once their value passes ~100 KB.
     ///
@@ -48,6 +37,17 @@ public nonisolated enum BackupExclusion {
             .appendingPathComponent(".\(storeURL.deletingPathExtension().lastPathComponent)_SUPPORT", isDirectory: true)
     }
 
+    /// Sets `isExcludedFromBackupKey` to `excluded` on a Core Data store file, its `-wal`/`-shm`
+    /// sidecars, and — when `includeSupportDir` is true — the sibling `.<StoreName>_SUPPORT`
+    /// external-binary-storage directory (where attributes flagged `allowsExternalBinaryDataStorage`
+    /// spill blobs > ~100 KB). A per-URL failure (e.g. a sidecar/dir that does not exist yet) is
+    /// logged, not fatal — first-session sidecars self-heal on the next launch's idempotent re-apply.
+    ///
+    /// - Parameters:
+    ///   - storeURL: The `.sqlite` store file URL.
+    ///   - excluded: The value to write to `isExcludedFromBackupKey`.
+    ///   - includeSupportDir: Whether to also exclude the `.<StoreName>_SUPPORT` directory. Pass
+    ///     `true` for stores whose attributes use `allowsExternalBinaryDataStorage`.
     public static func apply(storeURL: URL, excluded: Bool, includeSupportDir: Bool) {
         var urls = [storeURL,
                     URL(fileURLWithPath: storeURL.path + "-wal"),

@@ -35,6 +35,7 @@ public struct FernletDropdown<Value: Hashable>: View {
 
     /// - Parameters:
     ///   - label: The control's name, harvested into the calling target's catalog.
+    ///   - selection: The chosen option.
     ///   - options: Every choice, in menu order.
     ///   - showsLabel: Draw the label before the dropdown as a section label.
     ///   - fullWidth: Spread the dropdown across its row.
@@ -338,6 +339,7 @@ public struct FernletNotice<Icon: View>: View {
     let icon: Icon
     @Environment(\.fernletFramedLook) private var look
 
+    /// - Parameter text: The notice's line, harvested into the calling target's catalog.
     /// - Parameter icon: Its leading glyph (a ``FernletIcon`` or one of the app's pixel sprites).
     public init(_ text: LocalizedStringKey, tone: Tone = .info, @ViewBuilder icon: () -> Icon) {
         self.text = Text(text)

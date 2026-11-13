@@ -151,7 +151,7 @@ nonisolated enum MeshContinuationAdoption: String, Equatable, Sendable, CaseIter
 ///
 /// ## Concurrency
 ///
-/// `@MainActor`, because ``ProximityKit/MeshNetworkManager`` is: every raise is a main-actor call
+/// `@MainActor`, because `ProximityKit/MeshNetworkManager` is: every raise is a main-actor call
 /// on the manager the composition root owns. The manager is held **weakly** — the store owns both,
 /// and a driver that outlived it must raise nothing rather than resurrect it.
 @MainActor
@@ -237,7 +237,7 @@ final class MeshContinuationDriver {
     ///
     /// The second half of the F2 rule, and the reason the host may keep adopting a delivery the
     /// moment it arrives. Level-triggered and idempotent — the host is fed the foreground fact on
-    /// every scene edge, including the ones that did not change it — because ``raisedBegan`` is what
+    /// every scene edge, including the ones that did not change it — because `raisedBegan` is what
     /// makes a second call a no-op rather than a second raise. With no task in hand it does nothing
     /// at all: a mesh that merely went dark with no continued task is suspended along with the
     /// process, which is what `MeshSessionState.backgroundedSuspended` would mean and is nobody's to

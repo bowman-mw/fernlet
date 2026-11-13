@@ -67,10 +67,12 @@ public nonisolated enum ItemNameModeration {
     /// `ItemGridTexture.sanitized()`'s never-throw boundary coercion for the name string. Does NOT remove
     /// profanity — listing is gated separately by `isAllowedForListing`.
     ///
-    /// - Parameter maxLength: the length cap, defaulting to ``maxNameLength`` (24, the clothing wire
-    ///   bound). Callers whose names are not clothing labels — a prompt payload bounding externally
-    ///   authored meal/session names, say — pass their own; the control-character, zero-width and
-    ///   whitespace-collapse properties are the same at any cap.
+    /// - Parameters:
+    ///   - raw: the name to coerce, possibly untrusted.
+    ///   - maxLength: the length cap, defaulting to ``maxNameLength`` (24, the clothing wire
+    ///     bound). Callers whose names are not clothing labels — a prompt payload bounding externally
+    ///     authored meal/session names, say — pass their own; the control-character, zero-width and
+    ///     whitespace-collapse properties are the same at any cap.
     public static func sanitizedName(_ raw: String, maxLength: Int = maxNameLength) -> String {
         // Order is load-bearing, and the three legs are not interchangeable:
         //  1. Invisible scalars are dropped OUTRIGHT, never turned into a space. They render as

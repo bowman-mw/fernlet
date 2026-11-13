@@ -31,7 +31,7 @@ extension FernletStore {
     /// cascade, no AI: the three typed numbers ARE the meal.
     ///
     /// The slot is the sheet's explicit chip choice, or the same by-time "Auto" classification a
-    /// typed log follows. Stamped ``MealConfidence/logged`` (entered directly by the user) with
+    /// typed log follows. Stamped `MealConfidence/logged` (entered directly by the user) with
     /// truthful manual provenance; there are no component snapshots and no micronutrients to
     /// invent, so none are.
     @discardableResult

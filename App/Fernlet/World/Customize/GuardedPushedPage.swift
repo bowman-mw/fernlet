@@ -3,14 +3,14 @@ import UIKit
 import FernletUI
 
 extension View {
-    /// ``SwiftUI/View/fernletPushedPage(_:)`` for a page holding work that must not be lost to a stray
+    /// `SwiftUI/View/fernletPushedPage(_:)` for a page holding work that must not be lost to a stray
     /// Back: the Creation Studio's unsaved paint (designs `b2-studio` and `b2-studio-save`). Under a World
     /// plate the page hands the plate its title and Back as any pushed page does, but while `isGuarded`
     /// the plate's Back and the panel's ✕ run `onBlockedBack` (the studio asks before discarding) and
     /// the edge swipe is off. Outside a plate (a sheet's own stack) it is `.navigationTitle(title)` and the page keeps its
     /// own toolbar guard.
     ///
-    /// Built on the plate's own model (``FernletPlateNavigation``), so the plate draws it exactly like
+    /// Built on the plate's own model (`FernletPlateNavigation`), so the plate draws it exactly like
     /// every other pushed page.
     func fernletGuardedPushedPage(_ title: LocalizedStringResource, isGuarded: Bool,
                                   onBlockedBack: @escaping () -> Void) -> some View {
@@ -67,7 +67,7 @@ private final class PlateBackGate {
 }
 
 /// Turns the navigation controller's edge swipe off while the page is guarded (or the panel is held,
-/// ``SwiftUI/View/worldPanelHeld(_:)``), and back on after.
+/// `SwiftUI/View/worldPanelHeld(_:)`), and back on after.
 struct EdgeSwipeGate: UIViewControllerRepresentable {
     let isEnabled: Bool
 

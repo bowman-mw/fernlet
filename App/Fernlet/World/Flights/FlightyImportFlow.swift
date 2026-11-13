@@ -29,7 +29,7 @@ nonisolated enum FlightyImportProblem: Error, Equatable, Sendable {
 }
 
 /// The Flighty import (World-Airports-Spec §9, screens 19–24): "Add past flights" opens iOS's own file picker
-/// (CSV only); the picked file is read once, off the main actor, by ``FlightyImport`` (only the date, airports,
+/// (CSV only); the picked file is read once, off the main actor, by `FlightyImport` (only the date, airports,
 /// cancelled and diverted flags, gate times and Flighty's ID are ever decoded) and planned against the passport;
 /// the summary sheet's "Add N flights" adds them as records, and the toast's Undo takes that import back.
 ///
@@ -156,7 +156,7 @@ final class FlightyImportFlow {
         }
     }
 
-    /// Reads and plans the file at `url` off the main actor: at most ``FlightyImport/maxFileBytes`` are read.
+    /// Reads and plans the file at `url` off the main actor: at most `FlightyImport/maxFileBytes` are read.
     nonisolated static func read(_ url: URL, airports: WorldAirports,
                                  book: PassportBook) -> Result<FlightyImportFound, FlightyImportProblem> {
         let scoped = url.startAccessingSecurityScopedResource()
@@ -183,7 +183,7 @@ final class FlightyImportFlow {
 nonisolated struct FlightyImportAdded: Equatable, Sendable {
     /// How many flights the file added (the toast's number).
     let count: Int
-    /// What Undo takes `source` off (``FlightImportPlan/undoFlights``).
+    /// What Undo takes `source` off (`FlightImportPlan/undoFlights`).
     let undo: [PassportFlight]
     let source: PassportFlight.Sources
 }

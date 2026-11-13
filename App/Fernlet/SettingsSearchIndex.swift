@@ -147,7 +147,7 @@ nonisolated struct SettingsSearchBreadcrumb: Sendable {
 
 /// Namespace holding the hand-written settings search catalog and its matching/normalization logic.
 ///
-/// ``SettingsSheet`` calls ``results(for:)`` whenever the search field is non-empty and renders one
+/// ``SettingsSheet`` calls ``results(for:languages:)`` whenever the search field is non-empty and renders one
 /// navigation row per match. The catalog is leaf-granular — one ``SettingsSearchEntry`` per
 /// meaningful control, including the Privacy & Data sub-page's cards — and ordered to mirror the hub
 /// top-to-bottom so results read in the same order the settings appear. Matching mirrors
@@ -160,6 +160,7 @@ nonisolated enum SettingsSearchIndex {
     /// to) some matchable token. Empty/whitespace queries return nothing (the caller keeps showing the
     /// Form). Catalog order is preserved so results are stable.
     ///
+    /// - Parameter query: The text typed in the search field.
     /// - Parameter languages: The input languages (English plus the app's language by default), so a
     ///   Spanish interface finds "Modo oscuro" and an English one reads exactly what it always did.
     static func results(for query: String, languages: InputLanguages = .current) -> [SettingsSearchEntry] {

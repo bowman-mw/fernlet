@@ -36,6 +36,7 @@ enum WorkoutCalibrationDeferral {
     /// for longer than two weeks). A moment already past is returned as it is; it defers nothing.
     ///
     /// - Parameter now: The reading moment; the planner may pass the start of today.
+    /// - Parameter defaults: Where the moment is stored.
     static func askAgainFrom(asOf now: Date = Date(), in defaults: UserDefaults = .standard) -> Date? {
         guard let seconds = defaults.object(forKey: askAgainFromKey) as? Double, seconds.isFinite else { return nil }
         let stored = Date(timeIntervalSince1970: seconds)

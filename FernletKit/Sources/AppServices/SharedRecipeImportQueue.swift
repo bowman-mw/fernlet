@@ -300,10 +300,12 @@ public struct SharedRecipeImportQueue {
     /// `markAttempt`, this does NOT burn an attempt or remove the record — a budget miss is transient and
     /// not the page's fault; it only tells the drain to stop re-fetching this page today.
     ///
-    /// - Parameter refundingStartedAttempt: gives back the attempt ``markAttemptStarted(_:)`` spent
-    ///   before the import ran. The drain passes `true`, and it is what keeps "a budget miss does not
-    ///   burn an attempt" TRUE now that the attempt is spent up front — without it, three resting
-    ///   days would silently delete a perfectly good queued recipe.
+    /// - Parameters:
+    ///   - dayKey: Today's day key, stored on the record as the day the budget ran out.
+    ///   - refundingStartedAttempt: gives back the attempt ``markAttemptStarted(_:)`` spent
+    ///     before the import ran. The drain passes `true`, and it is what keeps "a budget miss does not
+    ///     burn an attempt" TRUE now that the attempt is spent up front — without it, three resting
+    ///     days would silently delete a perfectly good queued recipe.
     ///
     /// - Returns: whether the rewrite landed (see ``remove(_:)``); a lost stamp only costs a repeat
     ///   fetch today, but it is still reported rather than assumed.

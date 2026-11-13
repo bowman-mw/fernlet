@@ -15,7 +15,7 @@ import SwiftUI
 /// One month cell, drawn only (the grid's ``BodybuildingDayCellButton`` makes it a control and reads it).
 struct BodybuildingDayCell: View {
     let day: BodybuildingDay
-    /// The marks the cell draws (``BodybuildingCalendarSettings/monthCellSignals``).
+    /// The marks the cell draws (`BodybuildingCalendarSettings/monthCellSignals`).
     let signals: [BodybuildingSignal]
     /// The day of the month as drawn.
     let number: String

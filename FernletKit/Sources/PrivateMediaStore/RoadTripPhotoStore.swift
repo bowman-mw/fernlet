@@ -54,7 +54,7 @@ public nonisolated struct RoadTripPhoto: Codable, Equatable, Hashable, Identifia
 
 /// The trip photos' durable truth, sealed at rest as `RoadTripPhotoIndex.sealed`: every photo, oldest first.
 ///
-/// Frozen at rest: `schemaVersion` and `photos` are field names, and ``schemaVersion`` only ever rises — an older
+/// Frozen at rest: `schemaVersion` and `photos` are field names, and `schemaVersion` only ever rises — an older
 /// build reading a newer file defers rather than purging it. Concurrency: a `Sendable` value type.
 public nonisolated struct RoadTripPhotoIndex: Codable, Equatable, Sendable {
     /// The format this build writes and the only one it reads.

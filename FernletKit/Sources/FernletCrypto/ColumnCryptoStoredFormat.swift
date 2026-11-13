@@ -10,7 +10,7 @@ import Foundation
 
 /// Which at-rest generation a stored sealed-column blob's **marker byte** says it is.
 ///
-/// This is the one place outside ``ColumnCrypto/openBlob(_:contentKey:)`` that encodes the
+/// This is the one place outside `ColumnCrypto/openBlob(_:contentKey:)` that encodes the
 /// sealed-column marker semantics (`0x03` → v3, `0x02` → v2, anything else → unprefixed
 /// legacy). It exists so the Phase 0 census can count the corpus **without a content key and
 /// without ever decrypting anything** — the plan's stated risk control is "count by MARKER
@@ -65,11 +65,11 @@ import Foundation
 /// byte-inspection value type, called synchronously from the sealed store's nonisolated
 /// `NSManagedObjectContext.performAndWait` scan, exactly like ``ColumnCrypto`` itself.
 public nonisolated enum ColumnCryptoStoredFormat: String, Sendable, Hashable, CaseIterable {
-    /// First byte is ``ColumnCrypto/deviceBoundFormatVersionV3`` (`0x03`): the current
+    /// First byte is `ColumnCrypto/deviceBoundFormatVersionV3` (`0x03`): the current
     /// device-bound format (purpose ‖ binding as AAD). **Upper bound** — see the type's note on
     /// the 1-in-256 nonce collision.
     case v3Marked
-    /// First byte is ``ColumnCrypto/deviceBoundFormatVersionV2`` (`0x02`): the pre-purpose
+    /// First byte is `ColumnCrypto/deviceBoundFormatVersionV2` (`0x02`): the pre-purpose
     /// device-bound format (binding-only AAD). **Upper bound**, same caveat.
     case v2Marked
     /// First byte is neither marker: a bare `combined` blob with no version prefix and no AAD.

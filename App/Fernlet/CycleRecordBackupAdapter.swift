@@ -4,7 +4,7 @@ import Foundation
 import PrivateHealthStore
 
 /// The period Sealed backup's adapter for the v2 engine (design 2026-09-30, §4.1): the gated
-/// ``CycleRecordStore`` funnel, mapped onto ``SealedBackupV2Adapter``.
+/// `CycleRecordStore` funnel, mapped onto ``SealedBackupV2Adapter``.
 ///
 /// - `snapshotIDs` is the store's keyless `allIDs()`; `classifiedChunk` is its gated
 ///   `backupChunk(ids:contentKey:)`, already a classified page (undecided rows are transient; this

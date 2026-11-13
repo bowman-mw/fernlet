@@ -17,7 +17,7 @@ import FernletDomainModel
 /// charge, exactly as before parts existed. Splitting a recipe makes it at least two parts, and
 /// removing parts down to one collapses it back to the flat lists. Caps are the editor's
 /// whole-recipe caps (``RecipeLimits``), counted across every part, plus
-/// ``RecipeComponentLimits/maxComponents`` parts.
+/// `RecipeComponentLimits/maxComponents` parts.
 struct RecipePartsDraft: Equatable {
     var parts: [RecipeComponentInput] = []
 
@@ -154,10 +154,10 @@ struct RecipePartsDraft: Equatable {
 /// of a multipart one.
 enum RecipeEditorInputs {
     /// One editor row per ingredient whose food still resolves. A manual (custom) food re-opens as a
-    /// hand-typed row with its macros — its EXACT grams (``FoodItem/exactMacros``), so re-saving a
+    /// hand-typed row with its macros — its EXACT grams (`FoodItem/exactMacros`), so re-saving a
     /// 3.4 g food never rounds it to 3 — and a catalog food re-opens bound to its id.
     ///
-    /// A household choice saved as grams re-opens as the choice (``RecipePortionPicker/reopened(_:foodItem:choices:)``):
+    /// A household choice saved as grams re-opens as the choice (`RecipePortionPicker/reopened(_:foodItem:choices:)`):
     /// "118 g" saved from "1 each" of a banana as "1 each" (F4a), "150 g" saved from "cup, sliced" as
     /// one "cup, sliced (150 g)", a typical size as that size (F4b).
     static func inputs(for ingredients: [RecipeIngredient], foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {

@@ -232,7 +232,7 @@ nonisolated enum ProximityRunPolicy {
         /// the review started is still running. Stops discovery from STARTING anything — no second
         /// session forms, and no answered session is resumed — while never changing a live
         /// session's discovery: the coordinator answers false whenever a session is live, and the
-        /// policy lowers only a running verdict (``discoveryState(_:foreground:hardStop:)``).
+        /// policy lowers only a running verdict (`discoveryState(_:foreground:hardStop:)`).
         let sessionPhotoReviewBlocksDiscovery: Bool
 
         /// `settings.allowConnectByTapping` (World Friends §1.6, "Connect by tapping phones", on by
