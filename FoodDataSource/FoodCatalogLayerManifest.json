@@ -1,0 +1,100 @@
+{
+  "manifestVersion": 1,
+  "decision": "Owner decisions of 2026-11-13 (ROADMAP G1): ship FNDDS's generic layer as a small bundled file beside the never-regenerated base catalog (the compact option), and approve Canada's Canadian Nutrient File 2026 as a source with its attribution.",
+  "generator": "Scripts/food-catalog/generic_layers.py",
+  "layers": {
+    "survey": {
+      "resource": "FoodCatalogSurvey",
+      "publisher": "USDA Agricultural Research Service, Food Surveys Research Group; distributed by USDA FoodData Central",
+      "dataset": "FNDDS 2021-2023 (Survey (FNDDS) foods of FoodData Central 2026-04-30)",
+      "license": "CC0 1.0 / United States public domain",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "USDA FoodData Central; citation requested but not required by CC0.",
+      "input": {
+        "description": "Schema-v4 preservation artifact built by Scripts/food-catalog/catalog_pipeline.py from FoodData_Central_csv_2026-04-30.zip (FoodCatalogSourceManifest.json usda_fdc_consumer, SHA-256 c33d91e5c44ddbcd71ed6038714fb648b26089b3f91fabfa3be63d96d5763a01). Local and ignored; never committed.",
+        "filename": "FoodCatalog.sqlite",
+        "bytes": 449552384,
+        "sha256": "4b148d2ec162d2ad071a5d804133933e6426b008c2b59d5a2b63e2ffeebf828e"
+      },
+      "expected": {
+        "Survey (FNDDS)": 5432
+      },
+      "counts": {
+        "sourceFoods": 5432,
+        "alreadyInBase": 202,
+        "droppedZeroMacroAlcohol": 11,
+        "written": 5219
+      },
+      "droppedZeroMacroAlcohol": [
+        "Whiskey and soda",
+        "Whiskey and water",
+        "Vodka and soda",
+        "Vodka and water",
+        "Brandy",
+        "Whiskey",
+        "Scotch",
+        "Gin",
+        "Rum",
+        "Vodka",
+        "Tequila"
+      ],
+      "output": {
+        "file": "FernletKit/Sources/FoodCatalog/Resources/FoodCatalogSurvey.sqlite",
+        "rows": 5219,
+        "bytes": 5853184,
+        "sha256": "57f8e2ac7aa327aa8d2718e46db5669229295ca0616b567a267af704bc4f201b"
+      }
+    },
+    "cnf": {
+      "resource": "FoodCatalogCNF",
+      "publisher": "Health Canada",
+      "dataset": "Canadian Nutrient File 2026",
+      "license": "Open Government Licence - Canada",
+      "licenseURL": "https://open.canada.ca/en/open-government-licence-canada",
+      "attribution": "Contains information licensed under the Open Government Licence – Canada.",
+      "input": {
+        "description": "Health Canada's CNF 2026 all-files CSV archive (UTF-8 with BOM), read member by member without extraction. Kept outside Git.",
+        "filename": "cnf_fcen_all-files-data_2026.zip",
+        "bytes": 26656195,
+        "sha256": "f5faad8977ee6bbdd9d69c8649077cacd87d8658ad200509a4047db1e29edcdd"
+      },
+      "expected": {
+        "foods": 5993
+      },
+      "counts": {
+        "sourceFoods": 5993,
+        "droppedUSDANoChanges": 3529,
+        "droppedUSDASurveyFilesAlreadyShipped": 123,
+        "droppedZeroMacroAlcohol": 2,
+        "written": 2339,
+        "writtenByFoodSourceCode": {
+          "1": 87,
+          "3": 347,
+          "4": 9,
+          "6": 7,
+          "9": 2,
+          "10": 1,
+          "11": 74,
+          "12": 6,
+          "20": 25,
+          "23": 255,
+          "24": 45,
+          "26": 116,
+          "28": 212,
+          "35": 134,
+          "37": 1019
+        }
+      },
+      "droppedZeroMacroAlcohol": [
+        "Alcohol, cocktail, scotch and soda",
+        "Alcohol, gin (40% alcohol by volume)"
+      ],
+      "output": {
+        "file": "FernletKit/Sources/FoodCatalog/Resources/FoodCatalogCNF.sqlite",
+        "rows": 2339,
+        "bytes": 2519040,
+        "sha256": "2df36094b8574c020c3d6a33bff56aae30793fbb3e0431f80ee4f55aa6d0e295"
+      }
+    }
+  }
+}
