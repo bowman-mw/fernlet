@@ -87,8 +87,8 @@
 //     match"; the fold now happens inside `assemble` before the stamp. F9 — the longest-substring
 //     tie-break was hash-order nondeterministic, now a deterministic lexicographic tuple compare. F2 —
 //     an ordinary food word that collides with a chain's lexicon spelling ("chipotle" the pepper,
-//     "chilis" the vegetable) still false-positives; PINNED, not fixed — see
-//     `foodWordCollisionWithAChainNameIsPinnedNotFixed` and §37 Q7. F7 — a theoretical double-naming
+//     "chilis" the vegetable) false-positived; fixed by roadmap G1 F11 — see
+//     `foodWordCollisionWithAChainNameIsNotABrand`. F7 — a theoretical double-naming
 //     risk (a brand chip AND the same item's whole raw text both landing in `unmatchedItems`) is closed
 //     by construction: the brand check is now recorded only on the successful-assembly path.
 //
@@ -1165,30 +1165,25 @@ struct DishTemplateBindAuditTests {
                 "honest gap: falls back to the lexicon spelling, not a verbatim \"wendyʼs\" slice — see doc comment")
     }
 
-    // MARK: - Review finding F2: the food-word collision class (pinned, not fixed)
+    // MARK: - Review finding F2: the food-word collision class (fixed by roadmap G1, F11)
 
-    /// The SAME unanchored-substring matching that catches "costco" also catches an ordinary FOOD WORD
-    /// that happens to collide with a chain's lexicon entry — "chipotle" (the pepper) and "chilis"
-    /// (plural of chili, the vegetable) both match real chain entries. Building a food-word exception
-    /// list would invent phrase-vs-token semantics that belong to §37 Q7's restructuring, not to this
-    /// fix — recorded here as a KNOWN, ACCEPTED trade (the round's ledger), not fixed.
-    @Test func foodWordCollisionWithAChainNameIsPinnedNotFixed() throws {
+    /// "chipotle" (the pepper) and "chilis" (plural of chili) both spell a chain's lexicon entry. Since
+    /// roadmap G1's F11 (2026-11-13) the lexicon reads chains as whole words and keeps these two as
+    /// food words unless the text reads as the restaurant, so neither is flagged as an unaccounted
+    /// brand any more.
+    @Test func foodWordCollisionWithAChainNameIsNotABrand() throws {
         let catalog = FoodCatalog.bundled()
         try #require(catalog.bundledCount == Self.shippedRowCount, "shipped catalog must be loaded")
 
-        // "chicken taco" (12 chars) out-matches the bare "taco" (4 chars) alias, so the unaccounted
-        // leftover is "chipotle" — the pepper, not the restaurant chain the lexicon assumes it is.
         let pepper = try #require(DishTemplateLexicon.resolve(
             description: "chipotle chicken taco", mealType: nil, catalog: catalog
         ))
-        #expect(pepper.unmatchedItems == ["chipotle"], "false positive: this \"chipotle\" is a pepper, not the chain — Q7")
+        #expect(!pepper.unmatchedItems.contains("chipotle"), "this \"chipotle\" is a pepper, not the chain")
 
-        // "quesadilla" (10 chars) is the matched key; "chilis" (the vegetable, plural of chili) is the
-        // unaccounted leftover — and also, coincidentally, Chili's the restaurant chain's own entry.
         let vegetable = try #require(DishTemplateLexicon.resolve(
             description: "green chilis quesadilla", mealType: nil, catalog: catalog
         ))
-        #expect(vegetable.unmatchedItems == ["chilis"], "false positive: this \"chilis\" is chili peppers, not Chili's — Q7")
+        #expect(!vegetable.unmatchedItems.contains("chilis"), "this \"chilis\" is chili peppers, not Chili's")
     }
 
     // MARK: - Review finding F9: deterministic length-tie tie-break

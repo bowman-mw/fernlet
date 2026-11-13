@@ -263,8 +263,9 @@ struct IngredientSearchCorpusTests {
     /// without that, "semi sweet chocolate chips" would have read 6 → 5 for a row that is plainly one.
     /// 454 with the 2026-11-09 typed-search fixes (PR #139), whose plural stems changed the shipped
     /// candidate set for "tomatoes": canned tomatoes 6 → 5, its #1 unchanged. #139 merged without
-    /// re-taking this pin; re-taken here.
-    static let plainRowsInSixBaseline = 454
+    /// re-taking this pin; re-taken here. 456 with roadmap G1's branded-category gate (2026-11-13):
+    /// honey 3 → 4 and marshmallows 4 → 5, as flavor-last products left the six.
+    static let plainRowsInSixBaseline = 456
 
     /// The description `BundledRowCorrection.rebasingBrandedNutrients` gives a branded label serving
     /// it keeps as the row's count portion — a serving, not an item.
@@ -525,7 +526,7 @@ struct IngredientSearchCorpusTests {
         .init("egg whites", 1, 1, plain: 4),
         .init("yeast", 1, 1, plain: 3),
         .init("cornstarch", 1, 1, plain: 2),
-        .init("honey", 1, 1, plain: 3),
+        .init("honey", 1, 1, plain: 4),   // G1 branded-category gate: a flavor-last row left the six
         .init("maple syrup", 1, 1, plain: 3),
         .init("molasses", 1, 1, plain: 1),
         .init("oats", 1, 1, plain: 4),
@@ -546,7 +547,7 @@ struct IngredientSearchCorpusTests {
         .init("oat milk", 1, 1, plain: 3),
         .init("sweetened condensed milk", 1, 1, plain: 2),
         .init("graham crackers", 1, 1, plain: 1, each: false, count: false),
-        .init("marshmallows", 1, 1, plain: 4, each: false, count: true),
+        .init("marshmallows", 1, 1, plain: 5, each: false, count: true),   // G1 gate
         .init("peanut butter", 1, 1, plain: 4),
         .init("almond flour", 1, 1, plain: 6),
         .init("coconut oil", 1, 1, plain: 2),

@@ -1380,9 +1380,13 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     public var unknownDataTypeToken: String? = nil
     public var sourceURL: URL?
     public var servingDescription: String?
+    /// How many days a looked-up value stays fresh after ``lastVerified`` (``isPastVerification(asOf:)``).
     public var verificationPolicyDays: Int = 180
+    /// When this food's values were last looked up or confirmed.
     public var lastVerified: Date?
-    public var isFlagged: Bool = false
+    // `isFlagged` (a stored Bool nothing ever set or read) was retired by roadmap G1 (2026-11-13). Its
+    // synced-blob key "isFlagged" is no longer written; an older build reads its absence as `false`, the
+    // only value it ever held. Never reuse the key for a different meaning.
     public var tags: [String]
     public var portions: [FoodPortion]
     /// Normalized GTIN (see `FoodBarcode.normalized`) when this food was created from / matched to a
@@ -1402,6 +1406,16 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
 
     public var calories: Int {
         macros.calories
+    }
+
+    /// Whether this food's looked-up values are older than its ``verificationPolicyDays`` at `now`, so
+    /// they should be looked up again before being reused (roadmap G1: a cached web product used to be
+    /// reused at any age). A food never verified (`lastVerified == nil`) counts as past, and a
+    /// non-positive policy means "never fresh".
+    public func isPastVerification(asOf now: Date) -> Bool {
+        guard let lastVerified, verificationPolicyDays > 0 else { return true }
+        let window = TimeInterval(verificationPolicyDays) * 86_400
+        return now.timeIntervalSince(lastVerified) > window
     }
 
     /// This food's grams at full precision: ``preciseMacros`` while it still agrees with ``macros``,
@@ -1516,7 +1530,6 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         servingDescription: String? = nil,
         verificationPolicyDays: Int = 180,
         lastVerified: Date? = nil,
-        isFlagged: Bool = false,
         tags: [String],
         portions: [FoodPortion] = [],
         barcode: String? = nil,
@@ -1540,7 +1553,6 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         self.servingDescription = servingDescription
         self.verificationPolicyDays = verificationPolicyDays
         self.lastVerified = lastVerified
-        self.isFlagged = isFlagged
         self.tags = tags
         self.portions = portions
         self.barcode = barcode
@@ -1569,7 +1581,6 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         servingDescription = try container.decodeIfPresent(String.self, forKey: .servingDescription)
         verificationPolicyDays = try container.decodeIfPresent(Int.self, forKey: .verificationPolicyDays) ?? 180
         lastVerified = try container.decodeIfPresent(Date.self, forKey: .lastVerified)
-        isFlagged = try container.decodeIfPresent(Bool.self, forKey: .isFlagged) ?? false
         tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
         portions = try container.decodeIfPresent([FoodPortion].self, forKey: .portions) ?? []
         barcode = try container.decodeIfPresent(String.self, forKey: .barcode)

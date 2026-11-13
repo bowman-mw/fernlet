@@ -318,8 +318,8 @@ struct FernletExchangeTests {
     ///
     /// **This test pins a defect. It is not a specification.** It is written as an assertion of the
     /// current behaviour so the behaviour is visible, attributable, and impossible to change by
-    /// accident — the house pattern from `DishTemplateBindAuditTests`
-    /// (`foodWordCollisionWithAChainNameIsPinnedNotFixed`). Fixing it should turn this test red.
+    /// accident — the house pattern (as `DishTemplateBindAuditTests` once did for the chain food-word collision,
+    /// until roadmap G1 fixed it). Fixing it should turn this test red.
     ///
     /// **The mechanism.** A recipe imported from the web — via the share extension, a pasted URL, or
     /// a mesh-received `.saved` recipe — is built with `ingredients: []` and its real ingredient

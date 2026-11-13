@@ -1709,14 +1709,17 @@ public final class DiaryStore {
     }
 
     /// A previously web-imported product matching `query` (by stored query tag or normalized
-    /// name), so a repeat lookup needs no new import.
-    public func cachedWebImportedFoodProduct(for query: String) -> FoodItem? {
+    /// name), so a repeat lookup needs no new import — while it is still fresh. A product older than
+    /// its `verificationPolicyDays` (``FoodItem/isPastVerification(asOf:)``) is not offered, so the
+    /// lookup runs again and the save refreshes it in place (roadmap G1: cached web products were
+    /// reused at any age).
+    public func cachedWebImportedFoodProduct(for query: String, now: Date = Date()) -> FoodItem? {
         let normalizedQuery = FoodItemSearch.normalized(query)
         guard !normalizedQuery.isEmpty else { return nil }
         let queryTag = "web-query:\(normalizedQuery)"
         return webImportedFoodItems.first { foodItem in
-            foodItem.tags.contains(queryTag)
-                || FoodItemSearch.normalized(foodItem.name) == normalizedQuery
+            (foodItem.tags.contains(queryTag) || FoodItemSearch.normalized(foodItem.name) == normalizedQuery)
+                && !foodItem.isPastVerification(asOf: now)
         }
     }
 

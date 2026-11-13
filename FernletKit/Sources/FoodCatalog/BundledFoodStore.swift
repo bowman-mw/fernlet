@@ -477,13 +477,22 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             }
             defer { sqlite3_finalize(stmt) }
             bind(stmt)
+            // One decoder per fetch, not per row (roadmap G1, F8: up to 10,000 rows per keystroke).
+            let decoder = JSONDecoder()
             var results: [FoodItem] = []
             while sqlite3_step(stmt) == SQLITE_ROW {
-                if let item = Self.hydrate(stmt, includesBarcode: hasBarcodeColumn) { results.append(item) }
+                // A superseded typed search stops here; its answer is dropped anyway (F8).
+                if results.count % Self.cancellationCheckInterval == 0, TypedSearchScope.isSuperseded { return [] }
+                if let item = Self.hydrate(stmt, includesBarcode: hasBarcodeColumn, decoder: decoder) {
+                    results.append(item)
+                }
             }
             return results
         }
     }
+
+    /// How many rows a fetch hydrates between checks for a superseded typed search.
+    static let cancellationCheckInterval = 128
 
     /// The `food` table's total row count, read once at open to seed `count`.
     private static func scalarCount(_ db: OpaquePointer?) -> Int {
@@ -508,9 +517,8 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// Builds a `FoodItem` from a result row. Column order must match `FoodCatalogSchema.selectColumns`
     /// (+ trailing `gtin_upc` at index 17 when `includesBarcode`). The row then passes through
     /// ``BundledRowCorrection`` — the load-time fixes for defects in the committed file.
-    private static func hydrate(_ stmt: OpaquePointer?, includesBarcode: Bool) -> FoodItem? {
+    private static func hydrate(_ stmt: OpaquePointer?, includesBarcode: Bool, decoder: JSONDecoder) -> FoodItem? {
         guard let idString = sqliteColumnText(stmt, 0), let id = UUID(uuidString: idString) else { return nil }
-        let decoder = JSONDecoder()
         func decodeJSON<T: Decodable>(_ type: T.Type, _ index: Int32) -> T? {
             guard let text = sqliteColumnText(stmt, index), let data = text.data(using: .utf8) else { return nil }
             return try? decoder.decode(type, from: data)
@@ -535,7 +543,6 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             dataType: dataType,
             servingDescription: sqliteColumnText(stmt, 11),
             verificationPolicyDays: Int(sqlite3_column_int(stmt, 12)),
-            isFlagged: sqlite3_column_int(stmt, 13) != 0,
             tags: decodeJSON([String].self, 15) ?? [],
             portions: decodeJSON([FoodPortion].self, 16) ?? [],
             barcode: includesBarcode ? sqliteColumnText(stmt, 17) : nil

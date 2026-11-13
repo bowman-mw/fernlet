@@ -641,8 +641,15 @@ struct FoodSearchCorpusTests {
     @Test func trailingSFlipsTheQueryIntoRestaurantMode() throws {
         #expect(FoodBrandLexicon.queryContainsBrandToken("chilis"))
         #expect(!FoodBrandLexicon.queryContainsBrandToken("chili"))
-        // The converse §9(b) failure: the apostrophe form never reaches the lexicon entry at all.
-        #expect(!FoodBrandLexicon.queryContainsBrandToken("mcdonald's fries"))
+        // The converse §9(b) failure, closed by roadmap G1 F11: the apostrophe form now reaches the
+        // lexicon entry through the possessive collapse.
+        #expect(FoodBrandLexicon.queryContainsBrandToken("mcdonald's fries"))
+        // F11: the words of a chain, never a substring, and a food word stays a food word.
+        #expect(!FoodBrandLexicon.queryContainsBrandToken("green chilis"))
+        #expect(!FoodBrandLexicon.queryContainsBrandToken("chipotle chicken"))
+        #expect(FoodBrandLexicon.queryContainsBrandToken("chipotle burrito bowl"))
+        #expect(FoodBrandLexicon.queryContainsBrandToken("chili's fajitas"))
+        #expect(!FoodBrandLexicon.queryContainsBrandToken("supersonic shake"))
 
         let chili = try Self.rankedRows(for: "chili")
         let chilis = try Self.rankedRows(for: "chilis")

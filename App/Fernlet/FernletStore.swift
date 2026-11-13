@@ -5860,8 +5860,10 @@ final class FernletStore {
         diary.saveCustomIngredient(ingredient)
     }
 
-    func cachedWebImportedFoodProduct(for query: String) -> FoodItem? {
-        diary.cachedWebImportedFoodProduct(for: query)
+    /// A saved web product for `query` that is still fresh at `now` (roadmap G1); nil sends the caller
+    /// to a new lookup, whose save refreshes the old row in place.
+    func cachedWebImportedFoodProduct(for query: String, now: Date = Date()) -> FoodItem? {
+        diary.cachedWebImportedFoodProduct(for: query, now: now)
     }
 
     // MARK: - Local correction memory (research §26 fix 1.10)

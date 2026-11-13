@@ -364,12 +364,20 @@ the typed surface). Everywhere else it stays false and the order is unchanged.
 "a&w root beer"). The tokenizer drops one-character words, so the catalog finds those rows by exact
 phrase instead.
 
+``FoodShortQuery`` (roadmap G1) answers the typed queries under the three-character floor: a few
+abbreviations ("pb", "oj", "eg") search the words they stand for, "v8" searches as typed, and anything
+else asks for more letters. ``FoodIngredientIdentity``'s branded-category gate (also G1) stops a
+flavor-last product in a composite aisle ("Cake Mix Extra Moist Lemon") counting as its flavor on the
+recipe surfaces, and ``FoodItem/isPastVerification(asOf:)`` keeps a saved web product from being
+reused past its `verificationPolicyDays`.
+
 ``FoodSearchVocabulary`` turns the catalog index's words (``FoodSearchTerm``) into an OFFERED
 spelling suggestion ("chobanni" → "chobani", "chickfila" → "chick fil a"), never a silent rewrite.
 
 - ``FoodItemSearch``
 - ``FoodBrandAgreement``
 - ``FoodBrandInitialism``
+- ``FoodShortQuery``
 - ``FoodSearchVocabulary``
 - ``FoodSearchTerm``
 - ``FoodSearchRanking``

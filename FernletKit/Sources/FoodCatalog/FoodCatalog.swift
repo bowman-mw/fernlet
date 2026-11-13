@@ -282,13 +282,31 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         context: FoodSearchContext,
         ranking: FoodSearchRanking = .standard
     ) -> [FoodItem] {
+        let typed = context == .userTyped
+        // Roadmap G1: a typed abbreviation ("pb", "oj") searches the words it stands for (F9), and a
+        // typed search runs in `TypedSearchScope`, so the SQLite fetch beneath it stops as soon as a
+        // newer keystroke cancels it (F8).
+        return TypedSearchScope.$isTyped.withValue(typed) {
+            scopedResults(
+                for: typed ? FoodShortQuery.expanded(query) : query, limit: limit,
+                stripsStopwords: stripsStopwords, typed: typed, ranking: ranking
+            )
+        }
+    }
+
+    /// ``results(for:limit:stripsStopwords:context:ranking:)`` inside its search scope.
+    private func scopedResults(
+        for query: String, limit: Int, stripsStopwords: Bool, typed: Bool, ranking: FoodSearchRanking
+    ) -> [FoodItem] {
         // A query too short to search is answered BEFORE retrieval. The scorer, the partial path, the
         // alias and the correction all refuse one under `minimumQueryLength` anyway, but the FTS fetch
         // did not: typing "ch" hydrated and indexed the 10,000-row cap (~0.4 s on the simulator, F5's
-        // latency measurement) to return nothing, on every typeahead.
-        guard FoodItemSearch.normalized(query).count >= FoodItemSearch.minimumQueryLength else { return [] }
+        // latency measurement) to return nothing, on every typeahead. A short food word ("v8",
+        // ``FoodShortQuery``) is the one exception.
+        let normalizedQuery = FoodItemSearch.normalized(query)
+        guard normalizedQuery.count >= FoodItemSearch.minimumQueryLength
+                || FoodShortQuery.isShortWord(normalizedQuery) else { return [] }
         let rankingNow = Date()
-        let typed = context == .userTyped
         let fetchLimit = typed ? TypeaheadDuplicateCollapse.fetchLimit(for: limit) : limit
         let candidates = index(for: query, stripsStopwords: stripsStopwords)
         guard !isSuperseded(typed) else { return [] }
@@ -501,6 +519,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         typed && Task.isCancelled
     }
 
+
     /// Inserts the row a ``CuratedSearchAlias`` phrase names (ingredient-search round, F7) — typed
     /// search only, so the resolver's `candidates(for:limit:ranking:)` and the importer's bind never see it.
     ///
@@ -676,10 +695,15 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     /// `stripsStopwords` reaches the SOURCE, not just the scorer: retrieval and scoring must gate on
     /// the same token set or the fetch cap truncates a set the scorer never asked for.
+    ///
+    /// A superseded typed search (``TypedSearchScope``) skips the branded fetch and the index build:
+    /// its answer is dropped anyway (roadmap G1, F8).
     private func index(for query: String, stripsStopwords: Bool) -> FoodItemSearch.Index {
         let branded = brandedSource
-        let candidates = source.candidates(forQuery: query, stripsStopwords: stripsStopwords)
-            + (branded?.candidates(forQuery: query, stripsStopwords: stripsStopwords) ?? [])
+        let base = source.candidates(forQuery: query, stripsStopwords: stripsStopwords)
+        guard !TypedSearchScope.isSuperseded else { return .empty }
+        let candidates = base + (branded?.candidates(forQuery: query, stripsStopwords: stripsStopwords) ?? [])
+        guard !TypedSearchScope.isSuperseded else { return .empty }
         return FoodItemSearch.Index(foodItems: candidates + userItems)
     }
 

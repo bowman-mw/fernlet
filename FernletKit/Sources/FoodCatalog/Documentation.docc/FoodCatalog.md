@@ -188,6 +188,22 @@ measured against `Docs/Food-Search-Phase0-Baseline-2026-10-29.md`:
   corrected query would itself find nothing. The three search fields now show it under "No catalog
   matches." as "Did you mean …?"; tapping it fills the field.
 
+**Roadmap G1 (2026-11-13), the review's leftovers.**
+
+- **Short queries.** A typed "pb", "oj" or "eg" searches the words it stands for and "v8" searches as
+  typed (`FoodShortQuery` in the domain module); any other query under three characters is still not
+  searched, and the three fields say "Keep typing to search." instead of "No catalog matches."
+- **A superseded search stops early.** A typed search runs inside an internal task-local scope
+  (`TypedSearchScope`), so ``SQLiteBundledFoodSource``'s fetch loop checks every 128 rows whether a
+  newer keystroke cancelled it, and the index skips the branded fetch once it has. A machine-generated
+  search never stops early. The fetch also builds one `JSONDecoder` per query instead of one per row.
+- **A lone digit.** "2% milk" keeps its "2" and "7 up" searches "7up" (`FoodItemSearch.searchTokens`);
+  a count digit ("2 eggs") is still dropped.
+- **Chains are words.** The restaurant lexicon matches chain names as whole words, and "chipotle" and
+  "chilis" stay food words unless the text reads as the restaurant.
+- **Retired `is_flagged`.** The column stays in the shipped schema; it is no longer read, and the
+  generator writes 0.
+
 None of these reaches ``FoodCatalog/candidates(for:limit:ranking:)``,
 ``FoodCatalog/scoredResults(for:limit:stripsStopwords:)`` or any confidence gate.
 
