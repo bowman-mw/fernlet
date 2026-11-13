@@ -192,6 +192,20 @@ struct PersistedSurfaceWipeBoundaryTests {
         "ageAssuranceRecord": .cleared(token: "ageAssurance.clear"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
         "fernlet.weather.requestBudget": .cleared(token: "WeatherKitService.shared.clearRequestHistory"),
+        // The companion-feelings settings (owner 2026-11-13: Delete everything "really means everything").
+        "fernlet.companionFeelings.appetiteCues": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "fernlet.companionFeelings.bedtimeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "fernlet.companionFeelings.wakeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        // The three former open gaps (G3, 2026-11-13): traces of use the wipe now reaches.
+        "fernlet.daySummary.lastRunKey": .cleared(token: "LaunchPreparationService.clearDaySummaryRunMarker"),
+        "pastDayJournalScrubVersion": .cleared(token: "pastDayJournalScrubDefaults.removeObject"),
+        "pastDayJournalScrubAttempts": .cleared(token: "pastDayJournalScrubDefaults.removeObject"),
         // The World map's device-only settings (World build, 2026-10-23).
         "fernlet.worldMap.uncoverAsYouGo": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
@@ -331,17 +345,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         "com.fernlet.savedRecipeMigrationCompleted": .kept(
             reason: "The saved-recipe legacy-migration latch. A wipe leaves the Core Data store empty by definition, so clearing this bit would re-run the JSON migration on the next launch and resurrect every recipe it describes."
         ),
-        // The companion-feelings settings (2026-09-24): the hunger-and-thirst cue switch and the
-        // companion's bedtime window. Preferences the person set, not records.
-        "fernlet.companionFeelings.appetiteCues": .kept(
-            reason: "The hunger-and-thirst cue switch: a preference, not a record. Clearing it would silently switch appetite cues back on for someone who turned them off, which is the one outcome the switch exists to prevent."
-        ),
-        "fernlet.companionFeelings.bedtimeMinute": .kept(
-            reason: "When the companion gets sleepy: a preference the person set, holding nothing about any day. Clearing it only hands someone who just deleted their data a companion on the wrong clock."
-        ),
-        "fernlet.companionFeelings.wakeMinute": .kept(
-            reason: "When the companion wakes: the bedtime preference's other half and the same class, with no content and nothing about any day."
-        ),
+        // The companion-feelings settings (2026-09-24) were kept until the owner's 2026-11-13 call:
+        // Delete everything "really means everything". They now sit with the cleared rows above.
         "fernlet.breathing.presetID": .kept(
             reason: "Breathing-timer configuration, not a record: which preset the user last chose. It holds nothing about the user's days, and clearing it only hands someone who just deleted their data a suddenly-unfamiliar app."
         ),
@@ -511,24 +516,6 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": .kept(
             reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — App colors' Paper row (design `b2-colors`) writes the custom dark background `fernletCustomDarkBackgroundHex` (Settings' Appearance pickers moved here), and Appearance's App colors row reads it for its swatch; kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
-        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .kept(
-            reason: "@AppStorage(CompanionEmotionPreferences.appetiteCuesKey) in Home's live companion — `fernlet.companionFeelings.appetiteCues`, the hunger-and-thirst cue switch, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
-        ),
-        "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .kept(
-            reason: "@AppStorage(CompanionEmotionPreferences.appetiteCuesKey) in the Companion feelings settings card — `fernlet.companionFeelings.appetiteCues`, the hunger-and-thirst cue switch, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
-        ),
-        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/HomeView.swift": .kept(
-            reason: "@AppStorage(CompanionEmotionPreferences.bedtimeMinuteKey) in Home's live companion — `fernlet.companionFeelings.bedtimeMinute`, the companion's bedtime, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
-        ),
-        "unresolved:CompanionEmotionPreferences.bedtimeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .kept(
-            reason: "@AppStorage(CompanionEmotionPreferences.bedtimeMinuteKey) in the Companion feelings settings card — `fernlet.companionFeelings.bedtimeMinute`, the companion's bedtime, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
-        ),
-        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/HomeView.swift": .kept(
-            reason: "@AppStorage(CompanionEmotionPreferences.wakeMinuteKey) in Home's live companion — `fernlet.companionFeelings.wakeMinute`, the companion's wake time, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
-        ),
-        "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": .kept(
-            reason: "@AppStorage(CompanionEmotionPreferences.wakeMinuteKey) in the Companion feelings settings card — `fernlet.companionFeelings.wakeMinute`, the companion's wake time, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
-        ),
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": .kept(
             reason: "@AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) — the kept `hasCompletedOnboarding` bit. The constant lives in OnboardingCoordinator.swift, so this binding's key cannot be resolved from here."
         ),
@@ -540,15 +527,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
 
         // ── Open gaps: not cleared, and nobody decided they should survive ──────────────────────
-        "fernlet.daySummary.lastRunKey": .openGap(
-            reason: "One yyyy-MM-dd key: the last day the once-per-day summary backfill ran. A date the app was used, surviving the deletion of every day it describes. Low severity, and open since the 2026-08-20 sweep."
-        ),
-        "pastDayJournalScrubVersion": .openGap(
-            reason: "The run-once version flag for the historical past-day journal scrub (WI-1). Keeping it is not load-bearing — post-wipe the scrub would simply run once over an empty store — so nothing has decided it should survive."
-        ),
-        "pastDayJournalScrubAttempts": .openGap(
-            reason: "The scrub's retry-budget counter: how many launches sealed at least one day badly. Usually absent (it is removed at every terminal state), but when present it is a trace of app use that the wipe does not reach."
-        ),
+        // None since 2026-11-13 (G3): the day-summary backfill's day key and the past-day journal
+        // scrub's latch and counter, the three found on 2026-08-20, are cleared rows above now.
         // `FernletMessages.lastRecipeID` (the iMessage composer's last-picked recipe) left this
         // table on 2026-09-23 by leaving the tree: it lived in the extension's OWN defaults domain,
         // which the funnel cannot open, so the gap was closed by deleting the write rather than by
