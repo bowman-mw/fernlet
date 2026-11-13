@@ -764,8 +764,11 @@ struct CompanionRefreshPipelineTests {
     /// previous value. The diff then sees no change, reports `unchanged`, and the run ends with
     /// `dayAdvanced` true and no reload in its trace, on the single most consequential refresh of
     /// the day. Reading the file either side of the roll is what lets the trace name that reload.
-    @Test func aDayRollThatRepublishedThroughTheStoreStillNamesItsReload() async {
-        let store = makeTestStore(date: Date().addingTimeInterval(-24 * 60 * 60))
+    @Test func aDayRollThatRepublishedThroughTheStoreStillNamesItsReload() async throws {
+        // Yesterday by the calendar, not now − 24 h: on a 23- or 25-hour DST day the fixed
+        // interval lands two days back or on today, and the roll this test needs never happens.
+        let yesterday = try #require(Calendar.current.date(byAdding: .day, value: -1, to: .now))
+        let store = makeTestStore(date: yesterday)
         // A WARM process: the scene ran, so the mirror exists and the store's own roll publishes.
         store.ensureWidgetSnapshotMirror().publish(store.currentWidgetSnapshot())
         #expect(store.ensureWidgetSnapshotMirror().currentSnapshot()?.dateKey == store.todayKey,
@@ -794,8 +797,11 @@ struct CompanionRefreshPipelineTests {
     /// `WidgetDayGate.snapshotReflectsDay` — the widget stops drawing the companion at all until
     /// the next foreground. A widget one tap behind beats a blank one, so the skip yields to a new
     /// day.
-    @Test func aPendingWidgetActionAcrossMidnightPublishesRatherThanBlankingTheWidget() async {
-        let store = makeTestStore(date: Date().addingTimeInterval(-24 * 60 * 60))
+    @Test func aPendingWidgetActionAcrossMidnightPublishesRatherThanBlankingTheWidget() async throws {
+        // Yesterday by the calendar, not now − 24 h: on a 23- or 25-hour DST day the fixed
+        // interval lands two days back or on today, and the roll this test needs never happens.
+        let yesterday = try #require(Calendar.current.date(byAdding: .day, value: -1, to: .now))
+        let store = makeTestStore(date: yesterday)
         let yesterdayKey = store.todayKey
         store.ensureWidgetSnapshotMirror().publish(store.currentWidgetSnapshot())
         let queued = PendingWidgetAction(
