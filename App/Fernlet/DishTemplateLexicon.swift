@@ -456,9 +456,9 @@ enum DishTemplateLexicon {
     /// out of `itemName` — not the lexicon's own spelling — so "Wendy's" surfaces as "Wendy's", not a
     /// sentence-cased "Wendys" (review finding F3, which also dissolves finding F8: `retailerTerms`
     /// stays undisplayed matching-input English, because what reaches the screen is the user's own
-    /// text, never the lexicon term). §37 Q7 is an open owner question about token-boundary matching
-    /// (over-matching a food word that collides with a chain name, like "chipotle" the pepper or
-    /// "chilis" the vegetable — review finding F2, pinned not fixed) — deliberately not touched here.
+    /// text, never the lexicon term). Chain matching is by whole words since roadmap G1 (F11,
+    /// 2026-11-13), and "chipotle" the pepper or "chilis" the vegetable no longer read as the chain
+    /// unless the text reads as the restaurant (``FoodBrandLexicon/matchedChainTokens(in:)``).
     static func unaccountedBrandChips(itemName: String, matchedKey: String) -> [String] {
         let itemNorm = FoodItemSearch.normalized(itemName)
         var terms: [String] = []

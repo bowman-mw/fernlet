@@ -249,12 +249,17 @@ struct CatalogHygieneTests {
 
     /// On the shipped catalog: "extra virgin olive oil" showed one product six times — every one of
     /// the 60 rows the scorer ranks for it is named exactly that — so the typed list is now that one
-    /// product, once, while the resolver still sees the run. "chocolate chips" keeps a single
+    /// product, once (followed by the next distinct products since roadmap G1 widened the collapse's
+    /// window), while the resolver still sees the run. "chocolate chips" keeps a single
     /// "Chocolate Chips, Chocolate" (the report's three-row tie, §2.5).
     @Test func shippedDuplicateRunsCollapse() throws {
         let catalog = try Self.shippedCatalog()
         let typed = catalog.results(for: "extra virgin olive oil", context: .userTyped)
-        #expect(typed.map(\.name) == ["Extra Virgin Olive Oil"])
+        // Roadmap G1: the collapse reads 180 ranked rows, so past the 60-row run the list fills with
+        // the next distinct products ("… Blend", "…, Basil") instead of stopping at one row.
+        #expect(typed.first?.name == "Extra Virgin Olive Oil")
+        #expect(typed.filter { $0.name == "Extra Virgin Olive Oil" }.count == 1)
+        #expect(Set(typed.map(\.name)).count == typed.count)
         #expect(typed.first.map(TypeaheadDuplicateCollapse.isPlausible) == true)
         let machine = catalog.results(for: "extra virgin olive oil", context: .machineGenerated)
         #expect(machine.count == 6 && machine.allSatisfy { $0.name == "Extra Virgin Olive Oil" },

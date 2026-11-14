@@ -99,9 +99,13 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// measured over the 160-query corpus, every unfinished prefix sits under 1% and every finished word
 /// over 60%. Off means every row is 0 and the standard order stands, unchanged.
 ///
-/// **What it cannot see.** A single-segment product name that puts its flavor LAST ("Cake Mix Extra
-/// Moist Lemon", "Apple Cinnamon") reads like a plain noun phrase whose head is the flavor, so it still
-/// counts; telling a flavor from a product noun there needs something other than the name. Nor can it
+/// **The branded-category gate.** A single-segment product name that puts its flavor LAST ("Cake Mix
+/// Extra Moist Lemon", "Apple Cinnamon") reads like a plain noun phrase whose head is the flavor; the
+/// name alone cannot tell. Since roadmap G1 (2026-11-13) the row's branded CATEGORY does: in a
+/// composite aisle (sweets, snacks, drinks, mixes, sauces, prepared meals) a product is the ingredient
+/// only when the category names that noun, the name says every typed modifier, or the name is
+/// nothing but the typed words (``categoryAdmits(_:headForms:modifierForms:)``). A product in an aisle
+/// outside that list (a spice jar, bagged produce) still reads by its name alone. Nor can the name
 /// tell a flavor-first name whose second segment happens to be a variant word ("Southwest Cilantro,
 /// Medium", a salsa) from the plain product.
 ///
@@ -234,6 +238,9 @@ public nonisolated enum FoodIngredientIdentity {
             guard heads.contains(where: { !FoodIngredientIdentity.forms(of: $0).isDisjoint(with: forms) }) else {
                 return 0
             }
+            // The branded-category gate (roadmap G1): a flavor-last product is not its flavor.
+            guard reference || FoodIngredientIdentity.isNamedByPerson(foodItem)
+                    || FoodIngredientIdentity.categoryAdmits(foodItem, headForms: forms, modifierForms: modifierForms) else { return 0 }
             guard reference, !brandQuery, !modifierForms.isEmpty,
                   FoodIngredientIdentity.namesKind(parsed, modifierForms: modifierForms) else {
                 return FoodIngredientIdentity.ingredientLevel
@@ -278,9 +285,9 @@ public nonisolated enum FoodIngredientIdentity {
     /// only. A product description (branded, restaurant, a person's own food) is free-form and is read
     /// as one product phrase instead (``productPhraseCounts(_:personNamed:)``).
     public static func followsReferenceNaming(of foodItem: FoodItem) -> Bool {
-        guard foodItem.source == .usda else { return false }
+        guard foodItem.source.isBundledReference else { return false }
         switch foodItem.dataType {
-        case .foundation, .survey, .srLegacy: return true
+        case .foundation, .survey, .srLegacy, .supplementalReference: return true
         case .branded, .restaurant: return false
         }
     }

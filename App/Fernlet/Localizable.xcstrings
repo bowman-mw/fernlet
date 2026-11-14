@@ -6417,6 +6417,22 @@
         }
       }
     },
+    "AI-estimated macros" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Macros estimados por la IA"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Macros estimados por la IA"
+          }
+        }
+      }
+    },
     "About Open Food Facts" : {
       "localizations" : {
         "es" : {
@@ -18055,6 +18071,22 @@
         }
       }
     },
+    "Enter the nutrition for the amount on this line." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce la información nutricional de la cantidad de esta línea."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingresa la información nutricional de la cantidad de esta línea."
+          }
+        }
+      }
+    },
     "Enter your current passcode again — Fernlet needs it to re-key your sealed notes." : {
       "localizations" : {
         "es" : {
@@ -23423,6 +23455,22 @@
         }
       }
     },
+    "Health Canada macros" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Macros de Health Canada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Macros de Health Canada"
+          }
+        }
+      }
+    },
     "Health access" : {
       "localizations" : {
         "es" : {
@@ -26221,6 +26269,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mantén esta pestaña abierta. Cuando alguien de esa sesión vuelva a estar cerca, se reconectarán automáticamente y lo que todavía esté en camino terminará de llegar."
+          }
+        }
+      }
+    },
+    "Keep typing to search." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue escribiendo para buscar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue escribiendo para buscar."
           }
         }
       }
@@ -33929,6 +33993,23 @@
         }
       }
     },
+    "Opens the licence in Safari" : {
+      "comment" : "VoiceOver hint on the Open Government Licence – Canada link in Acknowledgments: it leaves Fernlet for the Government of Canada's licence page in Safari.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la licencia en Safari"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la licencia en Safari"
+          }
+        }
+      }
+    },
     "Opens this year's flights." : {
       "comment" : "VoiceOver hint: a year's row on the passport's Flights page",
       "localizations" : {
@@ -36920,7 +37001,24 @@
         }
       }
     },
+    "Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). Most foods built into Fernlet come from USDA FoodData Central (SR Legacy, Foundation Foods, and the Food and Nutrient Database for Dietary Studies, FNDDS 2021–2023), which is in the public domain." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los productos que encuentras con una consulta de código de barras vienen de Open Food Facts, con la licencia Open Database License (ODbL). La mayoría de los alimentos incluidos en Fernlet vienen de USDA FoodData Central (SR Legacy, Foundation Foods y la Food and Nutrient Database for Dietary Studies, FNDDS 2021–2023), que es de dominio público."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los productos que encuentras con una consulta de código de barras vienen de Open Food Facts, con la licencia Open Database License (ODbL). La mayoría de los alimentos incluidos en Fernlet vienen de USDA FoodData Central (SR Legacy, Foundation Foods y la Food and Nutrient Database for Dietary Studies, FNDDS 2021–2023), que es de dominio público."
+          }
+        }
+      }
+    },
     "Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -44519,6 +44617,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Toques suaves al inhalar y uno al exhalar, en Primeros auxilios › Respiración lenta."
+          }
+        }
+      }
+    },
+    "Some built-in foods come from Health Canada's Canadian Nutrient File 2026: the foods that are Canadian rather than copies of USDA data. Fernlet rounds their protein, carbohydrate and fat to whole grams and keeps the other values as published." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos alimentos incluidos vienen del Canadian Nutrient File 2026 de Health Canada: los que son canadienses y no copias de datos del USDA. Fernlet redondea sus proteínas, hidratos de carbono y grasas a gramos enteros y conserva los demás valores tal como se publicaron."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos alimentos incluidos vienen del Canadian Nutrient File 2026 de Health Canada: los que son canadienses y no copias de datos del USDA. Fernlet redondea sus proteínas, hidratos de carbono y grasas a gramos enteros y conserva los demás valores tal como se publicaron."
           }
         }
       }

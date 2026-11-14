@@ -302,6 +302,18 @@ distinct priority because the comparators stop at the first differing source. A 
 the token reads the row as `.manual` and parks the token (`EnumDecodeCompat`), so a round trip
 through an older device loses nothing.
 
+Its fifth, `canadianNutrientFile` (2026-11-13), marks a bundled reference food from Health Canada's
+Canadian Nutrient File (FoodCatalog's `FoodCatalogCNF.sqlite` layer). Its
+``FoodItemSource/attributionLine`` is the Open Government Licence – Canada notice, carried by
+``Meal/attributionLines(sourceOfFood:)`` and the locked-macros card; its search rows read "Health
+Canada" through ``FoodItem/dataSourceLabel``. ``FoodItemSource/isBundledReference`` (USDA's rows and
+these) is what "a catalog row, never a person's food" now asks, and ``FoodItemSearch``'s comparators
+compare source PRIORITIES, so this source shares USDA's tier and a CNF row is ordered with USDA rows by
+data type and score. Older builds park the token like `openFoodFacts`. ``FoodDataType`` gained
+`supplementalReference` the same day: the search tier of every row of FoodCatalog's generic layers
+(FNDDS's survey foods beyond the base, and CNF), below the base's reference tiers and above branded data
+for a plain query (``FoodItemSearch/dataTypePriority(_:brandQuery:)``); older builds read it as `.srLegacy`.
+
 ``FoodItemSearch``'s comparator has one per-user input, research §26 fix 1.9's
 ``FoodSearchHistory``: the foods this person has logged, weighted by frequency and recency, read as
 its TOP ranking key. It defaults to ``FoodSearchHistory/empty`` on every entry point and
@@ -364,12 +376,20 @@ the typed surface). Everywhere else it stays false and the order is unchanged.
 "a&w root beer"). The tokenizer drops one-character words, so the catalog finds those rows by exact
 phrase instead.
 
+``FoodShortQuery`` (roadmap G1) answers the typed queries under the three-character floor: a few
+abbreviations ("pb", "oj", "eg") search the words they stand for, "v8" searches as typed, and anything
+else asks for more letters. ``FoodIngredientIdentity``'s branded-category gate (also G1) stops a
+flavor-last product in a composite aisle ("Cake Mix Extra Moist Lemon") counting as its flavor on the
+recipe surfaces, and ``FoodItem/isPastVerification(asOf:)`` keeps a saved web product from being
+reused past its `verificationPolicyDays`.
+
 ``FoodSearchVocabulary`` turns the catalog index's words (``FoodSearchTerm``) into an OFFERED
 spelling suggestion ("chobanni" → "chobani", "chickfila" → "chick fil a"), never a silent rewrite.
 
 - ``FoodItemSearch``
 - ``FoodBrandAgreement``
 - ``FoodBrandInitialism``
+- ``FoodShortQuery``
 - ``FoodSearchVocabulary``
 - ``FoodSearchTerm``
 - ``FoodSearchRanking``

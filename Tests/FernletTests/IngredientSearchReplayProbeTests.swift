@@ -134,7 +134,7 @@ struct IngredientSearchReplayProbeTests {
     @Test func replayRecipeIngredientCorpus() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["FERNLET_REPLAY"] != nil || env["TEST_RUNNER_FERNLET_REPLAY"] != nil else { return }
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount > 100_000, "the shipped catalog must be loaded")
         let outDirectory = env["FERNLET_REPLAY_OUT"] ?? env["TEST_RUNNER_FERNLET_REPLAY_OUT"]
         Self.emit(Self.run(label: "base", catalog: catalog), to: outDirectory)

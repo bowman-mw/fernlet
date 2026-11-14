@@ -132,7 +132,7 @@ enum FoodCatalogDatabaseBuilder {
             sqliteBindText(foodStmt, 13, item.dataType.rawValue)
             sqliteBindText(foodStmt, 14, item.servingDescription)
             sqlite3_bind_int(foodStmt, 15, Int32(item.verificationPolicyDays))
-            sqlite3_bind_int(foodStmt, 16, item.isFlagged ? 1 : 0)
+            sqlite3_bind_int(foodStmt, 16, 0)   // is_flagged: retired (roadmap G1), always 0
             sqliteBindText(foodStmt, 17, micros)
             sqliteBindText(foodStmt, 18, tags)
             sqliteBindText(foodStmt, 19, portions)

@@ -158,7 +158,7 @@ nonisolated struct ParsedIngredientLine: Equatable {
     /// 100 g reference amount, which is a basis for the numbers and not a portion anyone eats as
     /// "one", and not a survey dish's "1 cup".
     static func servingIsAnItem(_ row: FoodItem) -> Bool {
-        guard row.source == .usda, row.dataType != .branded, row.dataType != .restaurant else { return true }
+        guard row.source.isBundledReference, row.dataType != .branded, row.dataType != .restaurant else { return true }
         guard let unit = RecipeUnit.normalized(row.servingUnit) else { return true }
         return unit.dimension != .mass && unit.dimension != .volume
     }

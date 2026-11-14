@@ -35,9 +35,43 @@ public nonisolated enum FoodBrandLexicon {
         chains.first { $0.contains(" ") && $0.replacingOccurrences(of: " ", with: "") == word }
     }
 
+    /// Whether `query` names a restaurant chain as WORDS (``namedChains(in:)``), which flips the
+    /// data-type priority to restaurant/branded first.
+    ///
+    /// Roadmap G1, F11 (2026-11-13): this used to be a raw substring test, so a chain spelled inside
+    /// another word or a food word that is also a chain's name flipped the order — "chipotle chicken"
+    /// (the pepper) and "green chilis" (the vegetable) came back branded-first. It now shares
+    /// ``matchedChainTokens(in:)``'s word-boundary, possessive-aware reading.
     nonisolated public static func queryContainsBrandToken(_ query: String) -> Bool {
-        let n = FoodItemSearch.normalized(query)
-        return chains.contains { n.contains($0) }
+        !namedChains(in: query).isEmpty
+    }
+
+    /// Chain names that are also ordinary food words — "chipotle" the pepper, "chilis" the plural of
+    /// chili — each with the menu words that make a following mention the restaurant ("chipotle
+    /// burrito bowl"). Such a chain reads as the restaurant only when typed as a possessive ("Chili's"),
+    /// typed alone, or followed by one of its menu words ("chilis burger"); each chain has its own, so
+    /// "green chilis quesadilla" stays a dish of chilis. FROZEN ENGLISH MATCHING INPUT.
+    nonisolated private static let foodWordChains: [String: Set<String>] = [
+        "chipotle": ["burrito", "burritos", "bowl", "bowls", "quesadilla", "quesadillas", "menu"],
+        "chilis": ["burger", "burgers", "fajitas", "menu"]
+    ]
+
+    /// Every chain `text` names as whole words, sorted: a chain's words must stand as words in the
+    /// normalized text or in its possessive-collapsed form ("chili s" → "chilis"); a food-word chain
+    /// also needs the restaurant reading described at `foodWordChains`. R2: one pass over `chains`.
+    nonisolated static func namedChains(in text: String) -> [String] {
+        let plainWords = FoodItemSearch.normalized(apostropheNormalized(text)).split(separator: " ").map(String.init)
+        let collapsedWords = possessiveCollapsed(plainWords.joined(separator: " ")).split(separator: " ").map(String.init)
+        let plain = " " + plainWords.joined(separator: " ") + " "
+        let collapsed = " " + collapsedWords.joined(separator: " ") + " "
+        return chains.filter { chain in
+            let typedPlain = plain.contains(" \(chain) ")
+            guard typedPlain || collapsed.contains(" \(chain) ") else { return false }
+            guard let menuWords = foodWordChains[chain] else { return true }
+            guard typedPlain else { return true }   // typed as a possessive: the restaurant
+            guard let at = collapsedWords.firstIndex(of: chain) else { return false }
+            return collapsedWords.count == 1 || collapsedWords[(at + 1)...].contains(where: menuWords.contains)
+        }.sorted()
     }
 
     /// The token-level twin of ``queryContainsBrandToken``: every chain name (not just whether one
@@ -56,9 +90,10 @@ public nonisolated enum FoodBrandLexicon {
     /// be silently missed while the incidentally-already-collapsed spelling worked. This also checks a
     /// possessive-collapsed form of `text` (a lone "s" token folded back onto the word before it —
     /// "mcdonald" + "s" → "mcdonalds") in addition to the plain normalized form.
-    /// ``queryContainsBrandToken`` is deliberately left BYTE-UNCHANGED: its token-boundary semantics
-    /// are `Docs/Food-Search-And-Community-Database-Research-2026-08-22.md` §37 Q7's open owner
-    /// question, and widening the wrong function would prejudge that decision.
+    /// ``queryContainsBrandToken`` now reads the same way (roadmap G1, F11, 2026-11-13: §37 Q7's
+    /// token-boundary question, answered as "words, not substrings"); both go through
+    /// ``namedChains(in:)``, which also keeps "chipotle" and "chilis" as food words unless the text
+    /// reads as the restaurant.
     ///
     /// **Widened again, same review, the Lm-apostrophe finding.** U+2019/U+2018 (the curly "smart
     /// quote" apostrophes iOS text fields insert by default) already work with NO further change here:
@@ -75,9 +110,7 @@ public nonisolated enum FoodBrandLexicon {
     /// separator + collapse path U+2019/U+2018/`'` already use — `FoodItemSearch.normalized` itself is
     /// still not touched.
     nonisolated public static func matchedChainTokens(in text: String) -> [String] {
-        let n = FoodItemSearch.normalized(apostropheNormalized(text))
-        let possessive = possessiveCollapsed(n)
-        return chains.filter { n.contains($0) || possessive.contains($0) }.sorted()
+        namedChains(in: text)
     }
 
     /// Replaces Unicode letter-class (Lm) apostrophe look-alikes with the plain ASCII apostrophe —
@@ -206,7 +239,7 @@ public nonisolated enum FoodItemSearch {
                     foodItem: foodItem,
                     normalizedName: name,
                     nameTokens: Set(name.split(separator: " ").map(String.init)),
-                    searchableTokens: FoodItemSearch.tokens(in: searchable)
+                    searchableTokens: FoodItemSearch.indexTokens(in: searchable)
                 )
             }
         }
@@ -266,16 +299,14 @@ public nonisolated enum FoodItemSearch {
                     FoodItemSearch.ranksAhead(first, second, isBrandQuery: isBrandQuery)
                 }
                 .map { (foodItem: $0.foodItem, score: $0.score) }
-            let window = ranked.prefix(max(limit, FoodItemSearch.demotionWindow))
-            let ordered = PreparedDishHeuristic.demotingDishes(scored: Array(window), forQuery: query.normalized)
-            return Array(ordered.prefix(limit))
+            return FoodItemSearch.demotingWindow(of: ranked, limit: limit, query: query.normalized)
         }
 
         public func exactNameMatch(for normalizedName: String) -> FoodItem? {
             entries
                 .filter { $0.normalizedName == normalizedName }
                 .sorted {
-                    if $0.foodItem.source != $1.foodItem.source {
+                    if FoodItemSearch.sourcePriority($0.foodItem.source) != FoodItemSearch.sourcePriority($1.foodItem.source) {
                         return FoodItemSearch.sourcePriority($0.foodItem.source) > FoodItemSearch.sourcePriority($1.foodItem.source)
                     }
                     return $0.foodItem.name.localizedStandardCompare($1.foodItem.name) == .orderedAscending
@@ -463,7 +494,7 @@ public nonisolated enum FoodItemSearch {
     /// ``results(for:in:limit:stripsStopwords:)``.
     private static func searchQuery(_ query: String, stripsStopwords: Bool) -> SearchQuery? {
         let normalizedQuery = normalized(query)
-        guard normalizedQuery.count >= minimumQueryLength else { return nil }
+        guard normalizedQuery.count >= minimumQueryLength || FoodShortQuery.isShortWord(normalizedQuery) else { return nil }
         let rawTokens = tokens(in: query)
         let searchTokens = stripsStopwords ? stopWordFiltered(rawTokens) : rawTokens
         guard !searchTokens.isEmpty else { return nil }
@@ -562,10 +593,37 @@ public nonisolated enum FoodItemSearch {
         let ranked = markingIdentity(branded, query: prepared, ranking: ranking, isBrandQuery: isBrandQuery)
         .sorted { ranksAhead($0, $1, isBrandQuery: isBrandQuery) }
         .map { (foodItem: $0.foodItem, score: $0.score) }
-        let window = ranked.prefix(max(limit, demotionWindow))
-        return PreparedDishHeuristic.demotingDishes(
-            scored: Array(window), forQuery: prepared.normalized
-        ).prefix(limit).map(\.foodItem)
+        return demotingWindow(of: ranked, limit: limit, query: prepared.normalized).map(\.foodItem)
+    }
+
+    /// The first `limit` ranked rows with fix 1.7a's dish demotion applied to the first
+    /// ``demotionWindow`` of them. Rows past the window follow in ranked order, untouched: a caller
+    /// asking for more than the window (the typed surface's duplicate collapse, roadmap G1, which reads
+    /// past 60 rows when one product fills them, as 53 "Candy Corn" rows did) gets the same top 60 as
+    /// every other caller. R2: bounded by `limit`.
+    ///
+    /// The window counts ``demotionWindow`` rows that are NOT generic-layer rows
+    /// (`.supplementalReference`, 2026-11-13), and carries every layer row ranked among them: the
+    /// layers rank above branded data, so counted they pushed the branded rows that set the window's
+    /// best ingredient score out of it, and "salmon" stopped sinking "Salmon nuggets, breaded".
+    fileprivate static func demotingWindow(
+        of ranked: [(foodItem: FoodItem, score: Int)], limit: Int, query: String
+    ) -> [(foodItem: FoodItem, score: Int)] {
+        let window = Array(ranked.prefix(windowLength(of: ranked)))
+        let demoted = PreparedDishHeuristic.demotingDishes(scored: window, forQuery: query)
+        let rest = ranked.dropFirst(window.count).prefix(max(0, limit - window.count))
+        return Array((demoted + rest).prefix(limit))
+    }
+
+    /// How many leading rows of `ranked` hold ``demotionWindow`` non-layer rows (see
+    /// `demotingWindow`). R2: one bounded pass over `ranked`.
+    private static func windowLength(of ranked: [(foodItem: FoodItem, score: Int)]) -> Int {
+        var counted = 0
+        for (offset, row) in ranked.enumerated() {
+            if row.foodItem.dataType != .supplementalReference { counted += 1 }
+            if counted == demotionWindow { return offset + 1 }
+        }
+        return ranked.count
     }
 
     /// Exact, bounded queries the source may run after the full AND query returns zero. A one-word
@@ -686,15 +744,31 @@ public nonisolated enum FoodItemSearch {
         // whole query and the product alone — so their scores cannot order them. Below history, so
         // the brand's product this person logs still comes first.
         if first.viaBrandField != second.viaBrandField { return second.viaBrandField }
-        if first.foodItem.source != second.foodItem.source {
+        if sourcePriority(first.foodItem.source) != sourcePriority(second.foodItem.source) {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
         }
+        if let baseFirst = nonLayerLeadsLayer(first, second) { return baseFirst }
         if first.identity != second.identity { return first.identity > second.identity }
         let firstType = dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
         let secondType = dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
         if firstType != secondType { return firstType > secondType }
         if first.score != second.score { return first.score > second.score }
         return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
+    }
+
+    /// Among rows that ARE the typed ingredient (the identity order of the recipe surfaces), every
+    /// base-catalog row leads a generic-layer row (`.supplementalReference`, 2026-11-13) whatever their
+    /// identity levels: there the layers fill in where the base and branded data have no answer, never
+    /// reorder the answers they give. Measured on the ingredient corpus: with the layer rows competing on
+    /// identity, "salmon" led with "Salmon nuggets", and "mayonnaise" filled its six with layer
+    /// variants (light, fat free) and lost its plain row. Layer rows stay one block below, so the order
+    /// is still total. `nil` when the rule does not decide the pair.
+    private static func nonLayerLeadsLayer(_ first: RankedRow, _ second: RankedRow) -> Bool? {
+        guard first.identity > 0, second.identity > 0 else { return nil }
+        let firstLayer = first.foodItem.dataType == .supplementalReference
+        let secondLayer = second.foodItem.dataType == .supplementalReference
+        guard firstLayer != secondLayer else { return nil }
+        return secondLayer
     }
 
     /// Half of the search path's presentation floor — research §26 fix 1.8: **does this row's own
@@ -806,7 +880,19 @@ public nonisolated enum FoodItemSearch {
         }
         score += preparationBias(queryTokens: query.tokens, normalizedQuery: query.effective, candidateName: entry.foodItem.name)
         score += formSpecificityBias(queryTokens: query.tokens, candidateName: entry.foodItem.name)
+        score += percentWithTailBias(queryTokens: query.tokens, name: name)
         return score
+    }
+
+    /// Roadmap G1, lone digit: a typed percent ("2% milk") describes the food itself, so a row that says
+    /// it only after "with" — "Puddings, rice, dry mix, prepared with 2% milk" — is a dish MADE with that
+    /// milk and sinks below the milk. Inert for every query without a single-digit word (a digit
+    /// survives tokenizing only with a percent sign, ``tokens(in:)``), so no other ranking moves.
+    private static func percentWithTailBias(queryTokens: [String], name: String) -> Int {
+        let digits = queryTokens.filter { $0.count == 1 && $0.first?.isNumber == true }
+        guard !digits.isEmpty, let with = name.range(of: " with ") else { return 0 }
+        let before = Set(name[..<with.lowerBound].split(separator: " ").map(String.init))
+        return digits.allSatisfy(before.contains) ? 0 : -300
     }
 
     /// The whole-phrase half of the score — exact / prefix / substring name hits, less the length
@@ -917,24 +1003,31 @@ public nonisolated enum FoodItemSearch {
     nonisolated private static let cannedImpliedTokens: Set<String>  = ["canned", "tinned"]
     nonisolated private static let driedImpliedTokens: Set<String>   = ["dried", "jerky", "dehydrated"]
 
-    /// Step 2's source key. Every source carries a DISTINCT priority on purpose: the comparators
-    /// (`ranksAhead`, `Index.exactNameMatch`) return as soon as two rows' sources differ, so two
-    /// sources sharing a number would compare equal there and skip the data-type and score keys —
-    /// an inconsistent sort order, not merely a tie.
+    /// Step 2's source key. The comparators (`ranksAhead`, `Index.exactNameMatch`) compare these
+    /// PRIORITIES, not the sources themselves, so two sources sharing a number fall through to the
+    /// data-type and score keys together — a consistent order.
     ///
     /// `.openFoodFacts` sits just below `.manual`: a barcode product the user looked up, reviewed and
     /// chose to keep has the standing of the products they remember by hand (which is what the same
     /// screen saves without the lookup), minus the authorship — so it outranks reference and
     /// AI-estimated lookalikes, and never the user's own entry.
+    ///
+    /// `.canadianNutrientFile` SHARES `.usda`'s number (2026-11-13): both are bundled reference data, so
+    /// a Canadian Nutrient File row and a USDA row are ordered by data type and score like two USDA
+    /// rows — generic before branded — rather than one database always above the other.
     private static func sourcePriority(_ source: FoodItemSource) -> Int {
         switch source {
         case .manual: 4
         case .openFoodFacts: 3
-        case .usda: 2
+        case .usda, .canadianNutrientFile: 2
         case .aiResolved: 1
         }
     }
 
+    /// The data-type key. `.supplementalReference` (the bundled generic layers, 2026-11-13) sits below
+    /// every base reference tier and above branded data for a plain query, and last for a brand query:
+    /// measured on the corpus suites, ranking the FNDDS layer's rows as `.survey` handed 238 pinned
+    /// answers from SR Legacy ingredients to survey dishes ("salt" showed salted nuts).
     public static func dataTypePriority(_ dataType: FoodDataType, brandQuery: Bool) -> Int {
         if brandQuery {
             switch dataType {
@@ -943,24 +1036,90 @@ public nonisolated enum FoodItemSearch {
             case .foundation: return 3
             case .survey: return 2
             case .srLegacy: return 1
+            case .supplementalReference: return 0
             }
         } else {
             switch dataType {
-            case .foundation: return 5
-            case .survey: return 4
-            case .srLegacy: return 3
+            case .foundation: return 6
+            case .survey: return 5
+            case .srLegacy: return 4
+            case .supplementalReference: return 3
             case .branded: return 2
             case .restaurant: return 1
             }
         }
     }
 
-    private static func tokens(in text: String) -> [String] {
+    /// A row's indexed words: every normalized word of two or more characters, and every single
+    /// DIGIT, so a typed "2%" can be held against "2% milkfat" (roadmap G1, lone digit). A row's own
+    /// words can only widen what it matches; which words a QUERY demands is ``tokens(in:)``.
+    private static func indexTokens(in text: String) -> [String] {
         normalized(text)
             .split(separator: " ")
             .map(String.init)
-            .filter { $0.count >= 2 }
+            .filter { $0.count >= 2 || $0.first?.isNumber == true }
     }
+
+    /// A query's words: normalized words of two or more characters, plus two readings of a lone digit
+    /// that used to vanish (roadmap G1, 2026-11-13). A digit typed with a percent sign ("2% milk",
+    /// "1 % milk") is kept as its own word, the way the catalog writes "2% milkfat". A digit followed by
+    /// a one- or two-letter word that is not a unit ("7 up") joins it, the way the catalog writes
+    /// "7UP". Every other lone digit is a count ("2 eggs") and is dropped, as before.
+    /// R2: one bounded pass over the words.
+    private static func tokens(in text: String) -> [String] {
+        let words = normalized(text).split(separator: " ").map(String.init)
+        let percent = percentDigits(in: text)
+        var kept: [String] = []
+        var index = 0
+        while index < words.count {
+            let word = words[index]
+            let isDigit = word.count == 1 && word.first?.isNumber == true
+            if isDigit, index + 1 < words.count, joinsDigit(words[index + 1]) {
+                kept.append(word + words[index + 1])
+                index += 2
+                continue
+            }
+            if word.count >= 2 || (isDigit && percent.contains(word)) { kept.append(word) }
+            index += 1
+        }
+        return kept
+    }
+
+    /// Unit abbreviations a count digit precedes ("2 oz"), which must never join it.
+    /// FROZEN ENGLISH MATCHING INPUT.
+    nonisolated private static let shortUnitWords: Set<String> = [
+        "g", "kg", "mg", "oz", "lb", "ml", "l", "dl", "cl", "tb", "ts", "pc", "pk", "ct", "c", "t"
+    ]
+
+    /// Whether `next` is a short brand word that joins the digit before it ("7 up" → "7up").
+    private static func joinsDigit(_ next: String) -> Bool {
+        next.count <= 2 && next.allSatisfy(\.isLetter) && !shortUnitWords.contains(next)
+            && !functionStopWords.contains(next)
+    }
+
+    /// The single digits `text` writes with a percent sign ("2%", "2 %"). R2: one pass over `text`.
+    private static func percentDigits(in text: String) -> Set<String> {
+        var digits: Set<String> = []
+        var lastDigit: Character?
+        var beforeDigit: Character = " "
+        var previous: Character = " "
+        for character in text.prefix(maxPercentScanCharacters) {
+            if character == "%", let digit = lastDigit, !beforeDigit.isNumber, beforeDigit != "." {
+                digits.insert(String(digit))
+            }
+            if character.isNumber {
+                beforeDigit = previous
+                lastDigit = character
+            } else if character != " " {
+                lastDigit = nil
+            }
+            previous = character
+        }
+        return digits
+    }
+
+    /// How much of a query ``percentDigits(in:)`` reads: far longer than any typed food.
+    nonisolated private static let maxPercentScanCharacters = 512
 
     /// The query tokens used by the scorer's hard match gate (normalized, length ≥ 2, stopwords
     /// dropped unless `stripsStopwords` is false). Exposed so the SQLite candidate source can build

@@ -19,7 +19,7 @@ hashes, and the FDC data-type/curated-GTIN eligibility rules. The raw archives s
 | SR Legacy 2018-04 JSON | Prior-release validation fixture | Validate the 7,793 canonical SR identities/descriptions. Never co-ingest it. |
 | Existing `BrandedCuratedFoodItems.json` | Bounded branded base tier | Include the existing deterministic 50,000-row subset. Do not import the roughly two million current FDC Branded rows. CC0/public domain. |
 | CoFID 2021 | Parallel national composition source | Include under OGL v3 with the manifest attribution. Preserve source text and sheet basis. |
-| Canadian Nutrient File 2026 | Excluded | CNF's no-modification instruction still needs an exact-value adapter policy or written clearance. Do not ingest without that decision. |
+| Canadian Nutrient File 2026 | Excluded from this pipeline | The owner approved CNF as a runtime source on 2026-11-13 (Open Government Licence – Canada, with its attribution). It ships as its own layer, `FoodCatalogCNF.sqlite`, built by `generic_layers.py` (see FoodDataSource/FoodCatalogLayerManifest.json), not by this preservation pipeline. |
 | NEVO 2025 v9.0 | Excluded | Supplied terms do not grant transformed redistribution. Do not ingest without new written permission. |
 
 The curated branded base remains compatible with Fernlet's existing optional branded ODR tier, but

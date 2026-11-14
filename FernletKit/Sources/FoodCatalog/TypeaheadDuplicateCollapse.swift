@@ -26,10 +26,13 @@ import FernletDomainModel
 ///
 /// Bounded: it reads at most ``window`` rows plus the caller's `limit`, in one pass.
 nonisolated enum TypeaheadDuplicateCollapse {
-    /// How many ranked rows a typed search reads before collapsing — `FoodItemSearch.demotionWindow`
-    /// (60, internal to its module): asking the scorer for up to that many rows changes no order,
-    /// because its dish demotion already reads that window whatever the limit.
-    static let window = 60
+    /// How many ranked rows a typed search reads before collapsing: three times
+    /// `FoodItemSearch.demotionWindow` (60, internal to its module). Roadmap G1: at 60, a product the
+    /// catalog lists dozens of times under one name ("Candy Corn", 53 rows) filled the whole window and
+    /// collapsed to one row, so "candy corn" showed three rows instead of six. Asking the scorer for
+    /// more changes no order: its dish demotion still reads only the first 60, and the rows past them
+    /// follow in ranked order.
+    static let window = 180
 
     /// The limit to ask the scorer for, so collapsing still leaves `limit` rows when it can.
     static func fetchLimit(for limit: Int) -> Int {

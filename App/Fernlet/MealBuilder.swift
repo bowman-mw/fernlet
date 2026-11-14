@@ -166,7 +166,7 @@ struct MealBuilder {
         let recipeFoodItems = recipe.ingredients.compactMap { ingredient in
             foodItems.first(where: { $0.id == ingredient.foodItemId })
         }
-        if recipeFoodItems.contains(where: { $0.source == .usda }) {
+        if recipeFoodItems.contains(where: { $0.source.isBundledReference }) {
             return MealLogSource.usdaRecipe
         }
         if recipeFoodItems.contains(where: { $0.micronutrients.populatedFieldCount >= 5 }) {

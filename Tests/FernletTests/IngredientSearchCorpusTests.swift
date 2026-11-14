@@ -263,8 +263,12 @@ struct IngredientSearchCorpusTests {
     /// without that, "semi sweet chocolate chips" would have read 6 → 5 for a row that is plainly one.
     /// 454 with the 2026-11-09 typed-search fixes (PR #139), whose plural stems changed the shipped
     /// candidate set for "tomatoes": canned tomatoes 6 → 5, its #1 unchanged. #139 merged without
-    /// re-taking this pin; re-taken here.
-    static let plainRowsInSixBaseline = 454
+    /// re-taking this pin; re-taken here. 456 with roadmap G1's branded-category gate (2026-11-13):
+    /// honey 3 → 4 and marshmallows 4 → 5, as flavor-last products left the six. 463 with the rest of
+    /// G1: extra virgin olive oil 1 → 4 (the typed collapse reads 180 rows, so the run of 60 identical
+    /// rows no longer fills the six), and lemon 1 → 2, lime 1 → 2, parsley 2 → 3, feta 3 → 4 as FNDDS /
+    /// CNF layer rows filled places flavor-last products had held.
+    static let plainRowsInSixBaseline = 463
 
     /// The description `BundledRowCorrection.rebasingBrandedNutrients` gives a branded label serving
     /// it keeps as the row's count portion — a serving, not an item.
@@ -525,7 +529,7 @@ struct IngredientSearchCorpusTests {
         .init("egg whites", 1, 1, plain: 4),
         .init("yeast", 1, 1, plain: 3),
         .init("cornstarch", 1, 1, plain: 2),
-        .init("honey", 1, 1, plain: 3),
+        .init("honey", 1, 1, plain: 4),   // G1 branded-category gate: a flavor-last row left the six
         .init("maple syrup", 1, 1, plain: 3),
         .init("molasses", 1, 1, plain: 1),
         .init("oats", 1, 1, plain: 4),
@@ -546,21 +550,21 @@ struct IngredientSearchCorpusTests {
         .init("oat milk", 1, 1, plain: 3),
         .init("sweetened condensed milk", 1, 1, plain: 2),
         .init("graham crackers", 1, 1, plain: 1, each: false, count: false),
-        .init("marshmallows", 1, 1, plain: 4, each: false, count: true),
+        .init("marshmallows", 1, 1, plain: 5, each: false, count: true),   // G1 gate
         .init("peanut butter", 1, 1, plain: 4),
         .init("almond flour", 1, 1, plain: 6),
         .init("coconut oil", 1, 1, plain: 2),
         .init("vegetable oil", 1, 1, plain: 4),
         .init("canola oil", 1, 1, plain: 2),
         .init("olive oil", 1, 1, plain: 2),
-        .init("extra virgin olive oil", 1, 1, plain: 1),
+        .init("extra virgin olive oil", 1, 1, plain: 4),
         .init("banana", 1, 1, plain: 4, each: true, count: true),
         .init("bananas", 1, 1, plain: 3, each: true, count: true),
         .init("apple", 4, 4, plain: 3, each: false, count: true),
         .init("apples", 4, 4, plain: 3, each: false, count: true),
-        .init("lemon", 1, 1, plain: 1, each: true, count: true),
+        .init("lemon", 1, 1, plain: 2, each: true, count: true),
         .init("lemon juice", 1, 1, plain: 1),
-        .init("lime", 1, 1, plain: 1, each: true, count: true),
+        .init("lime", 1, 1, plain: 2, each: true, count: true),
         .init("orange", 1, 1, plain: 6, each: true, count: true),
         .init("strawberries", 1, 1, plain: 2),
         .init("blueberries", 1, 1, plain: 1),
@@ -595,7 +599,7 @@ struct IngredientSearchCorpusTests {
         .init("peas", 1, 1, plain: 1),
         .init("green beans", 1, 1, plain: 4),
         .init("cilantro", 1, 1, plain: 1),
-        .init("parsley", 1, 1, plain: 2),
+        .init("parsley", 1, 1, plain: 3),
         .init("basil", 1, 1, plain: 2),
         .init("green onions", 1, 1, plain: 2),
         .init("scallions", 1, 1, plain: 1),
@@ -621,7 +625,7 @@ struct IngredientSearchCorpusTests {
         .init("cheddar cheese", 1, 1, plain: 3),
         .init("mozzarella", 1, 1, plain: 6),
         .init("parmesan", 1, 1, plain: 6),
-        .init("feta", 1, 1, plain: 3),
+        .init("feta", 1, 1, plain: 4),
         .init("greek yogurt", 1, 1, plain: 2),
         .init("yogurt", 1, 1, plain: 3),
         .init("soy sauce", 1, 1, plain: 4),
@@ -717,7 +721,7 @@ struct IngredientSearchCorpusTests {
 
     /// THE replay: all 160 queries against their pins, every mismatch named in one message.
     @Test func corpusReplaysToThePinnedRanks() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount >= FoodSearchCorpusTests.shippedRowCount,
                      "the shipped catalog must be loaded — this suite must never pass vacuously")
         let matchers = try Self.judges.map(IngredientCorpusMatcher.init)
@@ -742,7 +746,7 @@ struct IngredientSearchCorpusTests {
     /// compound rows it must lead with, the flavored products it must no longer count as the ingredient,
     /// and the variant-named plain products it must count again.
     @Test func theSixShowTheNamedRows() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount >= FoodSearchCorpusTests.shippedRowCount,
                      "the shipped catalog must be loaded — this suite must never pass vacuously")
         for pin in Self.sixPins {

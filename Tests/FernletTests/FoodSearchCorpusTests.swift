@@ -302,8 +302,17 @@ struct FoodSearchCorpusTests {
     /// teas — ingredient-search round F6).
     static let supplementRowCount = 26
 
-    /// What `FoodCatalog.bundled().bundledCount` reports: the file's rows plus its supplement's.
-    static let loadedRowCount = shippedRowCount + supplementRowCount
+    /// The file's rows plus its supplement's: the catalog before the generic layers
+    /// (`FoodCatalog.bundled(includesLayers: false)`).
+    static let baseLoadedRowCount = shippedRowCount + supplementRowCount
+
+    /// Rows of the generic layers `FoodCatalog.bundled()` unions in (2026-11-13): FNDDS's survey foods
+    /// the base lacks and the Canadian Nutrient File's (``BundledFoodLayersTests``).
+    static let layerRowCount = BundledFoodLayersTests.surveyRowCount + BundledFoodLayersTests.canadianNutrientFileRowCount
+
+    /// What `FoodCatalog.probeBundled().bundledCount` reports: the base and supplement, plus the layers
+    /// unless the run measures the catalog without them (`FERNLET_LAYERS_OFF`).
+    static let loadedRowCount = baseLoadedRowCount + (FoodCatalog.probeLayersOff ? 0 : layerRowCount)
 
     // MARK: - The 57-query corpus
 
@@ -458,7 +467,7 @@ struct FoodSearchCorpusTests {
     /// before it shows up as a reordering: a fix that moves `Calzone, with cheese, meatless` from 58
     /// to something else has changed the comparator even on queries whose visible answer is unmoved.
     @Test func corpusReplaysToThePinnedBaseline() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount, "shipped catalog must be loaded — this suite must never pass vacuously")
         for corpusCase in Self.corpus {
             let ranked = catalog.scoredResults(for: corpusCase.query, limit: 1)
@@ -511,7 +520,7 @@ struct FoodSearchCorpusTests {
         #expect(Set(Self.corpus.map { FoodItemSearch.normalized($0.query) }).count == Self.corpus.count,
                 "corpus queries must be unique after normalization")
 
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         // The corpus's zero-result verdict pins the normal prefix-AND gate and its confidence-safe
         // scorer. A typed discovery fallback is intentionally outside that baseline.
@@ -641,8 +650,15 @@ struct FoodSearchCorpusTests {
     @Test func trailingSFlipsTheQueryIntoRestaurantMode() throws {
         #expect(FoodBrandLexicon.queryContainsBrandToken("chilis"))
         #expect(!FoodBrandLexicon.queryContainsBrandToken("chili"))
-        // The converse §9(b) failure: the apostrophe form never reaches the lexicon entry at all.
-        #expect(!FoodBrandLexicon.queryContainsBrandToken("mcdonald's fries"))
+        // The converse §9(b) failure, closed by roadmap G1 F11: the apostrophe form now reaches the
+        // lexicon entry through the possessive collapse.
+        #expect(FoodBrandLexicon.queryContainsBrandToken("mcdonald's fries"))
+        // F11: the words of a chain, never a substring, and a food word stays a food word.
+        #expect(!FoodBrandLexicon.queryContainsBrandToken("green chilis"))
+        #expect(!FoodBrandLexicon.queryContainsBrandToken("chipotle chicken"))
+        #expect(FoodBrandLexicon.queryContainsBrandToken("chipotle burrito bowl"))
+        #expect(FoodBrandLexicon.queryContainsBrandToken("chili's fajitas"))
+        #expect(!FoodBrandLexicon.queryContainsBrandToken("supersonic shake"))
 
         let chili = try Self.rankedRows(for: "chili")
         let chilis = try Self.rankedRows(for: "chilis")
@@ -679,7 +695,7 @@ struct FoodSearchCorpusTests {
 
         // The floor stated as an invariant over the whole corpus rather than as a row list: every
         // presented row carries the query in its NAME **and** scores at or above the floor.
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         for corpusCase in Self.corpus {
             for row in catalog.scoredResults(for: corpusCase.query, limit: 6) {
@@ -768,7 +784,7 @@ struct FoodSearchCorpusTests {
 
     /// Replays the review battery.
     @Test func reviewBatteryTopAnswersAreUnchanged() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         for entry in Self.reviewBattery {
             let top = catalog.results(for: entry.query, limit: 1, context: .userTyped).first?.name
@@ -783,7 +799,7 @@ struct FoodSearchCorpusTests {
     /// assurance that every accepted row is food-correct: the remaining category and form defects
     /// require later ranking work rather than an unmeasured lower score floor.
     @Test func confidentBindPopulationMeetsTheColdFalseConfidentCeiling() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         let confident = Self.corpus.filter { corpusCase in
             (catalog.scoredResults(for: corpusCase.query, limit: 1).first?.score ?? 0) >= FoodItemSearch.confidentBindScore
@@ -888,7 +904,7 @@ struct FoodSearchCorpusTests {
     /// guard is that a dish may only sink beneath ingredients that match AT LEAST AS WELL, which the
     /// two rescued rows clear by a wide margin and the two demoted rows do not.
     @Test func dishDemotionNeverSinksABetterMatch() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
 
         // Rescued: the query reads as an ingredient, the top row IS a dish, and it stays anyway.
@@ -997,7 +1013,7 @@ struct FoodSearchCorpusTests {
 
     /// Pins the resolver pool's size and top candidate for every bank entry.
     @Test func resolverCandidateSurfaceIsUnchanged() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         for resolverCase in Self.resolverBank {
             let pool = catalog.candidates(for: resolverCase.query, limit: 18)
@@ -1022,7 +1038,7 @@ struct FoodSearchCorpusTests {
     /// `searchPhrases` searches sub-phrases a single AND gate never forms — which is the resolver's
     /// entire purpose, and why fix 1.6 is confined to the typed-query surface.
     @Test func searchAndResolverSurfacesStillDisagree() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         let searchIsEmptyButResolverIsNot = ["costco cheese pizza slice"]
         for query in searchIsEmptyButResolverIsNot {
@@ -1060,7 +1076,10 @@ struct FoodSearchCorpusTests {
         // misfiled "Apple & Cheese Tray", which left the generic tier for both. 16 since the 2026-10-29
         // brand fixes: typed `quest protein bar` now answers with Quest's own bars through the brand-field
         // route, while the resolver — deliberately untouched — still pools "Formulated Bar, SOUTH BEACH".
-        #expect(stillDiverging.count == 16, "divergences: \(stillDiverging.map(\.query))")
+        // 18 since the generic food layers (2026-11-13): they answer typed searches only, never the
+        // resolver's pool, so two corpus queries now get a layer row from search while the resolver
+        // keeps its base answer — the intended split (an automatic bind never picks a layer row).
+        #expect(stillDiverging.count == 18, "divergences: \(stillDiverging.map(\.query))")
     }
 
     // MARK: - Catalog composition (the vintage proxy)
@@ -1103,7 +1122,7 @@ struct FoodSearchCorpusTests {
         // Same file, both paths: the repo copy and the resource the FoodCatalog target bundles.
         let bundled = try #require(SQLiteBundledFoodSource(), "the FoodCatalog resource bundle must carry the database")
         #expect(bundled.count == probe.scalar("SELECT COUNT(*) FROM food"))
-        #expect(FoodCatalog.bundled().bundledCount == Self.loadedRowCount)
+        #expect(FoodCatalog.probeBundled().bundledCount == Self.loadedRowCount)
     }
 
     /// §8's retrieval-layer table: 22 raw FTS5 MATCH expressions and their row counts.
@@ -1164,7 +1183,7 @@ struct FoodSearchCorpusTests {
         #expect(probe.ftsMatchCount("kirkland* AND protein* AND bar*") == 0)
 
         // Without this guard all three assertions below would pass against the empty-catalog fallback.
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount, "shipped catalog must be loaded")
         #expect(catalog.scoredResults(for: "costco cheese pizza slice").isEmpty)
         #expect(catalog.scoredResults(for: "kirkland protein bar").isEmpty)
@@ -1235,7 +1254,7 @@ struct FoodSearchCorpusTests {
 
         // The resolver path really does take the unstripped branch end to end: every row it returns
         // for a quantity-led sub-phrase carries BOTH words, which the stripped gate could not promise.
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == Self.loadedRowCount)
         let phrases = FoodSelectionCandidateBuilder.searchPhrases(from: "two slices of pizza")
         #expect(phrases.contains("slices pizza"), "the quantity word survives into the sub-phrases")
@@ -1384,7 +1403,7 @@ struct FoodSearchCorpusTests {
     /// §29's coupled unit, the first change that actually moves these numbers.
     private static func printLiveMeasurementIfRequested() {
         guard dumpRequested else { return }
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         guard catalog.bundledCount == loadedRowCount else {
             print("// LIVE DUMP SKIPPED — the shipped catalog is not loaded, so nothing measured here is real")
             return
@@ -1479,7 +1498,7 @@ struct FoodSearchCorpusTests {
     private static func printLiveCandidateSetSizes() {
         // The adversarial review's battery, measured live so its cases can be judged and pinned.
         print("// ── review battery, top-6 ─────────────────────────────────────")
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         for query in ["burger", "ham", "hot dog", "eggs", "cheese pizza", "cheese", "beef", "onion",
                       "bacon", "turkey", "chicken nuggets", "caesar salad", "chicken noodle soup", "apple"] {
             print("// \"\(query)\":")
@@ -1517,7 +1536,7 @@ struct FoodSearchCorpusTests {
 
     /// The top-6 ranked rows for `query` through the shipped pipeline, flattened for pinning.
     private static func rankedRows(for query: String) throws -> [FoodSearchRankedRow] {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount == loadedRowCount, "shipped catalog must be loaded")
         return catalog.scoredResults(for: query, limit: 6)
             .map { FoodSearchRankedRow($0.item.name, $0.score, $0.item.dataType.rawValue) }

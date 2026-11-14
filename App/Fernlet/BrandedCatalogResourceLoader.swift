@@ -47,6 +47,16 @@ final class BrandedCatalogResourceLoader {
     /// creating an `NSBundleResourceRequest`, where the loser's resource hold would be leaked when the
     /// winner overwrote `request`.
     private var inFlight: Task<Void, Never>?
+    /// When the last On-Demand Resource request failed (offline, not downloaded yet, purged), so a later
+    /// foreground can try again (roadmap G1, F10: a failure used to wait for the next cold launch).
+    private var lastFailure: Date?
+    /// Set when the pack arrived but holds no usable catalog (a build without the database ships an
+    /// empty placeholder): asking again cannot help, so the retry never runs.
+    private var packUnusable = false
+
+    /// The least time between two retries after a failed request: a foreground activation inside it
+    /// does nothing, so switching apps back and forth never queues ODR request after request.
+    static let retryInterval: TimeInterval = 5 * 60
 
     /// Best-effort attach of the branded catalog. Safe to call more than once (no-op once attached, and
     /// a concurrent call joins the one in flight), never throws, never blocks launch. Leaves the catalog
@@ -61,6 +71,15 @@ final class BrandedCatalogResourceLoader {
         inFlight = task
         await task.value
         inFlight = nil
+    }
+
+    /// Tries the load again when the last attempt FAILED at least ``retryInterval`` ago (roadmap G1,
+    /// F10). A no-op once attached, before any attempt, after an unusable pack, and inside the interval.
+    /// Called on every foreground activation (`FernletStore.retryBrandedCatalogIfNeeded()`).
+    func retryIfNeeded(into catalog: FoodCatalog, now: Date = Date()) async {
+        guard !attached, !packUnusable, let lastFailure,
+              now.timeIntervalSince(lastFailure) >= Self.retryInterval else { return }
+        await loadBrandedCatalog(into: catalog)
     }
 
     /// The actual acquisition, run inside the single in-flight task (see `loadBrandedCatalog`).
@@ -81,12 +100,16 @@ final class BrandedCatalogResourceLoader {
                 // The pack arrived but holds no usable catalog: the placeholder a build without the
                 // database ships (see the type's NOTE), or a file that would not open.
                 FernletAuditLog.log("brandedCatalog.odr.packUnusable")
+                packUnusable = true
                 req.endAccessingResources()
                 return
             }
             request = req   // keep the access alive for the session
+            lastFailure = nil
         } catch {
-            // Recovery: not downloaded yet, offline, or purged — stay on base coverage. Logged
+            lastFailure = Date()
+            // Recovery: not downloaded yet, offline, or purged — stay on base coverage until a later
+            // foreground retries (`retryIfNeeded`). Logged
             // unconditionally so a Release install can say WHY it is on the base catalog.
             FernletAuditLog.log(
                 "brandedCatalog.odr.unavailable",
@@ -96,7 +119,8 @@ final class BrandedCatalogResourceLoader {
     }
 
     /// Detach the branded source and release the ODR hold — e.g. in response to storage/memory pressure.
-    /// The catalog immediately falls back to base + user items.
+    /// The catalog immediately falls back to base + user items. Nothing calls it today (the 2026-11-09
+    /// review); it stays as the release seam, and a later ``loadBrandedCatalog(into:)`` re-attaches.
     func purge(from catalog: FoodCatalog) {
         catalog.detachBrandedSource()
         attached = false

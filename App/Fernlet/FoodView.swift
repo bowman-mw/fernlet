@@ -2226,6 +2226,15 @@ nonisolated struct CatalogTypeaheadResultSet {
     }
 }
 
+/// What a typed catalog field says when it settles on no rows (roadmap G1, F9): "Keep typing to
+/// search." while the text is too short to search (``FoodShortQuery``), so a person halfway through a
+/// word is not told the food is missing; "No catalog matches." otherwise.
+enum CatalogMissCopy {
+    static func title(for query: String) -> LocalizedStringKey {
+        FoodShortQuery.isAwaitingMoreLetters(query) ? "Keep typing to search." : "No catalog matches."
+    }
+}
+
 /// One catalog typeahead suggestion: name + provenance badge over the reference serving/macros.
 ///
 /// Shared by the recipe editor's ingredient search and Adjust meal's Replace/"Add an item" fields
@@ -2325,6 +2334,8 @@ private struct CatalogSpellingSuggestionButton: View {
 /// deterministic manual path. This increment adds no AI control or behavior.
 private struct CatalogSearchEmptyState: View {
     var actionTitle: LocalizedStringKey
+    /// The field's text, so a query too short to search says "Keep typing" (``CatalogMissCopy``).
+    var query: String
     /// A spelling to offer above the action, with what a tap does with it.
     var suggestion: String?
     var onAcceptSuggestion: (String) -> Void = { _ in }
@@ -2332,7 +2343,7 @@ private struct CatalogSearchEmptyState: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            EmptyState(text: "No catalog matches.", systemImage: "magnifyingglass")
+            EmptyState(text: CatalogMissCopy.title(for: query), systemImage: "magnifyingglass")
             if let suggestion {
                 CatalogSpellingSuggestionButton(suggestion: suggestion, onAccept: onAcceptSuggestion)
             }
@@ -2382,6 +2393,9 @@ struct RecipeIngredientEditor: View {
     /// The label the editor is asking the grams of — "How many grams is one?" (F4b fix round 1, report
     /// §6.3 Rung E) — or nil when it is not asking.
     @State private var askingGramsFor: String?
+    /// True after "Use manual nutrition" on an amount the food could not weigh: the grams start empty
+    /// for the person to fill in for the amount on the line (roadmap G1, owner decision 2026-11-13).
+    @State private var manualAmountUnweighed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2485,6 +2499,7 @@ struct RecipeIngredientEditor: View {
         } else if showsSettledMiss && !isCreatingCustomIngredient {
             CatalogSearchEmptyState(
                 actionTitle: "Create custom ingredient",
+                query: ingredient.name,
                 suggestion: typeaheadResults.visibleSuggestion(for: ingredient.name),
                 onAcceptSuggestion: { ingredient.name = $0 }
             ) {
@@ -2560,6 +2575,12 @@ struct RecipeIngredientEditor: View {
                 unweighedAmountPrompt(for: selectedFoodItem)
             }
         } else {
+            if manualAmountUnweighed {
+                Text("Enter the nutrition for the amount on this line.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
             MacroInputRow(label: "Protein", unit: "g", value: $ingredient.protein, range: 0.0...250.0)
             MacroInputRow(label: "Carbs", unit: "g", value: $ingredient.carbs, range: 0.0...300.0)
             MacroInputRow(label: "Fat", unit: "g", value: $ingredient.fat, range: 0.0...200.0)
@@ -2640,6 +2661,7 @@ struct RecipeIngredientEditor: View {
         ingredient.unit = unit.rawValue
         ingredient.portion = nil
         askingGramsFor = nil
+        manualAmountUnweighed = false
         seedManualGrams(foodItem.exactMacros)
         isCreatingCustomIngredient = false
     }
@@ -2649,15 +2671,19 @@ struct RecipeIngredientEditor: View {
     /// F4b fix round 1 (finding s2-C-F4B-C2, report §6.3 item 0d): the row keeps the amount it showed
     /// — a named portion folded into its grams ("2 fruit (272 g)" becomes 272 g, never "2 g") — and the
     /// grams it seeds are the ones the locked panel showed FOR THAT AMOUNT, so the custom food a save
-    /// mints from it ("272 g" carrying 272 g of nutrition) is as dense as the food. Only an amount the
-    /// food cannot weigh seeds the food's own serving, as before.
+    /// mints from it ("272 g" carrying 272 g of nutrition) is as dense as the food. An amount the food
+    /// cannot weigh ("2 cups" of a food with no cup) has no honest number to seed: it used to seed the
+    /// food's own serving (per 100 g), which the line then read as the nutrition of 2 cups. Since roadmap
+    /// G1 (owner decision 2026-11-13, "macros for the amount shown") those grams start empty, with a
+    /// line asking for the amount on the row.
     private func useManualNutrition(seededFrom foodItem: FoodItem) {
         let shown = ingredient.resolvedPreciseMacros(foodItems: [foodItem])
         ingredient = ingredient.droppingPortion()
         ingredient.selectedFoodItemId = nil
         ingredient.pickedForSearch = nil
         askingGramsFor = nil
-        seedManualGrams(shown ?? foodItem.exactMacros)
+        manualAmountUnweighed = shown == nil
+        seedManualGrams(shown ?? PreciseMacros(protein: 0, carbs: 0, fat: 0))
     }
 
     /// Seeds the row's editable grams with `grams` as given (a food's EXACT grams, or the amount shown at
@@ -2724,13 +2750,15 @@ private struct LockedMacroSummary: View {
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    /// Where the locked macros came from. An Open Food Facts import must not be labelled USDA; the
-    /// other sources keep the wording they always had.
+    /// Where the locked macros came from, named for the real source (the roadmap's food-tail "USDA"
+    /// label, 2026-11-13): an AI estimate or a Canadian Nutrient File food is not labelled USDA.
     private var macroSourceTitle: LocalizedStringKey {
         switch foodItem.source {
         case .manual: "Saved macros"
         case .openFoodFacts: "Open Food Facts macros"
-        case .usda, .aiResolved: "USDA macros"
+        case .usda: "USDA macros"
+        case .canadianNutrientFile: "Health Canada macros"
+        case .aiResolved: "AI-estimated macros"
         }
     }
 }
@@ -3371,7 +3399,7 @@ struct MealSheet: View {
             }
             .accessibilityIdentifier("mealComposer.catalogResults")
         } else if showsMealCatalogMiss {
-            FernletNotice("No catalog matches.") { FernletIcon(.search, scale: 2) }
+            FernletNotice(CatalogMissCopy.title(for: description)) { FernletIcon(.search, scale: 2) }
                 .accessibilityIdentifier("mealComposer.catalogMiss")
             if let suggestion = catalogResults.visibleSuggestion(for: description) {
                 CatalogSpellingSuggestionButton(suggestion: suggestion) { description = $0 }
@@ -4966,7 +4994,7 @@ private struct MealItemSearchField: View {
                 .accessibilityIdentifier("mealCorrection.catalogResults")
             }
             if showsSettledMiss && !isCreatingCustomFood {
-                FernletNotice("No catalog matches.") { FernletIcon(.search, scale: 2) }
+                FernletNotice(CatalogMissCopy.title(for: searchText)) { FernletIcon(.search, scale: 2) }
                 if let suggestion = typeaheadResults.visibleSuggestion(for: searchText) {
                     CatalogSpellingSuggestionButton(suggestion: suggestion) { searchText = $0 }
                 }

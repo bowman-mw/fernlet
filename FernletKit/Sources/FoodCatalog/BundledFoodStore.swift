@@ -221,17 +221,19 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// catalog's tuned cap); the branded source can pass a smaller cap.
     private let candidateCap: Int
 
-    /// Locates `FoodCatalog.sqlite` in `bundle` (defaults to this module's resource bundle). Returns
-    /// nil when the resource is absent so callers can fall back to a user-items-only catalog rather
-    /// than crashing. `nil` resolves to `.module`; `.module` is synthesized as internal, so it cannot
-    /// appear as a default-argument value in this public initializer.
+    /// Locates `<resourceName>.sqlite` in `bundle` (defaults to this module's resource bundle; the
+    /// name defaults to the base `FoodCatalog`, and a generic layer passes its own, see
+    /// ``BundledFoodLayers``). Returns nil when the resource is absent so callers can fall back to a
+    /// user-items-only catalog rather than crashing. `nil` resolves to `.module`; `.module` is
+    /// synthesized as internal, so it cannot appear as a default-argument value in this public initializer.
     public convenience init?(
         bundle: Bundle? = nil,
+        resourceName: String = FoodCatalogSchema.resourceName,
         skipPriorityOrder: Bool = false,
         candidateCap: Int = FoodCatalogSchema.candidateFetchLimit
     ) {
         let bundle = bundle ?? .module
-        guard let url = bundle.url(forResource: FoodCatalogSchema.resourceName, withExtension: FoodCatalogSchema.resourceExtension) else {
+        guard let url = bundle.url(forResource: resourceName, withExtension: FoodCatalogSchema.resourceExtension) else {
             return nil
         }
         self.init(url: url, skipPriorityOrder: skipPriorityOrder, candidateCap: candidateCap)
@@ -477,13 +479,22 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             }
             defer { sqlite3_finalize(stmt) }
             bind(stmt)
+            // One decoder per fetch, not per row (roadmap G1, F8: up to 10,000 rows per keystroke).
+            let decoder = JSONDecoder()
             var results: [FoodItem] = []
             while sqlite3_step(stmt) == SQLITE_ROW {
-                if let item = Self.hydrate(stmt, includesBarcode: hasBarcodeColumn) { results.append(item) }
+                // A superseded typed search stops here; its answer is dropped anyway (F8).
+                if results.count % Self.cancellationCheckInterval == 0, TypedSearchScope.isSuperseded { return [] }
+                if let item = Self.hydrate(stmt, includesBarcode: hasBarcodeColumn, decoder: decoder) {
+                    results.append(item)
+                }
             }
             return results
         }
     }
+
+    /// How many rows a fetch hydrates between checks for a superseded typed search.
+    static let cancellationCheckInterval = 128
 
     /// The `food` table's total row count, read once at open to seed `count`.
     private static func scalarCount(_ db: OpaquePointer?) -> Int {
@@ -508,9 +519,8 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// Builds a `FoodItem` from a result row. Column order must match `FoodCatalogSchema.selectColumns`
     /// (+ trailing `gtin_upc` at index 17 when `includesBarcode`). The row then passes through
     /// ``BundledRowCorrection`` — the load-time fixes for defects in the committed file.
-    private static func hydrate(_ stmt: OpaquePointer?, includesBarcode: Bool) -> FoodItem? {
+    private static func hydrate(_ stmt: OpaquePointer?, includesBarcode: Bool, decoder: JSONDecoder) -> FoodItem? {
         guard let idString = sqliteColumnText(stmt, 0), let id = UUID(uuidString: idString) else { return nil }
-        let decoder = JSONDecoder()
         func decodeJSON<T: Decodable>(_ type: T.Type, _ index: Int32) -> T? {
             guard let text = sqliteColumnText(stmt, index), let data = text.data(using: .utf8) else { return nil }
             return try? decoder.decode(type, from: data)
@@ -535,7 +545,6 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
             dataType: dataType,
             servingDescription: sqliteColumnText(stmt, 11),
             verificationPolicyDays: Int(sqlite3_column_int(stmt, 12)),
-            isFlagged: sqlite3_column_int(stmt, 13) != 0,
             tags: decodeJSON([String].self, 15) ?? [],
             portions: decodeJSON([FoodPortion].self, 16) ?? [],
             barcode: includesBarcode ? sqliteColumnText(stmt, 17) : nil
