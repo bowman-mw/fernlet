@@ -508,6 +508,13 @@ final class LaunchPreparationService {
     /// Device-local (not synced) UserDefaults key gating the once-per-day day-summary backfill.
     private static let daySummaryRunKeyDefault = "fernlet.daySummary.lastRunKey"
 
+    /// Forgets the last day the backfill ran — the "Delete everything" funnel's call (G3, 2026-11-13).
+    /// The key is a date the app was used, and it outlived every day it described. Post-wipe the
+    /// backfill simply runs once more over an empty store. A plain removal has no failure signal.
+    static func clearDaySummaryRunMarker() {
+        UserDefaults.standard.removeObject(forKey: daySummaryRunKeyDefault)
+    }
+
     /// Runaway bound on a generated day summary (~70 words). The prompt asks for "under 50 words";
     /// this is not a word-count enforcer, it is the ceiling past which the reply is treated as a
     /// fallback rather than a summary. Deliberately not a truncation: half a sentence in the

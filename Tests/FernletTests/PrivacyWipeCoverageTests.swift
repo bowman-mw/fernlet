@@ -188,6 +188,12 @@ struct PrivacyWipeCoverageTests {
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",
+        // G3 (2026-11-13): the companion-feelings settings (owner: "really means everything") and
+        // the three former open gaps — the day-summary backfill's day key and the journal scrub's
+        // latch and retry counter.
+        "CompanionEmotionPreferences.clearAll",
+        "LaunchPreparationService.clearDaySummaryRunMarker",
+        "pastDayJournalScrubDefaults.removeObject",
         // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of
         // 2026-10-20). The heart-rate switches stored beside it are kept; this is about their body.
         "WorkoutZonePreferences.clearMaxHeartRate",
@@ -347,7 +353,10 @@ struct PrivacyWipeCoverageTests {
         // A sub-leg of `resetAll`, split out for the 60-line rule when today's workout plan joined
         // the guided run's clears (e7, 2026-11-10): it holds `guidedRunStateStore.clear` and
         // `guidedPlanFile?.clear`, so it must be scanned or both tokens would go unseen.
-        "func clearGuidedWorkoutStateForWipe()"
+        "func clearGuidedWorkoutStateForWipe()",
+        // A sub-leg of `resetAll` (G3, 2026-11-13), split out for the 60-line rule: the
+        // companion-feelings settings and the three run markers that used to be open gaps.
+        "func clearSettingsAndRunMarkersForWipe()"
     ]
 
     /// The `ContentView` half of the wipe path: five real clears live inside the hook closures

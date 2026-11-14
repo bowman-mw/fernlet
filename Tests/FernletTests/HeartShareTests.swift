@@ -165,8 +165,12 @@ struct HeartShareTests {
         return (envelope, plaintext)
     }
 
-    private func throwawayCoordinator() -> ProximityCoordinator {
-        let identity = IdentityService(keychainService: "test.heart.share.\(UUID().uuidString)")
+    /// A coordinator to stand as the delegate call's sender, over an identity provisioned in the
+    /// keychain under `keychainService`. The CALLER owns that service's rows and must delete them
+    /// (`deliver` does, in a `defer`): before 2026-11-13 every delivery left a fresh identity's key
+    /// rows behind in the simulator's keychain, one service per call, forever.
+    private func throwawayCoordinator(keychainService: String) -> ProximityCoordinator {
+        let identity = IdentityService(keychainService: keychainService)
         try? identity.ensureProvisioned()
         return ProximityCoordinator(
             identity: identity,
@@ -185,10 +189,30 @@ struct HeartShareTests {
         _ payload: HeartPayload,
         to manager: PresenceManager,
         from peer: ProximityCoordinator.PeerIdentity?,
-        senderDisplayName: String = "Aisha Bloom"
+        senderDisplayName: String = "Aisha Bloom",
+        coordinatorKeychainService: String = "test.heart.share.\(UUID().uuidString)"
     ) throws {
         let (envelope, plaintext) = try makeHeartEnvelope(payload: payload, senderDisplayName: senderDisplayName)
-        manager.proximityCoordinator(throwawayCoordinator(), didReceive: envelope, plaintext: plaintext, from: peer)
+        defer { cleanup(coordinatorKeychainService) }
+        let coordinator = throwawayCoordinator(keychainService: coordinatorKeychainService)
+        manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: peer)
+    }
+
+    /// Regression (G3, 2026-11-13): the throwaway sender's identity is provisioned in the keychain,
+    /// so a delivery that did not delete it left key rows behind on every run of this suite.
+    @Test func deliveringAHeartLeavesNoKeychainRowsBehind() throws {
+        let host = MockHeartProximityHost()
+        let friend = makePeerIdentity(displayName: "Aisha Bloom")
+        host.proximityTrustVault.trust(friend, mode: .friend)
+        let ledger = ProximityHeartLedger(fileURL: tempLedgerURL(), now: { self.baseDate })
+        let manager = PresenceManager(store: host, ledger: ledger)
+        let service = "test.heart.share.leak.\(UUID().uuidString)"
+
+        try deliver(HeartPayload(sentAtDayKey: "2026-07-05"), to: manager, from: friend,
+                    coordinatorKeychainService: service)
+
+        #expect(ledger.receivedHearts.count == 1, "the delivery itself still lands")
+        #expect(KeychainItem.loadAll(service: service).isEmpty, "the throwaway identity's rows outlived the delivery")
     }
 
     @Test func receivedHeartFromTrustedFriendIsPersisted() throws {

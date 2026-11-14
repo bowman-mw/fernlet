@@ -7337,6 +7337,8 @@ final class FernletStore {
         // Advanced period tracking's device-only switch (World build, `b3-period-settings`): how the
         // person tracks their cycle, so it goes with everything else.
         CyclePreferences.clearAll()
+        // The companion-feelings settings and three run markers (G3, 2026-11-13).
+        clearSettingsAndRunMarkersForWipe()
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
         // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
@@ -7436,6 +7438,21 @@ final class FernletStore {
         // the standalone "Reset everything" too (same reasoning as `worryBoxResetHook`).
         if sealedStoreRebuildHook?() == false { incompleteStores.append("your sealed store") }
         return incompleteStores
+    }
+
+    /// The settings-and-markers leg of ``resetAll()`` (G3, 2026-11-13), split out of it for the
+    /// 60-line rule (R4). Registered as a wipe leg in `PrivacyWipeCoverageTests`, so its body is
+    /// scanned like `resetAll`'s own. Plain `UserDefaults` removals: no failure signal.
+    private func clearSettingsAndRunMarkersForWipe() {
+        // The companion-feelings settings (owner 2026-11-13: Delete everything "really means
+        // everything"): the appetite-cues switch and the sleep window go back to their defaults.
+        CompanionEmotionPreferences.clearAll()
+        // Three traces of use nobody decided should survive (the former "Open gaps"): the
+        // day-summary backfill's last-run day, and the past-day journal scrub's latch and retry
+        // counter. Post-wipe both jobs simply run once more over an empty store.
+        LaunchPreparationService.clearDaySummaryRunMarker()
+        pastDayJournalScrubDefaults.removeObject(forKey: Self.pastDayJournalScrubFlagKey)
+        pastDayJournalScrubDefaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
     }
 
     /// The guided-workout leg of ``resetAll()``, split out of it for the 60-line rule (R4) when
@@ -8106,6 +8123,19 @@ extension FernletStore: JournalSealingContext {
         scrubLeakedPastDayJournalsIfNeeded()
     }
     func deactivateSealedJournals() { journalSealingCoordinator.deactivateSealedJournals() }
+
+    /// The first written journal entry of `dateKey`, for Home's looking-back card — or nil while the
+    /// Private tab's journal is closed (CAP-2, G3 2026-11-13). Home is not behind the lock, so it
+    /// never decrypts sealed text on its own, and never shows a day's blob text either: with the
+    /// journal closed, text in the blob can only be an entry the seal failed to take.
+    func lookBackJournalText(for dateKey: String) -> String? {
+        guard journalSealingCoordinator.canIdentifyTagOnlyEntries else { return nil }
+        let day = loadDayWithDecryptedJournals(for: dateKey)
+        return day.journals.first { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }?.text
+    }
+
+    /// Whether the Private tab's journal is open, so sealed journal text may be shown.
+    var isSealedJournalOpen: Bool { journalSealingCoordinator.canIdentifyTagOnlyEntries }
 
     /// A sealed journal row was written, re-sealed or deleted (`JournalSealingContext`): the journal
     /// Sealed backup's mutation epoch moves and its upload is owed, so the next hub settle re-exports
