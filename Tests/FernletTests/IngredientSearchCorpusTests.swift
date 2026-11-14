@@ -717,7 +717,7 @@ struct IngredientSearchCorpusTests {
 
     /// THE replay: all 160 queries against their pins, every mismatch named in one message.
     @Test func corpusReplaysToThePinnedRanks() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount >= FoodSearchCorpusTests.shippedRowCount,
                      "the shipped catalog must be loaded — this suite must never pass vacuously")
         let matchers = try Self.judges.map(IngredientCorpusMatcher.init)
@@ -742,7 +742,7 @@ struct IngredientSearchCorpusTests {
     /// compound rows it must lead with, the flavored products it must no longer count as the ingredient,
     /// and the variant-named plain products it must count again.
     @Test func theSixShowTheNamedRows() throws {
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount >= FoodSearchCorpusTests.shippedRowCount,
                      "the shipped catalog must be loaded — this suite must never pass vacuously")
         for pin in Self.sixPins {

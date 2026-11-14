@@ -25,6 +25,9 @@ struct FoodSearchLabelAndFallbackTests {
         #expect(makeFood(source: .usda, dataType: .branded, brandSource: "Chobani").dataSourceLabel == "Chobani")
         #expect(makeFood(source: .usda, dataType: .branded, brandSource: nil).dataSourceLabel == "Branded")
         #expect(makeFood(source: .usda, dataType: .restaurant, brandSource: nil).dataSourceLabel == "Restaurant")
+        // A Canadian Nutrient File row names its publisher, never USDA, at any data type.
+        #expect(makeFood(source: .canadianNutrientFile, dataType: .srLegacy).dataSourceLabel == "Health Canada")
+        #expect(makeFood(source: .canadianNutrientFile, dataType: .survey).dataSourceLabel == "Health Canada")
     }
 
     // MARK: - Fallback micronutrients

@@ -261,6 +261,16 @@ struct NoTrackingBoundaryTests {
             """
         ),
         PermittedDestination(
+            host: "open.canada.ca",
+            reason: """
+            Not fetched. The Open Government Licence – Canada's page, which the Canadian Nutrient File's \
+            licence asks its attribution to name. A `Link` hands it to Safari when the user taps the \
+            licence's name under Food data on Settings → Privacy & data → Acknowledgments; the app sends \
+            it nothing and holds no client for it (Fernlet/AcknowledgmentsView.swift). The CNF foods ship \
+            inside the app (FoodCatalogCNF.sqlite) and are never fetched.
+            """
+        ),
+        PermittedDestination(
             host: "example.com",
             reason: """
             RFC 2606 reserved documentation domain. Appears as UI placeholder TEXT in the product-import \

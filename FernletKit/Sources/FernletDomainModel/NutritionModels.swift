@@ -1257,7 +1257,7 @@ public nonisolated enum FoodDataType: String, Codable, Sendable {
 
 /// Who authored a food row: USDA data, an AI resolution, the user, or Open Food Facts contributors.
 ///
-/// Ranked manual > openFoodFacts > usda > aiResolved in search so the user's own foods always
+/// Ranked manual > openFoodFacts > usda = canadianNutrientFile > aiResolved in search so the user's own foods always
 /// outrank lookalikes; decoded tolerantly on ``FoodItem`` (an unknown source freezes to `.manual`,
 /// never falsely claiming USDA or AI provenance — which is also how a build that predates
 /// ``openFoodFacts`` reads such a row, parking the token and re-emitting it on save).
@@ -1275,14 +1275,54 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
     /// row carries this token rather than `.manual` — and every surface that names the row's source
     /// shows ``attributionLine``.
     case openFoodFacts
+    /// A bundled reference food from Health Canada's Canadian Nutrient File (the 2026 file's foods
+    /// that are Canadian rather than a copy of USDA data, served from `FoodCatalogCNF.sqlite`, owner
+    /// decision 2026-11-13). Its numbers are Health Canada's, under the Open Government Licence –
+    /// Canada, so the row carries this token rather than `.usda`: its search rows read "Health Canada"
+    /// (``FoodItem/dataSourceLabel``), and the surfaces that show its numbers — the locked-macros card,
+    /// a logged meal and the export — carry ``attributionLine``, as Settings → Privacy & data →
+    /// Acknowledgments does. A build that predates this case reads the token as `.manual`
+    /// with the token parked (see ``FoodItem``), never as USDA.
+    case canadianNutrientFile
 
     /// The data-licence attribution a surface must show wherever it names this source, or `nil`
     /// for a source that carries no attribution obligation.
     public var attributionLine: String? {
         switch self {
         case .openFoodFacts: Self.openFoodFactsAttribution
+        case .canadianNutrientFile: Self.canadianNutrientFileAttribution
         case .usda, .aiResolved, .manual: nil
         }
+    }
+
+    /// Whether rows of this source are bundled reference data — the catalog's own foods, never a
+    /// person's: USDA's and the Canadian Nutrient File's. Such rows are not kept among the user's
+    /// foods, are read by reference naming, and declare no serving of their own.
+    public var isBundledReference: Bool {
+        switch self {
+        case .usda, .canadianNutrientFile: true
+        case .aiResolved, .manual, .openFoodFacts: false
+        }
+    }
+
+    /// The Open Government Licence – Canada notice the Canadian Nutrient File asks for:
+    /// "Contains information licensed under the Open Government Licence – Canada."
+    ///
+    /// Localized display copy (the licence publishes its own French wording); the frozen token is
+    /// the raw value ``canadianNutrientFile``, never this string.
+    public static var canadianNutrientFileAttribution: String {
+        String(localized: "foodItemSource.canadianNutrientFile.attribution",
+               defaultValue: "Contains information licensed under the Open Government Licence – Canada.",
+               bundle: .module,
+               comment: "Attribution shown wherever a food from Health Canada's Canadian Nutrient File is displayed. 'Open Government Licence – Canada' is the licence's name; use the licence's official name in the target language.")
+    }
+
+    /// The short source tag for a Canadian Nutrient File row: "Health Canada", the publisher — the
+    /// counterpart of the agency name "USDA" on USDA's rows.
+    public static var canadianNutrientFileLabel: String {
+        String(localized: "foodItem.dataSource.canadianNutrientFile", defaultValue: "Health Canada",
+               bundle: .module,
+               comment: "Food search row tag: a reference food from Health Canada's Canadian Nutrient File. 'Health Canada' is the Canadian government department's name; use its official name in the target language.")
     }
 
     /// The Open Food Facts attribution notice: "Data from Open Food Facts (ODbL)".
@@ -1304,8 +1344,9 @@ public extension Meal {
     /// (tracker §2.6, 2026-10-18): the ``FoodItemSource/attributionLine`` of each food its components
     /// were logged from, each distinct line once, in component order.
     ///
-    /// Empty when no component names an attributed food. Today only an Open Food Facts import carries
-    /// an obligation (ODbL); the bundled USDA catalog is public domain (CC0, attribution requested
+    /// Empty when no component names an attributed food. An Open Food Facts import carries an
+    /// obligation (ODbL) and so does a Canadian Nutrient File food (Open Government Licence – Canada);
+    /// the bundled USDA catalog is public domain (CC0, attribution requested
     /// rather than required), and the user's own foods and AI estimates carry none. A component
     /// whose food can no longer be resolved (deleted since) contributes nothing: the meal keeps its
     /// numbers but not their source.
@@ -1463,9 +1504,11 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
 
     /// Short, human-readable provenance shown on ingredient-search rows so the user can tell where a
     /// match came from (Item 3 ingredient-search UX). Branded/restaurant items prefer their brand
-    /// name; reference USDA foods read "USDA"; user and AI-derived foods are labelled distinctly; an
-    /// Open Food Facts import reads as its ODbL attribution line, so the licence notice appears on
-    /// every row that names where the numbers came from.
+    /// name; reference USDA foods read "USDA" and Canadian Nutrient File foods "Health Canada"
+    /// (whose licence line ``FoodItemSource/attributionLine`` carries where the numbers are
+    /// shown); user and AI-derived foods are labelled distinctly; an Open Food Facts import reads as
+    /// its ODbL attribution line, so the licence notice appears on every row that names where the
+    /// numbers came from.
     ///
     /// Localized display only (Spanish round step 2, 2026-10-20). Its one non-display reader, the swap
     /// sheet's de-duplication key, is built and compared within one screen, so it never meets a value
@@ -1477,6 +1520,8 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
                           comment: "Food search row tag: a food the person created themselves")
         case .openFoodFacts:
             return FoodItemSource.openFoodFactsAttribution
+        case .canadianNutrientFile:
+            return FoodItemSource.canadianNutrientFileLabel
         case .aiResolved:
             return String(localized: "foodItem.dataSource.aiEstimate", defaultValue: "AI estimate", bundle: .module,
                           comment: "Food search row tag: a food whose nutrition the on-device AI estimated")

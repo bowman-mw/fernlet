@@ -221,17 +221,19 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// catalog's tuned cap); the branded source can pass a smaller cap.
     private let candidateCap: Int
 
-    /// Locates `FoodCatalog.sqlite` in `bundle` (defaults to this module's resource bundle). Returns
-    /// nil when the resource is absent so callers can fall back to a user-items-only catalog rather
-    /// than crashing. `nil` resolves to `.module`; `.module` is synthesized as internal, so it cannot
-    /// appear as a default-argument value in this public initializer.
+    /// Locates `<resourceName>.sqlite` in `bundle` (defaults to this module's resource bundle; the
+    /// name defaults to the base `FoodCatalog`, and a generic layer passes its own, see
+    /// ``BundledFoodLayers``). Returns nil when the resource is absent so callers can fall back to a
+    /// user-items-only catalog rather than crashing. `nil` resolves to `.module`; `.module` is
+    /// synthesized as internal, so it cannot appear as a default-argument value in this public initializer.
     public convenience init?(
         bundle: Bundle? = nil,
+        resourceName: String = FoodCatalogSchema.resourceName,
         skipPriorityOrder: Bool = false,
         candidateCap: Int = FoodCatalogSchema.candidateFetchLimit
     ) {
         let bundle = bundle ?? .module
-        guard let url = bundle.url(forResource: FoodCatalogSchema.resourceName, withExtension: FoodCatalogSchema.resourceExtension) else {
+        guard let url = bundle.url(forResource: resourceName, withExtension: FoodCatalogSchema.resourceExtension) else {
             return nil
         }
         self.init(url: url, skipPriorityOrder: skipPriorityOrder, candidateCap: candidateCap)

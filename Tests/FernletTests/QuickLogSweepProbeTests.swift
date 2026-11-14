@@ -82,7 +82,7 @@ struct QuickLogSweepProbeTests {
     @Test func sweepQuickLogResolver() async throws {
         let env = ProcessInfo.processInfo.environment
         guard env["FERNLET_QUICKLOG_SWEEP"] != nil || env["TEST_RUNNER_FERNLET_QUICKLOG_SWEEP"] != nil else { return }
-        let store = makeTestStore(foodCatalog: FoodCatalog.bundled())
+        let store = makeTestStore(foodCatalog: FoodCatalog.probeBundled())
         try #require(store.settings.aiStatus == AIStatus.off, "the deterministic tiers must be the rungs measured")
         try #require(store.foodCatalog.bundledCount > 100_000, "the shipped catalog must be loaded")
         var entries: [QuickLogSweepEntry] = []

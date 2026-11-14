@@ -2724,13 +2724,15 @@ private struct LockedMacroSummary: View {
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    /// Where the locked macros came from. An Open Food Facts import must not be labelled USDA; the
-    /// other sources keep the wording they always had.
+    /// Where the locked macros came from, named for the real source (the roadmap's food-tail "USDA"
+    /// label, 2026-11-13): an AI estimate or a Canadian Nutrient File food is not labelled USDA.
     private var macroSourceTitle: LocalizedStringKey {
         switch foodItem.source {
         case .manual: "Saved macros"
         case .openFoodFacts: "Open Food Facts macros"
-        case .usda, .aiResolved: "USDA macros"
+        case .usda: "USDA macros"
+        case .canadianNutrientFile: "Health Canada macros"
+        case .aiResolved: "AI-estimated macros"
         }
     }
 }

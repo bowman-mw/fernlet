@@ -101,3 +101,15 @@ Commons Attribution 4.0 International
 (https://creativecommons.org/licenses/by/4.0/). Fernlet changed the data:
 the present-day 0.083-degree map was reduced to 0.1-degree cells (the
 majority class of each) and its classes turned into terrain.
+
+Food data (the built-in food catalog, FernletKit/Sources/FoodCatalog/Resources/)
+
+USDA FoodData Central (https://fdc.nal.usda.gov/): SR Legacy, Foundation Foods and FNDDS 2021-2023
+(FoodCatalog.sqlite, FoodCatalogSupplement.json, FoodCatalogSurvey.sqlite), CC0 1.0 / United States
+public domain. No credit is required; Fernlet gives it anyway.
+
+Canadian Nutrient File 2026, Health Canada (FoodCatalogCNF.sqlite). Contains information licensed under
+the Open Government Licence – Canada (https://open.canada.ca/en/open-government-licence-canada).
+Fernlet keeps the foods that are Canadian rather than copies of USDA data, rounds their protein,
+carbohydrate and fat to whole grams and keeps the other values as published; the generator,
+Scripts/food-catalog/generic_layers.py, is in this repository.
