@@ -24,20 +24,19 @@ final class Phase3GateReadoutUITests: XCTestCase {
     @MainActor
     func testPhase3GateReadoutPushesAndRenders() throws {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10),
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10),
                       "settings sheet did not open")
 
         let connectionLog = scrollToRow("settings.row.connectionLog", app: app)
         XCTAssertTrue(connectionLog.isHittable, "Connection log row not reachable")
         connectionLog.tap()
-        XCTAssertTrue(app.navigationBars["Connection log"].waitForExistence(timeout: 6),
-                      "Connection log did not open")
+        XCTAssertTrue(waitForPushedPage("Connection log", in: app), "Connection log did not open")
 
         // SETT-28 folded the old Debug hub row into the Connection log page.
         let developerTools = scrollToRow("Developer tools", app: app)
         XCTAssertTrue(developerTools.isHittable, "Developer tools row not reachable")
         developerTools.tap()
-        XCTAssertTrue(app.navigationBars["Debug"].waitForExistence(timeout: 6),
+        XCTAssertTrue(waitForPushedPage("Debug", in: app) || waitForPushedPage("Developer tools", in: app, timeout: 1),
                       "Developer tools did not open")
 
         let readoutRow = scrollToRow("settings.row.phase3GateReadout", app: app)
@@ -45,8 +44,7 @@ final class Phase3GateReadoutUITests: XCTestCase {
         readoutRow.tap()
 
         // The assertion the whole file exists for: the destination's body evaluated without trapping.
-        let bar = app.navigationBars["Phase 3 gate readout"]
-        XCTAssertTrue(bar.waitForExistence(timeout: 10),
+        XCTAssertTrue(waitForPushedPage("Phase 3 gate readout", in: app, timeout: 10),
                       "the Phase 3 gate readout did not render — a missing store injection traps on the push")
         XCTAssertTrue(app.state == .runningForeground, "the app died on the push")
 
@@ -88,6 +86,21 @@ final class Phase3GateReadoutUITests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Waits for a page pushed inside the Settings sheet titled `title`: the World look draws the
+    /// title on the sheet's plate, beside `plate.back`, where the classic look had a navigation bar.
+    @MainActor
+    private func waitForPushedPage(_ title: String, in app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        let bar = app.navigationBars[title]
+        let plateTitle = app.staticTexts[title].firstMatch
+        let back = app.buttons["plate.back"].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if bar.exists || (back.exists && plateTitle.exists) { return true }
+            _ = back.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return bar.exists || (back.exists && plateTitle.exists)
+    }
 
     /// Drags the list up until `element` exists and sits clear of the sheet's chrome. Returns
     /// whether it got there — the List is lazy, so an element below the fold does not exist yet and

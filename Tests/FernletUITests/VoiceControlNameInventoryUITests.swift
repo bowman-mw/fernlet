@@ -220,7 +220,8 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
             try VoiceControlNameInventory.record(app, screen, in: self)
             app.buttons[next].tap()
         }
-        XCTAssertTrue(app.buttons["Home"].waitForExistence(timeout: 8))
+        // Home is the World map; its status plate is the first control it hands over.
+        XCTAssertTrue(app.buttons["world.statusPlate"].firstMatch.waitForExistence(timeout: 10))
     }
 
     // MARK: - Home, and the quick paths it carries (water, mood)
@@ -305,10 +306,15 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
 
     /// The Log sheet's set-by-set entry (idea 6): a lift picked, "Log set by set" switched on, and
     /// its set rows — each reps stepper, weight field and Add / Repeat button named for Voice Control.
+    /// In the World look the sheet is a list of exercises; Add exercise opens the lift's own page,
+    /// where the search and the set rows live (`b3-workout-exercise`).
     @MainActor
     func testWorkoutSheetSetBySetNames() throws {
         let app = UXTestApp.launch(openSheet: "workout")
         XCTAssertTrue(app.descendants(matching: .any)["sheet.workout"].waitForExistence(timeout: 8))
+        let add = app.buttons["workout.log.addExercise"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 4), "no Add exercise in the workout sheet")
+        add.tap()
         let search = app.textFields["exercise.search"]
         XCTAssertTrue(search.waitForExistence(timeout: 4))
         search.tap()
@@ -340,28 +346,30 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
     @MainActor
     func testSettingsSubpageNames() throws {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10))
         for (row, title) in [("settings.row.goalNutrition", "Goal & nutrition"),
                              ("settings.row.appearance", "Appearance")] {
             app.buttons[row].firstMatch.tap()
-            let bar = app.navigationBars[title]
-            XCTAssertTrue(bar.waitForExistence(timeout: 6), "[Settings · \(title)] never appeared")
+            XCTAssertTrue(waitForPushedPage(title, in: app), "[Settings · \(title)] never appeared")
             try VoiceControlNameInventory.record(app, "Settings · \(title)", in: self)
             app.swipeUp()
             try VoiceControlNameInventory.record(app, "Settings · \(title) – scrolled", in: self)
-            bar.buttons.firstMatch.tap()
-            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 6))
+            // Back: the plate's (`plate.back`) on a plate-chromed page, else the pushed page's own
+            // navigation-bar back button, which is what the framed Settings sheet's sub-pages carry.
+            let plateBack = app.descendants(matching: .any)["plate.back"].firstMatch
+            if plateBack.exists { plateBack.tap() } else { app.navigationBars[title].buttons.firstMatch.tap() }
+            XCTAssertTrue(app.buttons[row].firstMatch.waitForExistence(timeout: 6), "[Settings] Back did not return to the hub")
         }
     }
 
     @MainActor
     func testSafetyAndReportingNames() throws {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10))
         let row = app.buttons["settings.row.safety"].firstMatch
         for _ in 0..<6 where !row.isHittable { app.swipeUp() }
         row.tap()
-        XCTAssertTrue(app.navigationBars["Safety & reporting"].waitForExistence(timeout: 6))
+        XCTAssertTrue(waitForPushedPage("Safety & reporting", in: app))
         try VoiceControlNameInventory.record(app, "Settings · Safety & reporting", in: self)
         app.swipeUp()
         try VoiceControlNameInventory.record(app, "Settings · Safety & reporting – scrolled", in: self)
@@ -379,7 +387,10 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
         let app = UXTestApp.launch(openSheet: "workoutSuggestion")
         XCTAssertTrue(app.descendants(matching: .any)["sheet.workoutSuggestion"].waitForExistence(timeout: 8))
         try VoiceControlNameInventory.record(app, "Workout suggestion", in: self)
-        app.buttons["workout.suggest"].firstMatch.tap()
+        // Only an uncommitted day shows the configurator and its Suggest; with today's plan already
+        // committed (an earlier test or launch the same day — the plan persists) the sheet opens on it.
+        let suggest = app.buttons["workout.suggest"].firstMatch
+        if suggest.waitForExistence(timeout: 4) { suggest.tap() }
         let startNow = app.buttons["workout.startGuided"].firstMatch
         let plan = app.buttons["workout.approvePlan"].firstMatch
         XCTAssertTrue(plan.waitForExistence(timeout: 30), "[Workout suggestion] no plan appeared within 30s")
@@ -393,6 +404,22 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
         start.tap()
         XCTAssertTrue(app.buttons["workout.guided.doneSet"].firstMatch.waitForExistence(timeout: 8))
         try VoiceControlNameInventory.record(app, "Guided workout – running", in: self)
+    }
+
+    /// Waits for a page pushed inside the Settings sheet titled `title`: a navigation bar with that
+    /// title (the framed sheet's sub-pages keep one), or a plate-chromed page — its title drawn beside
+    /// `plate.back`.
+    @MainActor
+    private func waitForPushedPage(_ title: String, in app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        let bar = app.navigationBars[title]
+        let plateTitle = app.staticTexts[title].firstMatch
+        let back = app.descendants(matching: .any)["plate.back"].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if bar.exists || (back.exists && plateTitle.exists) { return true }
+            _ = bar.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return bar.exists || (back.exists && plateTitle.exists)
     }
 
     // MARK: - Common task: log a mood (the Private hub's journal)

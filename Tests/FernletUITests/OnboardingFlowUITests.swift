@@ -23,7 +23,9 @@ final class OnboardingFlowUITests: XCTestCase {
         continueFromDiet(app)
         finishPermissions(app)
 
-        XCTAssertTrue(app.buttons["Home"].waitForExistence(timeout: 5))
+        // Home is the World map; its status plate is the first control it hands over.
+        XCTAssertTrue(app.buttons["world.statusPlate"].firstMatch.waitForExistence(timeout: 10),
+                      "onboarding did not finish on Home")
     }
 
     @MainActor
@@ -37,7 +39,9 @@ final class OnboardingFlowUITests: XCTestCase {
         chooseStorage("Just on this device", app: app)
         finishRemainingScreens(app)
 
-        XCTAssertTrue(app.buttons["Home"].waitForExistence(timeout: 5))
+        // Home is the World map; its status plate is the first control it hands over.
+        XCTAssertTrue(app.buttons["world.statusPlate"].firstMatch.waitForExistence(timeout: 10),
+                      "onboarding did not finish on Home")
     }
 
     @MainActor
