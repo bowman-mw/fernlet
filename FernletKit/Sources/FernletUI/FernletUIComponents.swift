@@ -766,7 +766,6 @@ public extension View {
     /// app-target types. Same rule as ``discardConfirmation(isPresented:onDiscard:)``: an `alert`, so
     /// iOS 26 cannot hide the Cancel button, and the mutation runs *only* from `onConfirm`.
     ///
-    /// - Parameters:
     /// Every string parameter here is **already resolved** — this helper is called from package
     /// modules, whose literals must go through their own `bundle: .module` lookup before they get
     /// here (a `LocalizedStringKey` would carry no bundle and land back in `Bundle.main`). That is
@@ -779,6 +778,7 @@ public extension View {
     ///   - message: Name the exact data affected and whether anything survives. Already localized.
     ///   - confirmLabel: The destructive button, e.g. "Delete all 12". Already localized.
     ///   - cancelLabel: Overrides the shared "Cancel"; already localized when passed.
+    ///   - onConfirm: The mutation, run only when the destructive button is tapped.
     func confirmDestructive(
         _ title: String,
         isPresented: Binding<Bool>,
@@ -1227,6 +1227,7 @@ public struct SheetField<Content: View>: View {
     /// ``init(verbatim:namesControl:content:)``, since a key harvested into a package bundle is
     /// invisible to `Bundle.main` and would render as untranslated English with no error anywhere.
     ///
+    /// - Parameter label: The caption drawn above the content, localized from `Bundle.main`.
     /// - Parameter namesControl: Opt in to making the caption the accessibility *name* of the
     ///   content (review T2-16). **Only pass `true` when the content is exactly ONE focusable
     ///   control** — a lone `TextField`, `Stepper`, `Picker`, `DatePicker` or `Toggle`. It is an
@@ -1253,6 +1254,7 @@ public struct SheetField<Content: View>: View {
     /// ``SectionLabel/init(verbatim:)`` for why a same-label `String` overload would quietly
     /// capture every literal in the app.
     ///
+    /// - Parameter label: The caption, already final; shown as given.
     /// - Parameter namesControl: See ``init(_:namesControl:content:)`` — single control only.
     /// - Parameter content: The field's control or controls, drawn under the caption.
     public init(
@@ -1713,6 +1715,7 @@ public struct SheetGrowingTextField: View {
     var onSubmit: (() -> Void)?
 
     /// - Parameters:
+    ///   - text: The field's text.
     ///   - placeholder: Harvested into the *calling* target's catalog and looked up in
     ///     `Bundle.main`, which is correct for the app-target sheets that own every call site. It
     ///     was a plain `String` until review T2-1: `TextField(_ title: some StringProtocol, …)` is

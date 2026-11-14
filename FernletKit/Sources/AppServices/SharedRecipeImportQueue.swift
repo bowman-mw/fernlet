@@ -301,6 +301,7 @@ public struct SharedRecipeImportQueue {
     /// not the page's fault; it only tells the drain to stop re-fetching this page today.
     ///
     /// - Parameters:
+    ///   - record: The queued import the budget stopped.
     ///   - dayKey: Today's day key, stored on the record as the day the budget ran out.
     ///   - refundingStartedAttempt: gives back the attempt ``markAttemptStarted(_:)`` spent
     ///     before the import ran. The drain passes `true`, and it is what keeps "a budget miss does not

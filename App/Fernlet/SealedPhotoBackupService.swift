@@ -311,6 +311,8 @@ final class SealedPhotoBackupService {
     ///    make each device's upload delete the other's photos — and, because each would then
     ///    re-upload on its next pass, ping-pong the whole library every launch.
     ///
+    /// - Parameter corpus: The photo corpus whose manifest this pass commits.
+    /// - Parameter ids: Every photo id this device holds in the corpus right now.
     /// - Parameter sidecar: The corpus sidecar (the progress timeline index) to commit with the
     ///   manifest; nil keeps the one already there.
     /// - Parameter verifyingContentHashes: When true (the FULL pass — enabling the backup, or the
@@ -324,6 +326,7 @@ final class SealedPhotoBackupService {
     ///   allowed to remove. An id in here that is no longer in `ids` was genuinely deleted on this
     ///   device, so it leaves the manifest (and its record is deleted); an id NOT in here is another
     ///   device's and is carried forward untouched. Empty means "prune nothing", the safe default.
+    /// - Parameter photo: Reads one id's plaintext bytes; nil when the photo is gone.
     @discardableResult
     func reconcile(
         corpus: SealedPhotoCorpus,
@@ -669,6 +672,8 @@ final class SealedPhotoBackupService {
     ///   keep: they are neither fetched, written, nor counted as failed — the restore INTO a corpus
     ///   holding photos this device took before its backup was turned on (bug confirmation 2026-10-15
     ///   §2), where a fetched copy must never overwrite the local one.
+    /// - Parameter write: Stores one restored photo's bytes under its id and returns whether they
+    ///   reached the local store.
     /// - Returns: nil when the corpus has no manifest at all (nothing was ever committed).
     /// - Throws: `SealedBackupError.staleGeneration` on rollback, `.keyAgreementIdentityMismatch`
     ///   when the manifest is not ours, `.malformedRecord` when it is ours but corrupt.

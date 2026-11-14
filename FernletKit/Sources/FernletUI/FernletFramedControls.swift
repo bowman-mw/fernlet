@@ -340,6 +340,7 @@ public struct FernletNotice<Icon: View>: View {
     @Environment(\.fernletFramedLook) private var look
 
     /// - Parameter text: The notice's line, harvested into the calling target's catalog.
+    /// - Parameter tone: The notice's fill; `.info` by default.
     /// - Parameter icon: Its leading glyph (a ``FernletIcon`` or one of the app's pixel sprites).
     public init(_ text: LocalizedStringKey, tone: Tone = .info, @ViewBuilder icon: () -> Icon) {
         self.text = Text(text)

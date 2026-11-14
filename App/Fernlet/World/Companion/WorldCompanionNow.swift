@@ -39,6 +39,7 @@ extension WorldCompanionLook {
     ///
     /// - Parameters:
     ///   - store: The store the companion's feeling, state and worn pieces are read from.
+    ///   - date: The moment the picture shows.
     ///   - night: Which night the picture keeps (``WorldCompanionNight``).
     ///   - bodySignal: The opt-in body-signal reading, where the picture reads it (the map, the close-up).
     ///   - playfulUntil: When a pet's playfulness ends, where the picture is petted.

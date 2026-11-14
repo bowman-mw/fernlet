@@ -1265,6 +1265,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///   - keychainDelete: Replaces `KeychainItem.deleteReportingStatus` for every custody delete.
     ///   - deviceOwnerVerifier: Replaces the `LAContext` device-owner check before an adoption.
     ///   - privatePersistenceController: Replaces the shared store whose sealed rows the service counts and rebuilds.
+    ///   - biometricTypeOverride: Replaces the device's reported biometry type (tests only).
     public convenience init(
         keychainService: String = KeychainItem.productionService,
         sealedContentKeyServices: [String] = [KeychainItem.journalService],

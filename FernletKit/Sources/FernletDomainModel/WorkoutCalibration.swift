@@ -114,6 +114,8 @@ public nonisolated enum WorkoutCalibration {
     ///   - oneRepMax: the lift's one-rep max estimate the sets are worked from; not positive and finite answers no sets.
     ///   - todaysSuggested: the regular prescription's suggested weight, used by the strength check.
     ///   - todaysReps: the regular prescription's reps, used by the strength check.
+    ///   - kind: the calibration protocol (``kind(profile:confidence:)``).
+    ///   - step: the equipment's weight step the loads are rounded to; not positive answers no sets.
     ///   - ladder: the loads the location has for this lift; nil keeps the equipment's steps.
     public static func sets(
         kind: CalibrationKind, oneRepMax: Double, todaysSuggested: Double?, todaysReps: Int, step: Double,
