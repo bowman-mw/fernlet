@@ -27,7 +27,7 @@ import ProximityKit
 /// Fernlet's mesh features and the mesh engine they ride: the composition the app builds once and owns.
 ///
 /// The initializer runs in a fixed order: the device identity (handed in, or asked of the host's
-/// ``ProximityHost/makeProximityIdentity()`` exactly once), the mesh (built by the factory with that
+/// `ProximityHost/makeProximityIdentity()` exactly once), the mesh (built by the factory with that
 /// identity, which checks and provisions it), the feature objects (over the mesh and the same
 /// identity, the activity manager first, whose ledger loads, collects and may write as it is built,
 /// then the session photos, whose wall, pending corpus and reconcile load as they are built), then

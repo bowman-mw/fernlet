@@ -570,7 +570,7 @@ struct MoveView: View {
 /// reimplemented).
 ///
 /// A session is worth *guiding* through when it carries real, set-based catalog work, or a cardio or
-/// mobility line the runner can time (``WorkoutTimedSessions``: steady and interval cardio, a mobility
+/// mobility line the runner can time (`WorkoutTimedSessions`: steady and interval cardio, a mobility
 /// flow). A line it cannot time stays a descriptor (`sets == 0`) and its session unguided, and the rest
 /// day's gentle stretch is never the day's session — only an optional extra
 /// (``optionalStretch(in:excluding:loggedGuidedWorkoutNames:)``). ``MoveView``,
@@ -604,7 +604,7 @@ enum GuidedWorkoutAvailability {
     /// but the guided log (written with `suggestion.name` and tagged `loggedFromGuidedSession`) survives
     /// in `day.workouts` — so matching on that name keeps an already-logged guided session from being
     /// offered, and re-logged, again. Only tagged names are passed in, so a manual or planned "Legs"
-    /// never counts — nor does a guided run of a planned "Legs" (``Workout/isPlanRun``), which the
+    /// never counts — nor does a guided run of a planned "Legs" (`Workout/isPlanRun`), which the
     /// store matches by its plan's id and leaves out of the names.
     nonisolated static func isAlreadyLogged(
         _ session: WorkoutProgram.SessionSuggestion,
@@ -1962,7 +1962,7 @@ struct LogAgainCard: View {
 /// start it guided, edit it, adjust it with AI, save it for later (approve), rework it, or bulk-log
 /// it as done.
 ///
-/// 2026-08-21 chrome (1b/1d): a pinned ``SheetHeader`` with Cancel top-left (XCUT-15) titles both
+/// 2026-08-21 chrome (1b/1d): a pinned `SheetHeader` with Cancel top-left (XCUT-15) titles both
 /// states; the configurator states the active space inline with one Change into the Your-spaces
 /// list (MOVE-34); and the committed state carries ONE green — "Start now" in the bottom bar, with
 /// "Save for later" (the renamed Approve) and "Edit" as secondaries (MOVE-17). Finishing the
@@ -3919,7 +3919,7 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     /// Free-text minutes for a `.timed` cardio row ("20"), written as " - 20 min" after its name.
     var minutes = ""
     /// The structured record of a lift entered set by set in the Log sheet (idea 6); nil for every
-    /// free-text row. When set, the row's line is the record's own ``ExerciseResult/loggedLine``, so
+    /// free-text row. When set, the row's line is the record's own `ExerciseResult/loggedLine`, so
     /// the readable log and the record cannot disagree.
     var result: ExerciseResult? = nil
 

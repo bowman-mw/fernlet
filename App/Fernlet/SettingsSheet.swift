@@ -2752,7 +2752,7 @@ enum AwayDeliveryConsentCopy {
 ///
 /// `MemoryNote.category` is persisted and synced, and it is what the page groups by and the editor's
 /// chips store — so it never localizes. The categories Fernlet itself writes are a journal entry's
-/// ``FeelingTag`` raw value and the editor's "other"; those draw localized names here. Any other token
+/// `FeelingTag` raw value and the editor's "other"; those draw localized names here. Any other token
 /// (one an older build or the user wrote) draws exactly as before: capitalized on a chip, upper-cased
 /// in the root locale on a heading. A feeling's name is the mood chip's own label, agreed with the
 /// user's term of address (`address`, the page's `fernletTermOfAddress`), since it names how they felt.

@@ -5,7 +5,7 @@ import PrivateMediaStore
 import WorldMapStore
 
 /// The road trips' photo roll on this iPhone (World-RoadTrip-Spec PR 3, owner-approved 2026-11-10: `rt-photos`,
-/// `rt-map`): a thin owner over the sealed corpus (``RoadTripPhotoStore``, the photos with who took them, when and
+/// `rt-map`): a thin owner over the sealed corpus (`RoadTripPhotoStore`, the photos with who took them, when and
 /// whether they are hidden) and the photos' places in the map's vault (a `PhotoPlaceStore` over
 /// `road-trip-photo-places.bin`, deleted with map history). The store's rules (`FernletStore+RoadTripPhotos.swift`)
 /// decide what goes in; this keeps it.

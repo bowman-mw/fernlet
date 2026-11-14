@@ -3,19 +3,19 @@ import WorldMapStore
 
 /// The one reader of the passport's discoveries (World-Exploration-Spec §4; `WorldAtlasKeeper.discoveries()` allows
 /// one reader, and a second subscription would end the first). Held by Home for as long as Home's map lives, it
-/// listens once and fans each ``PassportEvent`` out:
+/// listens once and fans each `PassportEvent` out:
 ///
 /// - **Sprout's lines** from first visits only (``line``, ``WorldLinePicker``): one line at a time, the best of one
 ///   fix's finds (``WorldLinePicker/better(_:_:)``: a city beats the ground under it). A new trip says nothing.
 ///   Landmark lines come from here and only here: `WorldExploreState.onLandmarkFound` (the cities piece's seam)
 ///   stays unattached, so a landmark's line plays once.
 /// - **New stamps** (``onNewStamp``): every first-visit country, continent, ocean and sea stamp, the two specials on
-///   the visit that completes them, and each ``PassportEvent/newTrip(_:)``. The passport book attaches here (the
+///   the visit that completes them, and each `PassportEvent/newTrip(_:)`. The passport book attaches here (the
 ///   next wave); nil drops them. Airport stamps never go there, whatever ``WorldLinePicker/stamps(for:in:)`` lists
 ///   (their banners are Home's own: one banner and one haptic for a landing).
 /// - **Airport stamps** (``onAirportStamp``, World-Airports-Spec §3, §6.3): an airport's first visit and each new trip
 ///   through it, by token and date, for Home's airport banner (``WorldAirportHomeState``). An airport's first visit
-///   also brings Sprout's new-airport line; a landing's line comes from Home through ``offer(_:)``.
+///   also brings Sprout's new-airport line; a landing's line comes from Home through ``offer(_:now:)``.
 ///
 /// A decoy hears nothing: the keeper announces nothing in one, and the router checks again.
 @MainActor
@@ -37,7 +37,7 @@ final class WorldDiscoveryRouter {
     /// How long a line may wait to be said before it goes stale (a panel was up when the place was found).
     static let staleAfter: TimeInterval = 15 * 60
 
-    /// Reads `keeper`'s discoveries until the task is cancelled, routing each (``route(_:book:places:isDecoy:)``).
+    /// Reads `keeper`'s discoveries until the task is cancelled, routing each (``route(_:book:places:isDecoy:now:)``).
     /// One listener at a time; ends the stream when it stops.
     func listen(to keeper: WorldAtlasKeeper, places: WorldDiscoveryPlaces, isDecoy: @escaping @MainActor () -> Bool) async {
         guard !isListening else { return }

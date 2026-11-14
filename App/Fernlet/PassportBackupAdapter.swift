@@ -19,9 +19,9 @@ struct PassportBackupSeamClosedError: Error, Equatable {}
 /// no `last`) reads as that country's one trip.
 ///
 /// **Airports and flights** (World-Airports-Spec §8–§11) keep the same shape and add only OPTIONAL keys:
-/// - kind `airport`: an airport (``WorldAirport/token``), one record per trip, like a country;
+/// - kind `airport`: an airport (`WorldAirport/token`), one record per trip, like a country;
 /// - kind `airportTransit`: one layover, `token` the airport and `first` its trip's start;
-/// - kind `flight` (flown) and `upcomingFlight`: one ``PassportFlight``, `token` "FROM>TO" (IATA codes), `first`
+/// - kind `flight` (flown) and `upcomingFlight`: one `PassportFlight`, `token` "FROM>TO" (IATA codes), `first`
 ///   the departure and `last` the arrival when known, with `src` the sources bitmask, `flags` (bit 1: the times
 ///   are unsure; absent when 0) and `eh` the calendar event's hash (calendar flights only).
 ///
@@ -30,7 +30,7 @@ struct PassportBackupSeamClosedError: Error, Equatable {}
 /// kept on the iPhone. A restore merges by kind and token, never by id. `kind` is kept as its raw
 /// spelling, and every key this build does not know is kept as it was read (``extra``, at most
 /// ``maxExtraKeys``), so a record of a kind this build does not know decodes whole: the restore skips it and
-/// keeps it (``PassportBook/keptBackupRecords``), and every later export carries it again (World-Airports-Spec
+/// keeps it (`PassportBook/keptBackupRecords`), and every later export carries it again (World-Airports-Spec
 /// §11), so a newer Fernlet's records survive a round trip through this build.
 nonisolated struct PassportBackupRecord: Codable, Equatable {
     /// The record's id within its set.
@@ -45,7 +45,7 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
     /// For a country's or an airport's latest trip, its clock; for a flight, its arrival when known; nil
     /// otherwise and in records from before trips.
     var lastSeen: Date?
-    /// A flight's sources bitmask (`src`, ``PassportFlight/Sources``); nil for every other kind.
+    /// A flight's sources bitmask (`src`, `PassportFlight/Sources`); nil for every other kind.
     var sources: Int?
     /// A flight's flags (`flags`: bit 1, the times are unsure); nil when there are none.
     var flags: Int?
@@ -146,7 +146,7 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
     }
 
     /// The flight a `flight` or `upcomingFlight` record carries, or nil for any other kind or a flight that
-    /// breaks ``PassportFlight``'s rules.
+    /// breaks `PassportFlight`'s rules.
     var flight: PassportFlight? {
         guard kind == Self.flightKind || kind == Self.upcomingFlightKind, let sources else { return nil }
         let codes = token.split(separator: ">", omittingEmptySubsequences: false)
@@ -219,7 +219,7 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
 ///   (``mergePassport``, `PassportBook.merge`). A record of a kind this build does not know is SKIPPED and
 ///   KEPT (World-Airports-Spec §11: an older build skips unknown kinds when restoring and keeps them when
 ///   rewriting), so it is carried again in every later export. A token it would refuse, a flight that breaks the
-///   rules, or a set over a cap (more than ``PassportBook/maxKeptBackupRecords`` kept records among them) is
+///   rules, or a set over a cap (more than `PassportBook/maxKeptBackupRecords` kept records among them) is
 ///   ``SealedBackupV2FormatError/unreadableRecords`` (a newer Fernlet wrote it: never dropped, never written
 ///   over); a failed save is rethrown, so the restore stays unresolved and a later pass merges again. No
 ///   follow-up write.
@@ -419,7 +419,7 @@ final class PassportBackupAdapter: SealedBackupV2Adapter {
     /// The passport `records` carry. A country's or an airport's records are its trips (an old record, one per
     /// country, is one trip), its clock the latest `last` among them; layovers, flights and upcoming flights come
     /// from their own kinds; and a record of a kind this build does not know is skipped and kept
-    /// (``PassportBook/keptBackupRecords``). ``SealedBackupV2FormatError/unreadableRecords`` for a token this
+    /// (`PassportBook/keptBackupRecords`). ``SealedBackupV2FormatError/unreadableRecords`` for a token this
     /// build would refuse, a flight that breaks the rules, or more than a cap allows.
     static func book(of records: [PassportBackupRecord]) throws -> PassportBook {
         guard records.count <= maxRecords else { throw SealedBackupV2FormatError.unreadableRecords }

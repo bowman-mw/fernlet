@@ -1,7 +1,7 @@
 import Foundation
 import WorldMapStore
 
-/// How far a passport has come, read from one ``PassportBook`` against the bundled atlas (World-Exploration-Spec §3):
+/// How far a passport has come, read from one `PassportBook` against the bundled atlas (World-Exploration-Spec §3):
 /// countries N of 194 (each one of the passport's countries, a territory counting toward its sovereign state, as
 /// the atlas's `CTRY` table says), continents N of 7, oceans N of 5, the seas (no fixed total), the two specials,
 /// the airports found (no total, World-Airports-Spec §4.2: "6 airports"), and each continent's countries, in
@@ -101,7 +101,7 @@ nonisolated struct PassportProgress: Equatable, Sendable {
 
 /// The atlas's passport countries, read once: each of the 194 with its continent, each territory's sovereign, and
 /// every continent's count, so ``PassportProgress`` is a few dictionary reads per render. Public data from the
-/// bundled pack. Bounded by the pack's country table (``WorldAtlas/countries``).
+/// bundled pack. Bounded by the pack's country table (`WorldAtlas/countries`).
 nonisolated struct PassportCountryTable: Equatable, Sendable {
     /// Each passport country's continent.
     let continentOf: [String: AtlasContinent]

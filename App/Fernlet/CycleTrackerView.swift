@@ -50,7 +50,7 @@ extension PeriodFlowLevel {
 /// "Egg White". One vocabulary, keyed on the CASE, now serves the picker that sets the value and
 /// the detail row that reads it back, so the two cannot disagree again and neither speaks a storage
 /// token aloud. Which case a raw HealthKit value is remains the sealed module's call, via
-/// ``CervicalMucusQuality/hkValue`` — the same table `CycleDayEntry.cervicalMucusQuality` matches on.
+/// `CervicalMucusQuality/hkValue` — the same table `CycleDayEntry.cervicalMucusQuality` matches on.
 extension CervicalMucusQuality {
     /// The localized mucus word shown in the log sheet's picker and on the calendar day detail.
     var displayName: String {
@@ -1133,11 +1133,11 @@ struct CycleMonthCell: Identifiable {
         }
     }
 
-    /// `Text` rather than `String` (review T2-1) — see ``JournalMonthCell/accessibilityLabel`` for
+    /// `Text` rather than `String` (review T2-1) — see `JournalMonthCell/accessibilityLabel` for
     /// why appending clauses cannot localize, and why whole sentences are chosen instead.
     ///
-    /// Every sentence opens with ``dayPrefix(day:)``, which carries the WEEKDAY. Forecast days
-    /// branch out first (review T2-17): see ``predictedLabel(prefix:)``.
+    /// Every sentence opens with `dayPrefix(day:)`, which carries the WEEKDAY. Forecast days
+    /// branch out first (review T2-17): see `predictedLabel(prefix:)`.
     var accessibilityLabel: Text {
         guard let day else { return Text("Empty calendar cell") }
         let prefix = dayPrefix(day: day)

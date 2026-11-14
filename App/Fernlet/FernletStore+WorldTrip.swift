@@ -91,7 +91,7 @@ extension FernletStore {
 
     /// What today's calendar flight depends on, for Home to read it again when any of it changes (§10.7): the airport,
     /// the trip, the flight, a decoy, and the upcoming flights, because a calendar look can finish after the person
-    /// reached the airport. In memory only. Bounded by ``PassportBook/maxUpcomingFlights``.
+    /// reached the airport. In memory only. Bounded by `PassportBook/maxUpcomingFlights`.
     var worldTripTodaySource: [String] {
         let flights = worldLocation.flights
         return [flights.currentAirport ?? "", flights.isOnTrip ? "trip" : "", flights.isFlying ? "air" : "",

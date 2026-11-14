@@ -92,7 +92,8 @@ public struct MealPhotoStore {
     ///     plaintext generation on disk (the original meal-photo store); pass false for stores that
     ///     were born sealed (recipe/body photos) so unsealed bytes are refused, not laundered.
     ///   - legacyKeyProvider: Optional pre-split key for the dual-open safety net (see
-    ///     ``legacyKeyProvider``). Nil — the default — means no fallback.
+    ///     `legacyKeyProvider`). Nil — the default — means no fallback.
+    ///   - purpose: The at-rest AEAD purpose every seal and open of this store uses; defaults to the meal-photo purpose.
     ///   - legacyQuarantine: Where a restore moves an unreadable file before writing over its id;
     ///     cleared by ``deleteAll()``. Nil — the default — writes over it as before.
     public init(
@@ -200,7 +201,7 @@ public struct MealPhotoStore {
     /// Writes ALREADY-NORMALIZED photo bytes under `id`, sealing them as-is — the escrow-restore
     /// seam (security-hardening Phase 5, step 5b).
     ///
-    /// Deliberately skips ``normalizedJPEG(from:)``, unlike ``save(_:forID:)``: the bytes being
+    /// Deliberately skips `normalizedJPEG(from:)`, unlike ``save(_:forID:)``: the bytes being
     /// restored were normalized once before they were uploaded, so re-encoding them here would be a
     /// second lossy JPEG pass AND would change their SHA-256 — which is the hash the sealed manifest
     /// committed, so every subsequent backup would see the whole restored corpus as "changed" and
@@ -310,7 +311,7 @@ public struct MealPhotoStore {
     ///
     /// "Openable" means openable by any path this store's READ actually uses: the own key, the
     /// dual-open legacy key, and — only where the corpus legitimately has one
-    /// (``allowsLegacyPlaintextUpgrade``) — a pre-sealing plaintext JPEG. That last clause is why
+    /// (`allowsLegacyPlaintextUpgrade`) — a pre-sealing plaintext JPEG. That last clause is why
     /// this is not simply the migration pass's `unopenable` tally: legacy plaintext scores
     /// unopenable there and is still returned to the user here.
     public func holdsOnlyUnopenableFiles() -> Bool {

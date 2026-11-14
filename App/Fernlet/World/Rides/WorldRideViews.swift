@@ -119,7 +119,7 @@ enum WorldRideLine {
 /// ``WorldRideKeeper/loggedRide`` is set, and only counts down while Home is in front: a ride that ended
 /// under a panel or with the app away waits there until Home is seen. VoiceOver hears the line as the
 /// note's window begins, as it hears the walk's; Undo removes the ride's workout. The first time a ride's
-/// note is seen it plays ``FernletFeedbackEvent/done`` (owner 2026-10-29), a logged meal's haptic, through
+/// note is seen it plays `FernletFeedbackEvent/done` (owner 2026-10-29), a logged meal's haptic, through
 /// the app's Haptics setting; it carries no sound.
 struct WorldRideNote: View {
     var store: FernletStore

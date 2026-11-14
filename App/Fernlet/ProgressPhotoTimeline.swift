@@ -477,7 +477,7 @@ enum ProgressPhotoSectionContent: Equatable {
 ///
 /// Purely presentational; ``DeferredLockSetupNudge`` decides when it shows and records the answer.
 /// Inline rather than modal, so it never blocks or delays capture — the copy says photos can keep
-/// being added either way. Buttons stack at accessibility text sizes (``AdaptiveStack``), and each
+/// being added either way. Buttons stack at accessibility text sizes (`AdaptiveStack`), and each
 /// carries a hint for what happens next, since "Not now" retires the card for good.
 struct ProgressPhotoLockNudgeCard: View {
     /// Opens lock setup granting `.progressPhotos`.

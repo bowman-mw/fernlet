@@ -16,7 +16,7 @@ import UIKit
 /// The pages pushed inside one title plate, bottom first: what the plate draws and where its Back goes.
 ///
 /// A plate owner (the World panel frame) keeps one in `@State` and puts it in the environment
-/// (``EnvironmentValues/fernletPlateNavigation``); each page that calls ``SwiftUI/View/fernletPushedPage(_:)``
+/// (``SwiftUICore/EnvironmentValues/fernletPlateNavigation``); each page that calls ``SwiftUICore/View/fernletPushedPage(_:)``
 /// reports when it appears and when it disappears, nothing else (SwiftUI's `isPresented` is false for a
 /// page covered by a push as well as for one popped, so it cannot tell the two apart). From that order:
 ///
@@ -218,6 +218,7 @@ public struct FernletBackButton: View {
     /// - Parameters:
     ///   - destination: The page Back returns to, already in the reader's language.
     ///   - compact: Draw the arrow alone (the current page's title is long).
+    ///   - action: Runs when the button is tapped.
     public init(verbatim destination: String, compact: Bool = false, action: @escaping () -> Void) {
         self.destination = destination
         self.compact = compact

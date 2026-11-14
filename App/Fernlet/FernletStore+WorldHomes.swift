@@ -10,7 +10,7 @@ import WorldMapStore
 extension FernletStore {
     // MARK: Homes and hotels
 
-    /// The companion's name as every screen says it: the person's choice, or "Sprout" (``CompanionName``).
+    /// The companion's name as every screen says it: the person's choice, or "Sprout" (`CompanionName`).
     /// The one app-side reader; screens call this rather than trimming `settings.companionName` themselves.
     var worldCompanionName: String { settings.companionDisplayName }
 

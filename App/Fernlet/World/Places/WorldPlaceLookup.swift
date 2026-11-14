@@ -4,7 +4,7 @@ import WorldMapStore
 /// The seam a place is decided and named through (World build step 5c and round 5).
 ///
 /// - **At capture**, on the device, at the moment of a visit or a solo photo: the places around a point, in
-///   plain values (``NearbyPlace``), or nil when no answer came (offline, or the lookup failed). Fernlet
+///   plain values (`NearbyPlace`), or nil when no answer came (offline, or the lookup failed). Fernlet
 ///   keeps none of what comes back beyond the decision (the MapKit terms): a visit keeps the person's own
 ///   point and the lookup's reference to the place; a photo keeps its point or nothing.
 /// - **When the person looks** at their places (Private's Places page): the name and kind of a kept place,

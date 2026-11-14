@@ -152,7 +152,7 @@ public struct LocalFernletDatabase: Codable, @unchecked Sendable {
 ///   those keys. ``purgeAllPersistedData()`` clears them too, and must: that corpus holds
 ///   journal and memory JSON *unsealed* in the preferences plist, and because an absent file is
 ///   indistinguishable from a first launch, keys left behind are re-read by
-///   ``migratedDatabase(todayKey:)`` on the very next load — a wipe the user watched succeed,
+///   `migratedDatabase(todayKey:)` on the very next load — a wipe the user watched succeed,
 ///   undone at relaunch (and re-uploaded, with sync on).
 /// - **Backup exclusion (security-hardening Phase 6).** When
 ///   `StoragePreferences.localBackupExcludedFromiOSBackup` is set, the day-blob file itself is
@@ -222,7 +222,7 @@ public struct LocalFernletRepository: FernletRepository {
     ///     custom location; `nil` selects the production path.
     ///   - backupExclusionPreference: Test seam for the exclusion choice; `nil` selects the live
     ///     `StoragePreferencesStore.currentPreferences()` read.
-    ///   - legacyDefaults: Test seam for the pre-database ``LegacyKeys`` domain; `nil` selects
+    ///   - legacyDefaults: Test seam for the pre-database `LegacyKeys` domain; `nil` selects
     ///     `.standard`, the domain the pre-database builds actually wrote.
     public init(
         fileURL: URL? = nil,
@@ -402,14 +402,14 @@ public struct LocalFernletRepository: FernletRepository {
         state.persistenceBlockedByDecodeFailure = true
     }
 
-    /// Deletes the whole local store file AND the pre-database ``LegacyKeys`` UserDefaults corpus.
+    /// Deletes the whole local store file AND the pre-database `LegacyKeys` UserDefaults corpus.
     /// Removing the file rather than writing an empty database leaves nothing on disk to be
     /// recovered, and the next `loadDatabase` already treats an absent file as a fresh database —
     /// so this is the same end state a first launch sees.
     ///
     /// The legacy keys are the other half of "the same end state", not an extra: they hold
     /// `[JournalEntry]` and `[MemoryNote]` as UNSEALED JSON in the preferences plist, and an
-    /// absent file routes the next load straight through ``migratedDatabase(todayKey:)``, which
+    /// absent file routes the next load straight through `migratedDatabase(todayKey:)`, which
     /// re-reads all seven families. Clearing only the file leaves the plaintext behind and lets
     /// relaunch put the data back.
     ///

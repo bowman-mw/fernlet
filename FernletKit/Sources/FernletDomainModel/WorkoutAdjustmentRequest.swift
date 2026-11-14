@@ -102,7 +102,7 @@ public nonisolated struct WorkoutAdjustmentRequest: Equatable, Sendable {
 
     /// `picks` with the request enforced: a pick on ruled-out equipment is replaced by the lift from
     /// `pool` that does the most similar work on equipment the request allows
-    /// (``replacement(for:in:excluding:)``), keeping the pick's sets, or left out when there is none.
+    /// (`replacement(for:in:excluding:)`), keeping the pick's sets, or left out when there is none.
     /// `catalog` is where a pick's name is looked up; a pick it does not know is kept as it is.
     public func enforced(on picks: [PrescribedExercise], pool: [ExerciseTarget], catalog: [ExerciseTarget]) -> [PrescribedExercise] {
         guard !excludedEquipment.isEmpty else { return picks }

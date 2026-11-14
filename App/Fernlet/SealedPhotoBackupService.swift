@@ -5,7 +5,7 @@ import Foundation
 import FernletFoundation
 import CloudKitSync
 
-/// AES-GCM seal/open for ``SealedPhotoRecord``s — the pure crypto half of the own-photo escrow
+/// AES-GCM seal/open for `SealedPhotoRecord`s — the pure crypto half of the own-photo escrow
 /// route (security-hardening Phase 5, step 5b).
 ///
 /// The sibling of `SealedBackupCrypto`, and deliberately its own namespace rather than a fifth
@@ -22,7 +22,7 @@ import CloudKitSync
 ///
 /// Stateless namespace; `@MainActor` because `IdentityService` is.
 enum SealedPhotoCrypto {
-    /// Seals one photo body (or a corpus manifest) into a ``SealedPhotoRecord``.
+    /// Seals one photo body (or a corpus manifest) into a `SealedPhotoRecord`.
     ///
     /// - Parameters:
     ///   - plaintext: The normalized JPEG, or the encoded manifest.
@@ -252,11 +252,11 @@ struct SealedPhotoRestoreSummary: Equatable, Sendable {
 /// gate, restore-before-reupload ordering, delete-all teardown).
 ///
 /// The three operations that define the scheme:
-/// - ``reconcile(corpus:ids:sidecar:photo:)`` uploads only what changed and writes the manifest
+/// - ``reconcile(corpus:ids:sidecar:verifyingContentHashes:prunableIDs:photo:)`` uploads only what changed and writes the manifest
 ///   **LAST** as the commit marker;
 /// - ``addPhoto(_:id:corpus:sidecar:)`` is the incremental add — one new record plus a rewritten
 ///   (small) manifest, nothing else touched;
-/// - ``restore(corpus:write:)`` opens the manifest FIRST (authenticate, then generation high-water,
+/// - ``restore(corpus:limitedTo:skipping:write:)`` opens the manifest FIRST (authenticate, then generation high-water,
 ///   in that order), then fetches each listed id.
 ///
 /// Main-actor isolated, matching its `IdentityService` dependency.
@@ -270,6 +270,8 @@ final class SealedPhotoBackupService {
 
     /// Creates the service over its CloudKit transport and the sealing identity.
     ///
+    /// - Parameter cloudDataService: The CloudKit transport the sealed records travel through.
+    /// - Parameter identityService: The identity the photos are sealed to and opened with.
     /// - Parameter generationStore: Injectable so tests drive rollback scenarios against an isolated
     ///   `UserDefaults` suite. Defaulted to `nil` and resolved in the body because
     ///   `SealedBackupGenerationStore` is `@MainActor` and default-argument expressions evaluate in a
@@ -309,6 +311,10 @@ final class SealedPhotoBackupService {
     ///    make each device's upload delete the other's photos — and, because each would then
     ///    re-upload on its next pass, ping-pong the whole library every launch.
     ///
+    /// - Parameter corpus: The photo corpus whose manifest this pass commits.
+    /// - Parameter ids: Every photo id this device holds in the corpus right now.
+    /// - Parameter sidecar: The corpus sidecar (the progress timeline index) to commit with the
+    ///   manifest; nil keeps the one already there.
     /// - Parameter verifyingContentHashes: When true (the FULL pass — enabling the backup, or the
     ///   user's explicit Retry) every id's plaintext is read and hashed, so a photo REPLACED in
     ///   place under the same id is re-uploaded. When false (the ambient launch pass) an id already
@@ -320,6 +326,7 @@ final class SealedPhotoBackupService {
     ///   allowed to remove. An id in here that is no longer in `ids` was genuinely deleted on this
     ///   device, so it leaves the manifest (and its record is deleted); an id NOT in here is another
     ///   device's and is carried forward untouched. Empty means "prune nothing", the safe default.
+    /// - Parameter photo: Reads one id's plaintext bytes; nil when the photo is gone.
     @discardableResult
     func reconcile(
         corpus: SealedPhotoCorpus,
@@ -655,6 +662,7 @@ final class SealedPhotoBackupService {
     /// ``SealedPhotoRestoreSummary/failed``, never the whole set. `write` returns whether the bytes
     /// reached the local store; a refusal counts as a failed photo.
     ///
+    /// - Parameter corpus: The photo corpus to restore.
     /// - Parameter limitedTo: When non-nil, only manifest entries whose id is in this set are
     ///   fetched — the REPAIR pass for a previous restore's failures. The whole point of the repair
     ///   is that it runs against a corpus that is no longer empty, so it must not re-download (or
@@ -664,6 +672,8 @@ final class SealedPhotoBackupService {
     ///   keep: they are neither fetched, written, nor counted as failed — the restore INTO a corpus
     ///   holding photos this device took before its backup was turned on (bug confirmation 2026-10-15
     ///   §2), where a fetched copy must never overwrite the local one.
+    /// - Parameter write: Stores one restored photo's bytes under its id and returns whether they
+    ///   reached the local store.
     /// - Returns: nil when the corpus has no manifest at all (nothing was ever committed).
     /// - Throws: `SealedBackupError.staleGeneration` on rollback, `.keyAgreementIdentityMismatch`
     ///   when the manifest is not ours, `.malformedRecord` when it is ours but corrupt.
@@ -779,7 +789,7 @@ final class SealedPhotoBackupService {
     ///
     /// Three things it deliberately does NOT do, each a way its reading could be quoted as proof of
     /// something it does not say:
-    /// - **No generation high-water check.** Only ``restore(corpus:limitedTo:write:)`` does that, so a
+    /// - **No generation high-water check.** Only `restore(corpus:limitedTo:write:)` does that, so a
     ///   stale-but-authentic manifest can read `>= 2` here while the live one reads 1. The caller
     ///   prints the record's ``SealedPhotoManifestFormatReading/generation`` beside
     ///   `SealedBackupGenerationStore.lastSeenPhoto(for:)` and says when they disagree.
@@ -864,7 +874,7 @@ final class SealedPhotoBackupService {
     /// plaintext) used to be accepted as a second, unbound comparison in a matching helper here;
     /// the crypto standardization round's Phase 3 deleted it, so an entry whose committed digest
     /// was written under v1 no longer matches anything and is refused BY NAME at the one call site
-    /// that compares — see ``restore(corpus:limitedTo:write:)`` and
+    /// that compares — see `restore(corpus:limitedTo:write:)` and
     /// ``SealedPhotoRestoreSummary/unverifiableLegacyDigest``.
     static func contentHash(_ plaintext: Data) -> Data {
         Data(SHA256.hash(data: FernletCryptoPurpose.Hash.sealedPhotoContentV2.data + plaintext))

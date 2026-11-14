@@ -3,7 +3,7 @@ import SwiftUI
 /// App colors' Wood and Accent (design `b2-colors`, approved 2026-10-24): the wood the World's
 /// navigation is made of (the title plates, the item bar, the sheets' grabbers) and the accent its
 /// buttons, switches and selected chips wear. Paper is the other half of the page and keeps today's
-/// stored backgrounds (``FernletThemeDefaults``).
+/// stored backgrounds (`FernletThemeDefaults`).
 ///
 /// **Storage.** Two device-only `UserDefaults` keys holding a case's raw value, so the raw values are
 /// frozen tokens (never renamed, never localized; a value no case knows reads as the default). They
@@ -12,7 +12,7 @@ import SwiftUI
 /// keys is in this file, so the wipe wall resolves them to their literals.
 ///
 /// **Redrawing.** ``WorldPalette``'s wood and accent tokens read the stored choice, and
-/// `worldDesignLanguage()` hands it down as ``EnvironmentValues/worldAppColors`` from `@AppStorage`, so
+/// `worldDesignLanguage()` hands it down as `EnvironmentValues/worldAppColors` from `@AppStorage`, so
 /// a pick rebuilds the framed look at once; a view drawing wood or accent straight from
 /// ``WorldPalette`` that stays on screen (a panel's plate, the item bar) reads the environment value,
 /// which redraws it too.
@@ -190,7 +190,7 @@ extension EnvironmentValues {
     @Entry var worldAppColors = WorldAppColorChoice()
 }
 
-/// Reads the stored App colors choice and hands it down (``EnvironmentValues/worldAppColors``); part of
+/// Reads the stored App colors choice and hands it down (`EnvironmentValues/worldAppColors`); part of
 /// `worldDesignLanguage()`. `@AppStorage`, so a pick on the App colors page redraws everything below.
 struct WorldAppColorsSource: ViewModifier {
     @AppStorage(WorldAppColors.woodKey) private var wood = WorldWood.oak.rawValue

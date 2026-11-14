@@ -148,7 +148,7 @@ struct PeerReportSubject: Identifiable, Equatable {
 
 extension View {
     /// Presents the app's one people-report flow whenever `subject` is set: the report sheet — one
-    /// destructive button per ``ReportReason`` and Cancel — then, once a reason is chosen and
+    /// destructive button per `ReportReason` and Cancel — then, once a reason is chosen and
     /// `onReport` has filed it, a short "Reported" note that offers the developer contact route
     /// Safety & reporting publishes.
     ///

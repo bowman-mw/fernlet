@@ -16,7 +16,7 @@ import FernletUI
 /// intimacy-tracking gate has flipped to hidden throws `IntimacyTrackingHiddenError`, which the
 /// sheet surfaces as a gentle explanation instead of a raw error string — as does a seal that
 /// refuses for want of an install binding
-/// (``ColumnCrypto/SealedColumnStrictSealError/bindingUnavailable``). A HealthKit write failure
+/// (`ColumnCrypto/SealedColumnStrictSealError/bindingUnavailable`). A HealthKit write failure
 /// after a successful seal is reported but never blocks the local save. Chrome is the 2026-08-21
 /// template: the draft-guard header carries Cancel and the title; Save commits bottom-right.
 struct LogIntimacySheet: View {

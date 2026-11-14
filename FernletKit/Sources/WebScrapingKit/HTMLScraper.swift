@@ -253,8 +253,8 @@ public enum HTMLScraper {
     /// never part of the article. Removed whole (open tag through close tag), not just untagged.
     public static let noiseElementNames = ["nav", "footer", "header", "aside", "script", "style"]
 
-    /// R3: the input cap for the *text* extraction tiers — this type's ``cleanedBodyText(from:
-    /// decodingNumericEntities:characterLimit:)`` and the product importer's visible-text /
+    /// R3: the input cap for the *text* extraction tiers — this type's
+    /// ``cleanedBodyText(from:decodingNumericEntities:characterLimit:)`` and the product importer's visible-text /
     /// serving-size scrapes.
     ///
     /// Those keep `(.*?)` / `(.+?)` patterns whose cost is quadratic in the input length on markup
@@ -269,7 +269,7 @@ public enum HTMLScraper {
     /// Non-greedy and case-insensitive, so nested same-name elements close at the first match. This is
     /// a text scrub, not a parse: unbalanced markup simply survives.
     ///
-    /// Walks ``nextElement(named:in:from:)`` rather than running six `.regularExpression` passes: the
+    /// Walks `nextElement(named:in:from:)` rather than running six `.regularExpression` passes: the
     /// regex form was quadratic on a page that opens a noise tag and never closes it (M10).
     public static func removingElements(_ tagNames: [String], from html: String) -> String {
         tagNames.reduce(html) { currentHTML, tagName in

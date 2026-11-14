@@ -142,10 +142,10 @@ public nonisolated struct CompanionEmotionInputs: Equatable, Sendable {
     /// The same inputs with the app-only signals removed: the body-signal reading, the pet and the
     /// friend's heart.
     ///
-    /// What the widget timeline is built from, so ``CompanionEmotion/calm``,
-    /// ``CompanionEmotion/frazzled``, ``CompanionEmotion/playful``, ``CompanionEmotion/loved`` and
-    /// ``CompanionEmotion/comforted`` cannot reach the widget snapshot by any route (see
-    /// ``CompanionEmotion/isWidgetPublishable``).
+    /// What the widget timeline is built from, so `CompanionEmotion/calm`,
+    /// `CompanionEmotion/frazzled`, `CompanionEmotion/playful`, `CompanionEmotion/loved` and
+    /// `CompanionEmotion/comforted` cannot reach the widget snapshot by any route (see
+    /// `CompanionEmotion/isWidgetPublishable`).
     public var widgetSafe: CompanionEmotionInputs {
         var copy = self
         copy.bodySignal = nil
@@ -176,7 +176,7 @@ public nonisolated struct CompanionEmotionInputs: Equatable, Sendable {
 /// order spelled out as the explicit table the engine walks.
 public nonisolated enum CompanionEmotionRule: String, CaseIterable, Sendable {
     /// Past the bedtime wind-down: asleep. Outranks even the unwell flag, because an asleep
-    /// companion shows nothing of the day (``CompanionEmotion/hidesTheDay``).
+    /// companion shows nothing of the day (`CompanionEmotion/hidesTheDay`).
     case asleep
     /// Today is marked unwell. No emotion: the sick face is the whole story.
     case unwell

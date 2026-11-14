@@ -2,11 +2,14 @@ import XCTest
 
 /// Guards the #7 redesigned home cards: First Aid previews its tools as chips, and Milestones shows the
 /// kept kinds of care as a keepsake shelf. Both must render and stay tappable to their destinations.
+/// In the World look Home is the map and these cards live in the Today panel, which the map's status
+/// plate opens.
 @MainActor
 final class HomeCardsRedesignUITests: XCTestCase {
 
     func testFirstAidAndMilestonesCardsRenderAndOpen() {
         let app = UXTestApp.launch()
+        openToday(in: app)
 
         let firstAid = app.descendants(matching: .any)["home.firstAid"].firstMatch
         XCTAssertTrue(scrollClearOfTabBar(firstAid, in: app), "First Aid card not reachable")
@@ -15,8 +18,12 @@ final class HomeCardsRedesignUITests: XCTestCase {
         firstAid.tap()
         let firstAidSheet = app.staticTexts["Slow breathing"].firstMatch
         XCTAssertTrue(firstAidSheet.waitForExistence(timeout: 5), "First Aid card did not open the tools sheet")
-        // Dismiss the sheet.
-        app.swipeDown(velocity: .fast)
+        // Dismiss the sheet: the framed sheet's Done.
+        let done = app.buttons["sheet.done"].firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 5), "the First Aid sheet has no Done")
+        done.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.firstAid"].firstMatch.waitForNonExistence(timeout: 5),
+                      "the First Aid sheet did not close")
 
         let milestones = app.descendants(matching: .any)["home.milestones"].firstMatch
         XCTAssertTrue(scrollClearOfTabBar(milestones, in: app), "Milestones card not reachable")
@@ -29,7 +36,7 @@ final class HomeCardsRedesignUITests: XCTestCase {
                       "Milestones card did not present the Milestones sheet")
     }
 
-    /// A5·Q2 — every personal-care toggle on the Home card must be its own focusable element, must
+    /// A5·Q2 — every personal-care toggle on the Personal care card (in the Today panel) must be its own focusable element, must
     /// activate the task it names (not the card's open-the-sheet button underneath it), and must say
     /// whether the task is done.
     ///
@@ -41,19 +48,19 @@ final class HomeCardsRedesignUITests: XCTestCase {
     /// carried `.isSelected`, so a screen reader announced "Floss, button" whether or not the task was
     /// already done. The grid is now a sibling of the open-the-sheet button rather than its child, so
     /// there is no flattening question left to be at the mercy of. `HomeWidget.hygiene` is opt-in (not
-    /// one of `HomeWidget.defaultWidgets`), so the card has to be added through Settings first.
+    /// one of `HomeWidget.defaultWidgets`), so the card has to be switched on in Arrange Today first.
     func testPersonalCareTogglesAreIndividuallyReachableAndOperable() {
         let app = addPersonalCareCardToHome()
 
         // Label-based, so the walk finds the card in both the flattened and the restructured tree.
         let anchor = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Personal care")).firstMatch
-        XCTAssertTrue(scrollClearOfTabBar(anchor, in: app), "Personal care card not reachable on Home")
+        XCTAssertTrue(scrollClearOfTabBar(anchor, in: app), "Personal care card not reachable in Today")
         // Then the card's last toggle, so the whole grid is on screen: it is lazy, and lays out only
         // the rows near the screen (two of eight with the card's header at y≈820), while the walk
         // below counts all eight.
         let lastTask = app.buttons[Self.lastTaskLabel].firstMatch
-        XCTAssertTrue(scrollClearOfTabBar(lastTask, in: app), "'\(Self.lastTaskLabel)' toggle not reachable on Home")
+        XCTAssertTrue(scrollClearOfTabBar(lastTask, in: app), "'\(Self.lastTaskLabel)' toggle not reachable in Today")
 
         let reachable = dumpPersonalCareElements(in: app)
         XCTAssertEqual(reachable, Self.personalCareTaskLabels.count,
@@ -70,7 +77,7 @@ final class HomeCardsRedesignUITests: XCTestCase {
 
         // Operable, not merely present: activating one has to flip that task's own selected state,
         // and must not activate the card's open-the-sheet button underneath it.
-        // Clear of the tab bar, not merely hittable: see `scrollClearOfTabBar`.
+        // Clear of the panel's edges, not merely hittable: see `scrollClearOfTabBar`.
         let floss = app.buttons[Self.flossTaskLabel].firstMatch
         XCTAssertTrue(scrollClearOfTabBar(floss, in: app), "'\(Self.flossTaskLabel)' toggle is present but not hittable")
         let wasSelected = floss.isSelected
@@ -85,7 +92,7 @@ final class HomeCardsRedesignUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["sheet.hygiene"].firstMatch.exists,
                        "activating a task toggle fell through to the card's open-the-sheet button")
 
-        restoreDefaultHomeWidgets(in: app)
+        setPersonalCareCard(shown: false, in: app)
     }
 
     /// The eight built-in `HygieneItem` labels, in `allCases` order. English on purpose: the
@@ -106,19 +113,22 @@ final class HomeCardsRedesignUITests: XCTestCase {
     /// there as their own *button*. The dump is what makes a regression quotable rather than a bare
     /// boolean; the count deliberately ignores the `StaticText` each button wraps, which is a second
     /// element carrying the same label and would double every total.
+    ///
+    /// Read from ONE snapshot of the tree, not element by element: ticking a task can raise a
+    /// transient banner (a silly-stat stamp) over Today, and a tree that changes between the listing
+    /// and the per-element reads fails the read with "No matches found for Identity Binding".
     @discardableResult
     private func dumpPersonalCareElements(in app: XCUIApplication) -> Int {
         let wanted = Set(Self.personalCareTaskLabels)
-        let elements = app.descendants(matching: .any).allElementsBoundByAccessibilityElement
         var found = 0
         print("AX-WALK ── personal-care card ──")
-        for element in elements {
+        for element in snapshotElements(of: app) {
             let label = element.label
             guard label.lowercased().hasPrefix("personal care") || wanted.contains(label) else { continue }
             if wanted.contains(label) && element.elementType == .button { found += 1 }
             print("AX-WALK type=\(element.elementType.rawValue) label=\"\(label)\" "
                   + "value=\(String(describing: element.value)) enabled=\(element.isEnabled) "
-                  + "selected=\(element.isSelected) hittable=\(element.isHittable)")
+                  + "selected=\(element.isSelected)")
         }
         print("AX-WALK ── task toggle BUTTONS reachable: \(found) of \(Self.personalCareTaskLabels.count) ──")
         return found
@@ -128,55 +138,80 @@ final class HomeCardsRedesignUITests: XCTestCase {
     /// `SectionLabel` static text inside it. More than one row here means one action is being offered
     /// as two things to focus.
     private func openCardControls(in app: XCUIApplication) -> [(type: UInt, label: String)] {
-        app.descendants(matching: .any).allElementsBoundByAccessibilityElement
+        snapshotElements(of: app)
             .filter { $0.label.lowercased().hasPrefix("personal care") && $0.elementType != .staticText }
             .map { (type: $0.elementType.rawValue, label: $0.label) }
     }
 
-    /// Adds the opt-in Personal care widget via Settings → Appearance → Home widgets, dismisses
-    /// Settings, and hands back the app sitting on Home with the card rendered.
+    /// Every element of one snapshot of the app's tree, in document order.
+    private func snapshotElements(of app: XCUIApplication) -> [XCUIElementSnapshot] {
+        guard let root = try? app.snapshot() else { return [] }
+        var all: [XCUIElementSnapshot] = []
+        var pending: [XCUIElementSnapshot] = [root]
+        while let node = pending.popLast() {
+            all.append(node)
+            pending.append(contentsOf: node.children.reversed())
+        }
+        return all
+    }
+
+    /// Opens the Today panel from the map's status plate and waits for its first card.
+    private func openToday(in app: XCUIApplication) {
+        let plate = app.buttons["world.statusPlate"].firstMatch
+        XCTAssertTrue(plate.waitForExistence(timeout: 10), "the map's status plate is missing")
+        plate.tap()
+        XCTAssertTrue(app.buttons["world.panel.close"].firstMatch.waitForExistence(timeout: 8),
+                      "the status plate did not open Today")
+    }
+
+    /// Switches the opt-in Personal care card on in the Today panel (Arrange Today) and hands back the
+    /// app sitting on Today with the card rendered.
     private func addPersonalCareCardToHome() -> XCUIApplication {
-        let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 20), "Settings sheet did not open")
-
-        let appearanceRow = app.descendants(matching: .any)["settings.row.appearance"].firstMatch
-        XCTAssertTrue(appearanceRow.waitForExistence(timeout: 8), "Appearance settings row missing")
-        appearanceRow.tap()
-        let appearanceBar = app.navigationBars["Appearance"]
-        XCTAssertTrue(appearanceBar.waitForExistence(timeout: 8), "Appearance page did not open")
-
-        // The widget list lives in the app's container, which survives between runs, so start from a
-        // known state: reset to the defaults (which do not include Personal care), then add it.
-        let reset = app.buttons["Reset home widgets"].firstMatch
-        XCTAssertTrue(dragUntilHittable(reset, in: app), "'Reset home widgets' not reachable")
-        reset.tap()
-
-        let chip = app.buttons["Personal care"].firstMatch
-        XCTAssertTrue(dragUntilHittable(chip, in: app), "'Personal care' Home-widget chip not reachable")
-        chip.tap()
-
-        appearanceBar.buttons.firstMatch.tap()
-        let done = app.navigationBars["Settings"].buttons["Done"].firstMatch
-        XCTAssertTrue(done.waitForExistence(timeout: 8), "Settings Done button missing")
-        done.tap()
+        let app = UXTestApp.launch()
+        openToday(in: app)
+        setPersonalCareCard(shown: true, in: app)
         return app
     }
 
-    /// Puts the Home layout back to `HomeWidget.defaultWidgets`. The widget list is persisted in the
-    /// app's container, which outlives the test process, so leaving Personal care on Home would hand
-    /// every later suite in the run a Home tab this one rearranged. Runs at the end of the test body
-    /// rather than in a teardown block: XCTest assertions do not throw, so a failing assertion above
-    /// still reaches this line.
-    private func restoreDefaultHomeWidgets(in app: XCUIApplication) {
-        // Relaunched rather than driven from where the test left off: the Home header (and its gear)
-        // has been scrolled past by then, and `openSheet:` lands on the Settings root directly.
-        _ = UXTestApp.launch(openSheet: "settings")
-        let appearanceRow = app.descendants(matching: .any)["settings.row.appearance"].firstMatch
-        guard appearanceRow.waitForExistence(timeout: 15) else { return }
-        appearanceRow.tap()
-        let reset = app.buttons["Reset home widgets"].firstMatch
-        guard dragUntilHittable(reset, in: app) else { return }
-        reset.tap()
+    /// Shows or hides the Personal care card through Arrange Today, at the bottom of the Today panel
+    /// (the Home widget list lives in the app's container, which survives between runs, so the test
+    /// switches it off again at the end rather than leave every later suite a rearranged Today).
+    /// Runs at the end of the test body rather than in a teardown block: XCTest assertions do not
+    /// throw, so a failing assertion above still reaches it.
+    private func setPersonalCareCard(shown: Bool, in app: XCUIApplication) {
+        let arrange = app.buttons["world.today.arrange"].firstMatch
+        XCTAssertTrue(dragUntilHittable(arrange, in: app), "'Arrange Today' not reachable")
+        arrange.tap()
+        // By identifier on any type: the row's framed switch is a List row whose element type
+        // XCUITest reports inconsistently (not always a Switch).
+        let toggle = app.descendants(matching: .any)["world.todayEditor.hygiene"].firstMatch
+        XCTAssertTrue(dragUntilHittable(toggle, in: app), "the Personal care switch is not in Arrange Today")
+        // Flipping the switch moves the row between the shown and hidden halves of the list, so the
+        // row can leave the (lazy) list's materialised rows: wait for it either to read the value asked
+        // for or to be gone, and tap again only while it still sits there unflipped. Whether the card
+        // really followed is checked on Today itself, below.
+        let wanted = shown ? "1" : "0"
+        let unflipped = NSPredicate(format: "exists == true AND value != %@", wanted)
+        func stillUnflipped() -> Bool {
+            let moved = XCTNSPredicateExpectation(predicate: NSCompoundPredicate(notPredicateWithSubpredicate: unflipped),
+                                                  object: toggle)
+            return XCTWaiter().wait(for: [moved], timeout: 3) != .completed
+        }
+        if stillUnflipped() {
+            toggle.tap()
+            if stillUnflipped() { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap() }
+        }
+        let done = app.buttons["world.panel.done"].firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 5), "Arrange Today has no Done")
+        done.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["world.todayEditor"].firstMatch.waitForNonExistence(timeout: 5),
+                      "Arrange Today did not close")
+        let card = app.descendants(matching: .any)["home.hygiene"].firstMatch
+        if shown {
+            XCTAssertTrue(card.waitForExistence(timeout: 5), "Arrange Today did not add the Personal care card")
+        } else {
+            XCTAssertTrue(card.waitForNonExistence(timeout: 5), "Arrange Today did not remove the Personal care card")
+        }
     }
 
     /// Drags the page up in inertia-free steps until the element can be tapped.
@@ -198,26 +233,22 @@ final class HomeCardsRedesignUITests: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.25)
     }
 
-    /// Drags the home feed until the element sits wholly between the status bar and the floating tab
-    /// bar, and reports whether it got there.
+    /// Drags the Today feed until the element sits wholly between the panel's title plate and the
+    /// bottom of the screen, and reports whether it got there.
     ///
-    /// Hittable is not enough. The tab bar is the app's own view drawn over the feed, and XCUITest
-    /// steers its tap point off the tab BUTTONS' accessibility frames only — not off the pill drawn
-    /// around them. Measured 2026-09-24 with the First Aid header's top at y=810 under the compact
-    /// bar: `isHittable` was true, the tap point was (201, 835) — a point below Move's frame, inside
-    /// the pill — and `tap()` selected the Move tab, which is the full-suite flake. With the whole
-    /// frame above the bar there is nothing to steer around, and the tap lands on the element's centre.
+    /// Hittable is not enough: it can be sampled while the feed is still moving, or with the element
+    /// half under the plate, and the tap then lands on whatever is drawn there. With the whole frame
+    /// clear and two reads that agree, the tap lands on the element's centre. (The name is from the
+    /// tab-bar era, when the floating bar was what covered the feed's bottom.)
     private func scrollClearOfTabBar(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         let window = app.windows.firstMatch
-        // The feed scrolls up under the status bar. The pill reaches 6pt past the tab buttons, and a
-        // tap just outside a tab can still select it.
-        let topClear: CGFloat = 100
-        let tabBarClear: CGFloat = 16
+        // The feed scrolls up under the panel's title plate; the home indicator sits at the bottom.
+        let topClear: CGFloat = 130
+        let tabBarClear: CGFloat = 40
         for _ in 0..<14 {
             guard element.exists else { dragFeed(by: 300, in: app); continue }
             let frame = element.frame
-            // Re-read every pass: the bar compacts, and drops 30pt, once the feed has scrolled.
-            let bottom = tabBarTop(in: app) - tabBarClear
+            let bottom = window.frame.maxY - tabBarClear
             let top = window.frame.minY + topClear
             if frame.maxY > bottom {
                 dragFeed(by: frame.maxY - bottom + 40, in: app)
@@ -229,14 +260,6 @@ final class HomeCardsRedesignUITests: XCTestCase {
             }
         }
         return false
-    }
-
-    /// The top of the floating tab bar, read off its Home tab as `UXScreenProbe.assertAboveTabBar`
-    /// does. `app.tabBars` is no use here: the bar is a custom SwiftUI view, and on a tab root the
-    /// query finds nothing.
-    private func tabBarTop(in app: XCUIApplication) -> CGFloat {
-        let homeTab = app.buttons["Home"].firstMatch
-        return homeTab.exists ? homeTab.frame.minY : app.windows.firstMatch.frame.maxY
     }
 
     /// Moves the feed's content up by about `distance` points (down when negative) with a

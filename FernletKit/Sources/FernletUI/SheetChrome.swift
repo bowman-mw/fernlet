@@ -299,7 +299,7 @@ public extension SheetHeader where Accessory == EmptyView {
 /// card (XCUT-21).
 ///
 /// One style replaces five ad-hoc treatments. Terracotta, not system red, so it survives dark
-/// mode; ``Color/terracottaInk`` on a 12% terracotta fill measures 6.0:1 in light mode. The
+/// mode; ``SwiftUICore/Color/terracottaInk`` on a 12% terracotta fill measures 6.0:1 in light mode. The
 /// disabled state drops the fill to 6% and the ink to taupe — **opacity, never a red error**.
 ///
 /// ```swift

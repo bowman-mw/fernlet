@@ -79,7 +79,7 @@ public nonisolated struct AtlasGrid: Hashable, Sendable {
 
 /// A polygon from the pack (a country, a state or province, or an urban boundary): its bounding box and rings
 /// in 1e-5 degrees, tested with the even-odd rule, so a hole is just another ring. The point test walks only
-/// the edges of the point's latitude band (``AtlasEdgeBands``, built the first time the polygon is tested and
+/// the edges of the point's latitude band (`AtlasEdgeBands`, built the first time the polygon is tested and
 /// kept), not every ring point. Equality and hashing read the box and rings only.
 ///
 /// Decoding is bounded: at most ``maxRings`` rings and ``maxPointsPerRing`` points a ring (and never more

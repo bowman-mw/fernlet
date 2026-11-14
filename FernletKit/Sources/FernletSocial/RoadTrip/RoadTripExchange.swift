@@ -28,14 +28,14 @@ import ProximityKit
 /// - **The swap:** at each commit the app's ``catchUpProvider`` is asked for an offer for that friend (nil when they
 ///   share no trip, which sends nothing). A received offer is answered by one reply, computed before the offer is
 ///   handed to the app (so the reply carries the road from before this catch-up) and at most once per friend every
-///   ``replyIntervalSeconds``, so a hostile friend cannot use offers to make this phone send its road again and
+///   `replyIntervalSeconds`, so a hostile friend cannot use offers to make this phone send its road again and
 ///   again. A reply is never answered. Because each side offers at its own commit and answers the other's, the
 ///   swap completes whichever phone committed first (a frame on a slot not yet committed is dropped by the mesh).
 /// - **Photos** (PR 3, `rt-photos`): after a swap the app hands ``sendPhotos(_:to:bytes:done:)`` the photos the friend
 ///   is owed (its own, the ones they were there for and don't hold yet); they go one photo at a time, in pieces
 ///   (``RoadTripPhotoChunker``), each read only when its turn comes, stopping if the friend goes out of reach or a
 ///   decoy begins. A photo already sent to a friend in this hangout is not sent again in it. Received pieces are put
-///   back together and checked (``RoadTripPhotoAssembler``) before the whole photo reaches ``onPhoto``; every piece
+///   back together and checked (`RoadTripPhotoAssembler`) before the whole photo reaches ``onPhoto``; every piece
 ///   that lands tells ``onPhotoActivity`` (so Home's note and a short hangout wait for the transfer). Who took a photo
 ///   is always the verified sender, so a received photo can't be passed on as someone else's.
 /// - **Gate:** ``isEnabledProvider`` (the app: never in a decoy) gates every receive and every send; nil means no.
@@ -43,7 +43,7 @@ import ProximityKit
 /// Built by the composition (``FernletMeshFeatures``) over its mesh, held weakly, and the features' host holder,
 /// which answers the trust and block questions, carries the namespace the capability is read in and pins the host
 /// for a spawned send. `@MainActor`, like the mesh and the frames that drive it. Bounded (Power of 10): the reply
-/// clock remembers at most ``maxRemembered`` friends, the photos sent at most ``maxSentRemembered``, and the
+/// clock remembers at most `maxRemembered` friends, the photos sent at most `maxSentRemembered`, and the
 /// assembler its own bounds; all are cleared when a session ends.
 @MainActor
 public final class RoadTripExchange {

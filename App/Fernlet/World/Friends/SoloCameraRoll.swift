@@ -10,7 +10,7 @@ import PrivateMediaStore
 ///
 /// Pure and nonisolated, so the tests pin every boundary. "Goes to sleep" is the companion's own
 /// night (`CompanionSleepWindow`, the bedtime the person set in Settings): it falls asleep at the
-/// end of the wind-down, ``CompanionSleepWindow/fallsAsleepMinute``.
+/// end of the wind-down, `CompanionSleepWindow/fallsAsleepMinute`.
 nonisolated enum SoloCameraRules {
     /// Photos a local day, alone.
     static let photosPerDay = 10
@@ -87,7 +87,7 @@ enum SoloShotOutcome: Equatable {
 /// The disposable camera's roll on your own: today's film, the shot, and the photos that show
 /// (World build; owner 2026-10-24: "I think the photos can be saved in the friend area").
 ///
-/// A thin owner over ``SoloCameraPhotoStore`` (sealed, device-only, excluded from backup; the store's
+/// A thin owner over `SoloCameraPhotoStore` (sealed, device-only, excluded from backup; the store's
 /// doc has the custody): every shot is normalized like a session photo (downscaled and re-encoded,
 /// which also drops the camera's metadata), then sealed at once, and the day's film is spent in the
 /// same sealed write. ``SoloCameraRules`` decides when each photo shows.

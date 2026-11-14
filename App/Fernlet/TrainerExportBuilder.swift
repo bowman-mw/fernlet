@@ -306,7 +306,7 @@ struct TrainerExportBundle: Codable, Equatable {
     /// Where and how the user trains: their active location's equipment and the split they follow.
     ///
     /// `ownedEquipment` is the granular user-facing gear list; it maps down onto the coarse
-    /// ``Equipment`` capabilities the planning engine and safety filter reason about.
+    /// `Equipment` capabilities the planning engine and safety filter reason about.
     struct TrainingSetup: Codable, Equatable {
         /// The location's STORED name ("Full gym" for the default, never its localized display form),
         /// and `splitName` the split's frozen English name, so an export reads the same from any device.
@@ -326,7 +326,7 @@ struct TrainerExportBundle: Codable, Equatable {
 
     /// One location's weights on hand, in the unit they were entered in.
     ///
-    /// A direct projection of ``WorkoutWeightInventory``: dumbbell pairs by one dumbbell's weight,
+    /// A direct projection of `WorkoutWeightInventory`: dumbbell pairs by one dumbbell's weight,
     /// kettlebells, the bar, and plate pairs one entry per pair (two pairs of 45s are `[45, 45]`).
     /// Empty lists become nil. A coach prescribing loads should use only what these can make.
     struct LocationWeights: Codable, Equatable {
@@ -370,6 +370,7 @@ extension FernletStore {
     /// Assembles the curated trainer bundle from live in-memory state. Excludes sealed/sensitive data by
     /// construction (see the file header). `options` gate the opt-in categories only.
     ///
+    /// - Parameter options: the person's choices for the opt-in categories.
     /// - Parameter window: how far back each section reaches. Defaults to ``TrainerExportWindow/unlimited``
     ///   so the shipped file/mesh export keeps sending the full history; the clipboard coach handoff
     ///   passes ``TrainerExportWindow/coachHandoff``.
@@ -517,7 +518,7 @@ extension FernletStore {
     }
 
     /// The body areas `profile` trains around — the planner's mild areas
-    /// (``WorkoutProfile/injuryLimits``) — as one line of frozen ``BodyArea`` tokens in picker order:
+    /// (`WorkoutProfile/injuryLimits`) — as one line of frozen `BodyArea` tokens in picker order:
     /// "knee, lowerBack". Nil when there are none. Tokens, not display names: an export field reads the
     /// same from any device, like the avoided lists beside it.
     static func trainAroundLine(_ profile: WorkoutProfile) -> String? {

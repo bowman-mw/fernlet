@@ -35,8 +35,8 @@ nonisolated protocol CalendarEventSource: Sendable {
 }
 
 /// Reads a window of the calendar as flights (World-Airports-Spec §10.5, §10.6), off the main actor: the window
-/// in pieces of at most four years (``CalendarFlightLook/chunks(of:)``), at most
-/// ``CalendarFlightLook/maxEvents`` events looked at in all, each title through the parser's first pass before
+/// in pieces of at most four years (`CalendarFlightLook/chunks(of:)`), at most
+/// `CalendarFlightLook/maxEvents` events looked at in all, each title through the parser's first pass before
 /// anything else of it is read.
 nonisolated enum CalendarFlightReader {
     /// The look over `window` from `source`, read with `airports` and hashed under `salt`.

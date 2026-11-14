@@ -279,7 +279,7 @@ public nonisolated enum WorkoutTimedSessions {
         return steps.map { WorkoutSessionBlocks.timedStep(name: $0.name, seconds: hold, side: $0.side, block: .mobility) }
     }
 
-    /// The rest day's optional gentle stretch, about eight minutes: ``gentleMoves`` at
+    /// The rest day's optional gentle stretch, about eight minutes: `gentleMoves` at
     /// ``gentleHoldSeconds`` each, both sides where one-sided, minus anything `feasible` leaves out.
     public static func gentleStretch(feasible: [ExerciseTarget]) -> [PrescribedExercise] {
         let stretches = mobilityRows(feasible)
@@ -293,9 +293,9 @@ public nonisolated enum WorkoutTimedSessions {
         return steps
     }
 
-    /// A seated stretch session of about `minutes`: ``seatedMoves`` that are in `feasible` (so the
+    /// A seated stretch session of about `minutes`: `seatedMoves` that are in `feasible` (so the
     /// injured area's own stretches are already out), one-sided stretches done both sides, held
-    /// 30–45 s, the list walked again (at most ``seatedRounds`` times) when once through runs short.
+    /// 30–45 s, the list walked again (at most `seatedRounds` times) when once through runs short.
     /// Empty when the filter left none of them.
     public static func seatedMobility(minutes: Int, feasible: [ExerciseTarget]) -> [PrescribedExercise] {
         guard minutes > 0 else { return [] }

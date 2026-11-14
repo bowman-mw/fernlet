@@ -57,7 +57,7 @@ public enum ProximityRecipeShareDiagnostics {
 /// recipes nearby Fernlets send, for the user to review.
 ///
 /// The mechanism (discovery on the recipe radio, the hard two-device cap, verification, the status
-/// line and its 2.5 s clear, and the send outcome) is its session's, a ``ProximityPairSession`` under
+/// line and its 2.5 s clear, and the send outcome) is its session's, a `ProximityPairSession` under
 /// Fernlet's recipe profile (FernletConnections' `ProximityPairProfile.recipeShare(in:)`, on the host's
 /// own namespace). This manager adds what is the recipe's: the payload, its format and the signed
 /// summary, the English it shows, and the inbound rules (a 1 MiB size gate before decoding, the format
@@ -124,7 +124,7 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     /// every other recipient row while this is set; nil when idle.
     public var engagedRecipientID: UUID? { pairSession.engagedPeerID }
     /// Whether the listener is up right now: the pair session's own account (see
-    /// ``ProximityPairSession/isListening``), which the app's run-policy seam reads.
+    /// `ProximityPairSession/isListening`), which the app's run-policy seam reads.
     public var isListening: Bool { pairSession.isListening }
 
     /// The pair session this manager drives, under Fernlet's recipe profile: built once, at

@@ -27,7 +27,7 @@ import ProximityKit
 /// composition registers its projection adapter under, the token the session hearts send under and
 /// the composition registers their ledger judge under, and the token the session photos send under and
 /// the composition registers their projection adapter under — and ``entries`` hands them all to the
-/// host's ``ProximityHost/meshRoutedTypeEntries``.
+/// host's `ProximityHost/meshRoutedTypeEntries`.
 public nonisolated struct FernletRoutedTypes: Equatable, Sendable {
 
     /// The temporary-message row: the live-session chat's routed type (P6 item 4).
@@ -104,7 +104,7 @@ public nonisolated struct FernletRoutedTypes: Equatable, Sendable {
     /// photo row. The registry is token-keyed, so their order reaches no door and no byte.
     public var entries: [MeshRoutedTypeEntry] { [text, heart, photo] }
 
-    /// The rows a host answers ``ProximityHost/meshRoutedTypeEntries`` with:
+    /// The rows a host answers `ProximityHost/meshRoutedTypeEntries` with:
     /// `FernletRoutedTypes(routedTypes).entries`.
     ///
     /// - Parameter routedTypes: The routed types of the namespace the host holds.

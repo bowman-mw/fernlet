@@ -276,8 +276,8 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     /// from the in-memory key until relaunch, then `mediaKey()` minted a fresh key and every retained
     /// photo decrypted to garbage. See Docs/PrivacyWipeCoverage.md.
     ///
-    /// The Phase-5 own-photos row (``ownAccount``) and the pending session-photo row
-    /// (``pendingAccount``) are deliberately NOT deleted by the wipe either, and have no equivalent
+    /// The Phase-5 own-photos row (`ownAccount`) and the pending session-photo row
+    /// (`pendingAccount`) are deliberately NOT deleted by the wipe either, and have no equivalent
     /// method: their stores ARE emptied by delete-all, so the keys protect nothing afterwards, and
     /// deleting them would only re-introduce the same stale-cache hazard for anything captured
     /// between the wipe and relaunch.

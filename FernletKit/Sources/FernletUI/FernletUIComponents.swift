@@ -741,7 +741,7 @@ public extension View {
 
     /// Standard "discard your unsaved changes?" dialog for entry sheets. Pair with
     /// `.interactiveDismissDisabled(isDirty)` and a Cancel affordance that flips `isPresented` on when
-    /// dirty (dismiss directly when clean), or adopt ``SwiftUI/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)``
+    /// dirty (dismiss directly when clean), or adopt ``SwiftUICore/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)``
     /// which wires all three together. Keeps the wording consistent across every workout/food sheet.
     ///
     /// - Important: this is an `alert`, deliberately, and destructive confirmations elsewhere should
@@ -766,7 +766,6 @@ public extension View {
     /// app-target types. Same rule as ``discardConfirmation(isPresented:onDiscard:)``: an `alert`, so
     /// iOS 26 cannot hide the Cancel button, and the mutation runs *only* from `onConfirm`.
     ///
-    /// - Parameters:
     /// Every string parameter here is **already resolved** — this helper is called from package
     /// modules, whose literals must go through their own `bundle: .module` lookup before they get
     /// here (a `LocalizedStringKey` would carry no bundle and land back in `Bundle.main`). That is
@@ -775,9 +774,11 @@ public extension View {
     ///
     /// - Parameters:
     ///   - title: Phrase it as a question, e.g. "Delete 12 shared pictures?". Already localized.
+    ///   - isPresented: Shows the alert while true.
     ///   - message: Name the exact data affected and whether anything survives. Already localized.
     ///   - confirmLabel: The destructive button, e.g. "Delete all 12". Already localized.
     ///   - cancelLabel: Overrides the shared "Cancel"; already localized when passed.
+    ///   - onConfirm: The mutation, run only when the destructive button is tapped.
     func confirmDestructive(
         _ title: String,
         isPresented: Binding<Bool>,
@@ -862,7 +863,7 @@ public extension View {
     }
 }
 
-/// Implements ``SwiftUI/View/fernletSheetStyle()``: the look's paper under the look, parchment without.
+/// Implements ``SwiftUICore/View/fernletSheetStyle()``: the look's paper under the look, parchment without.
 public struct FernletSheetStyleModifier: ViewModifier {
     @Environment(\.fernletFramedLook) private var look
 
@@ -876,7 +877,7 @@ public struct FernletSheetStyleModifier: ViewModifier {
     }
 }
 
-/// Implements ``SwiftUI/View/sheetTextInput(font:)``: the cream card, or the framed field under the look.
+/// Implements ``SwiftUICore/View/sheetTextInput(font:)``: the cream card, or the framed field under the look.
 public struct SheetTextInputModifier: ViewModifier {
     let font: Font?
     @Environment(\.fernletFramedLook) private var look
@@ -911,7 +912,7 @@ public struct SheetTextInputModifier: ViewModifier {
     }
 }
 
-/// Implements ``SwiftUI/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)`` — see there.
+/// Implements ``SwiftUICore/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)`` — see there.
 ///
 /// Owns the discard-prompt flag itself so call sites don't each declare a `@State showDiscardConfirm`;
 /// the cancel bar is installed as a top safe-area inset so it stays pinned above the sheet's own
@@ -1226,6 +1227,7 @@ public struct SheetField<Content: View>: View {
     /// ``init(verbatim:namesControl:content:)``, since a key harvested into a package bundle is
     /// invisible to `Bundle.main` and would render as untranslated English with no error anywhere.
     ///
+    /// - Parameter label: The caption drawn above the content, localized from `Bundle.main`.
     /// - Parameter namesControl: Opt in to making the caption the accessibility *name* of the
     ///   content (review T2-16). **Only pass `true` when the content is exactly ONE focusable
     ///   control** — a lone `TextField`, `Stepper`, `Picker`, `DatePicker` or `Toggle`. It is an
@@ -1234,6 +1236,7 @@ public struct SheetField<Content: View>: View {
     ///   (`WorkoutSetupView`'s Experience and Areas-to-work-around fields are the worked examples).
     ///   With it off the behaviour is exactly what it has always been: caption and content are
     ///   separate elements.
+    /// - Parameter content: The field's control or controls, drawn under the caption.
     public init(
         _ label: LocalizedStringKey,
         namesControl: Bool = false,
@@ -1251,7 +1254,9 @@ public struct SheetField<Content: View>: View {
     /// ``SectionLabel/init(verbatim:)`` for why a same-label `String` overload would quietly
     /// capture every literal in the app.
     ///
+    /// - Parameter label: The caption, already final; shown as given.
     /// - Parameter namesControl: See ``init(_:namesControl:content:)`` — single control only.
+    /// - Parameter content: The field's control or controls, drawn under the caption.
     public init(
         verbatim label: String,
         namesControl: Bool = false,
@@ -1421,15 +1426,15 @@ public struct ChipButtonStyle: ButtonStyle {
 
 /// Which role an ``ActionPillButtonStyle`` plays — it picks the fill/ink pair, not the size.
 public enum FernletActionPillKind {
-    /// The screen's affirmative action: filled ``Color/mossFill`` with ``Color/onMoss`` ink.
+    /// The screen's affirmative action: filled ``SwiftUICore/Color/mossFill`` with ``SwiftUICore/Color/onMoss`` ink.
     case primary
     /// A secondary action beside a primary one: cream with a bark hairline.
     case secondary
-    /// Deletes or ends something: the 2026-08-21 destructive token — ``Color/terracottaInk`` ink on
+    /// Deletes or ends something: the 2026-08-21 destructive token — ``SwiftUICore/Color/terracottaInk`` ink on
     /// a 10% terracotta fill with a 35% edge (artboard 2b), NOT solid terracotta. Solid terracotta
     /// is reserved for the confirm button inside a confirmation alert, the one place the keep-it
     /// button is guaranteed to render beside it. Always pair with a confirmation — see
-    /// ``SwiftUI/View/confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)``.
+    /// ``SwiftUICore/View/confirmDestructive(_:isPresented:message:confirmLabel:cancelLabel:onConfirm:)``.
     case destructive
 }
 
@@ -1463,6 +1468,7 @@ public struct ActionPillButtonStyle: ButtonStyle {
     var kind: FernletActionPillKind
     var size: FernletActionPillSize
 
+    /// - Parameter kind: Primary or destructive.
     /// - Parameter size: `.small` is the kit's `.pxbtn.sm` (a −15 s / +15 s pair, a card's own action);
     ///   it only changes the framed look.
     public init(_ kind: FernletActionPillKind = .primary, size: FernletActionPillSize = .regular) {
@@ -1709,11 +1715,13 @@ public struct SheetGrowingTextField: View {
     var onSubmit: (() -> Void)?
 
     /// - Parameters:
+    ///   - text: The field's text.
     ///   - placeholder: Harvested into the *calling* target's catalog and looked up in
     ///     `Bundle.main`, which is correct for the app-target sheets that own every call site. It
     ///     was a plain `String` until review T2-1: `TextField(_ title: some StringProtocol, …)` is
     ///     the verbatim overload, so no placeholder in the app was ever localized *or* harvested.
     ///   - lineLimit: How far the field may grow before it scrolls; 1…4 by default.
+    ///   - submitLabel: The Return key's label; `.done` by default.
     ///   - onSubmit: Runs when Return is pressed. Guard it with the sheet's own validity check —
     ///     Return must never save a form the Save pill would refuse.
     public init(
@@ -1949,15 +1957,15 @@ private struct FernletTabBarClearanceKey: EnvironmentKey {
 
 public extension EnvironmentValues {
     /// The floating tab bar's stable height plus breathing room, set by the tab container and
-    /// consumed by ``SwiftUI/View/fernletTabBarBottomClearance()`` on each page's scroll content
-    /// and by ``SwiftUI/View/fernletTabBarSafeAreaClearance()`` on a pushed page with a pinned bar.
+    /// consumed by ``SwiftUICore/View/fernletTabBarBottomClearance()`` on each page's scroll content
+    /// and by ``SwiftUICore/View/fernletTabBarSafeAreaClearance()`` on a pushed page with a pinned bar.
     var fernletTabBarClearance: CGFloat {
         get { self[FernletTabBarClearanceKey.self] }
         set { self[FernletTabBarClearanceKey.self] = newValue }
     }
 }
 
-/// Implements ``SwiftUI/View/fernletTabBarBottomClearance()`` — see there. A separate modifier so
+/// Implements ``SwiftUICore/View/fernletTabBarBottomClearance()`` — see there. A separate modifier so
 /// the environment read lives here rather than in every page.
 public struct FernletTabBarBottomClearanceModifier: ViewModifier {
     @Environment(\.fernletTabBarClearance) private var clearance
@@ -1969,11 +1977,11 @@ public struct FernletTabBarBottomClearanceModifier: ViewModifier {
     }
 }
 
-/// Implements ``SwiftUI/View/fernletTabBarSafeAreaClearance()`` — see there.
+/// Implements ``SwiftUICore/View/fernletTabBarSafeAreaClearance()`` — see there.
 ///
 /// The reservation is an empty bottom `safeAreaInset` sized by
 /// ``FernletTabBarClearance/reservation(clearance:keyboardOverlap:)``, with the keyboard's overlap
-/// read off the page itself by ``SwiftUI/View/fernletKeyboardOverlap(_:)``. It cannot simply ignore
+/// read off the page itself by ``SwiftUICore/View/fernletKeyboardOverlap(_:)``. It cannot simply ignore
 /// the keyboard: an inset's content is laid out with no bottom safe area of its own, so an ignore
 /// there reaches nothing, and the reservation stacked on top of the keyboard — the save bar floated
 /// a tab bar's height above it (measured 2026-10-01, iOS 26.5).
@@ -1999,7 +2007,7 @@ public struct FernletTabBarSafeAreaClearanceModifier: ViewModifier {
     }
 }
 
-/// Implements ``SwiftUI/View/fernletKeyboardOverlap(_:)`` — see there.
+/// Implements ``SwiftUICore/View/fernletKeyboardOverlap(_:)`` — see there.
 ///
 /// Two heights: the view's own, laid out above the keyboard, and a background probe's, which
 /// ignores the keyboard's safe area and so reaches down to the bottom edge the view would have with
@@ -2118,7 +2126,7 @@ public struct FernletTabBarCompactionModifier: ViewModifier {
 /// Rendered on a parchment strip so it reads as a fixed footer beneath the sheet's scrolling
 /// content; `disabled` fades the fill and blocks the action while the form is incomplete.
 ///
-/// Draws ``Color/onMoss`` on ``Color/mossFill`` rather than white on `moss`: white on the old fill
+/// Draws ``SwiftUICore/Color/onMoss`` on ``SwiftUICore/Color/mossFill`` rather than white on `moss`: white on the old fill
 /// measured 4.29:1 in light mode and 2.53:1 in dark, so the primary button of every entry sheet was
 /// the least legible text on it. The disabled state fades only the fill and switches to bark ink —
 /// a disabled Save the user cannot read tells them nothing about what finishing the form will do.

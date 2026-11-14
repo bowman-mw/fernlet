@@ -9,9 +9,8 @@ import Testing
 /// (``FoodRoute/pruned(_:manualIDs:savedIDs:)``); and the Friends path closing the friend shop with
 /// its window (``FriendsRoute``).
 ///
-/// The navigation itself — that clearing a path really unwinds the pages pushed above it, and that
-/// a typed recipe raises the discard alert — is proved on screen by `TabReselectUITests`; these pin
-/// the pure halves it rests on.
+/// The World look has no tab bar to reselect, so the on-screen suite that once drove these paths
+/// (`TabReselectUITests`) is gone; these still pin the pure path rules the app's navigation rests on.
 @Suite struct TabReselectTests {
 
     // MARK: - TabReselectAction

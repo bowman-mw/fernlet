@@ -2192,7 +2192,7 @@ struct ContentView: View {
 }
 
 extension View {
-    /// Marks one page of ``ContentView/tabPages``: tags it for `selectedTab`, and hides the system
+    /// Marks one page of `ContentView/tabPages`: tags it for `selectedTab`, and hides the system
     /// tab bar underneath it so only the app's own floating bar is ever drawn.
     ///
     /// The tab container is a plain `TabView` rather than a `.page` one precisely so there is no
@@ -2205,7 +2205,7 @@ extension View {
     }
 
     /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the World sheet
-    /// frame (``SwiftUI/View/fernletSheet()``: full height, paper, the ink top edge and the wooden
+    /// frame (`SwiftUI/View/fernletSheet()`: full height, paper, the ink top edge and the wooden
     /// grabber), the moss tint, the keyboard "Done" accessory, and the one design language.
     ///
     /// One modifier rather than the same lines repeated per case — the values are identical across
@@ -2224,7 +2224,7 @@ extension View {
     /// `launchRoot`, OUTSIDE the `.tint(Color.moss)` on `mainInterface`: every un-tinted system
     /// control inside one (the Effort slider, the recipe unit menu, the cycle Observation pickers,
     /// the Settings hub's toggles and links) rendered Apple blue. And numeric keypads have no return
-    /// key, so without ``SwiftUI/View/keyboardDoneToolbar()`` the pad floated over the Save bar with
+    /// key, so without `SwiftUI/View/keyboardDoneToolbar()` the pad floated over the Save bar with
     /// no way to dismiss it.
     ///
     /// That Done reaches only a sheet with no `NavigationStack` of its own. Where the sheet's view

@@ -3,10 +3,10 @@ import FernletDomainModel
 import FernletUI
 
 /// "Weights I have" — the location editor's optional list of the dumbbells, kettlebells, bar and
-/// plates a space has (``WorkoutWeightInventory``), below the equipment grid.
+/// plates a space has (`WorkoutWeightInventory`), below the equipment grid.
 ///
 /// With weights set, the planner suggests only loads the space can make and adds reps before a jump
-/// that is too big or missing (``WorkoutLoadEngine/loadCap(from:step:lowerBody:ladder:)``). Each block
+/// that is too big or missing (`WorkoutLoadEngine/loadCap(from:step:lowerBody:ladder:)`). Each block
 /// shows only while its equipment is ticked: dumbbell presets (a home set, an adjustable pair, a full
 /// rack) and pairs, kettlebell sizes, and a bar with plate pairs. Values are in the user's unit
 /// (``WorkoutLoadContextBuilder/defaultUnit(for:)``) from the first edit on; an inventory set in the

@@ -32,7 +32,7 @@ enum SealedDeviceKeyRead {
         }
     }
 
-    /// The journal backup's view of this read (``JournalBackupDeviceKey``).
+    /// The journal backup's view of this read (`JournalBackupDeviceKey`).
     var journalBackupDeviceKey: JournalBackupDeviceKey {
         switch self {
         case .found(let key): return .present(key)
@@ -74,7 +74,7 @@ struct SealedBackupJournalReferences: Equatable {
 }
 
 /// The journal Sealed backup's adapter for the v2 engine (journal and intimacy Sealed backup v2 design
-/// 2026-09-30, §4.1, §7): the sealed ``JournalNarrativeRepository`` mapped onto
+/// 2026-09-30, §4.1, §7): the sealed `JournalNarrativeRepository` mapped onto
 /// ``SealedBackupV2Adapter``.
 ///
 /// - **What a backup holds (§7.1).** The snapshot is the sealed ids that some day's journals still

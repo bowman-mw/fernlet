@@ -26,7 +26,7 @@ import Foundation
 /// a ``CoachSession`` becomes one `PlannedWorkout` tagged `WorkoutPlanSource.coach`, and each
 /// ``CoachExerciseDefinition`` becomes a custom ``ExerciseTarget`` in the user's catalog.
 ///
-/// Never trust a decoded value: `init(from:)` enforces structure and bounds, and ``validate()``
+/// Never trust a decoded value: `init(from:)` enforces structure and bounds, and ``validate(knownExerciseNames:)``
 /// enforces semantics (day numbering, undefined exercise names, absurd set counts). A plan that
 /// fails either must not reach `PlannedWorkout` materialization.
 public nonisolated struct CoachPlan: Codable, Equatable, Sendable, Identifiable {
@@ -651,7 +651,7 @@ public nonisolated enum CoachPlanTokens {
 
 /// The hard bounds a decoded plan must satisfy.
 ///
-/// Enforced during decode where they bound memory (collection counts) and in ``CoachPlan/validate()``
+/// Enforced during decode where they bound memory (collection counts) and in ``CoachPlan/validate(knownExerciseNames:)``
 /// where they bound sense (set counts, name lengths). `maxDays` is the spec's own 1-30 range (§3.5).
 public nonisolated enum CoachPlanLimits {
     public static let maxDays = 30
@@ -689,7 +689,7 @@ public nonisolated enum CoachPlanDecodeError: Error, Equatable, Sendable {
     public static let unnamedEditTitle = "an edit"
 
     /// Copy shown to the user; every case names the actual number so the message is checkable.
-    /// Localized through ``CoachPlanIssueCopy`` (2026-10-20).
+    /// Localized through `CoachPlanIssueCopy` (2026-10-20).
     public var message: String {
         switch self {
         case .tooManyDays(let n):
@@ -736,7 +736,7 @@ public nonisolated struct CoachPlanIssue: Error, Equatable, Sendable, Identifiab
     /// What the issue is about — an exercise or session name — for grouping in the UI. Never drawn,
     /// so its fallbacks ("a planned workout", "Day 3") stay English.
     public var subject: String
-    /// The sentence the review screen shows, localized (``CoachPlanIssueCopy``).
+    /// The sentence the review screen shows, localized (`CoachPlanIssueCopy`).
     public var detail: String
 
     public init(id: UUID = UUID(), kind: Kind, subject: String, detail: String) {

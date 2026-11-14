@@ -6,7 +6,7 @@ import SwiftUI
 /// title inside the sheet in Fraunces, and Done top right only where the page offers one. It stands
 /// in for the navigation bar, which the page hides; the sheet's wooden grabber stays above it.
 ///
-/// Built on ``SheetHeader`` (its leading accessory slot carries the Back), so it is the same chrome
+/// Built on `SheetHeader` (its leading accessory slot carries the Back), so it is the same chrome
 /// every sheet draws, not a second one. Without a title (grounding) only the control row shows.
 struct FirstAidToolHeader: View {
     /// The tool's title, or nil for a page whose own content names it.

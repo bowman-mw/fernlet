@@ -1519,7 +1519,7 @@ public final class HealthKitService: HealthKitServicing {
     /// Individual metric queries are best-effort (a type the user never authorized simply
     /// contributes empty days) but the gates throw so the caller can scrub cached derivatives.
     ///
-    /// `daysBack` is clamped to `1...`` maxStressMetricDays`` (R5) — the window bounds four
+    /// `daysBack` is clamped to `1...maxStressMetricDays` (R5) — the window bounds four
     /// statistics queries and the returned array.
     public func stressMetricDays(daysBack: Int = 60, referenceDate: Date = .now) async throws -> [StressMetricDay] {
         guard isIntegrationEnabled else { throw HealthKitServiceError.healthDataUnavailable }
@@ -2000,7 +2000,7 @@ public final class HealthKitService: HealthKitServicing {
 
     /// Whether Fernlet may write `capability`'s kind of data into Apple Health right now — the
     /// device has a Health store, the master switch is on, AND this capability's own switch is on,
-    /// all read live from the keychain (the reason ``isIntegrationEnabled`` reads live applies: a
+    /// all read live from the keychain (the reason `isIntegrationEnabled` reads live applies: a
     /// switch flipped on another instance must bind this one at once).
     ///
     /// Deliberately does NOT consult the request ledger: the user's switches are the rule ("with
@@ -2054,7 +2054,7 @@ public final class HealthKitService: HealthKitServicing {
     /// The capability a write of `type` belongs to: the one whose SHARE set holds it, or nil for a
     /// type Fernlet never writes.
     ///
-    /// Derived from ``types(for:)`` rather than listed, so the write gate can never drift from the
+    /// Derived from `types(for:)` rather than listed, so the write gate can never drift from the
     /// types Fernlet actually asks to share. Each share type belongs to exactly one capability today
     /// (`HealthKitWriteGateTests` pins that); if two ever claimed one, the first in `allCases` order
     /// would win — and the gate would still require THAT capability's switch, never none.
@@ -2261,7 +2261,7 @@ public final class HealthKitService: HealthKitServicing {
     /// Whether granting `capability` lets Fernlet WRITE samples into Apple Health — i.e. whether its
     /// authorization bundle has a non-empty SHARE set.
     ///
-    /// Derived from ``types(for:)`` rather than an enumerated list, so the classification can never
+    /// Derived from `types(for:)` rather than an enumerated list, so the classification can never
     /// drift from the types actually requested. Today that is body profile (height/weight write-back),
     /// cycle tracking, workout logging, mindfulness and intimate logging; body context and activity
     /// context are read-only.
@@ -2427,7 +2427,7 @@ public final class HealthKitService: HealthKitServicing {
     public static let maxStressMetricDays = 366
 
     /// The page size the planned paginated first-run backfill will use (Power-of-10 R3 follow-up;
-    /// see ``startAnchoredQuery(for:handler:)``). Not yet applied: HealthKit rejects a limit on a
+    /// see `startAnchoredQuery(for:handler:)`). Not yet applied: HealthKit rejects a limit on a
     /// long-running anchored query, so it can only bound one-shot backfill pages.
     public static let maxSamplesPerAnchoredBatch = 5_000
 
@@ -2616,7 +2616,7 @@ public enum HealthAvailabilityState: Equatable {
 ///
 /// - Important: the ledger is read through on every access and never cached here, because several of
 ///   these view models coexist (Settings, the period sheets) and a wipe or a "turn Health off" on one
-///   must not be undone by another's stale copy. The consequence is that ``requestedCapabilities`` is
+///   must not be undone by another's stale copy. The consequence is that `requestedCapabilities` is
 ///   NOT observation-tracked: a view re-reads it because the same flows publish ``statusMessage`` and
 ///   ``isRequesting``, not because the ledger changed. A future surface that needs to react to a
 ///   ledger change made elsewhere in the process must observe something else — do not reintroduce a
@@ -2944,7 +2944,7 @@ extension HealthKitService: PeriodHealthKitServicing {
     /// only (`HKSource.default()`, which HealthKit enforces anyway). Every kind is attempted, so one
     /// refused kind never strands the rest (the "delete everything" sweep's stance):
     /// - a kind Fernlet was never granted, or with nothing matching, counts 0
-    ///   (``isExpectedDeleteSkip(_:)``);
+    ///   (`isExpectedDeleteSkip(_:)`);
     /// - a kind whose share access the user DENIED is reported in
     ///   `CycleMirrorDeletion.refusedKinds`, not thrown — HealthKit cannot say whether it was never
     ///   granted (nothing of Fernlet's there) or taken away after a copy was written, so the store
@@ -3004,7 +3004,7 @@ extension HealthKitService: PeriodHealthKitServicing {
         try await loadPeriodEvents(in: range)
     }
 
-    /// Fernlet's OWN cycle samples with no ``FernletCycleRecordMirror/recordIDKey`` — the pre-cutover
+    /// Fernlet's OWN cycle samples with no `FernletCycleRecordMirror/recordIDKey` — the pre-cutover
     /// ones the legacy import adopts (§8.3) — all time, at most `limit`. Deliberately WITHOUT the
     /// unrequested-type-reads-empty rule of ``loadPeriodEvents(in:)``: every error throws, so an empty
     /// answer can only mean "none" and the import never finishes without its data (R2-F8).
@@ -3061,7 +3061,7 @@ extension HealthKitService: PeriodHealthKitServicing {
 
     /// THE cycle sample builder: one sample per clinical field the record sets, all from the record's
     /// time, each stamped with the record id as `HKMetadataKeyExternalUUID` AND
-    /// ``FernletCycleRecordMirror/recordIDKey`` (so the id alone identifies Fernlet's copy, §5.1), and
+    /// `FernletCycleRecordMirror/recordIDKey` (so the id alone identifies Fernlet's copy, §5.1), and
     /// the `HKMetadataKeyMenstrualCycleStart` flag (forced false on the intermenstrual-bleeding sample —
     /// spotting never starts a cycle). The temperature goes in the unit it was entered in. A record
     /// whose clinical block is unknown or empty builds nothing.

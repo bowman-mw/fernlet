@@ -234,7 +234,7 @@ public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Ident
     /// The shape's name in the wardrobe's picker and on its equipped-item row.
     ///
     /// Localized in place (Spanish round, 2026-10-20): every reader draws it, and none compares it.
-    /// ``rawValue`` is the frozen token the synced appearance and the friend wire carry.
+    /// `rawValue` is the frozen token the synced appearance and the friend wire carry.
     public var label: String {
         switch self {
         case .circle: String(localized: "companionBodyStyle.circle", defaultValue: "Circle", bundle: .module,
@@ -262,7 +262,7 @@ public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identif
 
     public var id: String { rawValue }
 
-    /// The palette's name. Localized in place (Spanish round, 2026-10-20); ``rawValue`` is the
+    /// The palette's name. Localized in place (Spanish round, 2026-10-20); `rawValue` is the
     /// frozen token.
     public var label: String {
         switch self {
@@ -302,7 +302,7 @@ public nonisolated enum CompanionAssetColor: String, Codable, CaseIterable, Iden
     ///
     /// Localized (review T2-1). `rawValue` above is the FROZEN persisted token; this is the display
     /// half, and it was the one member of this file's four display forks that the localization
-    /// round missed — ``CompanionState/displayName``, ``FeelingTag/label`` and
+    /// round missed — ``CompanionState/displayName``, ``FeelingTag/label(addressing:)`` and
     /// ``SleepQuality/label`` all already resolve the same way.
     public var label: String {
         switch self {
@@ -351,7 +351,7 @@ public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Ident
     public var id: String { rawValue }
 
     /// The accessory's name in the wardrobe. Localized in place (Spanish round, 2026-10-20);
-    /// ``rawValue`` is the frozen token.
+    /// `rawValue` is the frozen token.
     public var label: String {
         switch self {
         case .none: String(localized: "companionAccessory.none", defaultValue: "None", bundle: .module,
@@ -378,7 +378,7 @@ public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identi
     public var id: String { rawValue }
 
     /// The clothing item's name in the wardrobe. Localized in place (Spanish round, 2026-10-20);
-    /// ``rawValue`` is the frozen token.
+    /// `rawValue` is the frozen token.
     public var label: String {
         switch self {
         case .none: String(localized: "companionClothing.none", defaultValue: "None", bundle: .module,
@@ -405,7 +405,7 @@ public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identi
     public var id: String { rawValue }
 
     /// The side item's name in the wardrobe. Localized in place (Spanish round, 2026-10-20);
-    /// ``rawValue`` is the frozen token.
+    /// `rawValue` is the frozen token.
     public var label: String {
         switch self {
         case .none: String(localized: "companionSideItem.none", defaultValue: "None", bundle: .module,

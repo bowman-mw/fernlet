@@ -12,19 +12,22 @@ final class RecipeShareSheetUITests: XCTestCase {
     @MainActor
     func testTheShareScreenExplainsMessagesAndSharesText() throws {
         let app = UXTestApp.launch()  // demo-seeded: "Overnight oats" has notes and steps
-        app.buttons["Food"].firstMatch.tap()
+        openFoodPanel(in: app)
 
         let recipeBook = app.buttons["Recipe book"]
         XCTAssertTrue(recipeBook.waitForExistence(timeout: 6), "Recipe book button not found on Food")
-        XCTAssertTrue(scrollClearOfTabBar(recipeBook, in: app), "Recipe book button not reachable on Food")
+        XCTAssertTrue(scrollIntoClearView(recipeBook, in: app), "Recipe book button not reachable on Food")
         recipeBook.tap()
 
         let share = app.buttons["Share recipe"].firstMatch
         XCTAssertTrue(share.waitForExistence(timeout: 6), "no recipe row offers Share in the book")
         share.tap()
 
-        let notes = app.switches["Include notes"].firstMatch
-        XCTAssertTrue(notes.waitForExistence(timeout: 6), "the Include notes switch is not above the cards")
+        // World (`b3-recipe-share` draft 2): the Include notes switch moved to Settings › Sharing,
+        // and the screen says so in a line under the cards.
+        let notesLine = app.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Notes and the picture go along as set in Settings")).firstMatch
+        XCTAssertTrue(notesLine.waitForExistence(timeout: 6), "the screen does not say where the notes choice lives")
         let note = app.descendants(matching: .any)["recipeShare.messagesNote"].firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 4), "the Messages row's note is missing")
         XCTAssertTrue(note.label.contains("Messages isn't set up"), "unexpected note: \(note.label)")
@@ -67,17 +70,32 @@ final class RecipeShareSheetUITests: XCTestCase {
         }
     }
 
-    /// Drags the Food page until the element sits wholly between the status bar and the floating tab
-    /// bar (the tab bar steals taps near it — see `RecipeDetailUITests.scrollClearOfTabBar`, whose
-    /// shape this copies; each suite keeps its own).
-    private func scrollClearOfTabBar(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+    /// Opens the Food panel from the map's item bar (`world.item.food`) and waits for its page. One
+    /// retry: a tap in the first seconds after launch is occasionally lost.
+    @MainActor
+    private func openFoodPanel(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let page = app.descendants(matching: .any)["screen.food"].firstMatch
+        let slot = app.buttons["world.item.food"].firstMatch
+        for _ in 0..<2 where !page.exists {
+            XCTAssertTrue(slot.waitForExistence(timeout: 30), "the item bar has no Food slot", file: file, line: line)
+            slot.tap()
+            _ = page.waitForExistence(timeout: 8)
+        }
+        XCTAssertTrue(page.exists, "the Food panel never showed screen.food", file: file, line: line)
+    }
+
+    /// Drags the Food panel's page until the element sits wholly between the panel's plate and the
+    /// bottom of the screen, and has stopped moving (a second read agrees), so the tap lands on its
+    /// centre. Each suite keeps its own copy.
+    private func scrollIntoClearView(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         let window = app.windows.firstMatch
+        let topClear: CGFloat = 130
+        let bottomClear: CGFloat = 40
         for _ in 0..<14 {
             guard element.exists else { dragFeed(by: 300, in: app); continue }
             let frame = element.frame
-            let homeTab = app.buttons["Home"].firstMatch
-            let bottom = (homeTab.exists ? homeTab.frame.minY : window.frame.maxY) - 16
-            let top = window.frame.minY + 100
+            let bottom = window.frame.maxY - bottomClear
+            let top = window.frame.minY + topClear
             if frame.maxY > bottom {
                 dragFeed(by: frame.maxY - bottom + 40, in: app)
             } else if frame.minY < top {

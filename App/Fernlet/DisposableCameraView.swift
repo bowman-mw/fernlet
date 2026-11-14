@@ -606,7 +606,7 @@ enum DisposableCameraOrientation {
 struct DisposableCameraView: View {
     var store: FernletStore
     /// Reported up to ``FriendsView``: whether this view has a sheet or alert of its own up right
-    /// now (see ``ownPresentationIsUp``). The Friends surface must not request its session-end
+    /// now (see `ownPresentationIsUp`). The Friends surface must not request its session-end
     /// review over one — the request would queue behind this view's sheet with a snapshot taken
     /// before the person answered the Develop review here — and re-checks the moment this goes
     /// false (2026-09-30 fix round, findings C-F1/C-F2). Defaults to a constant for a caller that

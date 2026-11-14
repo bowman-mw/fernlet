@@ -197,7 +197,7 @@ final class FileDeviceDaySummaryStore: DeviceDaySummaryStoring {
     }
 }
 
-/// The in-memory ``DeviceDaySummaryStoring`` — the default for a `FernletStore` built through the
+/// The in-memory `DeviceDaySummaryStoring` — the default for a `FernletStore` built through the
 /// synchronous initializer (tests and previews), so a store that is not handed one can never share,
 /// or wipe, another store's summaries (the same per-instance-sidecar lesson as
 /// `InMemoryDeviceHealthResidueStore`). The launch path (`FernletStore.load`) always uses

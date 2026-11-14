@@ -38,7 +38,7 @@ public nonisolated enum WorkoutSessionLength: String, Codable, CaseIterable, Ide
         }
     }
 
-    /// The choice on screen, localized. Never persisted or matched — ``rawValue`` is the token.
+    /// The choice on screen, localized. Never persisted or matched — `rawValue` is the token.
     public var displayName: String {
         switch self {
         case .noLimit: String(localized: "workoutSessionLength.noLimit", defaultValue: "No limit",
@@ -69,7 +69,7 @@ public nonisolated enum WorkoutWarmUpMode: String, Codable, CaseIterable, Identi
 
     public var id: String { rawValue }
 
-    /// The choice on screen, localized. Never persisted or matched — ``rawValue`` is the token.
+    /// The choice on screen, localized. Never persisted or matched — `rawValue` is the token.
     public var displayName: String {
         switch self {
         case .full: String(localized: "workoutWarmUp.full", defaultValue: "Full",

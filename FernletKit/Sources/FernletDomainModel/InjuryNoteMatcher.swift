@@ -19,7 +19,7 @@ import Foundation
 
 /// Whole-word, idiom-aware reading of the free-text injury note into body areas and single muscles.
 ///
-/// Pure and deterministic; bounded by ``maxWords``. ``WorkoutProfile/injuryLimits`` treats every
+/// Pure and deterministic; bounded by `maxWords`. ``WorkoutProfile/injuryLimits`` treats every
 /// area it finds as severe unless the picker names that area.
 public nonisolated enum InjuryNoteMatcher {
     /// What a note names.

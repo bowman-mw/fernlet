@@ -26,7 +26,7 @@ import WorldMapStore
 ///   ``change(_:_:)``, into the same sealed book.
 /// - **Duress:** a decoy (``setDecoy(_:)``) shows no trip, records nothing and reads or writes no file; the real book
 ///   is dropped from memory while it lasts.
-/// - **Wipes:** ``forget()`` drops everything in memory, unsaved points included; the vault's ``WorldMapVault/clearAll()``
+/// - **Wipes:** ``forget()`` drops everything in memory, unsaved points included; the vault's `WorldMapVault/clearAll()`
 ///   removes the files.
 ///
 /// Bounded (Power of 10): one open piece of at most ``RoadTripLine/chunkSize`` points in memory, at most
@@ -297,7 +297,7 @@ final class RoadTripKeeper {
         tellPassenger()
     }
 
-    /// The wipe: forgets every trip and point in memory, unsaved ones included (the vault's ``WorldMapVault/clearAll()``
+    /// The wipe: forgets every trip and point in memory, unsaved ones included (the vault's `WorldMapVault/clearAll()`
     /// removes the files).
     func forget() {
         book = .empty

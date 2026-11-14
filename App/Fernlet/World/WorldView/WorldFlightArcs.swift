@@ -115,7 +115,7 @@ nonisolated enum WorldFlightArcs {
 
     /// The routes of `flights` (earliest first, as the book keeps them), in the order first flown, at most
     /// ``maxRoutes``; a flight on a route past the cap is not counted. Bounded: the book's
-    /// ``PassportBook/maxFlights``.
+    /// `PassportBook/maxFlights`.
     static func routes(_ flights: [PassportFlight]) -> [(route: WorldFlightRoute, tally: Tally)] {
         var order: [WorldFlightRoute] = []
         var tallies: [WorldFlightRoute: Tally] = [:]
@@ -252,7 +252,7 @@ nonisolated enum WorldFlightArcs {
 
     /// `kilometres` rounded to the nearest 10 with its thousands grouped by `separator`: "3,620" in English and
     /// Mexico's Spanish, "3.620" in Spain's (spec §12: Spanish groups even at four digits, so not the system's
-    /// style; ``FernletLanguage/thousandsSeparator(localization:)`` picks the mark). Bounded: an `Int`'s digits.
+    /// style; `FernletLanguage/thousandsSeparator(localization:)` picks the mark). Bounded: an `Int`'s digits.
     static func groupedKilometres(_ kilometres: Double, separator: String) -> String {
         guard kilometres.isFinite, kilometres >= 0 else { return "0" }
         let rounded = Int((min(kilometres, 1e9) / 10).rounded()) * 10

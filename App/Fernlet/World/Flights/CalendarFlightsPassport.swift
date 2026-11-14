@@ -6,7 +6,7 @@ import WorldMapStore
 /// read, and the passport's sealed backup marked owed after a change.
 extension WorldAtlasKeeper {
     /// Keeps a calendar look (spec §10.6): first every upcoming flight whose departure has passed joins the
-    /// flights flown (``PassportBook/promoteUpcomingFlights(asOf:)``, before anything replaces the list), then
+    /// flights flown (`PassportBook/promoteUpcomingFlights(asOf:)`, before anything replaces the list), then
     /// `flown` (the window's flights already flown; empty for the first look, whose past flights wait for the
     /// summary's confirm) is added one flight once, then the upcoming flights become `upcoming`. Whether the
     /// passport took it.

@@ -65,7 +65,7 @@ struct SettingsRootChrome: ViewModifier {
 }
 
 extension View {
-    /// One of Settings' content cards on the framed look's paper (``FernletCard``: a 2-pt ink frame
+    /// One of Settings' content cards on the framed look's paper (`FernletCard`: a 2-pt ink frame
     /// and a solid shadow), stretched to the page's width with its content leading. Replaces the
     /// pages' hand-made cream cards, so every card on a Settings page is the one approved card.
     func settingsCard() -> some View {

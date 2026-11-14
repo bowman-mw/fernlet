@@ -18,7 +18,7 @@ import Security
 /// **Delegation, never a copy.** A seal reads `DeviceBindingID.current()`, which mints the row on first
 /// use and returns it only after a read-back proves it durable; an open reads
 /// `DeviceBindingID.currentForOpen()`, which never mints and throws a retryable `ReadError` when the
-/// keychain read fails, translated here into ProximityKit's ``ProximityInstallBindingReadError`` with the
+/// keychain read fails, translated here into ProximityKit's `ProximityInstallBindingReadError` with the
 /// same status. Both are called at the moment ProximityKit asks, so `DeviceBindingID` keeps its one
 /// process-wide cache, its one mint path and its one task-local test seam: an override in force at that
 /// moment, including one a test flips partway through an operation, reaches the mesh stores exactly as
@@ -41,11 +41,11 @@ public nonisolated struct FernletDeviceBindingAdapter: ProximityInstallBinding {
 
     /// This install's `DeviceBindingID`, read for `access`.
     ///
-    /// - Parameter access: ``ProximityInstallBindingAccess/seal`` reads `DeviceBindingID.current()`,
-    ///   which may mint and answers `nil` for any failure; ``ProximityInstallBindingAccess/open`` reads
+    /// - Parameter access: `ProximityInstallBindingAccess/seal` reads `DeviceBindingID.current()`,
+    ///   which may mint and answers `nil` for any failure; `ProximityInstallBindingAccess/open` reads
     ///   `DeviceBindingID.currentForOpen()`, which never mints and answers `nil` only for an absent row.
     /// - Returns: The 16-byte binding, or `nil`.
-    /// - Throws: ``ProximityInstallBindingReadError`` when an open's keychain read failed.
+    /// - Throws: `ProximityInstallBindingReadError` when an open's keychain read failed.
     public func read(for access: ProximityInstallBindingAccess) throws(ProximityInstallBindingReadError) -> Data? {
         switch access {
         case .seal:

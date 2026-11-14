@@ -26,7 +26,7 @@ nonisolated enum WorldPalette {
     static let paperShade = adaptive(light: 0xEFDDB8, dark: 0x2A2017)
     /// Navigation only: the item bar and title plates, in the wood App colors chose (``WorldAppColors``;
     /// Oak, today's wood, by default). Read where it is drawn, so a pick shows on the next draw; a view
-    /// that stays on screen also reads ``EnvironmentValues/worldAppColors`` to be redrawn by it.
+    /// that stays on screen also reads `EnvironmentValues/worldAppColors` to be redrawn by it.
     static var wood: Color { WorldAppColors.wood().tones.wood }
     static var woodHigh: Color { WorldAppColors.wood().tones.high }
     static var woodLow: Color { WorldAppColors.wood().tones.low }

@@ -99,7 +99,7 @@ struct DuressSetupAvailability: Equatable {
 
     /// Whether `mode` may be chosen right now.
     ///
-    /// Only ``DuressMode/recoveryLock`` is ever withheld, and only for reasons that would make it an
+    /// Only `DuressMode/recoveryLock` is ever withheld, and only for reasons that would make it an
     /// unannounced permanent lock-out rather than a response: no enrolled custodian at all, or an
     /// enrolled custodian holding a SUPERSEDED key — one that opens the corpus from before this app
     /// lock but nothing written under it, so firing the response would destroy the live key and the
@@ -129,7 +129,7 @@ struct DuressSetupAvailability: Equatable {
 
     /// Whether the enrolled recovery device may be removed.
     ///
-    /// False while ``DuressMode/recoveryLock`` is the armed response, because that pairing is a trap
+    /// False while `DuressMode/recoveryLock` is the armed response, because that pairing is a trap
     /// rather than a configuration: the response destroys every local unlock key and the custodian is
     /// the only thing that gives them back. `FernletLockService.removeRecoveryCustodian()` throws in
     /// exactly this state; this is what stops the user reaching a button whose only outcome is an
@@ -149,7 +149,7 @@ struct DuressSetupAvailability: Equatable {
 
 // MARK: - Mode copy
 
-/// The user-facing name, summary and consequence copy for each ``DuressMode``.
+/// The user-facing name, summary and consequence copy for each `DuressMode`.
 ///
 /// A separate namespace so the destructive wording has one home and can be reviewed as a unit —
 /// the plan treats the copy on a destructive path as reviewable surface, not decoration.

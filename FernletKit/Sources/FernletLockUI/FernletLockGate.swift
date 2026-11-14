@@ -524,7 +524,7 @@ struct FernletLockGateModifier: ViewModifier {
 /// Exists for capture-FRICTION composition: `PrivateHubView` ANDs `!overlayIsUp(...)` into its
 /// `captureProtected(surface:isFrontmost:)` flag, so a screenshot of the LOCKED hub — where the
 /// once-per-session nudge banner would render invisibly beneath the gate's overlay — never
-/// spends the session's nudge. Kept HERE, next to ``FernletLockGateModifier``, because it must
+/// spends the session's nudge. Kept HERE, next to `FernletLockGateModifier`, because it must
 /// mirror the modifier's own overlay conditions (`isLocked` / `isNotConfigured`) exactly; a
 /// change to either must change the other, and `CaptureOcclusionGatingTests` pins the truth
 /// table.
@@ -537,7 +537,7 @@ public enum FernletLockGateOcclusion {
     /// - Parameters:
     ///   - active: The gate's `active` flag; an inactive gate (e.g. the UI-test bypass) never
     ///     overlays.
-    ///   - state: The lock service's current ``FernletLockState``.
+    ///   - state: The lock service's current `FernletLockState`.
     ///   - scope: The gated surface, matched against the unlock in force.
     /// - Returns: Whether the gate's opaque overlay is above the content right now.
     public static func overlayIsUp(active: Bool, state: FernletLockState, scope: FernletLockScope) -> Bool {

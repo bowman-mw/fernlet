@@ -41,7 +41,7 @@ protocol OwnPhotoBackupContext: AnyObject {
 /// What this type owns, and why each piece exists:
 /// - **One user-facing switch, three corpora.** The preference is a single
 ///   `sealedBackupOwnPhotosEnabled`; meal / recipe / progress are internal record namespaces
-///   (``SealedPhotoCorpus``), not three consent questions. They are all "your own photos".
+///   (`SealedPhotoCorpus`), not three consent questions. They are all "your own photos".
 /// - **Per-corpus no-clobber gate, in two halves.** Own-photo ownership is scattered
 ///   (`Meal.photoID`, the recipe id, the progress index), so "is this device empty?" cannot be a
 ///   whole-device check — it is a per-corpus check, the shape the sealed narratives' (since retired)
@@ -85,7 +85,7 @@ protocol OwnPhotoBackupContext: AnyObject {
 ///   ``tearDownForDeleteAll()``).
 ///
 /// Builds its own `MealPhotoStore`/`ProgressPhotoStore` instances over the shared
-/// ``OwnPhotoCorpusLayout`` paths rather than borrowing `FernletStore`'s: the stores are value types
+/// `OwnPhotoCorpusLayout` paths rather than borrowing `FernletStore`'s: the stores are value types
 /// over a directory and their key providers read the same keychain rows, so this is the same data —
 /// and it keeps a non-`Sendable` provider from being shared across owners (the precedent the
 /// media-key split's own launch pass set).
@@ -316,7 +316,7 @@ final class OwnPhotoBackupCoordinator {
     /// Turns the own-photo escrow backup on or off. Returns whether the operation succeeded; the
     /// caller should only persist the preference when it did.
     ///
-    /// Enabling runs the full ``synchronize()`` pass (restore first, then upload what this device
+    /// Enabling runs the full `synchronize()` pass (restore first, then upload what this device
     /// holds) and reports **false when that pass could not commit the user's photos** — offline,
     /// signed out of iCloud, over quota, or a record type not yet in the Production schema. That
     /// matters far beyond a tidy return value: `FernletStore.setOwnPhotoBackupEnabled` treats a

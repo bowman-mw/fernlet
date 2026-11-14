@@ -84,7 +84,7 @@ extension FernletStore {
     }
 
     /// The swap options for `name` in the plan editor: up to four exercises that do the same work
-    /// (``WorkoutExerciseSwapOptions``), drawn from what the planner itself may suggest here — the
+    /// (`WorkoutExerciseSwapOptions`), drawn from what the planner itself may suggest here — the
     /// active location's equipment, the injury limits, nothing hidden (saved or `alsoHidden`, the
     /// editor's pending marks) — and none already in the session (`excluding`). A `harder` variation
     /// the planner offered for a lift at its heaviest load (N7, `LoadGuidance.harderVariation`) comes

@@ -215,7 +215,7 @@ extension WorldAtlas {
 
     /// The state or province under `point`, among `countryCode`'s entries when it is given, else among all:
     /// the first in table order whose rings hold it. Only the entries whose boxes touch the point's one-degree
-    /// cell are tested (``AtlasBoxIndex`` keeps table order, so the first found is the whole table's first).
+    /// cell are tested (`AtlasBoxIndex` keeps table order, so the first found is the whole table's first).
     public func admin1(at point: GeoPoint, inCountry countryCode: String?) -> AtlasAdmin1? {
         guard point.isValid else { return nil }
         // Bounded: the cell's entries, each listed once (at most WorldAtlasLayers.maxAdmin1s).

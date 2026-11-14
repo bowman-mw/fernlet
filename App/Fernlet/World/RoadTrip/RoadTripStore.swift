@@ -5,15 +5,15 @@ import WorldMapStore
 /// Seals the road trips in the map's vault (World-RoadTrip-Spec §2.9: "kept on each phone like a walk's line:
 /// sealed, never synced, deleted with map history").
 ///
-/// - **The book** (``RoadTripBook``) is `road-trips.bin` (``WorldMapVault/File/roadTrips``): the device side's purpose
+/// - **The book** (``RoadTripBook``) is `road-trips.bin` (`WorldMapVault/File/roadTrips`): the device side's purpose
 ///   and the buffer key, under its own context.
-/// - **Each trip's line** is in pieces, `road-trip-line-<trip>-<piece>.bin` (``WorldMapVault/File/roadTripLine(trip:chunk:)``):
+/// - **Each trip's line** is in pieces, `road-trip-line-<trip>-<piece>.bin` (`WorldMapVault/File/roadTripLine(trip:chunk:)`):
 ///   the walk lines' purpose and the buffer key, bound to the trip and the piece.
 ///
 /// Both use the buffer key (`AfterFirstUnlockThisDeviceOnly`), because the iPhone that maps is in a pocket: the line
 /// is appended, and a locked launch reads whether it maps, with the phone locked. A file that can't be opened (its
 /// key gone, its bytes damaged) is removed, as every vault file is; a key that can't be read right now throws
-/// ``WorldMapVault/VaultError/keyUnavailable`` (only before the first unlock since the phone started). Every wipe and
+/// `WorldMapVault/VaultError/keyUnavailable` (only before the first unlock since the phone started). Every wipe and
 /// Delete map history remove every file with the vault's folder (`WorldFogKeeper.clearAll()`). Never in a decoy (the
 /// keeper's gate). Nothing here is synced, backed up, exported or given to the AI.
 @MainActor

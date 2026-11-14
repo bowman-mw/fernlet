@@ -11,7 +11,7 @@ final class DeleteAllDialogAppearanceUITests: XCTestCase {
 
     func testDeleteEverythingSheetAppearance() {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "settings sheet did not open")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10), "settings sheet did not open")
 
         let deleteButton = app.descendants(matching: .any)["settings.deleteAll"]
         for _ in 0..<12 where !(deleteButton.exists && deleteButton.isHittable) { app.swipeUp() }

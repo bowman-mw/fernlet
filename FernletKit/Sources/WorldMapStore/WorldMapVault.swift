@@ -221,7 +221,7 @@ public final class WorldMapVault {
     }
 
     /// The app's vault: `Application Support/WorldMap`, keys in the device keychain. Opening it re-asserts
-    /// the folder's backup exclusion when the folder is already there (``keepOutOfBackups(_:)``).
+    /// the folder's backup exclusion when the folder is already there (`keepOutOfBackups(_:)`).
     public static func production() -> WorldMapVault {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory

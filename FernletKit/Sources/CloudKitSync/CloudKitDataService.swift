@@ -545,7 +545,7 @@ public final class CloudKitDataService {
         }
     }
 
-    /// Deletes every legacy direct-CloudKit record — the ``legacyDirectRecordTypes`` — from the
+    /// Deletes every legacy direct-CloudKit record — the `legacyDirectRecordTypes` — from the
     /// private database, regardless of whether iCloud sync is on.
     ///
     /// The gap this closes. `deleteAllData` reaches the user's cloud copy two ways, and neither

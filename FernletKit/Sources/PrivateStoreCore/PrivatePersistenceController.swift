@@ -73,7 +73,7 @@ public final class PrivatePersistenceController {
     /// process-wide `nonisolated(unsafe)` object that is written OUTSIDE the
     /// `viewContext.performAndWait` discipline the rest of the type relies on (the
     /// `loadPersistentStores` completion runs on Core Data's own queue, while the app reads this
-    /// from the main actor). ``stateLock`` is what makes the R9 allowlist invariant true.
+    /// from the main actor). `stateLock` is what makes the R9 allowlist invariant true.
     public var didFailToLoad: Bool {
         stateLock.withLock { storedDidFailToLoad }
     }

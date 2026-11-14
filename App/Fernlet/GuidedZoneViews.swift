@@ -99,7 +99,7 @@ struct WorkoutZoneSettingsRows: View {
 /// Edits the sheet's text draft; the sheet's Save stores it through
 /// ``WorkoutZonePreferences/saveMaxHeartRate(_:in:)``, where an empty field — or anything that is not a
 /// whole number from 120 to 220, which a calm line here points out — clears it. The caption names the
-/// field for VoiceOver (``SheetField``'s `namesControl`), Voice Control also answers to "Max heart
+/// field for VoiceOver (`SheetField`'s `namesControl`), Voice Control also answers to "Max heart
 /// rate" and "Max" (A9), and every line wraps at any Dynamic Type size.
 struct WorkoutMaxHeartRateField: View {
     /// The field's text draft.

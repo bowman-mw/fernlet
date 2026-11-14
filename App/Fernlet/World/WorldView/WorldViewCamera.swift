@@ -15,8 +15,8 @@ import WorldMapStore
 ///   holds the band's middle. Zooming in widens that band smoothly until the whole square is open, so nothing
 ///   jumps on the way in or out.
 /// - **Zooming** is free (owner, 2026-11-02): ``zoom`` runs from 0 (World) through 3 (City) to
-///   ``AtlasZoomLevel/maxZoom`` and stops wherever the fingers leave it, keeping the place under a focus point (a pinch, a tapped marker) where it was. The levels
-///   of ``AtlasZoomLevel`` are the whole numbers on it; ``detail`` picks the hexes and ``level`` the lines, the
+///   `AtlasZoomLevel/maxZoom` and stops wherever the fingers leave it, keeping the place under a focus point (a pinch, a tapped marker) where it was. The levels
+///   of `AtlasZoomLevel` are the whole numbers on it; ``detail`` picks the hexes and ``level`` the lines, the
 ///   plate and the zoom control's word.
 nonisolated struct WorldViewCamera: Equatable, Sendable {
     /// The latitude the World view's top edge stays north of: the Arctic is always on the top edge.
@@ -29,7 +29,7 @@ nonisolated struct WorldViewCamera: Equatable, Sendable {
     /// (about 13,000 on an iPhone, more on an iPad).
     static let maxDrawnHexes = 40_000
 
-    /// The place on the free zoom: 0 is World, 3 is City, ``AtlasZoomLevel/maxZoom`` the closest.
+    /// The place on the free zoom: 0 is World, 3 is City, `AtlasZoomLevel/maxZoom` the closest.
     private(set) var zoom: Double
     /// Screen points a Mercator unit spans at this zoom (the width of the whole world, in points).
     private(set) var scale: Double

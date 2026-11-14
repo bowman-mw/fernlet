@@ -14,7 +14,7 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     /// A workout space of the person's own whose pin is within 100 m.
     struct Space: Equatable, Sendable {
         let id: UUID
-        /// Its name as drawn (``WorkoutLocation/displayedName``).
+        /// Its name as drawn (`WorkoutLocation/displayedName`).
         let name: String
         /// "Cardio, Free weights, Machines": the categories it has anything in (at most three).
         let equipment: String

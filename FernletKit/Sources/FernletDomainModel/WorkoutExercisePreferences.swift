@@ -14,7 +14,7 @@ import Foundation
 ///
 /// Both hold FROZEN exercise names (``ExerciseTarget/name``) — never a drawn display name — and match
 /// through ``WorkoutExerciseCatalog/normalizedName(_:)``, so "Bench Press" and "bench press" are one
-/// exercise. The planner (``WorkoutProgram/dayPlan(goal:intensity:profile:location:context:split:rotationIndex:progression:load:recent:options:preferences:catalog:)``)
+/// exercise. The planner (``WorkoutProgram/dayPlan(goal:intensity:profile:location:context:split:rotationIndex:progression:load:recent:options:preferences:catalog:cardioSeed:noteMayShorten:)``)
 /// leaves a hidden exercise out of every block and swaps in a saved alternate only when the
 /// alternate passes everything the original did; the AI adjuster never sees a hidden exercise.
 ///

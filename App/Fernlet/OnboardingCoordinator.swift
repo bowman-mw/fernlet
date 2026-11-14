@@ -10,7 +10,7 @@ import FernletUI
 /// Abstraction over the "does this iCloud account already hold Fernlet data?" probe.
 ///
 /// Conformers: `CloudKitDataService` (the real CloudKit query, via the retroactive conformance
-/// below) and ``MockExistingCloudDataDetector`` (fixed answers for UI tests and previews).
+/// below) and `MockExistingCloudDataDetector` (fixed answers for UI tests and previews).
 /// ``OnboardingStorageChoiceView`` runs it before revealing the storage choices so a returning
 /// user sees "Restore from iCloud" and the local-only warning instead of the fresh-install copy.
 protocol ExistingCloudDataDetecting {
@@ -131,7 +131,7 @@ final class DeferredLockSetupNudge {
 /// Chooses the ``ExistingCloudDataDetecting`` implementation for this launch.
 ///
 /// `FernletApp` calls ``makeDetector()`` when presenting onboarding: UI-test launch environment
-/// variables select a ``MockExistingCloudDataDetector`` (detection disabled, or a summary built
+/// variables select a `MockExistingCloudDataDetector` (detection disabled, or a summary built
 /// from env-supplied counts); every normal launch gets the real `CloudKitDataService`.
 @MainActor
 struct OnboardingCloudDataDetectorFactory {
@@ -238,8 +238,10 @@ final class OnboardingCoordinatorModel {
     /// place Fernlet asks unprompted; everywhere else the request is user-initiated from Settings.
     var ageAssurance: AgeAssuranceStore { store.ageAssurance }
 
+    /// - Parameter store: The app store the onboarding steps read and write.
     /// - Parameter defaults: Where the lock deferral and `hasCompletedOnboarding` are written.
     ///   Production uses `.standard`, which `FernletApp` reads; tests pass a throwaway suite.
+    /// - Parameter onComplete: Called once onboarding finishes.
     init(store: FernletStore, defaults: UserDefaults = .standard, onComplete: @escaping () -> Void) {
         self.store = store
         self.defaults = defaults

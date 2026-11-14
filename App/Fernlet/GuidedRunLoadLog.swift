@@ -3,9 +3,9 @@ import FernletDomainModel
 
 /// The two crossings between the domain's load plan and the guided run's app-group state.
 ///
-/// At start, a lift's ``LoadGuidance`` becomes the run's ``GuidedWorkoutRunState/Tracking`` (the
+/// At start, a lift's `LoadGuidance` becomes the run's ``GuidedWorkoutRunState/Tracking`` (the
 /// suggestion preselected, so finishing untouched needs no extra tap). At finish, each tracked lift
-/// becomes an ``ExerciseResult`` and its logged line ("Bench press - 3 x 8 @ 105 lb", with
+/// becomes an `ExerciseResult` and its logged line ("Bench press - 3 x 8 @ 105 lb", with
 /// "(did 8, 8, 6)" when edited), and the session's text is rebuilt around those lines. Each set is
 /// logged at the weight it was done at (s4): a weight changed mid-lift reads "(did 8 @ 100, 8 @ 100,
 /// 8 @ 110)", and the reps editor's own per-set weights win over the taps' record. A lift the

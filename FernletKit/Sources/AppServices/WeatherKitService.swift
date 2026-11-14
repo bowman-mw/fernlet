@@ -192,7 +192,7 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
 
     /// Requests when-in-use authorization. Returns whether it ended up granted.
     ///
-    /// Concurrent callers on `.notDetermined` coalesce onto one in-flight ``authRequest``, so a
+    /// Concurrent callers on `.notDetermined` coalesce onto one in-flight `authRequest`, so a
     /// cold-launch burst issues one system prompt and no caller's continuation is overwritten and
     /// leaked.
     public func requestAuthorization() async -> Bool {

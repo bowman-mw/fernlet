@@ -167,7 +167,7 @@ public struct ScoreBreakdown: Equatable {
 /// All members are stateless nonisolated statics, callable from any isolation context.
 public enum FernletScoring {
     /// The journal component for a day with at least one journal entry — ANY entry, whatever its
-    /// ``FeelingTag``.
+    /// `FeelingTag`.
     ///
     /// Owner decision, 2026-09-23: "journaling, no matter the type of day, should score the same
     /// amount of points. The point is to encourage these habits." The component used to be weighted
@@ -638,7 +638,7 @@ public enum MealParser {
 /// energy-matched `Workout` without AI; it currently has no production call sites — only
 /// `defaultGoals` is wired into the app. Pure statics, no state.
 ///
-/// Localization (2026-10-20): the suggestion's NAME is a frozen English ``WorkoutFallbackName``
+/// Localization (2026-10-20): the suggestion's NAME is a frozen English `WorkoutFallbackName`
 /// (it is the stored `Workout.name`, drawn through `Workout.displayedName`), its exercise lines are
 /// plan text and stay English like every other plan's, and its note and every field of the starter
 /// goals are composed in the device's language from `WorkoutFallbackCopy`, as the planner's own

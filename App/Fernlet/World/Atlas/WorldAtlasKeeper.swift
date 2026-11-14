@@ -4,7 +4,7 @@ import WorldMapStore
 
 /// Keeps the World passport (round 7, idea 4; owner 2026-10-29): reads each fix the fog keeper accepted
 /// against the bundled atlas and records the first visits and each country's trips in the sealed
-/// ``PassportStore``.
+/// `PassportStore`.
 ///
 /// **Which fixes.** `WorldFogKeeper` owns this keeper and calls ``observe(point:at:)`` only for fixes it
 /// accepted (precise, accurate to 65 m, "Uncover the map as you go" on), only while the phone is unlocked,
@@ -20,7 +20,7 @@ import WorldMapStore
 /// 2026-10-30 (a Debug build on an iPhone 17 Pro Max). Until that ends every reader is answered as if there
 /// were no atlas, the newest fix waits and is read once it is open, and views that asked draw again then.
 ///
-/// **The shore mask** (``WorldShoreMask``, Docs/World-Shore-Pack.md), the fog's and Your world's land and water, opens
+/// **The shore mask** (`WorldShoreMask`, Docs/World-Shore-Pack.md), the fog's and Your world's land and water, opens
 /// with the atlas, in the same background task, so Home's first fog is drawn with it and never redrawn for it; opening
 /// it reads only its table and overview (``openedShore``). A missing or unreadable pack is logged once and the map
 /// falls back to the atlas's `LAND`. Each fix is read with it too, so the passport's land rules match the map
@@ -49,7 +49,7 @@ import WorldMapStore
 /// the passport's backup owes an upload.
 ///
 /// **Discoveries for Sprout** (idea B) and new stamps for the passport. ``discoveries()`` is a stream of
-/// ``PassportEvent``s: each first visit, and each new trip to a country visited before (owner 2026-10-29, "Stamp
+/// `PassportEvent`s: each first visit, and each new trip to a country visited before (owner 2026-10-29, "Stamp
 /// each trip": a return trip is a new stamp, and the passport opens on its page). Each is announced once, only
 /// after it is saved, only for an accepted fix (never in a decoy, never for a restore), at most
 /// ``eventBufferSize`` held for a slow reader (the newest kept). Nothing in the app reads it yet.
@@ -140,7 +140,7 @@ final class WorldAtlasKeeper {
     }
 
     /// The opener for the landmark list bundled in `bundle`: reads `WorldLandmarks.json`. A missing file or
-    /// one ``WorldLandmarks`` refuses is logged and answers an empty list (the keeper opens it once).
+    /// one `WorldLandmarks` refuses is logged and answers an empty list (the keeper opens it once).
     static func bundledLandmarks(in bundle: Bundle = .main) -> @MainActor () -> WorldLandmarks {
         {
             guard let url = bundle.url(forResource: landmarksResource, withExtension: landmarksExtension) else {
@@ -379,7 +379,7 @@ final class WorldAtlasKeeper {
         }
     }
 
-    /// An import's Undo: takes `source` off the flights that are `flights` (``FlightImportPlan/undoFlights``).
+    /// An import's Undo: takes `source` off the flights that are `flights` (`FlightImportPlan/undoFlights`).
     /// Whether the passport took it.
     func undoImport(_ source: PassportFlight.Sources, flights: [PassportFlight]) -> Bool {
         apply { book in
@@ -522,7 +522,7 @@ final class WorldAtlasKeeper {
         }
     }
 
-    /// Which of the atlas's seas touch (``WorldAtlas/seaNeighbours()``), for the passport's sea inks; empty with no
+    /// Which of the atlas's seas touch (`WorldAtlas/seaNeighbours()`), for the passport's sea inks; empty with no
     /// atlas. One table a session for every passport screen: a background pass starts as soon as the atlas opens,
     /// and a screen that asks before it is done works the table out here and keeps it. The pass walks the atlas's
     /// whole sea raster (about 6.5 million cells): on 2026-10-30 each screen's own pass held the main thread for

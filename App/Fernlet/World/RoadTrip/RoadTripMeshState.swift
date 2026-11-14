@@ -48,7 +48,7 @@ nonisolated enum RoadTripCatchUpAsk {
 /// - **Ask once** (``refreshQuestion(members:nearby:isFree:now:)``): with Fernlet open and Home in front, a trip
 ///   member presence hears nearby is asked about once while they stay nearby; one who goes away and comes back may
 ///   be asked again, and one just caught up with is not (``RoadTripCatchUpAsk``). Never a notification.
-/// - **The short hangout** (``beginHandOff(member:now:)``): which member a one-tap catch-up is for, so the store
+/// - **The short hangout** (``beginHandOff(member:now:leave:)``): which member a one-tap catch-up is for, so the store
 ///   leaves the hangout once the swap with them is done, or once ``handOffSeconds`` pass without one.
 /// - **Photos settle first** (PR 3): a swap is done once its photos have landed and gone. After the road comes
 ///   (``didCatchUp(with:metres:now:photos:leave:)``) the note waits until no piece has landed

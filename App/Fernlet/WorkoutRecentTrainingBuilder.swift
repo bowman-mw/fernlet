@@ -2,12 +2,12 @@ import Foundation
 import FernletDomainModel
 import FernletFoundation
 
-/// Gathers what the 48-hour same-muscle guard reads (``WorkoutRecoveryGuard/RecentTraining``) from
+/// Gathers what the 48-hour same-muscle guard reads (`WorkoutRecoveryGuard/RecentTraining`) from
 /// the day history: the primary muscles that got hard working sets on the past days inside the
 /// window, and the workout names of the most recent of those days.
 ///
 /// Two sources, like ``WorkoutLoadContextBuilder``:
-/// - a guided row's structured ``ExerciseResult``s — the lifts the runner tracked, never the warm-up,
+/// - a guided row's structured `ExerciseResult`s — the lifts the runner tracked, never the warm-up,
 ///   activation or cool-down; a calibration's light ramp sets don't count;
 /// - every other row's lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb"): a line with sets
 ///   and reps of a strength lift the catalog knows. A guided row without results (an older log, "Mark
@@ -15,7 +15,7 @@ import FernletFoundation
 ///   enough; the light activation lines it carries only reach the core, which today's lifting never
 ///   trains.
 ///
-/// A logged Travel-day reset never counts. Holds, stretches, jumps and unknown names never count (``WorkoutRecoveryGuard/hardMuscles(ofLift:)``).
+/// A logged Travel-day reset never counts. Holds, stretches, jumps and unknown names never count (`WorkoutRecoveryGuard/hardMuscles(ofLift:)`).
 /// Today's own rows are left out, so logging today's session never moves today's plan. Pure over its
 /// inputs.
 enum WorkoutRecentTrainingBuilder {

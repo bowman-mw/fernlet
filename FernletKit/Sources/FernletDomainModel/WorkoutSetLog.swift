@@ -76,7 +76,9 @@ extension ExerciseResult {
     /// weights: 100 lb in a 95–110 lb range corrected to 45 kg is still inside its range, not a
     /// lighter override that drops the session from the trend.
     ///
-    /// - Parameter unit: The unit the weights were entered in; ignored when no set has a weight.
+    /// - Parameters:
+    ///   - sets: The sets as done, at most `maxSets` kept.
+    ///   - unit: The unit the weights were entered in; ignored when no set has a weight.
     public mutating func record(_ sets: [LoggedSet], unit: LoadUnit?) {
         let capped = Array(sets.prefix(Self.maxSets)).map(\.clamped)
         guard !capped.isEmpty else { return }

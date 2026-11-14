@@ -89,7 +89,7 @@ struct SavedExerciseSwap: Identifiable {
 /// Every action saves as it happens (Done just closes): showing an exercise again or removing a swap
 /// is one tap to reverse in the plan editor, and deleting an exercise asks first. Deleting an exercise
 /// takes it out of the catalog only — workouts already logged with it keep it. Each list wraps at
-/// every text size; at accessibility sizes a row's button moves under its name (``AdaptiveStack``).
+/// every text size; at accessibility sizes a row's button moves under its name (`AdaptiveStack`).
 /// Buttons are named for VoiceOver with the exercise they act on and answer Voice Control by their
 /// visible word.
 struct WorkoutExercisePreferencesSheet: View {

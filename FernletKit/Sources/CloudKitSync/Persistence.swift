@@ -69,7 +69,7 @@ public enum PersistenceStoreLoadError: LocalizedError, Equatable {
 ///   preference (including the CloudKit `_SUPPORT` sidecar directory).
 /// - **Local-only history prune**: when a store loads WITHOUT CloudKit mirroring (sync off, or no
 ///   iCloud account) nothing consumes the persistent-history log, so every successful load deletes
-///   history older than ``localOnlyHistoryRetention`` (7 days) on a background context — best-effort,
+///   history older than `localOnlyHistoryRetention` (7 days) on a background context — best-effort,
 ///   audit-logged on failure, never on a mirrored store (its delegate owns that history).
 /// - **DEBUG schema deploy**: the `INITIALIZE_CLOUDKIT_SCHEMA` launch argument (see
 ///   ``CloudKitSchemaDeploy``) pushes the model to the CloudKit development schema against a
@@ -127,7 +127,7 @@ nonisolated public final class PersistenceController {
     /// shipping build must not expose a way to redirect the next store load.
     @ObservationIgnored public var reloadStoreURLOverrideForTesting: URL?
 
-    /// DEBUG-only: overrides ``localOnlyHistoryRetention`` for the next `reload(with:)`, so a test can
+    /// DEBUG-only: overrides `localOnlyHistoryRetention` for the next `reload(with:)`, so a test can
     /// prove the load path prunes un-consumed history (a real 7-day window is untestable — persistent
     /// history cannot be backdated). Instance state, not a static (R6). Absent from Release.
     @ObservationIgnored public var localOnlyHistoryRetentionOverrideForTesting: TimeInterval?
@@ -222,7 +222,7 @@ nonisolated public final class PersistenceController {
     /// - Parameters:
     ///   - preferences: the preferences the fresh container is configured from.
     ///   - compacting: one-shot SQLite compaction for ``compactStoreAfterWipe()`` — see that
-    ///     method and ``configure(_:inMemory:preferences:storeURL:iCloudAvailabilityOverride:compacting:)``.
+    ///     method and `configure(_:inMemory:preferences:storeURL:iCloudAvailabilityOverride:compacting:)`.
     ///     Never set by the ordinary sync-toggle path (use ``reload(with:)``).
     /// - Throws: the store-load error when the new container cannot load (the old container has
     ///   already been locked; `didFailToLoad` is not set by a failed reload).

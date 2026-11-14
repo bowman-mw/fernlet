@@ -261,7 +261,7 @@ public nonisolated enum WorkoutLoadEngine {
     /// Epley's one-rep max with reps in reserve added back, or nil outside 1…``epleyMaxReps`` reps.
     /// A true single — one rep with nothing left — is its own max (w6, 2026-11-10): Epley at one rep
     /// would add 3.3 % to a weight that was, by definition, the most the lifter could do. The trend
-    /// reads a single the same way (``WorkoutTrend/setEstimates(of:in:bodyWeightKg:)``).
+    /// reads a single the same way (`WorkoutTrend/setEstimates(of:in:bodyWeightKg:)`).
     public static func epley(weight: Double, reps: Int, repsInReserve: Double) -> Double? {
         guard weight > 0, weight.isFinite, reps >= 1, reps <= epleyMaxReps else { return nil }
         let effortReps = Double(reps) + max(0, repsInReserve)
@@ -353,7 +353,7 @@ public nonisolated enum WorkoutLoadEngine {
     /// The range around a suggested weight: ±10 % at low confidence, ±5 % at medium, one step up at
     /// high — always on the equipment's steps and never below one step. With a `ladder` (the
     /// location's weights) every value is a load the location has instead
-    /// (``rangeOnLoads(_:suggested:confidence:step:unit:)``).
+    /// (`rangeOnLoads(_:suggested:confidence:step:unit:)`).
     public static func prescription(
         suggested: Double, confidence: EstimateConfidence, step: Double, unit: LoadUnit, ladder: LoadLadder? = nil
     ) -> WeightPrescription? {
@@ -446,7 +446,7 @@ extension WorkoutLoadEngine {
     /// becomes reps first, then a set (``loadCap(from:step:lowerBody:ladder:)``). On an assisted
     /// machine the weight is help and every move is turned round (``WorkoutAssistedLifts``). In a
     /// marked deload week the plan repeats last time at about half the sets
-    /// (``deloadWeekOutcome(_:inputs:)``, ``deloadWeekSets(_:)``).
+    /// (`deloadWeekOutcome(_:inputs:)`, ``deloadWeekSets(_:)``).
     public static func plan(_ inputs: LiftInputs) -> LiftPlan {
         let history = inputs.exposures.filter { $0.calibration != .ramp }
         let unit = history.last(where: { $0.unit != nil })?.unit ?? inputs.defaultUnit

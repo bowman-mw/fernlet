@@ -66,7 +66,7 @@ nonisolated extension ProximityNamespace {
     /// installation also carries the Fernlet app's peer-name policy, which
     /// ProximityKit shows a peer's name under wherever one enters it.
     ///
-    /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
+    /// Sound by construction (`ProximityNamespaceGoldenTests` pins `ProximityNamespace/soundness`
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an
     /// installation of its own (plan step C1), so the two apps share one wire and never a key, a
     /// file or a log stream.

@@ -18,7 +18,7 @@ import Foundation
 /// every ciphertext already sealed under the old purpose.
 ///
 /// **At-rest format — ONE generation.** Every blob is `0x03`
-/// (``deviceBoundFormatVersionV3``) followed by the sealed box's `combined` bytes, sealed
+/// (`deviceBoundFormatVersionV3`) followed by the sealed box's `combined` bytes, sealed
 /// with this column's purpose ‖ this install's ``DeviceBindingID`` as ChaChaPoly additional
 /// authenticated data — so the ciphertext refuses to authenticate on any other install, not
 /// just under a different key. Both halves of the round's Phase 3 landed here: sealing

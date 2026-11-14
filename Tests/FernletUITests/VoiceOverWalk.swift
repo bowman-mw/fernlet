@@ -125,22 +125,20 @@ struct VoiceOverWalk {
         element.tap()
     }
 
-    /// Most drags spent bringing one element out from under the tab bar.
+    /// Most drags spent bringing one element out from under the item bar.
     static let maxTabBarClearingDrags = 4
-    /// The floating tab bar's buttons, by their spoken labels (``FernletTab`` titles; the buttons
-    /// carry no identifier).
-    static let tabBarLabels = ["Home", "Food", "Move", "Album", "Private"]
-    /// The bar's own padding and material above its buttons' frames, in points.
+    /// The identifier prefix of the World item bar's six slots (`WorldPanel.itemIdentifier`).
+    static let itemBarIdentifierPrefix = "world.item."
+    /// The bar's own padding and frame above its buttons' frames, in points.
     static let tabBarTopInset: CGFloat = 12
 
-    /// Fernlet's custom floating tab bar draws over the bottom of a scrolling screen, and XCUITest
-    /// counts an element under it as visible, so `tap()` lands on the bar instead (Home's first Quick
-    /// log row at launch, once the seeded sick-day card pushes it down). VoiceOver's cursor would bring
-    /// the element fully into view, so drag the content up until the element clears the bar. Only
-    /// while a tab button is hittable: a sheet over the bar means the element is in the sheet, which
-    /// is never dragged. A tab button itself is never moved.
+    /// The World item bar draws over the bottom of the map, and XCUITest counts an element under it
+    /// as visible, so `tap()` would land on the bar instead. VoiceOver's cursor would bring the
+    /// element fully into view, so drag the content up until the element clears the bar. Only while
+    /// an item-bar slot is hittable: every panel and sheet covers the bar, and an element in one is
+    /// never dragged. An item-bar slot itself is never moved.
     private func scrollClearOfTabBar(_ element: XCUIElement) {
-        guard !Self.tabBarLabels.contains(element.label), let barTop = tabBarTop() else { return }
+        guard !element.identifier.hasPrefix(Self.itemBarIdentifierPrefix), let barTop = tabBarTop() else { return }
         for _ in 0..<Self.maxTabBarClearingDrags {
             let covered = element.frame.maxY - barTop
             guard covered > 0 else { return }
@@ -150,20 +148,65 @@ struct VoiceOverWalk {
         }
     }
 
-    /// The top edge of the floating tab bar on screen, or nil when no tab button is hittable (a sheet
-    /// or a full-screen flow covers it).
+    /// The top edge of the item bar on screen, or nil when no slot is hittable (a panel, a sheet or
+    /// a full-screen flow covers it).
     private func tabBarTop() -> CGFloat? {
-        let tops = Self.tabBarLabels.compactMap { label -> CGFloat? in
-            let button = app.buttons[label].firstMatch
-            guard button.exists, button.isHittable else { return nil }
-            return button.frame.minY
-        }
-        return tops.min().map { $0 - Self.tabBarTopInset }
+        let slot = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", Self.itemBarIdentifierPrefix)).firstMatch
+        guard slot.exists, slot.isHittable else { return nil }
+        return slot.frame.minY - Self.tabBarTopInset
+    }
+
+    /// Opens the item bar's Log panel (the World look's quick-log tiles and mood card) from the map,
+    /// through its slot, and waits for its tiles.
+    func openLogPanel(file: StaticString = #file, line: UInt = #line) {
+        press("world.item.log", file: file, line: line)
+        button(labelStartingWith: "Water,", file: file, line: line)
+    }
+
+    /// Opens Settings the way a VoiceOver user does in the World look: the item bar's Settings slot,
+    /// which opens the Settings panel over the map. Waits for its hub.
+    func openSettingsPanel(file: StaticString = #file, line: UInt = #line) {
+        press("world.item.settings", file: file, line: line)
+        element("settings.row.appearance", file: file, line: line)
     }
 
     /// Finds and activates the button for `key`.
     func press(_ key: String, timeout: TimeInterval = 8, file: StaticString = #file, line: UInt = #line) {
         activate(button(key, timeout: timeout, file: file, line: line), file: file, line: line)
+    }
+
+    /// Activates whichever of `keys` the screen carries, first match in tree order — for a control
+    /// whose identifier depends on the look: the World look's framed chrome (``fernletSheetToolbar``,
+    /// ``fernletPushedPage``) names its Done `sheet.done` and its back `plate.back`, where the
+    /// classic navigation bar named them per screen.
+    func press(anyOf keys: [String], timeout: TimeInterval = 8, file: StaticString = #file, line: UInt = #line) {
+        let element = app.buttons.matching(NSPredicate(format: "identifier IN %@", keys)).firstMatch
+        XCTAssertTrue(
+            element.waitForExistence(timeout: timeout),
+            "[\(task)] none of \(keys) is a button in the accessibility tree — VoiceOver cannot reach it as a control",
+            file: file, line: line
+        )
+        assertSpeaksWords(element, describe: "button '\(element.identifier)'", file: file, line: line)
+        activate(element, file: file, line: line)
+    }
+
+    /// From a page pushed inside Settings back to the hub: the World look's plate back button, or
+    /// the classic navigation bar's back button titled "Settings" (which carries no identifier).
+    func backToSettingsHub(file: StaticString = #file, line: UInt = #line) {
+        let plate = app.buttons["plate.back"].firstMatch
+        if plate.waitForExistence(timeout: 4) {
+            assertSpeaksWords(plate, describe: "the back button", file: file, line: line)
+            activate(plate, file: file, line: line)
+        } else {
+            activate(app.navigationBars.buttons["Settings"].firstMatch, file: file, line: line)
+        }
+    }
+
+    /// Closes Settings from its hub: the Settings panel's ✕ (`world.panel.close`) when it was opened
+    /// from the item bar, `sheet.done` when the launch hook presented it as a framed sheet, and
+    /// `settings.done` in the classic look.
+    func closeSettings(file: StaticString = #file, line: UInt = #line) {
+        press(anyOf: ["world.panel.close", "sheet.done", "settings.done"], file: file, line: line)
     }
 
     /// The button whose spoken label begins with `prefix` — for controls whose label carries live
@@ -229,6 +272,20 @@ struct VoiceOverWalk {
         XCTAssertFalse(
             Self.readsAsGlyphName(label),
             "[\(task)] \(describe) speaks the glyph name '\(label)'",
+            file: file, line: line
+        )
+    }
+
+    /// A text field's spoken name: its label, or — for a field with no label — its placeholder, which
+    /// VoiceOver reads in the label's place ("Search settings, search field"). Same words-not-glyphs
+    /// bar as ``assertSpeaksWords(_:describe:file:line:)``; only the source of the words differs.
+    func assertFieldSpeaksWords(_ element: XCUIElement, describe: String, file: StaticString = #file, line: UInt = #line) {
+        guard element.exists else { return }
+        let spoken = element.label.isEmpty ? (element.placeholderValue ?? "") : element.label
+        XCTAssertFalse(spoken.isEmpty, "[\(task)] \(describe) has neither a spoken label nor a placeholder", file: file, line: line)
+        XCTAssertFalse(
+            Self.readsAsGlyphName(spoken),
+            "[\(task)] \(describe) speaks the glyph name '\(spoken)'",
             file: file, line: line
         )
     }

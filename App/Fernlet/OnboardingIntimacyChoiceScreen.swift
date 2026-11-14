@@ -31,8 +31,11 @@ struct OnboardingIntimacyChoiceScreen: View {
     /// sees the answer they gave last time.
     @State private var keepsIntimacyTracking: Bool
 
+    /// - Parameter stepText: The step counter text shown at the top of the page.
     /// - Parameter keepsIntimacyTracking: The selection to open on — the model's draft once answered,
     ///   else the setting as it stands.
+    /// - Parameter backAction: Goes back to the personal-details form.
+    /// - Parameter continueAction: Receives the selection on Continue: `true` keeps intimacy tracking.
     init(
         stepText: String,
         keepsIntimacyTracking: Bool,

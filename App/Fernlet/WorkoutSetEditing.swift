@@ -6,7 +6,7 @@ import FernletDomainModel
 /// The weight stays text until save so a half-typed "62," is never rewritten under the person's
 /// thumb. It is read the way every Fernlet number field reads (`LocaleTolerantNumber`, so "62,5" and
 /// "62.5" agree), with a trailing unit word tolerated ("100 lb"). Blank — or unreadable — repeats the
-/// set above (``LoggedSet/filledWeights(_:)``).
+/// set above (`LoggedSet/filledWeights(_:)`).
 struct SetRowDraft: Identifiable, Equatable {
     var id = UUID()
     var reps: Int
@@ -37,10 +37,10 @@ struct SetRowDraft: Identifiable, Equatable {
 /// hand-written line that parses into sets × reps) or in the Log sheet's set-by-set entry.
 ///
 /// Saving goes through ``WorkoutSetEditing``: a result is re-recorded in place
-/// (``ExerciseResult/record(_:unit:)``) and its line rewritten; a hand-written line or a new entry
-/// becomes a structured record (``ExerciseResult/handLogged(name:sets:unit:equipment:effort:)``)
+/// (`ExerciseResult/record(_:unit:)`) and its line rewritten; a hand-written line or a new entry
+/// becomes a structured record (`ExerciseResult/handLogged(name:sets:unit:equipment:effort:)`)
 /// beside its readable line. Always at least one row once it has any; at most
-/// ``ExerciseResult/maxSets``.
+/// `ExerciseResult/maxSets`.
 struct ExerciseSetsDraft: Identifiable, Equatable {
     /// Where the draft came from, which decides how saving writes it back.
     enum Origin: Equatable {
@@ -180,7 +180,7 @@ enum WorkoutSetEditing {
 
     /// `workout` with every changed draft written back, or unchanged when nothing changed.
     ///
-    /// A result is re-recorded in place and its line rewritten from the old ``ExerciseResult/loggedLine``
+    /// A result is re-recorded in place and its line rewritten from the old `ExerciseResult/loggedLine`
     /// to the new one; a changed hand-written line becomes a structured record and its line is
     /// rewritten to that record's. Every other line, and every untouched record, stays exactly as it
     /// was — so the readable log and the structured record always say the same thing.
@@ -319,6 +319,9 @@ extension WorkoutSetEditing {
     /// were not touched is never asked about, and neither is a value the lift already had when the
     /// sheet opened (it was saved once already).
     ///
+    /// - Parameter drafts: The lifts as edited.
+    /// - Parameter original: The lifts as they were when the sheet opened.
+    /// - Parameter settled: The questions already answered.
     /// - Parameter lastTime: The lift's last logged weight in the given unit, by name.
     static func weightQuestion(
         in drafts: [ExerciseSetsDraft], original: [ExerciseSetsDraft], settled: Set<String>,

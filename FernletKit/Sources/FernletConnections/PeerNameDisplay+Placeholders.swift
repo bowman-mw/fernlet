@@ -25,7 +25,7 @@ nonisolated extension PeerNameDisplay {
         case met
     }
 
-    /// The text to render for a peer: ``personName(_:fingerprint:in:)``, or the placeholder.
+    /// The text to render for a peer: `personName(_:fingerprint:in:)`, or the placeholder.
     ///
     /// - Parameters:
     ///   - raw: The name as received or stored.

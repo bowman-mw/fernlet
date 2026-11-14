@@ -73,7 +73,7 @@ nonisolated struct Phase3Stamp: Sendable, Equatable {
 
 // MARK: - The six gates
 
-/// The six Class-A surfaces Phase 3 is gated on, in ``CryptoFormatCensusSurface/allCases`` order so
+/// The six Class-A surfaces Phase 3 is gated on, in `CryptoFormatCensusSurface/allCases` order so
 /// the two debug surfaces read in the same order.
 ///
 /// ## Three of the six no longer gate anything, and the wording says so
@@ -229,11 +229,11 @@ nonisolated enum Phase3GateWitness: String, Sendable, CaseIterable {
 /// ## The invariant, inherited from ``CryptoFormatCensusRow``
 ///
 /// **Nothing `nil` ever renders as discharged.** ``discharged`` is reachable only when EVERY clause
-/// of the gate's wording was affirmatively observed. A clause nobody took is ``notTaken``; a clause
-/// taken that could not answer is ``unavailable``; a clause taken that answered against the gate is
-/// ``blocked``.
+/// of the gate's wording was affirmatively observed. A clause nobody took is ``notTaken(_:)``; a clause
+/// taken that could not answer is ``unavailable(_:)``; a clause taken that answered against the gate is
+/// ``blocked(_:)``.
 ///
-/// ``vacuous`` is the fifth kind and it is not a softer ``discharged``. It records that the gate's
+/// ``vacuous(_:)`` is the fifth kind and it is not a softer ``discharged``. It records that the gate's
 /// wording is satisfied because there is nothing for it to be about — an empty manifest carries no
 /// entry that could hold a legacy digest; a device that never committed an escrow route has no
 /// manifest to read. That is a TRUE statement and a strictly weaker one than the gate's, so the
@@ -381,11 +381,11 @@ nonisolated struct Phase3GateEnvironment: Sendable, Equatable {
 ///
 /// - An EMPTY manifest legitimately computes `minimumEntryHashVersion == 2`
 ///   (CloudKitSync/SealedPhotoRecord.swift, "no entries, vacuously no legacy digest"). That is not a
-///   proof, so it is ``vacuousEmptyManifest`` and never ``proven``.
+///   proof, so it is ``vacuousEmptyManifest(generation:deviceHighWater:)`` and never `proven`.
 /// - A nil return means "no manifest RECORD came back", not "no manifest exists": `records(for:)`
 ///   appends only `.success` results. That is ``noManifestReturned``.
 /// - `SealedBackupError.malformedRecord` covers several distinct causes including a TRANSIENT
-///   unreadable `CKAsset`, so a throw is ``unreadable`` carrying its cause — never "corrupt".
+///   unreadable `CKAsset`, so a throw is ``unreadable(_:)`` carrying its cause — never "corrupt".
 ///
 /// And `minimum == 1` means legacy **or unproven**, so the row prints "not proven", never "legacy
 /// entries found".
@@ -449,7 +449,7 @@ nonisolated struct Phase3ManifestProbe: Sendable, Equatable, Identifiable {
 /// This type is the whole answer to the media gate's two blind spots. `FormatMigrator.run(maxPasses:)`
 /// opens `if latch.isComplete { return true }`, so a latched device — exactly the device the gate is
 /// read from — never runs another pass through the shipped path and therefore produces no residue
-/// evidence at all. ``MediaAtRestFormatMigrator/performPass()`` produces the result WITHOUT touching
+/// evidence at all. `MediaAtRestFormatMigrator/performPass()` produces the result WITHOUT touching
 /// the latch (`markComplete()` is reached only from `run(maxPasses:)`), which is what makes
 /// `unopenableUnprefixed` — the plan's own named residue — available on demand.
 ///
@@ -705,7 +705,7 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
     let stamps: [Phase3Stamp]
     /// The device and preference context.
     let environment: Phase3GateEnvironment
-    /// One row per gate, in ``Phase3Gate/allCases`` order.
+    /// One row per gate, in `Phase3Gate/allCases` order.
     let rows: [Phase3GateRow]
     /// The sitting checklist with its derived done-states.
     let checklist: [Phase3SittingStep]
@@ -761,7 +761,7 @@ nonisolated struct Phase3GateReadout: Sendable, Equatable {
 /// the keychain or the network: every value it folds was purchased by somebody else and stamped.
 nonisolated enum Phase3GateReadoutBuilder {
 
-    /// Folds one input set into the whole readout: six rows in ``Phase3Gate/allCases`` order.
+    /// Folds one input set into the whole readout: six rows in `Phase3Gate/allCases` order.
     ///
     /// When the local scan has not landed, EVERY row says so rather than folding an all-false latch
     /// reading as evidence — an unread latch is not a cleared latch.
@@ -1052,7 +1052,7 @@ nonisolated enum Phase3GateReadoutBuilder {
 
     /// The three-part media gate: the latch, the residue arithmetic, and the blind spots.
     ///
-    /// A `false` latch NEVER stands alone — see ``mediaLatchLine(latch:witness:passInFlight:)``.
+    /// A `false` latch NEVER stands alone — see `mediaLatchLine(latch:witness:passInFlight:)`.
     static func row(
         forMedia audit: MediaResidueAudit?,
         latches: Phase3LatchReadings,

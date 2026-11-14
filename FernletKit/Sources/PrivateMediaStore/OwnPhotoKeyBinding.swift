@@ -126,7 +126,7 @@ public enum OwnPhotoKeyBindingOutcome: Sendable, Equatable {
 ///    asserts anything about WHICH key a file opens under. Nothing else does either: the reader that
 ///    could have told the difference is what Phase 3 removed.
 /// 2. The user has a sanctioned cross-device route: the opt-in own-photo escrow backup has
-///    actually **committed** a copy (not merely been switched on — see ``escrowRouteCommitted``),
+///    actually **committed** a copy (not merely been switched on — see `escrowRouteCommitted`),
 ///    or ``OwnPhotoDeviceBindingConsent`` is recorded. Binding before that silently deletes their
 ///    photos' only path onto a replacement phone.
 ///
@@ -174,7 +174,7 @@ public struct OwnPhotoKeyBinder {
     ///
     /// - Parameters:
     ///   - escrowRouteCommitted: Whether the own-photo escrow backup has committed a copy of this
-    ///     device's photos — see ``escrowRouteCommitted``. Never merely the preference.
+    ///     device's photos — see `escrowRouteCommitted`. Never merely the preference.
     ///   - defaults: Backing store for the sweep latch and the consent record; tests inject an
     ///     isolated suite.
     public init(escrowRouteCommitted: Bool, defaults: UserDefaults = .standard) {

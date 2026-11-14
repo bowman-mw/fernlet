@@ -95,7 +95,7 @@ public nonisolated struct MeshHeartLedgerProof: Equatable, Sendable {
 /// `recordHeartSent` runs only after the wire write succeeds. Dead-drop hearts use
 /// `recordReceivedDropHeart`, which keeps id-dedup + retention but deliberately skips (and does
 /// not arm) the 5-minute receive window — a multi-day pickup batch must not collapse to one
-/// heart. Persistence rides a ``ProtectedSidecar`` (Application Support/`HeartLedger.json`,
+/// heart. Persistence rides a `ProtectedSidecar` (Application Support/`HeartLedger.json`,
 /// `.completeFileProtection`, NEVER in the synced snapshot) and fails closed while unloaded:
 /// sends are refused and receives unrecorded, with the drop record left on the server for a later
 /// pass. `receivedHearts` is a published mirror refreshed after every mutation and sidecar

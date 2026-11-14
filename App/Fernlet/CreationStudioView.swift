@@ -31,7 +31,7 @@ struct CreationStudioView: View {
     var draftIsDirty: Binding<Bool>?
     /// How the host pops this studio off ITS stack. Supplied by ``WardrobeView``, which owns both
     /// pushes into here; nil only when nothing owns the push (previews, tests), where the
-    /// environment `dismiss` is the right exit. See ``leaveStudio()`` for why the environment
+    /// environment `dismiss` is the right exit. See `leaveStudio()` for why the environment
     /// action alone is not enough.
     var onExit: (() -> Void)?
 

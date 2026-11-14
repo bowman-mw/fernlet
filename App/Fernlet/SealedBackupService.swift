@@ -8,7 +8,7 @@ import CloudKitSync
 
 /// AES-GCM seal/open for `SealedBackupRecord`s — the pure crypto half of the sealed iCloud backup.
 ///
-/// ``seal(_:payloadType:identityService:chunkIndex:chunkCount:updatedAt:generation:)`` encrypts a
+/// ``seal(_:payloadType:identityService:chunkIndex:chunkCount:updatedAt:generation:keySalt:)`` encrypts a
 /// payload chunk under the identity's backup-escrow-derived key and binds the payload type, signing
 /// identity, chunk position, and the backup's generation + timestamp into the GCM
 /// additional-authenticated-data, so a chunk cannot be replayed in another slot, across

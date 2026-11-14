@@ -155,7 +155,7 @@ nonisolated struct WorldPreviewField: Sendable {
     }
 
     /// The field over `atlas` (nil: all sea) with `cells` lifted and `pins` found. Bounded: the preview's
-    /// hexes, at most ``WorldViewHexGrid/maxLiftedCells`` cells, and the pins.
+    /// hexes, at most `WorldViewHexGrid/maxLiftedCells` cells, and the pins.
     init(atlas: WorldAtlas?, cells: [HexCell], pins: [WorldViewCityPin]) {
         var lit = Set<Int>()
         for cell in cells.prefix(WorldViewHexGrid.maxLiftedCells) {

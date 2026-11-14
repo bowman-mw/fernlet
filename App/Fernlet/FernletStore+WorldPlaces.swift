@@ -233,7 +233,7 @@ extension FernletStore {
     // MARK: Solo photos' places
 
     /// Keeps where solo photo `id` was taken, from `fix`, only at one of the everyday places a visit is kept
-    /// at or inside a park, beach or campground (``PlaceClassifier/photoMayKeepPlace(_:)``; owner, round 5).
+    /// at or inside a park, beach or campground (`PlaceClassifier/photoMayKeepPlace(_:)`; owner, round 5).
     /// Anywhere else, or when the place can't be checked (offline), it keeps none, and the photo stays in
     /// Just you, off the map. Only a fresh, precise reading counts; nothing in a decoy. Whether a place was
     /// kept. Only the point is kept, never the lookup's answer.

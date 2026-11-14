@@ -26,7 +26,7 @@ import ProximityKit
 /// ONE process, so on the production scope every live `FernletStore` shares one outbox, one dedup
 /// store, one peer-bundle cache and one seal key — and any test that runs "delete everything"
 /// destroys all of them for every concurrently-running suite. Same hazard, and the same fix, as
-/// ``ProximityHost/proximitySupportDirectory`` for the friend photo wall and
+/// `ProximityHost/proximitySupportDirectory` for the friend photo wall and
 /// `FernletStore.photoDocumentsDirectory` for the own-photo corpora; this one just has a keychain
 /// half as well.
 ///

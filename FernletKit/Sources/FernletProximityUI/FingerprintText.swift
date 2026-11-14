@@ -7,7 +7,7 @@ import FernletUI
 /// Friends & Blocks, and nowhere else (owner decision: an identifier string is a debugging aid, not
 /// part of the connect experience). The join prompt, the activity roster, the keep-as-friend rows
 /// and the Friends-tab connect row used to render it too; they now show the person's name, or a
-/// plain placeholder, through ``PeerNameDisplay``, and the row-bound QR ceremony is the verification
+/// plain placeholder, through `PeerNameDisplay`, and the row-bound QR ceremony is the verification
 /// path on the connect side. `PeerNameDisplayTests` pins that no connect-path file renders this view.
 ///
 /// The treatment was centralized when four surfaces had each hand-rolled

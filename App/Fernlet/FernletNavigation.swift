@@ -364,7 +364,7 @@ enum FernletSheet: Identifiable {
     /// straight into one of them (gentle-offer cards use it).
     case firstAid(FirstAidTool?)
     /// Log a cycle day (optionally pre-dated) or edit one sealed record (period-data design
-    /// 2026-09-30, §9.3: the sheet edits a ``CycleRecord`` in place, seeded losslessly from its blocks).
+    /// 2026-09-30, §9.3: the sheet edits a `CycleRecord` in place, seeded losslessly from its blocks).
     case logPeriod(targetDate: Date?, editingRecord: CycleRecord?)
     case logIntimacy
     case editRecipe(RecipeDefinition)

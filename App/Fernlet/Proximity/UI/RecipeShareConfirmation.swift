@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - RecipeShareConfirmation
 
 /// What the recipe share sheet says about one finished share: a pure mapping from the manager's
-/// frozen ``ProximityPairSendOutcome`` to localized copy.
+/// frozen `ProximityPairSendOutcome` to localized copy.
 ///
 /// ## Honest by construction
 ///
@@ -19,12 +19,12 @@ import SwiftUI
 /// sentence and pins both halves of that.
 ///
 /// The failure copy keeps two facts apart that a single "didn't send" would merge:
-/// ``ProximityPairSendFailure/sendIncomplete`` means the other person **may** have it, and every
+/// `ProximityPairSendFailure/sendIncomplete` means the other person **may** have it, and every
 /// other cause means nothing left this device.
 ///
 /// Every sentence is a `LocalizedStringResource`, so the catalog sync harvests it, the view renders
 /// it with `Text(_:)`, and the announcer's app overload speaks it. The switches are exhaustive, so a
-/// new ``ProximityPairSendFailure`` case is a build error here until it has its own sentence.
+/// new `ProximityPairSendFailure` case is a build error here until it has its own sentence.
 struct RecipeShareConfirmation: Equatable, Identifiable {
 
     /// Which of the two panels this is.
@@ -210,7 +210,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
 // MARK: - RecipeShareOutcomeLatch
 
 /// Which share outcome the sheet is waiting for, and the confirmation it latched: the rule that
-/// decides whether a published ``ProximityPairSendOutcome`` becomes a panel at all.
+/// decides whether a published `ProximityPairSendOutcome` becomes a panel at all.
 ///
 /// The manager publishes an outcome for EVERY share that ends, including the `interrupted` a sheet's
 /// own teardown causes when it stops the radio on the way out. So the sheet must never derive its
@@ -345,7 +345,7 @@ enum RecipeShareRadioCustody: Equatable {
 /// what happened, and the actions (Done; "Try again" first on a failure).
 ///
 /// Everything wraps and scrolls, so the panel reads at every Dynamic Type size up to AX5; the pills
-/// are ``ActionPillButtonStyle``'s 44pt-tall targets. The glyph is hidden from VoiceOver (the heading
+/// are `ActionPillButtonStyle`'s 44pt-tall targets. The glyph is hidden from VoiceOver (the heading
 /// already says it) and the heading carries the header trait. The container keeps its children
 /// (`.contain` BEFORE the identifier, since a container identifier otherwise overrides theirs).
 struct RecipeShareConfirmationPanel: View {

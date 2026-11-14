@@ -53,7 +53,7 @@ public nonisolated enum BodyArea: String, Codable, CaseIterable, Identifiable, S
 
     public var id: String { rawValue }
 
-    /// The area's name on screen, localized. Never persisted or matched — ``rawValue`` is the token.
+    /// The area's name on screen, localized. Never persisted or matched — `rawValue` is the token.
     public var displayName: String {
         switch self {
         case .neck: String(localized: "bodyArea.neck", defaultValue: "Neck",
@@ -122,7 +122,7 @@ public nonisolated enum BodyArea: String, Codable, CaseIterable, Identifiable, S
 
     /// Whether `exercise` loads this area: it works one of the area's muscles (only its primary
     /// muscles count when `primaryOnly`), uses one of its patterns, or — for a spine area — is a
-    /// squat, hinge, lunge or carry with a bar on the body (``carriesABar(_:)``).
+    /// squat, hinge, lunge or carry with a bar on the body (`carriesABar(_:)`).
     ///
     /// This is the floor, read from the exercise's tags alone. A bundled exercise's reviewed record
     /// (``ExerciseAreaLoads``) can name more areas; ``InjuryLimits`` combines the two.

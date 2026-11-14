@@ -1,6 +1,6 @@
 import XCTest
 
-/// #11 piece 3 — the gym progress-photo timeline under the Move tab. Drives the real Move screen (demo
+/// #11 piece 3 — the gym progress-photo timeline in the Move panel. Drives the real Move screen (demo
 /// seed adds three dated progress photos through the sealed store) and screenshots the strip and the
 /// photo detail, asserting the section + detail RENDER and are reachable. Note the card-existence checks
 /// key on the dated a11y label, which comes from the (sealed) index — a card still exists even if its
@@ -10,9 +10,9 @@ import XCTest
 final class ProgressPhotoUITests: XCTestCase {
     @MainActor
     func testProgressPhotoTimelineAppearsUnderMoveWithDetail() throws {
-        let app = UXTestApp.launch()  // Home, demo-seeded
+        let app = UXTestApp.launch()  // Home (the World map), demo-seeded
 
-        app.buttons["Move"].firstMatch.tap()
+        app.buttons["world.item.move"].firstMatch.tap()  // the item bar's Move slot opens the Move panel
 
         // The section is the LAST thing in Move's scroll column (`MoveView.scrollContent`), so scroll
         // to the true bottom — until the strip's frame stops moving — rather than stopping the moment

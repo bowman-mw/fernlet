@@ -56,7 +56,7 @@ enum AIAuditBoundary: Equatable {
     case unknown
 }
 
-/// One row of the AI audit log, built from an ``AIAuditEntry`` by ``rows(from:)``.
+/// One row of the AI audit log, built from an `AIAuditEntry` by ``rows(from:)``.
 ///
 /// A value type on purpose: the whole rendering decision — parked token vs frozen enum, plain
 /// language vs verbatim token, on-device vs egress — is made here where `AIAuditLogScreenTests` can
@@ -182,7 +182,7 @@ struct AIAuditRow: Identifiable, Equatable {
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.aiAuditLog`. Calm disclosure, not a scoreboard:
 /// it counts nothing, grades nothing, and congratulates no one — it lists what happened.
 ///
-/// Reads ``AIAuditLog`` (an `actor`) exactly once per push, from `.task` into `@State`, so the
+/// Reads `AIAuditLog` (an `actor`) exactly once per push, from `.task` into `@State`, so the
 /// actor hop never happens on the main thread's critical path and a re-render never re-reads.
 /// `rows == nil` is the in-flight state, kept distinct from `rows == []` so a log that is still
 /// loading is never drawn as a log that is empty.

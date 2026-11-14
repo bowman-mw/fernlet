@@ -9,7 +9,7 @@ import PrivateHealthStore
 // hold, compare-and-swap, spacing and deletes.
 
 /// The `"bodyTally"` value on a journal set's head (§5.1, FROZEN keys): `{"v":1,"days":[…]}`, each
-/// day a ``BodyDayTally`` under its own frozen keys (`dayKey`, `bathroomVisits`, `freeMealIDs`,
+/// day a `BodyDayTally` under its own frozen keys (`dayKey`, `bathroomVisits`, `freeMealIDs`,
 /// `updatedAt`), in day order.
 ///
 /// Versioned on its own, so a later shape is told apart from this one: a `v` other than

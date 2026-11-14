@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// The presentation chrome for a sheet the Food screens present themselves: the UX-test screen
-    /// anchor, the World sheet frame (``SwiftUI/View/fernletSheet()``: full height, paper, the wooden
+    /// anchor, the World sheet frame (`SwiftUI/View/fernletSheet()`: full height, paper, the wooden
     /// grabber; Batch 3 draws every sheet full height), the moss tint and the keyboard's Done.
     ///
     /// It stands in for the root's `fernletSheetChrome(anchor:detents:)` on the Food screens' own

@@ -44,7 +44,7 @@ enum FoodProductWebSearch {
     /// unmatched item instead of maintaining a second, silently-diverging copy — the fix's location
     /// column names this exact list as the term source to reuse, not duplicate.
     ///
-    /// Deliberately a separate list from ``FoodBrandLexicon``'s restaurant-CHAIN set (which
+    /// Deliberately a separate list from `FoodBrandLexicon`'s restaurant-CHAIN set (which
     /// `shouldSearch` also consults below): these are stores/grocers a product was bought AT
     /// ("Kirkland" trail mix from Costco), not a chain that MADE the food. Frozen matching-input
     /// English, never localized.

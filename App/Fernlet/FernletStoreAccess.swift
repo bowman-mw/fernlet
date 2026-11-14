@@ -66,7 +66,7 @@ final class FernletStoreAccess: @unchecked Sendable {
     ///
     /// A fifth clause since P10 item 4, on the two paths that hand back a store this call did not
     /// build: a caller that brought a `healthKitService` gets it LATE-ATTACHED to that store — see
-    /// ``attaching(_:to:)``.
+    /// `attaching(_:to:)`.
     func load(
         healthKitService: (any HealthKitServicing)? = nil,
         statusUpdate: @escaping @MainActor (String) -> Void = { _ in }

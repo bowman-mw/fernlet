@@ -26,7 +26,7 @@ import FernletFoundation
 enum PlannedWorkoutRun {
 
     /// Whether `planned` can be run in the guided runner: it has at least one line, and no more than
-    /// ``WorkoutPlanRun/maximumLines`` — a longer plan stays one tap to log, so no line is ever left out
+    /// `WorkoutPlanRun/maximumLines` — a longer plan stays one tap to log, so no line is ever left out
     /// of a run.
     static func canGuide(_ planned: PlannedWorkout) -> Bool {
         let count = planned.exerciseLines.count
@@ -44,7 +44,7 @@ enum PlannedWorkoutRun {
     /// A single timed hold with no sets: "Plank - 45 s", "Side plank: 30 sec".
     private static let singleHold = #/^(.+?)\s*(?:[-–—:]\s*|\s)(\d{1,3})\s*(?:s|sec|secs|seconds)\s*$/#.ignoresCase()
 
-    /// One line read into the pieces ``WorkoutPlanRun`` builds a step from, or nil for a line that is
+    /// One line read into the pieces `WorkoutPlanRun` builds a step from, or nil for a line that is
     /// not sets × reps or a timed hold (it becomes a step marked done, showing the line).
     ///
     /// The app's ``ExerciseLineParser`` reads sets × reps and the weight ("Bench press - 3 x 8 @ 135 lb");
@@ -123,11 +123,11 @@ enum PlannedWorkoutRun {
     // MARK: The log
 
     /// The workout a finished run of `planned` logs: the row "log it" would write
-    /// (``PlannedWorkout/completedWorkout`` — the plan's name, split, muscles, targets and id, and the
+    /// (`PlannedWorkout/completedWorkout` — the plan's name, split, muscles, targets and id, and the
     /// "Completed from coach plan." note that lets a removal put the plan back as a coach's), with what
     /// the run actually did in place of the plan: each tracked lift's line and its structured result,
     /// timed cardio and stretching's minutes actually held, tagged as a guided log. The plan's own lines
-    /// ride along in ``Workout/plannedExercises``, so removing the row puts back the plan as written,
+    /// ride along in `Workout/plannedExercises`, so removing the row puts back the plan as written,
     /// not the run's record. A run that crossed local midnight files under the plan's day at noon, as
     /// every guided log does.
     ///

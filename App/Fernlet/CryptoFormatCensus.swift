@@ -155,7 +155,7 @@ nonisolated struct CryptoFormatCensusRow: Sendable, Equatable, Identifiable {
     }
 }
 
-/// Every surface's row, in ``CryptoFormatCensusSurface/allCases`` order.
+/// Every surface's row, in `CryptoFormatCensusSurface/allCases` order.
 nonisolated struct CryptoFormatCensusReport: Sendable, Equatable {
     /// One row per surface.
     let rows: [CryptoFormatCensusRow]
@@ -531,7 +531,7 @@ nonisolated enum CryptoFormatCensus {
     ///
     /// The detail line also prints how many of the swept locations were not THERE, because eight
     /// all-zero locations and eight absent ones render identically otherwise, and only one of them
-    /// is evidence about a corpus (see ``MediaAtRestFormatLocationCensus/existed``).
+    /// is evidence about a corpus (see `MediaAtRestFormatLocationCensus/existed`).
     static func row(forMedia report: MediaAtRestFormatCensusReport) -> CryptoFormatCensusRow {
         let tally = report.total
         let detail = "unprefixed legacy-or-unrecognised \(tally.unprefixedLegacyOrUnrecognized)"
@@ -615,7 +615,7 @@ nonisolated enum CryptoFormatCensus {
     /// exact for the names surveyed; an unreadable file makes it a lower bound, and so do files
     /// matching neither marker (a v0 plaintext sidecar, or garbage) — both are counted in the detail
     /// line AND named in the caveat, because both block a "clean" verdict without being legacy. See
-    /// ``heartDropStatus(_:)``.
+    /// `heartDropStatus(_:)`.
     static func row(forHeartDrop report: HeartDropSidecarFormatCensus.Report) -> CryptoFormatCensusRow {
         let states = report.files
             .map { "\($0.fileName) \($0.state.rawValue)" }

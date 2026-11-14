@@ -126,7 +126,7 @@ extension AtlasOcean {
 
 /// A stamp's date as the passport prints it (World-Passport-Spec §6 and §10): "14 AUG 2026" / "14 AGO 2026" in its
 /// date box, and "2 September 2026" / "2 de septiembre de 2026" for VoiceOver. The month names are the spec's own
-/// per-language tables (data like the atlas's names, so "SEP" never becomes ICU's "SEPT."), by ``FernletLanguage``.
+/// per-language tables (data like the atlas's names, so "SEP" never becomes ICU's "SEPT."), by `FernletLanguage`.
 nonisolated enum PassportDates {
     /// The months in capitals, January first.
     static func shortMonths(_ language: FernletLanguage) -> [String] {

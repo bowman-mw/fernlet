@@ -39,7 +39,7 @@ import FernletPersistence
 /// Unlike the ledger stores, reads MUST collapse duplicates: CloudKit mirrors by record
 /// identity, not `dateKey`, so two devices first-writing the same day before import settles can
 /// produce two rows for one key. `loadAll`/`load` return the rows for a key MERGED by entry id
-/// (``DuplicateDayRows``; bug confirmation 2026-10-15 §3) — so a meal logged on one device and a
+/// (`DuplicateDayRows`; bug confirmation 2026-10-15 §3) — so a meal logged on one device and a
 /// journal entry written on the other the same day both survive — and self-heal deletion of the
 /// older rows is deliberately conservative: only rows STRICTLY older than the top `updatedAt` are
 /// ever deleted, never ties (two devices' migration-backfilled rows share one stamp, and an on-tie

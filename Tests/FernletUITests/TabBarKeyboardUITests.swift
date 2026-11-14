@@ -1,55 +1,52 @@
 import XCTest
 
-/// The floating tab bar stays pinned to the physical bottom, behind the keyboard, while a field
-/// inside a tab is being typed into — and the pages above it still avoid the keyboard.
+/// The World panel frame with the keyboard up: the wooden title plate stays where it rests, the map's
+/// item bar stays out of reach under the panel, and the page above the keyboard still avoids it.
 ///
-/// Three surfaces, because the bar's host and the focused field's host differ: a tab root with no
-/// stack of its own (Private → Worry box), a page pushed one level inside the Food tab's stack (the
-/// Recipe book's search), and the editor pushed three levels down (Recipe book → Create → Manual
-/// entry), whose save bar is lifted over the tab bar by `fernletTabBarSafeAreaClearance()`. A
-/// fourth test covers the meal-logged toast, which the bar's inset used to carry.
+/// This suite began (2026-10-01) as the floating tab bar's: the bar rode the keyboard up on every
+/// surface (Home tab from y 759.7 to 458.7, iPhone 17, iOS 26.5) and the editor's Save floated
+/// 128.7pt above the keyboard. The World look has no tab bar — a panel covers the whole screen, item
+/// bar included, and `WorldPanelFrame` keeps its plate put while the page ends at the keyboard's top
+/// — so the same surfaces now pin that frame: a panel root with no stack of its own (Private → Worry
+/// box), a page pushed one level inside the Food panel's stack (the Recipe book's search), and the
+/// editor pushed three levels down (Recipe book → Create → Manual entry), whose save bar must rest
+/// on the keyboard. A fourth test covers the meal-logged toast, which must rest on the keyboard too.
 ///
-/// Measured on main before the fix (iPhone 17, iOS 26.5): on all three surfaces the Home tab went
-/// from y 759.7 to 458.7, the bar resting on the keyboard's top (y 539), and the editor's Save sat
-/// 128.7pt above the keyboard instead of 36 — `ContentView` kept the bar's keyboard ignore inside the
-/// inset's closure, where an inset's content has no bottom safe area to ignore.
-///
-/// The bar is read off `app.buttons["Home"]`: `app.tabBars` finds nothing on this custom bar.
+/// The plate is read off its ✕, `world.panel.close`.
 final class TabBarKeyboardUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
-    // MARK: - The bar stays behind the keyboard
+    // MARK: - The plate stays put, the item bar stays covered
 
-    /// A tab root: the Worry box page has no NavigationStack and an inline composer.
+    /// A panel root: the Worry box page has no NavigationStack and an inline composer.
     @MainActor
-    func testTabBarStaysBehindTheKeyboardOnATabRoot() {
+    func testPanelPlateStaysPutWithTheKeyboardOnAPanelRoot() {
         let app = UXTestApp.launch(bypassPrivateLock: true)
-        tabItem("Private", in: app).tap()
+        openPanel("personal", page: "screen.journal", in: app)
         let section = app.buttons["Worry box"].firstMatch
-        XCTAssertTrue(section.waitForExistence(timeout: 8), "the Private hub has no Worry box section")
+        XCTAssertTrue(section.waitForExistence(timeout: 8), "the Private panel has no Worry box section")
         section.tap()
         XCTAssertTrue(app.descendants(matching: .any)["screen.worryBox"].waitForExistence(timeout: 6),
                       "the Worry box page did not open")
         let composer = field(placeholder: "Something circling around?", in: app)
-        assertBarStaysBehindKeyboard(focusing: composer, surface: "Worry box (tab root)", in: app)
+        assertPlateStaysPut(focusing: composer, surface: "Worry box (panel root)", in: app)
     }
 
-    /// One push: the Recipe book's search field, pushed inside the Food tab's stack.
+    /// One push: the Recipe book's search field, pushed inside the Food panel's stack.
     @MainActor
-    func testTabBarStaysBehindTheKeyboardOnAPushedPage() {
+    func testPanelPlateStaysPutWithTheKeyboardOnAPushedPage() {
         let app = UXTestApp.launch()
         openRecipeBookFromFood(in: app)
         let search = field(placeholder: "Search recipes and products", in: app)
-        assertBarStaysBehindKeyboard(focusing: search, surface: "Recipe book search (pushed)", in: app)
+        assertPlateStaysPut(focusing: search, surface: "Recipe book search (pushed)", in: app)
     }
 
-    /// Three pushes, with a pinned save bar: the bar stays behind the keyboard, and the save bar —
-    /// lifted over the tab bar while the keyboard is down — rests right on the keyboard, with no
-    /// tab-bar reservation left stacked between them.
+    /// Three pushes, with a pinned save bar: the plate stays put, and the save bar rests right on the
+    /// keyboard, with no bottom reservation (the old tab bar's) left stacked between them.
     @MainActor
-    func testPushedEditorSaveBarSitsOnTheKeyboardWithTheTabBarBehindIt() {
+    func testPushedEditorSaveBarSitsOnTheKeyboard() {
         let app = UXTestApp.launch()
         openRecipeBookFromFood(in: app)
         let create = app.buttons["Create"].firstMatch
@@ -58,15 +55,15 @@ final class TabBarKeyboardUITests: XCTestCase {
         let manual = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Manual entry")).firstMatch
         XCTAssertTrue(manual.waitForExistence(timeout: 6), "the chooser has no Manual entry option")
         manual.tap()
-        XCTAssertTrue(app.navigationBars["New recipe"].waitForExistence(timeout: 6), "the manual editor did not open")
+        XCTAssertTrue(waitForPushedPage("New recipe", in: app), "the manual editor did not open")
 
         let name = field(placeholder: "black bean bowls", in: app)
-        let keyboardTop = assertBarStaysBehindKeyboard(focusing: name, surface: "Manual editor (pushed)", in: app)
+        let keyboardTop = assertPlateStaysPut(focusing: name, surface: "Manual editor (pushed)", in: app)
 
         let save = app.buttons["Save recipe"]
         XCTAssertTrue(save.exists, "the editor has no Save recipe button")
-        // A bar resting on the keyboard puts Save's label 36pt above the keyboard's top. The tab-bar
-        // reservation stacked on the keyboard added the bar's whole height to that: 128.7pt on main.
+        // A bar resting on the keyboard puts Save's label 36pt above the keyboard's top. The old tab
+        // bar's reservation stacked on the keyboard added the bar's whole height to that: 128.7pt.
         // The editor's keyboard "Done" accessory floats over the page's bottom, and the page avoids
         // part of it (iPhone 17, iOS 26.5: its bottom moved 14pt up, Save's gap 36 → 50), so the
         // allowance grows by that band's height; the stacked reservation would still add ~92pt.
@@ -74,20 +71,20 @@ final class TabBarKeyboardUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(gap, 0, "Save recipe (\(save.frame)) is under the keyboard (top \(keyboardTop))")
         XCTAssertLessThanOrEqual(
             gap, Self.saveLabelInset + keyboardAccessoryHeight(above: keyboardTop, in: app) + 4,
-            "Save recipe (\(save.frame)) floats \(gap)pt above the keyboard (top \(keyboardTop)): the tab-bar reservation is still stacked on it"
+            "Save recipe (\(save.frame)) floats \(gap)pt above the keyboard (top \(keyboardTop)): a bottom reservation is stacked on it"
         )
         XCTAssertTrue(save.isHittable, "Save recipe is not hittable with the keyboard up")
     }
 
-    /// The meal-logged toast used to ride the bar's inset; with the bar behind the keyboard it rests
-    /// on the keyboard instead of hiding behind it. Logged from the Recipe book's search results
+    /// The meal-logged toast used to ride the old tab bar's inset; it must rest on the keyboard
+    /// instead of hiding behind it. Logged from the Recipe book's search results
     /// with the search field still focused, then undone, so no meal outlives the test.
     @MainActor
     func testMealLoggedToastRestsOnTheKeyboard() {
         let app = UXTestApp.launch()
         openRecipeBookFromFood(in: app)
         let search = field(placeholder: "Search recipes and products", in: app)
-        let keyboardTop = assertBarStaysBehindKeyboard(focusing: search, surface: "Recipe book search, logging", in: app)
+        let keyboardTop = assertPlateStaysPut(focusing: search, surface: "Recipe book search, logging", in: app)
         search.typeText("oats")
         let log = app.buttons["Log recipe as meal"].firstMatch
         XCTAssertTrue(log.waitForExistence(timeout: 6), "the search found no recipe to log")
@@ -117,7 +114,7 @@ final class TabBarKeyboardUITests: XCTestCase {
         add(shot)
         // A covered Undo would take the tap on a key: put the keyboard away first, so even a red
         // run takes its meal back (a leftover "Overnight oats" meal row shadows the recipe row the
-        // RecipeDetail and TabReselect suites tap).
+        // RecipeDetail suite taps).
         if !isHittable { search.typeText("\n") }
         undo.tap()
         XCTAssertLessThanOrEqual(toast.maxY, keyboardTop, "the toast's Undo (\(toast)) is behind the keyboard (top \(keyboardTop))")
@@ -131,12 +128,13 @@ final class TabBarKeyboardUITests: XCTestCase {
     /// editor's bar: the button's 16pt vertical padding plus the bar's own 20pt (`RecipeSheet`).
     private static let saveLabelInset: CGFloat = 36
 
-    /// Focuses `field`, waits for the keyboard to settle, and asserts the tab bar did not move: it
-    /// still rests where it did with the keyboard down, at or below the keyboard's top, and cannot be
-    /// hit. Returns the keyboard's top as drawn (its predictions bar included).
+    /// Focuses `field`, waits for the keyboard to settle, and asserts the panel's plate did not move:
+    /// its ✕ still rests where it did with the keyboard down, above the keyboard, and the map's item
+    /// bar is not reachable over the panel. Returns the keyboard's top as drawn (its predictions bar
+    /// included).
     @MainActor
     @discardableResult
-    private func assertBarStaysBehindKeyboard(
+    private func assertPlateStaysPut(
         focusing field: XCUIElement,
         surface: String,
         in app: XCUIApplication,
@@ -144,9 +142,9 @@ final class TabBarKeyboardUITests: XCTestCase {
         line: UInt = #line
     ) -> CGFloat {
         XCTAssertTrue(field.waitForExistence(timeout: 6), "\(surface): no field to focus", file: file, line: line)
-        let home = app.buttons["Home"].firstMatch
-        XCTAssertTrue(home.exists, "\(surface): the tab bar is not in the tree", file: file, line: line)
-        let resting = settledFrame(of: home)
+        let close = app.buttons["world.panel.close"].firstMatch
+        XCTAssertTrue(close.exists, "\(surface): the panel's plate is not in the tree", file: file, line: line)
+        let resting = settledFrame(of: close)
 
         field.tap()
         if !field.waitForKeyboardFocus(timeout: 2) { field.tap() }
@@ -154,21 +152,22 @@ final class TabBarKeyboardUITests: XCTestCase {
         let keyboard = app.keyboards.firstMatch
         XCTAssertTrue(keyboard.waitForExistence(timeout: 6), "\(surface): no keyboard came up", file: file, line: line)
         _ = settledFrame(of: keyboard)
-        let raised = settledFrame(of: home)
+        let raised = settledFrame(of: close)
         let keyboardTop = self.keyboardTop(in: app)
         attachFrames(surface: surface, resting: resting, raised: raised, keyboardTop: keyboardTop, in: app)
 
         XCTAssertEqual(
             raised.minY, resting.minY, accuracy: 1,
-            "\(surface): the tab bar moved with the keyboard (Home tab \(resting) → \(raised), keyboard top \(keyboardTop))",
+            "\(surface): the plate moved with the keyboard (✕ \(resting) → \(raised), keyboard top \(keyboardTop))",
             file: file, line: line
         )
-        XCTAssertGreaterThanOrEqual(
-            raised.minY, keyboardTop,
-            "\(surface): the tab bar (Home tab \(raised)) shows above the keyboard (top \(keyboardTop))",
-            file: file, line: line
-        )
-        XCTAssertFalse(home.isHittable, "\(surface): the Home tab is still hittable over the keyboard", file: file, line: line)
+        XCTAssertLessThanOrEqual(raised.maxY, keyboardTop,
+                                 "\(surface): the plate (✕ \(raised)) is under the keyboard (top \(keyboardTop))",
+                                 file: file, line: line)
+        XCTAssertTrue(close.isHittable, "\(surface): the plate's ✕ is not hittable with the keyboard up", file: file, line: line)
+        let itemBarSlot = app.buttons["world.item.food"].firstMatch
+        XCTAssertFalse(itemBarSlot.exists && itemBarSlot.isHittable,
+                       "\(surface): the map's item bar is reachable over the panel", file: file, line: line)
         return keyboardTop
     }
 
@@ -248,8 +247,8 @@ final class TabBarKeyboardUITests: XCTestCase {
         let save = app.buttons["Save recipe"]
         let lines = [
             "surface: \(surface)",
-            "Home tab, keyboard down: \(resting)",
-            "Home tab, keyboard up: \(raised)",
+            "plate ✕, keyboard down: \(resting)",
+            "plate ✕, keyboard up: \(raised)",
             "keyboard keys: \(app.keyboards.firstMatch.frame)",
             "keyboard top (predictions bar included): \(keyboardTop)",
             "Save recipe: \(save.exists ? String(describing: save.frame) : "absent")",
@@ -277,61 +276,61 @@ final class TabBarKeyboardUITests: XCTestCase {
             .firstMatch
     }
 
-    /// Opens Food, then the Recipe book pushed inside the Food tab, and waits for it.
+    /// Opens the World panel `panel` from the map's item bar (`world.item.<panel>`) and waits for its
+    /// main page, `identifier`. One retry: a tap in the first seconds after launch is occasionally lost.
     @MainActor
-    private func openRecipeBookFromFood(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        let page = app.descendants(matching: .any)["screen.food"].firstMatch
-        // One retry: a tab tap in the first seconds after launch is still occasionally lost.
+    private func openPanel(
+        _ panel: String,
+        page identifier: String,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let page = app.descendants(matching: .any)[identifier].firstMatch
+        let slot = app.buttons["world.item.\(panel)"].firstMatch
         for _ in 0..<2 where !page.exists {
-            tabItem("Food", in: app).tap()
+            XCTAssertTrue(slot.waitForExistence(timeout: 30), "the item bar has no \(panel) slot", file: file, line: line)
+            slot.tap()
             _ = page.waitForExistence(timeout: 8)
         }
-        XCTAssertTrue(page.exists, "the Food tab never showed screen.food", file: file, line: line)
+        XCTAssertTrue(page.exists, "the \(panel) panel never showed \(identifier)", file: file, line: line)
+    }
+
+    /// Waits for a page pushed inside a panel titled `title`: the World frame draws its title on the
+    /// plate beside `plate.back` (whose own label names the page it returns to, never this one).
+    @MainActor
+    private func waitForPushedPage(_ title: String, in app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        let back = app.buttons["plate.back"].firstMatch
+        let plateTitle = app.staticTexts[title].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if back.exists, plateTitle.exists, back.label != "Back to \(title)" { return true }
+            _ = back.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return false
+    }
+
+    /// Opens the Food panel, then the Recipe book pushed inside it, and waits for it.
+    @MainActor
+    private func openRecipeBookFromFood(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        openPanel("food", page: "screen.food", in: app, file: file, line: line)
         let recipeBook = app.buttons["Recipe book"]
         XCTAssertTrue(recipeBook.waitForExistence(timeout: 6), "Recipe book button not found on Food", file: file, line: line)
-        XCTAssertTrue(scrollClearOfTabBar(recipeBook, in: app), "Recipe book button not reachable on Food", file: file, line: line)
+        XCTAssertTrue(scrollIntoClearView(recipeBook, in: app), "Recipe book button not reachable on Food", file: file, line: line)
         recipeBook.tap()
-        XCTAssertTrue(app.navigationBars["Recipe book"].waitForExistence(timeout: 6), "the recipe book did not open",
-                      file: file, line: line)
+        XCTAssertTrue(waitForPushedPage("Recipe book", in: app), "the recipe book did not open", file: file, line: line)
     }
 
-    /// The floating tab bar's button for `title`: the one on the row where the Home and Private tab
-    /// buttons also sit (a copy of `TabReselectUITests.tabItem`; each suite keeps its own).
-    private func tabItem(_ title: String, in app: XCUIApplication) -> XCUIElement {
-        let matches = app.buttons.matching(NSPredicate(format: "label == %@", title))
-        XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 30), "the tab bar has no \(title) button")
-        let homeRows = buttonMidYs(labelled: "Home", in: app)
-        let privateRows = buttonMidYs(labelled: "Private", in: app)
-        // Bounded: a handful of same-label buttons at most.
-        for index in 0..<min(matches.count, 8) {
-            let candidate = matches.element(boundBy: index)
-            let midY = candidate.frame.midY
-            if homeRows.contains(where: { abs($0 - midY) < 2 }) && privateRows.contains(where: { abs($0 - midY) < 2 }) {
-                return candidate
-            }
-        }
-        XCTFail("no \(title) button sits on the tab bar's row")
-        return matches.firstMatch
-    }
-
-    /// The vertical centres of every button labelled `label` (at most eight).
-    private func buttonMidYs(labelled label: String, in app: XCUIApplication) -> [CGFloat] {
-        let matches = app.buttons.matching(NSPredicate(format: "label == %@", label))
-        return (0..<min(matches.count, 8)).map { matches.element(boundBy: $0).frame.midY }
-    }
-
-    /// Drags the page until the element sits wholly between the status bar and the floating tab bar
-    /// (a copy of `TabReselectUITests.scrollClearOfTabBar`): a tap whose point lands inside the bar's
-    /// pill, even outside a tab button's frame, selects that tab.
-    private func scrollClearOfTabBar(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+    /// Drags the page until the element sits wholly between the panel's plate and the bottom of the
+    /// screen, and has stopped moving.
+    private func scrollIntoClearView(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         let window = app.windows.firstMatch
-        let topClear: CGFloat = 100
-        let tabBarClear: CGFloat = 16
+        let topClear: CGFloat = 130
+        let bottomClear: CGFloat = 40
         for _ in 0..<14 {
             guard element.exists else { dragFeed(by: 300, in: app); continue }
             let frame = element.frame
-            let homeTab = app.buttons["Home"].firstMatch
-            let bottom = (homeTab.exists ? homeTab.frame.minY : window.frame.maxY) - tabBarClear
+            let bottom = window.frame.maxY - bottomClear
             let top = window.frame.minY + topClear
             if frame.maxY > bottom {
                 dragFeed(by: frame.maxY - bottom + 40, in: app)

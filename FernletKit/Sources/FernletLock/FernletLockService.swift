@@ -190,7 +190,7 @@ public enum FernletLockCredentialKind: String, Codable {
 
 /// A user-entered lock credential paired with its kind, plus its format validation.
 ///
-/// Passed into ``FernletLockServicing/configure(credential:)`` and
+/// Passed into ``FernletLockServicing/configure(credential:grantingScope:)`` and
 /// ``FernletLockServicing/changeCredential(current:new:)``. Holds the secret only
 /// transiently in memory — the service persists a salted scrypt-digest verifier,
 /// never the credential itself.
@@ -654,7 +654,7 @@ public enum LockKeychainKey: String {
     ///
     /// Latency is a constant TWO derivations in every direction, which takes a second mechanism: a
     /// duress match returns before the real verifier is ever derived, so
-    /// ``FernletLockService/handleDuress(_:passcode:scope:)`` spends one discarded derivation to pay
+    /// `FernletLockService/handleDuress(_:passcode:scope:)` spends one discarded derivation to pay
     /// the difference. Without it a decoy came back in roughly half the time of a benign unlock —
     /// visible to the naked eye on a phone the observer has watched unlock before.
     case duressSalt = "com.fernlet.lock.duressSalt"
@@ -955,7 +955,7 @@ private func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
 /// protocol — the `PeriodLockContext` the sealed `PrivateHealthStore` uses to buffer
 /// narratives while the lock is engaged.
 ///
-/// **Key scheme.** ``configure(credential:)`` derives a scrypt wrapping key from the
+/// **Key scheme.** ``configure(credential:grantingScope:)`` derives a scrypt wrapping key from the
 /// passcode (+ random salt), mints a random 256-bit content key, and persists only: the
 /// salt, `SHA256(wrappingKey)` as the verifier, the ChaChaPoly-wrapped content key, the
 /// credential kind, and the scrypt N. The wrapping key itself is never persisted; the
@@ -1264,6 +1264,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// - Parameters:
     ///   - keychainDelete: Replaces `KeychainItem.deleteReportingStatus` for every custody delete.
     ///   - deviceOwnerVerifier: Replaces the `LAContext` device-owner check before an adoption.
+    ///   - privatePersistenceController: Replaces the shared store whose sealed rows the service counts and rebuilds.
+    ///   - biometricTypeOverride: Replaces the device's reported biometry type (tests only).
+    ///   - uptimeProvider: Replaces the monotonic clock cooldowns are measured on; nil uses the system uptime.
     public convenience init(
         keychainService: String = KeychainItem.productionService,
         sealedContentKeyServices: [String] = [KeychainItem.journalService],
@@ -1581,9 +1584,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// no device row, a fresh key is minted — but first the salt-independent copies of an old key
     /// (the enclave wrap, the re-wrap staging slot, the biometric bypass, a pre-split verifier that
     /// opens the scrypt wrap) must read definitively absent, or this throws
-    /// ``FernletLockError/deviceCustodyInconsistent`` with nothing written: the mint would delete the
+    /// `FernletLockError/deviceCustodyInconsistent` with nothing written: the mint would delete the
     /// last copy of a key that still opens everything sealed under it. When sealed rows exist and
-    /// `acknowledgedPriorData` is false it throws ``FernletLockError/priorSealedDataPending``
+    /// `acknowledgedPriorData` is false it throws `FernletLockError/priorSealedDataPending`
     /// instead, so the app can show the user what the new key cannot open before anything is
     /// written — and, with the check above, "cannot open" is then true. The one exception is a
     /// phone awaiting its custodian recovery: its rows are sealed under the key the recovery device
@@ -2070,7 +2073,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// Unlocks FOR ONE SURFACE. `scope` is the caller's own surface — never a default, so a new
     /// gated screen cannot inherit someone else's unlock by forgetting to say who it is. The
-    /// content key is only *retained* for `.privateHub` (see ``retainContentKey(_:for:)``); every
+    /// content key is only *retained* for `.privateHub` (see `retainContentKey(_:for:)`); every
     /// other scope recovers it purely as the act of verifying the passcode and then drops it.
     /// - Returns: An ``UnlockResult`` with method `.passcode`.
     public func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult {
@@ -2575,7 +2578,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Mirrors `PrivateMediaStore.PrivateMediaKeyStore.service` **by value rather than by import**:
     /// this module has no `PrivateMediaStore` edge and gains none for a wipe sweep. The app-target
     /// test suite pins that the two strings agree, exactly as it does for
-    /// ``recoveryCustodianPublicKeyByteCount``.
+    /// `recoveryCustodianPublicKeyByteCount`.
     public static let privateMediaKeychainService = "com.fernlet.private-media"
 
     /// The rejection copy shown when a duress-sensitive action is attempted while a duress session
@@ -2648,7 +2651,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Whether the enrolled custodian's blob seals a content key this device NO LONGER USES.
     ///
     /// True in exactly one state: a recovery-locked device whose user set up a new app lock before
-    /// reaching their custodian. ``mintLockRecords(for:contentKey:preservingRecoveryMaterial:)``
+    /// reaching their custodian. `mintLockRecords(for:contentKey:preservingRecoveryMaterial:)`
     /// keeps the blob there on purpose — it is the only route back to everything written before the
     /// recovery-lock fired — and marks it, because it seals the OLD key while the lock now holds a
     /// new one.
@@ -2725,7 +2728,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// material intact, no local unlock left at all — no passcode salt and no device-custody key.
     ///
     /// Read by the app-side recovery flow to know a ceremony is owed, and — more importantly —
-    /// by ``mintLockRecords(for:contentKey:preservingRecoveryMaterial:)``, which normally sweeps the
+    /// by `mintLockRecords(for:contentKey:preservingRecoveryMaterial:)`, which normally sweeps the
     /// recovery rows when a fresh content key is minted. In THIS state that sweep would be silent,
     /// permanent data loss: the blob is the only route back to the sealed corpus, and "set up app
     /// lock" is exactly what a recovery-locked device offers, so a user who taps it before reaching
@@ -2803,7 +2806,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// **Real-passcode gated by a counted re-entry (DPA-76).** The only entry point is Settings →
     /// App lock, a `.appLockSettings` surface the user must already have unlocked with the REAL
-    /// passcode, and ``handleDuress(_:passcode:scope:)`` refuses that scope to a duress PIN. That is
+    /// passcode, and `handleDuress(_:passcode:scope:)` refuses that scope to a duress PIN. That is
     /// not enough on its own: a page left open is held by whoever picks the phone up, and the
     /// "must be different from your passcode" refusal below answered "is this the passcode?" for
     /// every candidate with nothing counted. So `current` is required and goes through the same
@@ -3556,7 +3559,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// Refuses while ``DuressMode/recoveryLock`` is the armed duress response, because that pairing
     /// is a trap rather than a configuration: the response destroys every local unlock key and the
-    /// custodian is the only thing that gives them back. (``performRecoveryLockKeyDestruction()`` also fails
+    /// custodian is the only thing that gives them back. (`performRecoveryLockKeyDestruction()` also fails
     /// closed if the rows vanish some other way, but a refusal the user can read is better than a
     /// silent downgrade of the response they chose.) Change or remove the duress response first.
     ///
@@ -3591,7 +3594,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// until the user re-enables one.
     ///
     /// **A wrong key is REFUSED, not installed.** The recovered bytes are checked against this
-    /// device's own digest of the key the blob seals (``storedRecoveryContentKeyDigest()``). Without
+    /// device's own digest of the key the blob seals (`storedRecoveryContentKeyDigest()`). Without
     /// that check a custodian that returned the wrong bytes — a bug, a stale blob, a second corpus —
     /// would silently re-lock the device around a key that opens nothing, and the corpus would be
     /// gone with no error ever raised. This is the one place that can still tell.
@@ -4318,11 +4321,11 @@ extension FernletLockService {
     /// 1. Refuses (`.locked`) unless the state is `.notConfigured`, `scope` is `.privateHub`, and no
     ///    duress session is in force — the duress decoy stays keyless.
     /// 2. Reads the device row with a distinguishing read. Found → opened (`FDS1` terminal →
-    ///    ``FernletLockError/contentKeyUnrecoverable``; transient or an unknown marker →
+    ///    `FernletLockError/contentKeyUnrecoverable`; transient or an unknown marker →
     ///    `.contentKeyTemporarilyUnavailable`); an `FDR1` found on enclave hardware is upgraded in
     ///    place. Unreadable → `.contentKeyTemporarilyUnavailable`, and nothing is ever minted over it.
     ///    Absent → a fresh key only when `allowingMint` AND the mint-safety proof passes, else
-    ///    ``FernletLockError/deviceKeyAbsent``.
+    ///    `FernletLockError/deviceKeyAbsent`.
     /// 3. With the key in hand from the device row — and only then — sweeps any passcode rows an
     ///    interrupted transition left behind, so the sweep can never delete the last route to it.
     ///
@@ -4348,13 +4351,13 @@ extension FernletLockService {
     /// Order, and why:
     /// 1. Refuses during a duress session; reads salt + verifier with distinguishing reads.
     /// 2. **Duress first**: a duress PIN runs the armed response (which enters the locked decoy) and
-    ///    then throws ``FernletLockError/invalidPasscode`` — the `unlock` shape on `.appLockSettings`,
+    ///    then throws `FernletLockError/invalidPasscode` — the `unlock` shape on `.appLockSettings`,
     ///    NOT `changeCredential`'s silent success: removal is observable (the status would flip and
     ///    Private would open with a tap), so a reported success that removed nothing would be a tell.
     /// 3. `requiresReset`, the cooldown and a wrong passcode behave exactly as ``unlock(passcode:for:)``
     ///    (the same attempt ladder). Then, with the passcode proven — so only its holder learns why —
     ///    a SUPERSEDED recovery enrollment refuses with
-    ///    ``FernletLockError/recoveryDeviceHoldsEarlierKey``: that blob is the only route back to every
+    ///    `FernletLockError/recoveryDeviceHoldsEarlierKey`: that blob is the only route back to every
     ///    entry written before a recovery-lock fired, and removing it is its own deliberate step
     ///    (review L-U1-R2). The key is recovered through the custody in force.
     /// 4. The device row is written and proven to open to the key. On failure it is deleted and the
@@ -4520,7 +4523,7 @@ extension FernletLockService {
     /// - Parameter forPasscodeSetup: The setup route (a passcode over no device row). False for the
     ///   tap's mint, which also requires the biometric flag absent.
     /// - Returns: Whether an earlier key survives with a recovery device.
-    /// - Throws: ``FernletLockError/deviceCustodyInconsistent`` or `.keychainFailure`.
+    /// - Throws: `FernletLockError/deviceCustodyInconsistent` or `.keychainFailure`.
     public func checkFreshKeyMintIsSafe(forPasscodeSetup: Bool) throws -> FreshKeyMintVerdict {
         let localRows = forPasscodeSetup ? [LockKeychainKey.salt] + Self.saltIndependentKeyCopyRows : Self.mintSafetyRows
         try refuseIfAKeyCopySurvivesWithoutTheSalt(rows: [.deviceContentKey] + localRows)

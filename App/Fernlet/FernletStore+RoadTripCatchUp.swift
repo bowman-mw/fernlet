@@ -86,7 +86,7 @@ extension FernletStore {
 
     // MARK: Catch up now and one tap
 
-    /// The members a catch-up can reach now: in the hangout and linked (``RoadTripExchange/reachableFriends()``), or
+    /// The members a catch-up can reach now: in the hangout and linked (`RoadTripExchange/reachableFriends()`), or
     /// heard nearby by presence; of the trip on now, or of the newest trip still owing them its end. Empty in a decoy.
     func roadTripCatchUpMembers() -> (linked: [String], nearby: [String]) {
         guard !duressSessionActive, let trip = roadTripTripToCatchUp() else { return ([], []) }

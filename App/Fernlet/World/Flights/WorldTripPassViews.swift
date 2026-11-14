@@ -2,7 +2,7 @@ import FernletUI
 import SwiftUI
 import WorldMapStore
 
-/// The boarding pass's type (the mockup's `.apbp`): DM Sans throughout, two steps, as approved (``View/worldPassFont(_:)``): codes 34 (38 at the
+/// The boarding pass's type (the mockup's `.apbp`): DM Sans throughout, two steps, as approved (`View/worldPassFont(_:)`): codes 34 (38 at the
 /// largest text), labels 11 (14), places 13 (17), facts 15 (19).
 nonisolated enum WorldPassType {
     static func code(_ large: Bool) -> Font { .custom(FernletFontName.dmSansBold, size: large ? 38 : 34, relativeTo: .largeTitle) }

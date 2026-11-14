@@ -15,8 +15,8 @@ import ProximityKit
 ///    text, mints a routed item for it through the engine's origination door, and appends the local
 ///    echo here **only once the mint staged**.
 ///  - **Inbound** — the chat's projection handler for the temporary-message row calls
-///    ``receiveIncoming(id:senderFingerprint:senderSigningPublicKey:senderDisplayName:text:sentAt:seenAt:in:)``,
-///    which dedupes by ``MeshContentKey`` (author **and** id), sanitizes, caps, and returns which of the three
+///    `receiveIncoming(id:senderFingerprint:senderSigningPublicKey:senderDisplayName:text:sentAt:seenAt:in:)`,
+///    which dedupes by `MeshContentKey` (author **and** id), sanitizes, caps, and returns which of the three
 ///    things it did. The author's fingerprint
 ///    is the origin's signed one resolved against the admission ledger, with the block list and the
 ///    removal set applied **before** the content key is unwrapped; the display name is the body's
@@ -28,7 +28,7 @@ import ProximityKit
 ///
 /// ## The transcript is a DERIVATION, not an append log (plan §10.3, §12)
 ///
-/// The store holds a ``MeshContentSet`` of ``MeshMergedMessage`` and derives ``messages`` from
+/// The store holds a `MeshContentSet` of `MeshMergedMessage` and derives ``messages`` from
 /// `MeshContentLedger.visibleTranscript(gates:)` on every change. That is §12's own word —
 /// *re-derive* — and it is what the routed path needs rather than a nicety: a backlog drains in
 /// index order, `(originFingerprint, itemID)`, so a device joining a chat in progress would
@@ -44,8 +44,8 @@ import ProximityKit
 ///
 /// ## A row's identity is `(author, id)`, never the id alone (P6 item 4 fix review, P1-1)
 ///
-/// Every dedup here — ``seenKeys``, the held ``MeshContentSet``, the attribution table and
-/// ``Message/id`` itself — keys on ``MeshContentKey``. The id on the wire is the **origin's own
+/// Every dedup here — `seenKeys`, the held `MeshContentSet`, the attribution table and
+/// ``Message/id`` itself — keys on `MeshContentKey`. The id on the wire is the **origin's own
 /// choice**, the routed index's key is `(originFingerprint, itemID)`, and the signed manifest
 /// carrying that id reaches the whole roster-at-creation in the clear before the content does — so
 /// an admitted member could otherwise read another member's message id, mint its own text under it,
@@ -53,7 +53,7 @@ import ProximityKit
 /// marked final → gone for the session, while its sender saw `.staged`. The key is local: nothing
 /// about the manifest or the body changed.
 ///
-/// The gate value arrives through ``refreshGates(chatAllowed:isRefused:)``, which the chat folds
+/// The gate value arrives through `refreshGates(chatAllowed:isRefused:)`, which the chat folds
 /// (`MeshSessionChat.refreshVisibleTranscript()`) at every ingest and when the app reports or blocks
 /// from inside the session — Report… on a message re-renders at once (App Review guideline 1.2,
 /// 2026-10-15). Any other block or an age-gate flip re-renders at the NEXT ingest, not at the flip:
@@ -69,8 +69,8 @@ import ProximityKit
 ///
 /// ## What P3's sealed store did and did not change (plan §17.3)
 ///
-/// P3 gave ProximityKit its first durable surface, ``MeshSessionContext``, sealed by
-/// ``MeshSessionStore``. **This projection is untouched by that** — it is memory-only and not
+/// P3 gave ProximityKit its first durable surface, `MeshSessionContext`, sealed by
+/// `MeshSessionStore`. **This projection is untouched by that** — it is memory-only and not
 /// `Codable`, so a message still cannot reach a snapshot.
 ///
 /// What P6 item 4 changed is what lies BENEATH it. Chat now rides the routed store, so each message
@@ -136,7 +136,7 @@ public final class SessionMessageStore {
 
     /// Max characters a message may carry. A hostile peer over-length is capped, not dropped.
     ///
-    /// `nonisolated` for the same reason ``maxMessages`` is: ``MeshRoutedTextBody`` is a
+    /// `nonisolated` for the same reason `maxMessages` is: `MeshRoutedTextBody` is a
     /// `nonisolated` value type and its wire byte bound is stated as a multiple of this number
     /// rather than as a second literal (P6 item 4). **It is a `Character` cap, not a byte cap** —
     /// a grapheme cluster is unbounded in bytes — which is exactly why the routed row needs its
@@ -151,7 +151,7 @@ public final class SessionMessageStore {
     /// to conflate (P6 item 4).
     ///
     /// The caller needs the distinction because it decides whether the routed item still owes the
-    /// projection anything, and **all three are final**: ``seenKeys`` deliberately never forgets a
+    /// projection anything, and **all three are final**: `seenKeys` deliberately never forgets a
     /// dropped key ("a re-send cannot resurrect them"), and "empty after sanitizing" is a
     /// deterministic verdict over origin-signed bytes. Frozen English tokens — audit vocabulary,
     /// never user copy.
@@ -172,7 +172,7 @@ public final class SessionMessageStore {
     /// session.
     ///
     /// **Derived**, never appended to: it is `MeshContentLedger.visibleTranscript(gates:)` over
-    /// ``held``, recomputed on every ingest and on every gate change. See the type's own note on
+    /// `held`, recomputed on every ingest and on every gate change. See the type's own note on
     /// why that is §12's word and what follows from it.
     public private(set) var messages: [Message] = []
 

@@ -227,7 +227,7 @@ enum MeshMatrixDebugOptions {
 ///
 /// ## What it does, and what it deliberately does not
 ///
-/// It seeds ``MeshNetworkManager/currentMesh`` and calls `startJoin()`. Since P6 item 10 it also
+/// It seeds `MeshNetworkManager/currentMesh` and calls `startJoin()`. Since P6 item 10 it also
 /// carries the `FernletStore` the flow driver needs for the hearts script — the nearby-hearts
 /// opt-in, the trust vault and the heart ledger all live there, and every one of them is reached
 /// through a shipping door — and since finding L-4 it selects the Social tab on that store before
@@ -242,7 +242,7 @@ enum MeshMatrixDebugOptions {
 /// every run in the lane advertises byte-identical TXT records. The only thing that varies between
 /// runs is the membership state being tested.
 ///
-/// **Release cannot install it.** The whole body is compiled out; the release ``install(manager:)``
+/// **Release cannot install it.** The whole body is compiled out; the release ``install(manager:store:)``
 /// is empty, reads no environment, and can seed nothing.
 @MainActor
 enum MeshRejectionMatrixHarness {

@@ -106,15 +106,15 @@ public enum FriendPhotoReviewWorkingMessage: Equatable, Sendable {
 /// candidates exist.
 ///
 /// Presented by the app's hosts (the Friends surface's session-end review, the camera's Develop
-/// review) over photos HELD in the sealed pending corpus (2026-09-30): ``keepSelected`` copies the
-/// ticked ones to the in-app wall, ``discardAll`` deletes every shown one, and the host reads the
+/// review) over photos HELD in the sealed pending corpus (2026-09-30): `keepSelected` copies the
+/// ticked ones to the in-app wall, `discardAll` deletes every shown one, and the host reads the
 /// manager's per-photo answer. Copying to the system Photos library is an opt-in toggle
-/// (``alsoSaveToPhotos``) the HOST applies only after the keep has landed and only to the photos
+/// (`alsoSaveToPhotos`) the HOST applies only after the keep has landed and only to the photos
 /// that landed — there is no path from this sheet to the camera roll before the choice.
 ///
-/// Two host-driven states: ``answerFailure`` keeps an unapplied answer on screen with an inline line
-/// (the photos are still offered; nothing was lost), and ``canKeep`` false disables Keep with the
-/// reason while Delete all still works. A host that passes ``notNow`` (the app's session-end overlay)
+/// Two host-driven states: `answerFailure` keeps an unapplied answer on screen with an inline line
+/// (the photos are still offered; nothing was lost), and `canKeep` false disables Keep with the
+/// reason while Delete all still works. A host that passes `notNow` (the app's session-end overlay)
 /// gets a "Not now" text button in the header, and VoiceOver's escape gesture performs it; the
 /// camera's Develop sheet passes nil and keeps the sheet's own swipe-down and escape (cancel back to
 /// the camera) — except while an answer runs, when the sheet cannot be swiped away

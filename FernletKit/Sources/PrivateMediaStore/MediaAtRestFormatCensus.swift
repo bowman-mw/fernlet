@@ -36,7 +36,7 @@ import FernletCrypto
 /// a truncated or corrupt `FMA2` box counts as ``v2Marked`` because that is exactly what the reader
 /// would take it for.
 public enum MediaAtRestFormatClass: String, Sendable, Equatable, CaseIterable {
-    /// Begins with the four-byte `FMA2` marker (``MediaAtRestFormat/v2Marker``) — the current
+    /// Begins with the four-byte `FMA2` marker (`MediaAtRestFormat/v2Marker`) — the current
     /// format, which every shipping writer emits. This is the bucket a completed migration drives
     /// everything else into.
     case v2Marked
@@ -163,7 +163,7 @@ public struct MediaAtRestFormatTally: Sendable, Equatable {
     }
 
     /// The count for one format class — for a diagnostic row that renders
-    /// ``MediaAtRestFormatClass/allCases`` without restating the field list.
+    /// `MediaAtRestFormatClass/allCases` without restating the field list.
     public func count(of formatClass: MediaAtRestFormatClass) -> Int {
         switch formatClass {
         case .v2Marked: return v2Marked

@@ -177,7 +177,7 @@ enum AppleMapGeometry {
 
     /// The camera to hand MapKit for `camera`, or nil when there is nothing to move (W-15): no request
     /// since revision `applied`, or MapKit's camera (`current`) already shows it, within
-    /// ``WorldCamera/stillMetres`` of its centre and its height.
+    /// `WorldCamera/stillMetres` of its centre and its height.
     static func cameraMove(for camera: WorldCamera, applied: Int, showing current: MKMapCamera) -> MKMapCamera? {
         guard camera.revision != applied else { return nil }
         let shown = GeoPoint(current.centerCoordinate.latitude, current.centerCoordinate.longitude)

@@ -162,7 +162,7 @@ final class DeleteEverythingFlow {
     /// Which Apple Health outcome the dialog offers, from the two signals that outlive each other.
     ///
     /// The master toggle answers "is Fernlet integrated with Health right now"; the persisted
-    /// ``HealthCapabilityRequestLedger`` answers "was Fernlet ever prompted for a capability that
+    /// `HealthCapabilityRequestLedger` answers "was Fernlet ever prompted for a capability that
     /// WRITES samples", which is the question that decides whether Fernlet-authored samples can exist.
     /// Only the first was consulted before, so the user who turned Health off — the one most likely to
     /// want the samples gone — was the one never offered their deletion. The ledger is read from the

@@ -33,7 +33,7 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// and is passed to ``RecipeShareElsewhereCard``. "Include picture" strips the attached recipe photo
 /// from the nearby send, the only route that carries a picture. Both were switches on this sheet; since
 /// the World build (`b3-recipe-share` draft 2, owner 2026-10-24) they are Settings › Sharing's
-/// ``FernletSettings/recipeShareIncludesNotes`` and ``FernletSettings/recipeShareIncludesPicture``, on by
+/// `FernletSettings/recipeShareIncludesNotes` and `FernletSettings/recipeShareIncludesPicture`, on by
 /// default as the switches were, and the sheet says so under its cards.
 /// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
 /// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
@@ -42,7 +42,7 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// **When a share ends, the sheet says so and stays.** It used to dismiss itself 1.4 s after a send,
 /// which looked exactly like a cancel, and a failure line cleared itself after 2.5 s with nothing
 /// saying to retry. Now the content cross-fades to a ``RecipeShareConfirmationPanel`` built from the
-/// manager's ``ProximityRecipeShareManager/lastShareOutcome`` (latched by
+/// manager's `ProximityRecipeShareManager/lastShareOutcome` (latched by
 /// ``RecipeShareOutcomeLatch``, so a share the user cancelled never raises one), announced to
 /// VoiceOver, with a success or error haptic. It stays until Done. What the panel may claim is
 /// "sent", never "delivered": see ``RecipeShareConfirmation``.

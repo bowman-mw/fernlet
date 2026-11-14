@@ -182,7 +182,7 @@ final class FileDeviceHealthResidueStore: DeviceHealthResidueStoring {
     }
 }
 
-/// The in-memory ``DeviceHealthResidueStoring`` — the default for a `FernletStore` built through the
+/// The in-memory `DeviceHealthResidueStoring` — the default for a `FernletStore` built through the
 /// synchronous initializer (tests and previews), so a store that is not handed a cache can never
 /// share, or wipe, another store's (the per-instance-sidecar lesson: an isolation seam whose default
 /// is process-global is a cross-suite flake waiting for its first wipe). The launch path

@@ -123,7 +123,7 @@ public final class AIRetryQueueService {
     /// path must not schedule a save of the very state it just loaded.
     ///
     /// The restore boundary enforces the SAME two policies as ``queueMealRetry(_:dayKey:addressing:)`` (R3):
-    /// TTL age-out then the ``maxQueueSize`` cap. The blob this reads is written by another device
+    /// TTL age-out then the `maxQueueSize` cap. The blob this reads is written by another device
     /// and synced, so without them a corrupt or hostile snapshot reinstates an unbounded queue that
     /// `pendingCount`, `mealPendingCount` and the dispatcher then walk on the main actor.
     public func apply(_ queue: [AIAnalysisRetryRecord]) {

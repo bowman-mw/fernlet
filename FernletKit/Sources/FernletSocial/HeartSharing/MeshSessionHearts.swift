@@ -199,7 +199,7 @@ public final class MeshSessionHearts {
     /// best at. This answers the third question truthfully; it does not decide the order.
     ///
     /// **The answer is the engine's.** This is the mesh's
-    /// ``MeshNetworkManager/isAddressableRoutedRecipient(_:)``, asked verbatim (plan step A0.5.1, S6):
+    /// `MeshNetworkManager/isAddressableRoutedRecipient(_:)`, asked verbatim (plan step A0.5.1, S6):
     /// the addressability rule belongs to the routed origination door, and this is the heart's name
     /// for it, so the button's query and the mint cannot disagree. A mesh that is gone (only after the
     /// composition that owns it is) addresses nobody.
@@ -255,7 +255,7 @@ public final class MeshSessionHearts {
     /// `.sending` was never an observable state on this path; the presence fallback keeps its own.
     ///
     /// One `UUID` is minted and used three times — the routed item id, the body header's id and the
-    /// gift id — because for ``ProximityNamespace/RoutedTypes/heart`` those are one value by frozen contract.
+    /// gift id — because for `ProximityNamespace/RoutedTypes/heart` those are one value by frozen contract.
     ///
     /// - Parameter friend: The trusted friend's record.
     public func sendSessionHeart(to friend: ProximityTrustedPeerRecord) {

@@ -129,7 +129,7 @@ engine through its public seams.
   photos a friend is owed, sent one at a time as ``RoadTripPhotoChunkPayload`` pieces of 1 MiB under the
   same token (``RoadTripPhotoChunker``), at most 30 a friend and each photo once per hangout; a catch-up's
   `heldPhotos` names the receiver's own photos the sender already holds, so only the missing go. Pieces are
-  put back together by ``RoadTripPhotoAssembler`` — each checked against its photo's first piece, the whole
+  put back together by `RoadTripPhotoAssembler` — each checked against its photo's first piece, the whole
   against its length and SHA-256, at most 8 photos (2 per sender, 40 MiB) gathering, a stalled one dropped
   after 120 s and every incomplete one when the hangout ends — before ``RoadTripReceivedPhoto`` reaches the
   app. Who took a photo is never a field (it is the verified sender), so a received photo is never passed on.

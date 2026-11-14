@@ -24,7 +24,7 @@ struct WeeklyTrainingSummary: Equatable {
     let weekStart: Date
     /// Midnight of the week's last day.
     let weekEnd: Date
-    /// The muscles with any credit this week, in ``MuscleGroup``'s declaration order (head to toe).
+    /// The muscles with any credit this week, in `MuscleGroup`'s declaration order (head to toe).
     /// Never ranked by count: a ranking reads as a leaderboard.
     let muscleSets: [MuscleSets]
     /// Minutes of aerobic workouts in the week (``WeeklyTrainingSummaryBuilder/countsAsAerobic(_:)``),
@@ -36,7 +36,7 @@ struct WeeklyTrainingSummary: Equatable {
 /// Builds a ``WeeklyTrainingSummary`` from the day history. Pure over its inputs.
 ///
 /// **Sets** come from two sources:
-/// - a row's structured ``ExerciseResult``s (the guided runner's record, and any other row that
+/// - a row's structured `ExerciseResult`s (the guided runner's record, and any other row that
 ///   carries results), counting each set done with at least one rep;
 /// - any other row's lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb"), counting the sets
 ///   written, rep ranges included: a hand-logged row's record, and a guided row with no results — a
@@ -162,7 +162,7 @@ enum WeeklyTrainingSummaryBuilder {
         return WeeklyTrainingSummary(weekStart: span.start, weekEnd: span.end, muscleSets: rows, aerobicMinutes: minutes)
     }
 
-    /// The exercises keyed by ``WorkoutExerciseCatalog/normalizedName(_:)``; the first of two that
+    /// The exercises keyed by `WorkoutExerciseCatalog/normalizedName(_:)`; the first of two that
     /// share a name wins, as in `allExercises` (a bundled row before a custom one).
     static func exerciseIndex(_ exercises: [ExerciseTarget]) -> [String: ExerciseTarget] {
         var index: [String: ExerciseTarget] = [:]
@@ -259,7 +259,7 @@ enum WeeklyTrainingSummaryBuilder {
     }
 
     /// The minutes a row's cardio lines plan, as the guided runner reads them
-    /// (``WorkoutTimedSessions/classify(_:)``): a steady line's minutes ("Easy cardio - 20 min"), and an
+    /// (`WorkoutTimedSessions/classify(_:)`): a steady line's minutes ("Easy cardio - 20 min"), and an
     /// interval line's rounds × (hard + easy), in whole minutes rounded down ("Intervals - 8 × 1 min hard /
     /// 1 min easy" is 16). A mobility flow, the gentle stretch and any line the runner would not time add
     /// nothing. These are the PLANNED minutes as the row's text gives them, not a measurement: a guided

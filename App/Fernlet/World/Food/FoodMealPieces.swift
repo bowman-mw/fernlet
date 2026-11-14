@@ -27,7 +27,7 @@ struct FoodMealTypeDropdown: View {
 }
 
 /// A field's caption and its content on a sheet: under the World look the framed section label
-/// (`■ WHAT DID YOU EAT?`, Batch 3's sheets), today's ``SheetField`` caption without it.
+/// (`■ WHAT DID YOU EAT?`, Batch 3's sheets), today's `SheetField` caption without it.
 struct FoodSheetField<Content: View>: View {
     let label: LocalizedStringKey
     @ViewBuilder let content: () -> Content

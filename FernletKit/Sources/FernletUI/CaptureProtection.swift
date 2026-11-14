@@ -67,7 +67,7 @@ public final class CaptureProtectionState {
     /// `ObjectIdentifier`s of the registered screens whose `isCaptured` currently reads true.
     /// Per-screen rather than a single flag so two Fernlet windows (iPad Stage Manager / Split
     /// View) never produce a cross-window false positive: recording window A must not cover
-    /// window B. Updated by ``refreshCaptureState()`` on every `capturedDidChangeNotification`
+    /// window B. Updated by `refreshCaptureState()` on every `capturedDidChangeNotification`
     /// post and on every screen registration (the at-mount read the design requires, so a
     /// recording started on Home already covers the Private tab on arrival).
     public private(set) var capturedScreenIDs: Set<ObjectIdentifier> = []
@@ -183,7 +183,7 @@ public final class CaptureProtectionState {
 
     /// The capture verdict for one surface's own screen: the override when set; the per-screen
     /// answer when the probe has resolved; the conservative any-screen fallback
-    /// (``anyKnownScreenIsCaptured()``) while the screen is still unknown. The fallback
+    /// (`anyKnownScreenIsCaptured()`) while the screen is still unknown. The fallback
     /// consults the LIVE connected window scenes as well as the registry, because before the
     /// first protected surface has ever registered (the outer paged `TabView` instantiates its
     /// pages lazily, so a fresh launch that never visited the Private tab has an empty
@@ -363,7 +363,7 @@ public enum CaptureNudgeCopy {
 ///   because the modifier is applied INNER to `.fernletLockGate` (the lock overlay draws at
 ///   `zIndex(100)` in its own stack above this one), so the cover can never occlude the passcode
 ///   field.
-/// - The screen is resolved from the view's **own window scene** via ``CaptureScreenProbe``
+/// - The screen is resolved from the view's **own window scene** via `CaptureScreenProbe`
 ///   (never `UIScreen.main`, never `connectedScenes`), keeping two-window iPad states per-window
 ///   correct.
 public struct CaptureProtectedModifier: ViewModifier {

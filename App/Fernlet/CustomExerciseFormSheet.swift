@@ -4,11 +4,11 @@ import FernletUI
 
 /// "Add an exercise" (and edit): the hand-made custom exercise form (idea 15).
 ///
-/// Asks for every field a bundled catalog row carries (``CustomExerciseDraft``) — the name, main and
+/// Asks for every field a bundled catalog row carries (`CustomExerciseDraft`) — the name, main and
 /// other muscles, movement and its direction, kind of training, main equipment and what else it works
 /// with, gear it can't be done without, reps or seconds, one side at a time, and difficulty — so
-/// ``WorkoutSafetyFilter`` and slot eligibility treat the saved exercise exactly like a bundled one.
-/// The checks are ``CustomExerciseLibrary``'s: a name, no clash with a Fernlet exercise or another of
+/// `WorkoutSafetyFilter` and slot eligibility treat the saved exercise exactly like a bundled one.
+/// The checks are `CustomExerciseLibrary`'s: a name, no clash with a Fernlet exercise or another of
 /// the user's, at least one main muscle, and room under the 500-exercise cap.
 ///
 /// Name problems show as they are typed; the rest after a first Save, when the first problem is also

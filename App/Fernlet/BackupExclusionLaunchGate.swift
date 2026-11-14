@@ -159,7 +159,7 @@ struct BackupExclusionLaunchGate {
     /// Resolves the gate for this launch: re-reads the LIVE persisted blob (deferring, touching
     /// nothing, when the keychain is unreadable), classifies the install, applies/records the
     /// no-prompt outcomes, latches the prior-use marker, and reports whether the caller must
-    /// present the one-time prompt (whose answers go through ``recordPromptChoice``).
+    /// present the one-time prompt (whose answers go through `recordPromptChoice`).
     ///
     /// - Parameters:
     ///   - store: The loaded preferences store this launch runs against.
@@ -242,7 +242,7 @@ struct BackupExclusionLaunchGate {
     ///     `applyExclusionNow` so the files are flagged immediately); `false` keeps them included
     ///     and changes nothing but the recorded choice.
     ///   - store: The preferences store to record the answer in.
-    ///   - applyExclusionNow: Immediate-application seam, same as ``resolveAtLaunch``'s.
+    ///   - applyExclusionNow: Immediate-application seam, same as `resolveAtLaunch`'s.
     func recordPromptChoice(excludeFromBackups: Bool, store: StoragePreferencesStore, applyExclusionNow: (Bool) -> Void = { _ in }) {
         if excludeFromBackups {
             FernletAuditLog.log("privacy.localBackup.launchPromptExcludeChosen")

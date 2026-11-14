@@ -398,7 +398,7 @@ public nonisolated enum WorkoutTrend {
 
     // MARK: The strength-held check
 
-    /// Whether the lift's line has fallen beyond noise for weeks (G7): ``isEasedCandidate(_:resolved:)``
+    /// Whether the lift's line has fallen beyond noise for weeks (G7): `isEasedCandidate(_:resolved:)`
     /// on ``stallPersistence`` readings in a row, each taken as of its own newest session.
     public static func hasEased(_ points: [TrendPoint], profile: TrendProfile) -> Bool {
         let points = Array(points.suffix(WorkoutLoadEngine.maxExposuresPerLift))

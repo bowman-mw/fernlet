@@ -165,7 +165,7 @@ public final class ModerationBanStore {
     /// what is left no longer reaches the ban threshold. Nothing the banned party can do alone produces
     /// a withdrawal: an absent row (a wiped ledger, a reinstall, an evicted row, a blocked or removed
     /// reporter whose rows stop arriving) and a decayed row (the wall clock) are never withdrawals, and
-    /// the self-ban ignores the banned device's own rows entirely. See ``ModerationBanRecovery``.
+    /// the self-ban ignores the banned device's own rows entirely. See `ModerationBanRecovery`.
     public func reconcile(rows: [ModerationLedgerEntry], localSigningKey: Data) {
         let now = date()
         reconcileBan(BanSubject(account: Self.selfAccount, label: "self", key: localSigningKey,

@@ -41,7 +41,7 @@ public nonisolated enum LockWrapFormatState: Sendable, Equatable {
     /// This was the number Phase 3 watched before deleting the legacy reader in
     /// `FernletLockCrypto.unwrapContentKey`. That reader is now GONE, which changes what the bucket
     /// means rather than retiring it: a row counted here is no longer a migration candidate, it is
-    /// a wrap this build refuses as ``FernletLockError/contentKeyWrapFormatRetired``. Counting rows
+    /// a wrap this build refuses as `FernletLockError/contentKeyWrapFormatRetired`. Counting rows
     /// nothing can open is still the only way to know they are there — and it is what lets the
     /// refusal name what it refused.
     case legacyUnprefixed

@@ -46,7 +46,7 @@ struct MilestonesView: View {
 /// Warm display copy per milestone kind.
 ///
 /// Kept as a tiny model so the row order and phrasing live in one place (and copy stays
-/// count-aware without pluralization bugs). Built by ``MilestoneRowModel/rows(counts:worriesLetGo:)``,
+/// count-aware without pluralization bugs). Built by ``MilestoneRowModel/rows(counts:worriesLetGo:giftCounts:)``,
 /// which also encodes the worry-kind exceptions: worry counts come from the device-local Worry
 /// Box rather than the synced ledger, and worries award no coins.
 struct MilestoneRowModel {
@@ -165,7 +165,7 @@ struct MilestoneRowModel {
 ///
 /// Every count is a plural-ruled key (`%lld`, `one`/`other` authored in the catalog) rather than
 /// two English literals picked by `count == 1`, so a language with more plural forms than English
-/// gets them. ``MilestoneEventKind/resetBoundary`` reaches none of these: it is the wipe's
+/// gets them. `MilestoneEventKind/resetBoundary` reaches none of these: it is the wipe's
 /// bookkeeping row, never a keepsake, and each switch below gives it an empty string only to stay
 /// exhaustive.
 enum MilestonesCopy {

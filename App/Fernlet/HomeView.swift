@@ -2294,7 +2294,7 @@ enum SignalPresentation {
 ///
 /// Read-only over the signals the store already computed — presenting it never triggers a
 /// recompute. Read-only means Done top-right is the whole exit under the 2026-08-21 sheet
-/// template: the pinned ``SheetHeader`` carries the title and Done, and there is no bottom bar
+/// template: the pinned `SheetHeader` carries the title and Done, and there is no bottom bar
 /// (the 36pt `ScreenHeader` treatment belongs to tab roots, never sheets).
 struct TrendsModal: View {
     @Environment(\.dismiss) private var dismiss
@@ -2516,7 +2516,7 @@ struct HomeActionWidget: View {
 /// one convention for all six tiles — highlighted moss when today already has that kind of entry.
 ///
 /// Purely presentational; the action closure is supplied by ``HomeView``'s quick-log section.
-/// The noun draws in DM Sans Medium 12 (no existing ``FernletTextRole`` carries that face/size
+/// The noun draws in DM Sans Medium 12 (no existing `FernletTextRole` carries that face/size
 /// pair) with the state in 11pt slate beneath; VoiceOver always reads noun + full-length state,
 /// even while 3a·AX3 shortens the drawn state to a bare figure.
 struct QuickLogButton: View {
@@ -2886,7 +2886,7 @@ struct MacroRing: View {
 /// that tree is built. Making the open control its own labelled button removes the question: eight
 /// real, individually focusable, individually operable elements, none of them nested in a control
 /// that wants the same tap. The same walk showed the toggles carrying no selected state at all —
-/// "Floss, button" whether or not it was done — which is what ``taskToggle(_:)`` now fixes.
+/// "Floss, button" whether or not it was done — which is what `taskToggle(_:)` now fixes.
 struct HygieneCard: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?

@@ -1,6 +1,6 @@
 import XCTest
 
-// MARK: - Move tab header actions and the relocated Suggest entry
+// MARK: - Move panel header actions and the relocated Suggest entry
 //
 // The Move header was Log + Suggest; on 2026-08-12 Suggest moved into the plan sheet and Share (the
 // trainer / coach handoff) took its slot. This suite pins BOTH ends of that move, because either
@@ -44,7 +44,7 @@ final class MoveHeaderActionsUITests: XCTestCase {
         XCTAssertTrue(suggest.isHittable, "the root Suggest entry is not tappable")
 
         suggest.tap()
-        XCTAssertTrue(app.staticTexts["Suggest workout"].waitForExistence(timeout: 10),
+        XCTAssertTrue(suggestionFlowAppeared(in: app),
                       "tapping the root Suggest entry did not present the suggestion flow")
     }
 
@@ -60,7 +60,7 @@ final class MoveHeaderActionsUITests: XCTestCase {
         XCTAssertTrue(suggest.isHittable, "the Suggest entry is not tappable")
 
         suggest.tap()
-        XCTAssertTrue(app.staticTexts["Suggest workout"].waitForExistence(timeout: 10),
+        XCTAssertTrue(suggestionFlowAppeared(in: app),
                       "tapping Suggest did not present the suggestion flow")
         // The plan sheet must still be mounted underneath — the whole reason this is presented from
         // the plan sheet rather than routed through the tab's sheet slot is that a part-filled plan
@@ -87,7 +87,7 @@ final class MoveHeaderActionsUITests: XCTestCase {
     private func openMove() -> XCUIApplication {
         let app = UXTestApp.launch()
         let move = app.buttons["Move"].firstMatch
-        XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move tab")
+        XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move button in the item bar")
         move.tap()
         return app
     }
@@ -114,6 +114,17 @@ final class MoveHeaderActionsUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Plan workout"].waitForExistence(timeout: 8),
                       "the plan sheet did not open")
+    }
+
+    /// Whether the suggestion sheet came up. Its title says which state today is in: "Suggest
+    /// workout" over the configurator, or "Today's session" when today's plan is already committed
+    /// (an earlier test, or an earlier launch the same day, may have committed it — the plan persists),
+    /// where the sheet opens on that plan instead.
+    @MainActor
+    private func suggestionFlowAppeared(in app: XCUIApplication) -> Bool {
+        let title = app.staticTexts.matching(
+            NSPredicate(format: "label IN %@", ["Suggest workout", "Today's session"])).firstMatch
+        return title.waitForExistence(timeout: 10)
     }
 
     @MainActor

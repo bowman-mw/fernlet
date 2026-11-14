@@ -12,7 +12,7 @@ import WorldMapStore
 ///   ``WorldStopWatch``; readings on the way are passed by): a reading within 75 m of a place already known is
 ///   a visit there. Otherwise, at most once per 150 m moved or 30
 ///   minutes, the place lookup (``WorldPlaceLooking``) is asked about where the person stands, and the
-///   device decides at that moment (``PlaceClassifier/visitVerdict(_:)``): an everyday place (food and drink,
+///   device decides at that moment (`PlaceClassifier/visitVerdict(_:)`): an everyday place (food and drink,
 ///   gyms, parks, beaches, campgrounds) is learned with the person's own point and the lookup's reference to
 ///   it (a place already known by that reference is a visit there); anything else, a doctor's office, a
 ///   lawyer or a therapist above all, is not kept. Nothing from the lookup is stored but that: never the
@@ -40,7 +40,7 @@ import WorldMapStore
 /// nothing new is noted in Where you've been; with "Remember places I eat out" off no meal is noted. A lookup
 /// runs only while one of them is on. What is already kept stays until it is deleted.
 ///
-/// Captures wait in the device side (``PlaceDeviceState``, sealed under the map vault's buffer key) until
+/// Captures wait in the device side (`PlaceDeviceState`, sealed under the map vault's buffer key) until
 /// Private folds them under the hub key. Visits to one place within three hours count once.
 ///
 /// **Duress.** In a decoy nothing is read or written (``setDecoy(_:)``); a lookup that returns after a decoy

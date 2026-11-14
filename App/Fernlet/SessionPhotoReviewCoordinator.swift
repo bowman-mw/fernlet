@@ -209,7 +209,7 @@ extension FernletStore: SessionPhotoReviewHost {}
 ///
 /// **Invariants it keeps.**
 /// - I2: the ONLY function here that reaches the Photos library is
-///   ``exportKeptPhotosIfAsked(_:)``, which takes the ``SessionPhotoAnswer`` and saves only
+///   `exportKeptPhotosIfAsked(_:)`, which takes the `SessionPhotoAnswer` and saves only
 ///   `answer.keptOnWall`, hydrated from the WALL. The saver itself is injected by the store.
 /// - I10: "Not now", a ``SessionPhotoReviewGate/Verdict/hideWithoutAnswer`` and a backgrounding
 ///   answer nothing; only ``keepSelected()`` and ``discardAll()`` call the manager's answer.
@@ -224,7 +224,7 @@ extension FernletStore: SessionPhotoReviewHost {}
 ///   only the overlay's own answer refuses its actions.
 ///
 /// **Leaving at present.** A review that presents while an ended mesh is still held (door 3's
-/// give-up) leaves it at once (``leaveEndedMeshIfHeld()``), so the Friends tab swaps to the album
+/// give-up) leaves it at once (`leaveEndedMeshIfHeld()`), so the Friends tab swaps to the album
 /// under the overlay and no answer can run over a mesh the policy might resume.
 ///
 /// Concurrency: `@MainActor @Observable` — every stored fact is main-actor state the screen and the
@@ -333,7 +333,7 @@ final class SessionPhotoReviewCoordinator {
     /// tests, so the block can be observed while the leave runs).
     @ObservationIgnored private let leaveEndedMesh: @MainActor (MeshNetworkManager) async -> Void
     /// Where the overlay's answer waits for a failed export's alert to be closed — open while the
-    /// review is on screen (``present()`` opens it, both hides close it).
+    /// review is on screen (`present()` opens it, both hides close it).
     @ObservationIgnored let saveFailureAcknowledgement = PhotoSaveFailureAcknowledgement(host: "overlay")
     /// Where the camera's Develop answer waits for the same alert — open while
     /// ``cameraDevelopReviewUp``. Held here, on the store-owned coordinator, rather than in the

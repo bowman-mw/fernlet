@@ -5,9 +5,9 @@ import FernletUI
 /// "Swap" for one exercise in the plan editor (``GuidedWorkoutEditorSheet``): up to four exercises
 /// that do the same work, then a search over the whole catalog.
 ///
-/// The options come from ``FernletStore/exerciseSwapOptions(for:excluding:alsoHidden:)`` — what the
+/// The options come from ``FernletStore/exerciseSwapOptions(for:excluding:alsoHidden:harder:)`` — what the
 /// planner itself may suggest at this location with these injury limits, minus anything hidden and
-/// anything already in the session — ranked by muscle fit (``WorkoutExerciseSwapOptions``). The
+/// anything already in the session — ranked by muscle fit (`WorkoutExerciseSwapOptions`). The
 /// search is the log sheet's own picker, so any exercise, custom ones included, can be chosen.
 /// Picking one hands it back and closes the sheet; the editor then offers "Always use this
 /// instead". Reading order is layout order: the options under their caption, then the search. Each

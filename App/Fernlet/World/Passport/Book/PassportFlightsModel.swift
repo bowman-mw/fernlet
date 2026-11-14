@@ -61,7 +61,7 @@ nonisolated struct PassportFlightYearLog: Equatable, Identifiable, Sendable {
 /// the list.
 ///
 /// A value built from the passport's flights (`book.flights`, empty in a decoy) and the airport list's points.
-/// Bounded by ``PassportBook/maxFlights``.
+/// Bounded by `PassportBook/maxFlights`.
 nonisolated struct PassportFlightsModel: Equatable, Sendable {
     let trips: [PassportFlightTrip]
     /// The years with flights, newest first.

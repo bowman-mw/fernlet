@@ -101,7 +101,7 @@ enum DuressRecoveryTranscript {
     /// Domain separator for the custodian → primary reply. Distinct from ``requestDomain`` so a
     /// signature over one can never be replayed as a signature over the other.
     static let replyDomain = FernletCryptoPurpose.Signature.duressRecoveryReplyV1.data
-    /// The label the requester signs the ``request`` transcript under through its identity, and the
+    /// The label the requester signs the `request` transcript under through its identity, and the
     /// custodian verifies it under: `fernlet.duress.recovery.request.v1`, raw prefix, minted with
     /// ProximityKit's `featureSignature(_:framing:)` (its identity signs under nothing else). Spelled
     /// and framed as the registry entry ``requestDomain`` reads, its twin until plan step C1, which
@@ -109,7 +109,7 @@ enum DuressRecoveryTranscript {
     /// differs neither answers nor is answered by its enrolled custodian.
     static let requestPurpose = ProximityCryptographicPurpose.featureSignature(
         "fernlet.duress.recovery.request.v1", framing: .rawPrefix)
-    /// The label the custodian signs the ``reply`` transcript under, and the requester verifies it
+    /// The label the custodian signs the `reply` transcript under, and the requester verifies it
     /// under: `fernlet.duress.recovery.reply.v1`, raw prefix, the twin of the registry entry
     /// ``replyDomain`` reads, like ``requestPurpose``, and distinct from it for the same reason as the
     /// two domains.

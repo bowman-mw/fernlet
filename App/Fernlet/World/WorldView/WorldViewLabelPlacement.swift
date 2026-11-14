@@ -50,7 +50,7 @@ nonisolated struct WorldViewMarkerPlan: Sendable {
     /// Where each label stands, by the marker's anchor token.
     let spots: [String: WorldViewLabelSpot]
 
-    /// The plan of every detail. Bounded: ``AtlasZoomDetail/all`` details, each ``WorldViewLabelPlacement/spots``.
+    /// The plan of every detail. Bounded: `AtlasZoomDetail/all` details, each ``WorldViewLabelPlacement/spots(for:detail:found:flights:)``.
     static func all(pins: [WorldViewCityPin], found: [AtlasZoomDetail: Set<HexCell>],
                     flights: WorldFlightMap) -> [AtlasZoomDetail: WorldViewMarkerPlan] {
         var plans: [AtlasZoomDetail: WorldViewMarkerPlan] = [:]

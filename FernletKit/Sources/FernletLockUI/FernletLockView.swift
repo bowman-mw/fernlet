@@ -1985,7 +1985,7 @@ private func pinDotsRow(current: String, total: Int) -> some View {
 /// place of the system keyboard so PIN entry stays visually consistent with the lock screens.
 ///
 /// Every key press ticks (report B24), the same on every key of every pad — see
-/// ``press(_:into:maxLength:feedback:preferences:)``.
+/// `press(_:into:maxLength:feedback:preferences:)`.
 public struct FernletNumericPad: View {
     /// The PIN accumulated so far; owned by the caller, mutated one digit at a time.
     @Binding var value: String
@@ -2161,7 +2161,7 @@ public extension View {
     ///
     /// - Important: apply this to the screen's CONTENT (inside its background layer), not to the
     ///   background — a `Color.ignoresSafeArea()` inside a `ScrollView` would scroll away.
-    ///   ``DuressPINSetupView`` is the one pad host that cannot use this, because its pad is a
+    ///   `DuressPINSetupView` is the one pad host that cannot use this, because its pad is a
     ///   `safeAreaInset`; it caps the pad's Dynamic Type instead.
     func fernletLockPadPage() -> some View {
         GeometryReader { proxy in

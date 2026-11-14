@@ -31,6 +31,7 @@ enum RecipeShareText {
     /// The text for `recipe`.
     ///
     /// - Parameters:
+    ///   - recipe: The recipe to write out.
     ///   - foodItems: The catalog rows the recipe's lines are bound to (`FoodCatalog.items(forRecipe:)`).
     ///     A line whose food is missing is left out, exactly as the recipe payload leaves it out.
     ///   - showCalories: The person's "show calories" setting; calories appear only when it is on.

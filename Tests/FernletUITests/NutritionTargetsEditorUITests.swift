@@ -11,15 +11,14 @@ final class NutritionTargetsEditorUITests: XCTestCase {
     @MainActor
     func testEditorRebalancesResidualAndFatPlaceholderTracksCalories() throws {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "Settings did not open")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10), "Settings did not open")
 
         // Into "Goal & nutrition", the pushed screen that hosts the targets editor.
         let row = app.buttons["Goal & nutrition"]
         for _ in 0..<8 where !(row.exists && row.isHittable) { app.swipeUp() }
         XCTAssertTrue(row.isHittable, "'Goal & nutrition' row not reachable")
         row.tap()
-        XCTAssertTrue(app.navigationBars["Goal & nutrition"].waitForExistence(timeout: 6),
-                      "did not push Goal & nutrition")
+        XCTAssertTrue(waitForPushedPage("Goal & nutrition", in: app), "did not push Goal & nutrition")
 
         let calories = app.textFields["nutritionTargets.calories"]
         let protein = app.textFields["nutritionTargets.protein"]
@@ -76,9 +75,28 @@ final class NutritionTargetsEditorUITests: XCTestCase {
     @MainActor private func setField(_ field: XCUIElement, to text: String, app: XCUIApplication) {
         field.tap()
         field.typeText(text)
-        // Number pad has no return key — tap the nav bar to dismiss it without navigating.
-        app.navigationBars["Goal & nutrition"].tap()
+        // Number pad has no return key — the keyboard's one Done accessory dismisses it without
+        // navigating (`keyboardDoneToolbar`, pinned by `KeyboardDoneAccessoryUITests`).
+        let done = app.toolbars.buttons["Done"].firstMatch
+        if done.waitForExistence(timeout: 2) { done.tap() }
+        _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 3)
     }
+
+    /// Waits for a page pushed inside the Settings sheet titled `title`: the World look draws the
+    /// title on the sheet's plate, beside `plate.back`, where the classic look had a navigation bar.
+    @MainActor
+    private func waitForPushedPage(_ title: String, in app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        let bar = app.navigationBars[title]
+        let plateTitle = app.staticTexts[title].firstMatch
+        let back = app.buttons["plate.back"].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if bar.exists || (back.exists && plateTitle.exists) { return true }
+            _ = back.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return bar.exists || (back.exists && plateTitle.exists)
+    }
+
 
     @MainActor private func resetIfPresent(_ app: XCUIApplication) {
         let reset = app.buttons["nutritionTargets.reset"]

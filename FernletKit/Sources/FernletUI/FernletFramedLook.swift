@@ -96,7 +96,7 @@ public extension EnvironmentValues {
     /// plate (``fernletPageTitleOnPlate``).
     @Entry var fernletTitleOnPlate: Bool = false
     /// Whether this pushed page's title is on the plate (`fernletPushedPage(_:)` set it): ``ScreenHeader``
-    /// drops its title here too. ``SwiftUI/View/fernletSheet()`` and ``FernletFocusedFlow`` clear it.
+    /// drops its title here too. ``SwiftUICore/View/fernletSheet()`` and ``FernletFocusedFlow`` clear it.
     @Entry var fernletPageTitleOnPlate: Bool = false
     /// Set by ``FernletFramedSection`` (and the framed `Form` style) on its rows, so a row's control can
     /// take the row's padding: the framed switch adds the vertical room a 54-pt row needs.

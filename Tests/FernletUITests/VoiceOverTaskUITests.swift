@@ -23,14 +23,17 @@ final class VoiceOverTaskUITests: XCTestCase {
 
     // MARK: - Log water
 
-    /// Both water paths: Home's one-tap add, then the water sheet's adjustable count.
+    /// Both water paths: the Log panel's one-tap add, then the water sheet's adjustable count.
     @MainActor
     func testLogWaterWithVoiceOverOnly() throws {
         let app = UXTestApp.launch()
         let walk = VoiceOverWalk(app, task: "Log water", in: self)
         try walk.audit("Home")
+        // The quick-log tiles live in the item bar's Log panel (World look), not on the map.
+        walk.openLogPanel()
+        try walk.audit("Log panel")
 
-        // One tap from Home. The count it changes is drawn on the tile, so the button must carry
+        // One tap from the Log panel. The count it changes is drawn on the tile, so the button must carry
         // that count as its own value — the only thing VoiceOver can re-read after the double-tap.
         let quickAdd = walk.button("home.water.quickAdd")
         let before = try XCTUnwrap(quickAdd.value as? String, "the quick add carries no value — the add is silent")
@@ -64,24 +67,26 @@ final class VoiceOverTaskUITests: XCTestCase {
 
     // MARK: - Log a mood
 
-    /// The one-tap check-in on Home, then a journal entry with a feeling.
+    /// The one-tap check-in in the Log panel, then a journal entry with a feeling.
     @MainActor
     func testLogAMoodWithVoiceOverOnly() throws {
         let app = UXTestApp.launch()
         let walk = VoiceOverWalk(app, task: "Log a mood", in: self)
+        // The mood card sits under the quick-log tiles in the item bar's Log panel (World look).
+        walk.openLogPanel()
 
         // Pick a mood that is not today's current one, so the double-tap is a real write.
         let tags = ["good", "quiet", "bright", "neutral", "tired", "hard"]
         let chip = try XCTUnwrap(
             tags.lazy.map { app.buttons["quickMood.\($0)"].firstMatch }.first { $0.exists && !$0.isSelected },
-            "no unselected mood chip is reachable on Home"
+            "no unselected mood chip is reachable in the Log panel"
         )
         walk.assertSpeaksWords(chip, describe: "mood chip")
         XCTAssertTrue(chip.label.hasPrefix("Mood: "), "a mood chip reads '\(chip.label)'")
         walk.activate(chip)
         XCTAssertTrue(chip.wait(for: \.isSelected, toEqual: true, timeout: 4),
                       "the chosen mood chip is not marked selected after the double-tap")
-        try walk.audit("Home · mood logged")
+        try walk.audit("Log panel · mood logged")
 
         // A written entry with a feeling, through the Journal tile and its sheet.
         walk.activate(walk.button(labelStartingWith: "Journal,"))
@@ -110,6 +115,8 @@ final class VoiceOverTaskUITests: XCTestCase {
         // double-tap needs: activated straight after the launch hand-over on a loaded Mac, the
         // tile's tap landed and no sheet came up.
         try walk.audit("Home")
+        // The Meals tile is one of the quick-log tiles in the item bar's Log panel (World look).
+        walk.openLogPanel()
 
         let tile = walk.button(labelStartingWith: "Meals,")
         let tileBefore = tile.label
@@ -140,8 +147,11 @@ final class VoiceOverTaskUITests: XCTestCase {
 
         walk.activate(undo)
         XCTAssertTrue(undo.waitForNonExistence(timeout: 4), "the toast stayed after Undo")
-        XCTAssertEqual(walk.button(labelStartingWith: "Meals,").label, tileBefore,
-                       "Undo did not take the meal back off the Meals tile")
+        // The tile re-reads the day after the undo lands, so its label is waited on, not sampled.
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", tileBefore),
+                                                 object: walk.button(labelStartingWith: "Meals,"))
+        XCTAssertEqual(XCTWaiter().wait(for: [restored], timeout: 6), .completed,
+                       "Undo did not take the meal back off the Meals tile (still '\(walk.button(labelStartingWith: "Meals,").label)', was '\(tileBefore)')")
     }
 
     // MARK: - Complete a workout
@@ -154,7 +164,7 @@ final class VoiceOverTaskUITests: XCTestCase {
 
         walk.press("Move")
         walk.element("screen.move")
-        try walk.audit("Move tab")
+        try walk.audit("Move panel")
         walk.press("Log")
         walk.element("sheet.workout")
         try walk.audit("Workout sheet")
@@ -167,7 +177,7 @@ final class VoiceOverTaskUITests: XCTestCase {
         walk.dismissHealthAccessIfShown()
     }
 
-    /// The guided workout from the Move tab's card to "Nicely done", through every set and rest.
+    /// The guided workout from the Move panel to "Nicely done", through every set and rest.
     ///
     /// What gets suggested depends on the goal and the day: the seeded Wellness program offers a
     /// cardio descriptor on some days ("Easy cardio · 20 min"), which has no guided runner and so no
@@ -182,8 +192,8 @@ final class VoiceOverTaskUITests: XCTestCase {
         let strength = walk.button("goalPreset.strength")
         walk.activate(strength)
         XCTAssertTrue(strength.wait(for: \.isSelected, toEqual: true, timeout: 4))
-        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
-        walk.press("settings.done")
+        walk.backToSettingsHub()
+        walk.closeSettings()
 
         walk.press("Move")
         // A run an earlier launch left live persists by design (the app-group run state), and the
@@ -191,7 +201,7 @@ final class VoiceOverTaskUITests: XCTestCase {
         // walk had stopped mid-run. Resuming is itself part of this task, so it is walked, not reset.
         let resume = app.buttons["workout.resume"].firstMatch
         if resume.waitForExistence(timeout: 2) {
-            try walk.audit("Move tab · workout in progress")
+            try walk.audit("Move panel · workout in progress")
             walk.activate(resume)
         } else {
             try startSuggestedRun(walk, app: app)
@@ -215,15 +225,24 @@ final class VoiceOverTaskUITests: XCTestCase {
         let strength = walk.button("goalPreset.strength")
         walk.activate(strength)
         XCTAssertTrue(strength.wait(for: \.isSelected, toEqual: true, timeout: 4))
-        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
-        walk.press("settings.done")
+        walk.backToSettingsHub()
+        walk.closeSettings()
 
         walk.press("Move")
-        guard app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) else {
-            throw XCTSkip("the Move card offers no Suggest (a plan or a run from an earlier launch is live)")
+        if app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) {
+            walk.press("workout.suggestToday")
+        } else {
+            // The Strength goal leaves today's card on a ready plan, which offers Start rather than
+            // Suggest; today's plan sheet offers the same Suggest flow.
+            walk.activate(walk.button(labelStartingWith: "Today, day "))
+            walk.press("move.day.plan")
+            walk.press("plan.suggest")
         }
-        walk.press("workout.suggestToday")
-        walk.press("workout.suggest")
+        // With today's plan already committed the suggestion sheet opens on that plan, its rows'
+        // info buttons and all; only an uncommitted day shows the configurator and its Suggest.
+        if app.buttons["workout.suggest"].firstMatch.waitForExistence(timeout: 4) {
+            walk.press("workout.suggest")
+        }
         let info = app.buttons["workout.howTo.open"].firstMatch
         guard info.waitForExistence(timeout: 10) else {
             throw XCTSkip("today's suggested plan has no catalog exercise with a how-to")
@@ -254,15 +273,28 @@ final class VoiceOverTaskUITests: XCTestCase {
     }
 
     /// Suggest → plan → Start now → Start: the way into a fresh guided run.
+    ///
+    /// Robust to the state an earlier test (or an earlier launch the same day) left today's plan in,
+    /// the way the how-to walk is: on a day with no plan the card offers Suggest; on a ready plan it
+    /// offers Start instead, and today's plan sheet offers the same Suggest flow. With today's plan
+    /// already committed the suggestion sheet opens on that plan, Start now and all; only an
+    /// uncommitted day shows the configurator and its Suggest.
     @MainActor
     private func startSuggestedRun(_ walk: VoiceOverWalk, app: XCUIApplication) throws {
-        walk.press("workout.suggestToday")
-        // The Move tab presents its own Suggest sheet, which carries no `sheet.*` anchor; its
-        // primary is the landmark.
-        walk.button("workout.suggest")
-        try walk.audit("Suggest sheet")
-        walk.press("workout.suggest")
+        if app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) {
+            walk.press("workout.suggestToday")
+        } else {
+            walk.activate(walk.button(labelStartingWith: "Today, day "))
+            walk.press("move.day.plan")
+            walk.press("plan.suggest")
+        }
         let startNow = app.buttons["workout.startGuided"].firstMatch
+        if app.buttons["workout.suggest"].firstMatch.waitForExistence(timeout: 4) {
+            // The Suggest sheet carries no `sheet.*` anchor; its primary is the landmark.
+            walk.button("workout.suggest")
+            try walk.audit("Suggest sheet")
+            walk.press("workout.suggest")
+        }
         guard startNow.waitForExistence(timeout: 10) else {
             throw XCTSkip("today's suggested plan has nothing the guided runner can walk (no Start now)")
         }
@@ -352,19 +384,19 @@ final class VoiceOverTaskUITests: XCTestCase {
         walk.element("onboarding.permissions")
         try walk.audit("Permissions")
         walk.press("Start Fernlet")
-        walk.element("screen.home", timeout: 10)
+        // Home is the World map; its status plate (which opens Today) is the first control it hands over.
+        walk.button("world.statusPlate", timeout: 10)
     }
 
     // MARK: - Fundamentals: changing a setting
 
-    /// Settings from Home's gear, Appearance, a choice, and back out.
+    /// Settings from the item bar, Appearance, a choice, and back out to the map.
     @MainActor
     func testChangeASettingWithVoiceOverOnly() throws {
         let app = UXTestApp.launch()
         let walk = VoiceOverWalk(app, task: "Change a setting", in: self)
 
-        walk.press("home.settings")
-        walk.element("sheet.settings")
+        walk.openSettingsPanel()
         try walk.audit("Settings")
         walk.press("settings.row.appearance")
         let dark = walk.button("Dark")
@@ -376,10 +408,12 @@ final class VoiceOverTaskUITests: XCTestCase {
         let system = walk.button("System")
         walk.activate(system)
         XCTAssertTrue(system.wait(for: \.isSelected, toEqual: true, timeout: 4))
-        // Done lives on the hub; the pushed page's back button ("Settings") returns to it.
-        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
-        walk.press("settings.done")
-        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].waitForNonExistence(timeout: 6))
+        // Close lives on the hub's plate; the pushed page's back button returns to it.
+        walk.backToSettingsHub()
+        walk.closeSettings()
+        XCTAssertTrue(app.buttons["settings.row.appearance"].firstMatch.waitForNonExistence(timeout: 6),
+                      "Settings did not close")
+        walk.button("world.item.settings", timeout: 6)
     }
 
     // MARK: - Fundamentals: finding help
@@ -390,11 +424,12 @@ final class VoiceOverTaskUITests: XCTestCase {
         let app = UXTestApp.launch()
         let walk = VoiceOverWalk(app, task: "Find help", in: self)
 
-        walk.press("home.settings")
-        walk.element("sheet.settings")
+        walk.openSettingsPanel()
+        // The Settings panel's framed search field (`settings.search`), which carries the search-field
+        // trait; under the classic look the system search drawer.
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 6), "Settings has no search field")
-        walk.assertSpeaksWords(search, describe: "settings search")
+        walk.assertFieldSpeaksWords(search, describe: "settings search")
         walk.type("help", into: search)
         walk.activate(walk.button(labelStartingWith: "Safety & reporting"))
         let contact = walk.element("safety.contactEmail")

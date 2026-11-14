@@ -26,7 +26,7 @@ final class DeleteAllDataUITests: XCTestCase {
     func testDeletingEverythingEmptiesTheAppAndSurvivesARelaunch() throws {
         // Launch 1: seeded, so there is real logged data to destroy.
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "settings sheet did not open")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10), "settings sheet did not open")
 
         let deleteButton = app.descendants(matching: .any)["settings.deleteAll"]
         scrollUntilHittable(deleteButton, in: app)
