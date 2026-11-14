@@ -21,7 +21,9 @@ import FernletDomainModel
 /// the base's foundation / survey / SR Legacy rows and above branded data for a plain query. Typed as
 /// `survey`, the FNDDS rows displaced 238 pinned answers across the corpus suites — SR Legacy
 /// ingredients lost to survey dishes ("salt" showed salted nuts) — so the layers fill in where the base
-/// has no answer rather than reorder the answers it gives.
+/// has no answer rather than reorder the answers it gives. On the recipe surfaces' identity order a
+/// layer row sits below every base and branded row that is the typed ingredient
+/// (`FoodItemSearch.ranksAhead`).
 ///
 /// Both are generated, never authored: `Scripts/food-catalog/generic_layers.py` writes them by rule from
 /// manifest-pinned inputs (`FoodDataSource/FoodCatalogLayerManifest.json`) and refuses to run if an id
@@ -59,6 +61,15 @@ public nonisolated enum BundledFoodLayers {
 /// first. `count` is the sum of the layers' counts (their ids are disjoint by construction), and the
 /// spelling vocabulary is every layer's words (``FoodSearchVocabulary`` sums a word's counts).
 ///
+/// **Typed searches only.** The layers answer a search only inside a typed search
+/// (``TypedSearchScope/isTyped``): candidate fetches, exact-name lookups, brand-field and initialism
+/// pools from a machine-generated search (quick-log, the resolver, the recipe importer's bind, the swap
+/// sheet's pool) read the base alone. Measured 2026-11-13: with the layers in the machine pools, "cup of
+/// coffee" bound CONFIDENTLY to "Coffee creamer, liquid" and "string cheese" / "sprinkles" fell from a
+/// confident bind to review. A person choosing from a typed list can weigh a layer row; an automatic
+/// bind cannot. Id lookups (`item(id:)`, `items(ids:)`) always answer from every layer, so a logged
+/// layer row still resolves.
+///
 /// Thread-safety: immutable after init; every layer is itself `Sendable`.
 public nonisolated final class LayeredBundledFoodSource: BundledFoodSource, @unchecked Sendable {
     /// The most layers one source serves; more are dropped at init (a bound, not a use case).
@@ -71,16 +82,22 @@ public nonisolated final class LayeredBundledFoodSource: BundledFoodSource, @unc
         self.layers = Array(layers.prefix(Self.maximumLayers))
     }
 
+    /// The layers a search may read: every layer inside a typed search, the base alone otherwise
+    /// (see the type's "Typed searches only").
+    private var searchLayers: ArraySlice<BundledFoodSource> {
+        TypedSearchScope.isTyped ? layers[...] : layers.prefix(1)
+    }
+
     /// Every layer's rows.
     public var count: Int { layers.reduce(0) { $0 + $1.count } }
 
     public func candidates(forQuery query: String, stripsStopwords: Bool) -> [FoodItem] {
-        Self.union(layers.map { $0.candidates(forQuery: query, stripsStopwords: stripsStopwords) })
+        Self.union(searchLayers.map { $0.candidates(forQuery: query, stripsStopwords: stripsStopwords) })
     }
 
     public func candidates(forQuery query: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
         guard limit > 0 else { return [] }
-        let lists = layers.map { $0.candidates(forQuery: query, stripsStopwords: stripsStopwords, limit: limit) }
+        let lists = searchLayers.map { $0.candidates(forQuery: query, stripsStopwords: stripsStopwords, limit: limit) }
         return Array(Self.union(lists).prefix(limit))
     }
 
@@ -106,7 +123,7 @@ public nonisolated final class LayeredBundledFoodSource: BundledFoodSource, @unc
     }
 
     public func exactMatch(normalizedName: String) -> FoodItem? {
-        for layer in layers {
+        for layer in searchLayers {
             if let match = layer.exactMatch(normalizedName: normalizedName) { return match }
         }
         return nil
@@ -121,7 +138,7 @@ public nonisolated final class LayeredBundledFoodSource: BundledFoodSource, @unc
 
     public func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
         guard limit > 0 else { return [] }
-        let lists = layers.map {
+        let lists = searchLayers.map {
             $0.brandFieldCandidates(brandWord: brandWord, productQuery: productQuery, stripsStopwords: stripsStopwords, limit: limit)
         }
         return Array(Self.union(lists).prefix(limit))
@@ -135,7 +152,7 @@ public nonisolated final class LayeredBundledFoodSource: BundledFoodSource, @unc
 
     public func initialismCandidates(letters: [String], productQuery: String, limit: Int) -> [FoodItem] {
         guard limit > 0 else { return [] }
-        let lists = layers.map { $0.initialismCandidates(letters: letters, productQuery: productQuery, limit: limit) }
+        let lists = searchLayers.map { $0.initialismCandidates(letters: letters, productQuery: productQuery, limit: limit) }
         return Array(Self.union(lists).prefix(limit))
     }
 

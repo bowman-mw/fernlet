@@ -22,14 +22,14 @@ struct G1FoodSearchProbeTests {
     /// The probe's queries: the review's open cases.
     static let queries = [
         "eg", "pb", "oj", "v8", "2% milk", "7 up", "7up", "chipotle chicken", "green chilis",
-        "candy corn", "lemon", "lime", "apple", "garlic", "strawberry", "cinnamon", "mcdonalds fries"
+        "candy corn", "lemon", "lime", "apple", "garlic", "strawberry", "cinnamon", "mcdonalds fries",
+        "mayonnaise", "salsa", "walnuts", "vegetable oil", "banana", "salmon", "tamale pork", "turkey burger"
     ]
 
     @Test func printsTheOpenCases() throws {
         let env = ProcessInfo.processInfo.environment
         guard env["FERNLET_G1_PROBE"] != nil else { return }
-        let base = try #require(SQLiteBundledFoodSource())
-        let catalog = FoodCatalog(source: base)
+        let catalog = FoodCatalog.probeBundled()
         var lines = ["===G1-PROBE=== base"]
         lines += Self.table(catalog)
         if let path = env["FERNLET_REPLAY_BRANDED"], FileManager.default.fileExists(atPath: path) {

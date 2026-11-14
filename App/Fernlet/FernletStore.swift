@@ -7737,6 +7737,14 @@ final class FernletStore {
         FernletAuditLog.log("messagesCatalog.publish.unavailable", context: [:])
     }
 
+    /// Roadmap G1, F10: a branded catalog load that FAILED (offline, not downloaded yet) is tried again
+    /// on a later foreground activation, at most once per `BrandedCatalogResourceLoader.retryInterval`,
+    /// instead of waiting for the next cold launch. A no-op once the catalog is attached.
+    func retryBrandedCatalogIfNeeded() {
+        let catalog = foodCatalog
+        Task { [brandedCatalogLoader] in await brandedCatalogLoader.retryIfNeeded(into: catalog) }
+    }
+
     func deferredPostLaunchTasks() {
         let deferredDayKey = todayKey
         derivedSignalsService.scheduleDeferredRebuild(

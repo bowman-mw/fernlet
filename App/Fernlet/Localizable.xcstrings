@@ -18071,6 +18071,22 @@
         }
       }
     },
+    "Enter the nutrition for the amount on this line." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce la información nutricional de la cantidad de esta línea."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingresa la información nutricional de la cantidad de esta línea."
+          }
+        }
+      }
+    },
     "Enter your current passcode again — Fernlet needs it to re-key your sealed notes." : {
       "localizations" : {
         "es" : {
@@ -26236,6 +26252,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mantén esta pestaña abierta. Cuando alguien de esa sesión vuelva a estar cerca, se reconectarán automáticamente y lo que todavía esté en camino terminará de llegar."
+          }
+        }
+      }
+    },
+    "Keep typing to search." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue escribiendo para buscar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue escribiendo para buscar."
           }
         }
       }

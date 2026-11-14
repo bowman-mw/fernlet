@@ -265,8 +265,14 @@ struct FoodBrandSearchFixTests {
             #expect(FoodBrandAgreement.states(["m", "m"], in: FoodItemSearch.normalized(first.name)), "\(typed): \(first.name)")
         }
         // "turkey" is in Jennie-O Turkey Store's brand field; it must not put that maker first.
-        let cold = catalog.results(for: "turkey burger", context: .userTyped).map(\.id)
+        // The generic layers (2026-11-13) answer typed searches only, so a layer row is checked by its
+        // name rather than against the machine pool.
+        let cold = catalog.results(for: "turkey burger", context: .userTyped)
         let machine = Set(catalog.results(for: "turkey burger", limit: 60, context: .machineGenerated).map(\.id))
-        #expect(cold.allSatisfy(machine.contains), "a generic query shows only rows whose names say it")
+        #expect(cold.allSatisfy { row in
+            row.dataType == .supplementalReference
+                ? ["turkey", "burger"].allSatisfy(FoodItemSearch.normalized(row.name).contains)
+                : machine.contains(row.id)
+        }, "a generic query shows only rows whose names say it")
     }
 }

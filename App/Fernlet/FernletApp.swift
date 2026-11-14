@@ -390,24 +390,29 @@ struct FernletApp: App {
             // while the app was backgrounded — even if the Move tab isn't the one on screen.
             // Roll the day FIRST (a foreground can cross local midnight without onAppear), so a
             // finish reconciled here anchors/back-dates to the correct day.
-            if case .ready(let store) = loader.phase {
-                store.refreshCurrentDayIfNeeded()
-                store.reconcileGuidedRunFromAppGroup()
-                // Same for a cooking Next/Finish made from the Live Activity / Siri while
-                // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
-                // orphan cooking activity is retired and the walker/card stay in step.
-                store.reconcileCookingRunFromAppGroup()
-                // Phase-6 gate retry: a launch that reached readyContent while the
-                // preferences keychain was unreadable (pre-first-unlock prewarm /
-                // background relaunch) DEFERRED the backup-exclusion resolution; every
-                // foreground activation retries until it resolves. A no-op once
-                // `didResolveBackupExclusionDefault` is set.
-                resolveBackupExclusionDefaultIfNeeded()
-                // P5 item 10: the foreground rising leg, pushed AFTER
-                // `refreshStateFromKeychain()` so the duress fact is the current one.
-                pushProximityRunPolicy(store, phase: newPhase, protectedData: protectedDataAvailableNow)
-            }
+            if case .ready(let store) = loader.phase { handleForegroundActivation(store) }
         }
+    }
+
+    /// The ready store's half of a foreground activation (`handleScenePhaseChange`).
+    private func handleForegroundActivation(_ store: FernletStore) {
+        store.refreshCurrentDayIfNeeded()
+        store.reconcileGuidedRunFromAppGroup()
+        // Same for a cooking Next/Finish made from the Live Activity / Siri while
+        // backgrounded — reconcile even if the Food tab isn't the one on screen, so an
+        // orphan cooking activity is retired and the walker/card stay in step.
+        store.reconcileCookingRunFromAppGroup()
+        // Phase-6 gate retry: a launch that reached readyContent while the
+        // preferences keychain was unreadable (pre-first-unlock prewarm /
+        // background relaunch) DEFERRED the backup-exclusion resolution; every
+        // foreground activation retries until it resolves. A no-op once
+        // `didResolveBackupExclusionDefault` is set.
+        resolveBackupExclusionDefaultIfNeeded()
+        // Roadmap G1, F10: a branded catalog load that failed earlier this launch tries again.
+        store.retryBrandedCatalogIfNeeded()
+        // P5 item 10: the foreground rising leg, pushed AFTER
+        // `refreshStateFromKeychain()` so the duress fact is the current one.
+        pushProximityRunPolicy(store, phase: .active, protectedData: protectedDataAvailableNow)
     }
 
     var body: some Scene {

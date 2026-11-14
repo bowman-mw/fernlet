@@ -601,13 +601,29 @@ public nonisolated enum FoodItemSearch {
     /// asking for more than the window (the typed surface's duplicate collapse, roadmap G1, which reads
     /// past 60 rows when one product fills them, as 53 "Candy Corn" rows did) gets the same top 60 as
     /// every other caller. R2: bounded by `limit`.
+    ///
+    /// The window counts ``demotionWindow`` rows that are NOT generic-layer rows
+    /// (`.supplementalReference`, 2026-11-13), and carries every layer row ranked among them: the
+    /// layers rank above branded data, so counted they pushed the branded rows that set the window's
+    /// best ingredient score out of it, and "salmon" stopped sinking "Salmon nuggets, breaded".
     fileprivate static func demotingWindow(
         of ranked: [(foodItem: FoodItem, score: Int)], limit: Int, query: String
     ) -> [(foodItem: FoodItem, score: Int)] {
-        let window = Array(ranked.prefix(demotionWindow))
+        let window = Array(ranked.prefix(windowLength(of: ranked)))
         let demoted = PreparedDishHeuristic.demotingDishes(scored: window, forQuery: query)
         let rest = ranked.dropFirst(window.count).prefix(max(0, limit - window.count))
         return Array((demoted + rest).prefix(limit))
+    }
+
+    /// How many leading rows of `ranked` hold ``demotionWindow`` non-layer rows (see
+    /// `demotingWindow`). R2: one bounded pass over `ranked`.
+    private static func windowLength(of ranked: [(foodItem: FoodItem, score: Int)]) -> Int {
+        var counted = 0
+        for (offset, row) in ranked.enumerated() {
+            if row.foodItem.dataType != .supplementalReference { counted += 1 }
+            if counted == demotionWindow { return offset + 1 }
+        }
+        return ranked.count
     }
 
     /// Exact, bounded queries the source may run after the full AND query returns zero. A one-word
@@ -731,12 +747,28 @@ public nonisolated enum FoodItemSearch {
         if sourcePriority(first.foodItem.source) != sourcePriority(second.foodItem.source) {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
         }
+        if let baseFirst = nonLayerLeadsLayer(first, second) { return baseFirst }
         if first.identity != second.identity { return first.identity > second.identity }
         let firstType = dataTypePriority(first.foodItem.dataType, brandQuery: isBrandQuery)
         let secondType = dataTypePriority(second.foodItem.dataType, brandQuery: isBrandQuery)
         if firstType != secondType { return firstType > secondType }
         if first.score != second.score { return first.score > second.score }
         return first.foodItem.name.localizedStandardCompare(second.foodItem.name) == .orderedAscending
+    }
+
+    /// Among rows that ARE the typed ingredient (the identity order of the recipe surfaces), every
+    /// base-catalog row leads a generic-layer row (`.supplementalReference`, 2026-11-13) whatever their
+    /// identity levels: there the layers fill in where the base and branded data have no answer, never
+    /// reorder the answers they give. Measured on the ingredient corpus: with the layer rows competing on
+    /// identity, "salmon" led with "Salmon nuggets", and "mayonnaise" filled its six with layer
+    /// variants (light, fat free) and lost its plain row. Layer rows stay one block below, so the order
+    /// is still total. `nil` when the rule does not decide the pair.
+    private static func nonLayerLeadsLayer(_ first: RankedRow, _ second: RankedRow) -> Bool? {
+        guard first.identity > 0, second.identity > 0 else { return nil }
+        let firstLayer = first.foodItem.dataType == .supplementalReference
+        let secondLayer = second.foodItem.dataType == .supplementalReference
+        guard firstLayer != secondLayer else { return nil }
+        return secondLayer
     }
 
     /// Half of the search path's presentation floor — research §26 fix 1.8: **does this row's own

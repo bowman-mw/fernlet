@@ -230,4 +230,26 @@ struct G1FoodSearchFixesTests {
         }.value
         #expect(superseded.isEmpty)
     }
+
+    // MARK: - Generic layers answer typed searches only
+
+    /// The FNDDS / CNF layer rows reach a typed list, never a machine-generated pool (quick-log, the
+    /// resolver, the importer's bind): with them in the machine pools "cup of coffee" bound confidently
+    /// to coffee creamer (measured 2026-11-13).
+    @Test func layerRowsAnswerTypedSearchesOnly() {
+        let catalog = FoodCatalog.bundled()
+        // "Tamale, pork" is an FNDDS layer row; the base has no row of that name.
+        let typed = catalog.results(for: "tamale pork", limit: 6, context: .userTyped)
+        let machine = catalog.results(for: "tamale pork", limit: 6, context: .machineGenerated)
+        #expect(typed.contains { $0.dataType == .supplementalReference })
+        #expect(!machine.contains { $0.dataType == .supplementalReference })
+    }
+
+    /// Among rows that are the typed ingredient, a base reference row leads a layer row: "salmon" on
+    /// the identity order leads with a base USDA salmon, not the FNDDS "Salmon nuggets".
+    @Test func baseReferenceRowsLeadLayerRowsOnTheIdentityOrder() throws {
+        let catalog = FoodCatalog.bundled()
+        let top = try #require(catalog.results(for: "salmon", context: .userTyped, ranking: .ingredientIdentity).first)
+        #expect(top.dataType != .supplementalReference, "top: \(top.name)")
+    }
 }

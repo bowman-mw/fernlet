@@ -1076,7 +1076,10 @@ struct FoodSearchCorpusTests {
         // misfiled "Apple & Cheese Tray", which left the generic tier for both. 16 since the 2026-10-29
         // brand fixes: typed `quest protein bar` now answers with Quest's own bars through the brand-field
         // route, while the resolver — deliberately untouched — still pools "Formulated Bar, SOUTH BEACH".
-        #expect(stillDiverging.count == 16, "divergences: \(stillDiverging.map(\.query))")
+        // 18 since the generic food layers (2026-11-13): they answer typed searches only, never the
+        // resolver's pool, so two corpus queries now get a layer row from search while the resolver
+        // keeps its base answer — the intended split (an automatic bind never picks a layer row).
+        #expect(stillDiverging.count == 18, "divergences: \(stillDiverging.map(\.query))")
     }
 
     // MARK: - Catalog composition (the vintage proxy)
