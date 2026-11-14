@@ -219,10 +219,15 @@ final class VoiceOverTaskUITests: XCTestCase {
         walk.closeSettings()
 
         walk.press("Move")
-        guard app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) else {
-            throw XCTSkip("the Move card offers no Suggest (a plan or a run from an earlier launch is live)")
+        if app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) {
+            walk.press("workout.suggestToday")
+        } else {
+            // The Strength goal leaves today's card on a ready plan, which offers Start rather than
+            // Suggest; today's plan sheet offers the same Suggest flow.
+            walk.activate(walk.button(labelStartingWith: "Today, day "))
+            walk.press("move.day.plan")
+            walk.press("plan.suggest")
         }
-        walk.press("workout.suggestToday")
         walk.press("workout.suggest")
         let info = app.buttons["workout.howTo.open"].firstMatch
         guard info.waitForExistence(timeout: 10) else {
