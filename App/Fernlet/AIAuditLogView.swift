@@ -169,6 +169,7 @@ struct AIAuditRow: Identifiable, Equatable {
         case "workout-adjustment": return .known("Workout adjustment")
         case "ingredient-substitution": return .known("Ingredient substitution")
         case "recipe-extraction": return .known("Reading a recipe page")
+        case "recipe-text-parse": return .known("Reading pasted recipe text")
         case "journal-memory-summary": return .known("Journal memory summary")
         default: return .recorded(payloadKind)
         }

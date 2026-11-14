@@ -27,12 +27,28 @@ struct RecipeIngredientRows: View {
     @Binding var expandedId: UUID?
     let store: FernletStore
     let onRemove: (UUID) -> Void
+    /// AI recipe paste-and-parse (roadmap G1): the note under each pasted row to look at, shown while
+    /// the row still holds what the reader put there. Empty everywhere else.
+    var pastedRowNotes: [UUID: PastedRecipeSeed.RowNote] = [:]
 
     var body: some View {
         ForEach($ingredients) { $ingredient in
+            VStack(alignment: .leading, spacing: 4) {
+                row($ingredient)
+                if let note = pastedRowNotes[ingredient.id], note.applies(to: ingredient) {
+                    PastedRowNoteView(note: note)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ binding: Binding<ManualRecipeIngredientInput>) -> some View {
+        let ingredient = binding.wrappedValue
+        Group {
             if expandedId == ingredient.id || ingredient.trimmedName.isEmpty {
                 RecipeIngredientEditor(
-                    ingredient: $ingredient,
+                    ingredient: binding,
                     catalog: store.foodCatalog,
                     onSaveCustomIngredient: { store.saveCustomIngredient($0) },
                     onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },

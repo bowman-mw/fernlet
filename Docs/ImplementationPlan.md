@@ -30,7 +30,7 @@ Legend: ✅ shipped · ⚠️ partial (residuals on the tracker) · ⏸ deferred
 | **M1** — Meal-tracking & food-search overhaul | ⚠️ | Core shipped (data-type classification, generic-first ranking, SQLite catalog). Residue: chain-restaurant importer, dynamic product-image discovery — see [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md). |
 | **P3** — Memory, derived signals, trends | ⚠️ | Derived signals + trends shipped. Outstanding: editable Core Memory UI, natural-language forget/edit, derived-signal inspection. |
 | **P4a** — Food KB, recipes, micronutrients | ⚠️ | Backend shipped (`micronutrientTotals(for:)`); no recipe-builder UI binding yet. |
-| **P4** — Ambient, recipe, day-history features | ⚠️ | Mostly done. Day Detail, most ambient cards (the gentle-offer nudge among them, see Phase 16) and the overnight `daySummaryText` batch are built — the batch is `backfillDaySummaries` in `LaunchPreparationService`, on-device only. Residue: AI recipe paste-and-parse, seasonal rhythm, forgotten-good-things prompts. |
+| **P4** — Ambient, recipe, day-history features | ⚠️ | Mostly done. Day Detail, most ambient cards (the gentle-offer nudge among them, see Phase 16) and the overnight `daySummaryText` batch are built — the batch is `backfillDaySummaries` in `LaunchPreparationService`, on-device only. AI recipe paste-and-parse is built (2026-11-14). Residue: seasonal rhythm, forgotten-good-things prompts. |
 | **1** — Baseline hygiene & file split | ✅ | |
 | **2** — Scoring v3 | ✅ | |
 | **3 / S3** — Privacy modules, AI boundary, sealed stores | ✅ | The `FernletKit` carve-up + compile-time S3 wall, CI-enforced (`Scripts/spm-wall-check.sh`). One optional carve item remains (AI-file inversions, [SPM-Module-Carveup-Plan.md](SPM-Module-Carveup-Plan.md) §14). |
@@ -339,6 +339,7 @@ Tasks:
 **Recipe creation — primary path (paste and parse):**
 - Update `aiParseRecipe` to return ingredient names and quantities rather than estimated macros. Resolve each ingredient through `FoodItemRepository`. Queue unresolved items as `AIAnalysisRetry` entries.
 - Build two-step recipe modal: (1) paste text → AI parses ingredient list → each ingredient resolved and shown with its source, (2) review per-serving macros/calories/micronutrients → set servings → save as `RecipeDefinition`.
+  - Prototype status (2026-11-14, owner-approved design): built as `PastedRecipeReader` (AIProviders). The Import recipe screen's text field reads any recipe text that is not Fernlet recipe data: the on-device model returns name, servings, ingredient lines (amount, unit, food) and steps, never numbers; with AI off, resting or failing, a line-by-line reader runs instead and the editor says so. Each line binds in code through the importer's line parser and a `.machineGenerated` catalog search, and the manual recipe editor opens pre-filled as the review step: confident binds are ordinary rows, weak or typical-size binds carry "Check this match", and lines nothing matched stay unbound for the person to pick. Text is capped at 4,000 characters. Owner choices: no `AIAnalysisRetry` queue for unmatched lines (the person picks in review) and no "nutrition may have changed" notice in this round.
 - Surface a "nutrition may have changed" notice on a saved recipe if any of its ingredient `FoodItem` records are updated after the recipe was last viewed.
 
 **Recipe creation — secondary path (ingredient builder):**
@@ -381,7 +382,7 @@ Exit criteria:
 Goal: add low-cost delight, utility, and day history browsing without touching deferred systems.
 
 Tasks:
-- Phase 4 status (2026-11-12): mostly done — Day Detail, most ambient cards and the overnight day-summary batch are built; AI recipe paste-and-parse, seasonal rhythm and forgotten-good-things prompts remain. The per-task notes below are as written in 2026-05.
+- Phase 4 status (2026-11-14): mostly done — Day Detail, most ambient cards, the overnight day-summary batch and AI recipe paste-and-parse are built; seasonal rhythm and forgotten-good-things prompts remain. The per-task notes below are as written in 2026-05.
 - Add year-ago journal card.
   - Prototype status: partially present through journal history surfaces; a dedicated year-ago ambient card still needs review.
 - Add macro-gap meal suggestions from meal history.
@@ -393,7 +394,7 @@ Tasks:
 - Add "Today's intent" empty-state line (after 14:00 local with nothing logged).
   - Prototype status: not complete.
 - Add recipe parsing with AI path plus manual fallback.
-  - Prototype status: manual recipe builder is complete; URL recipe import exists separately; full AI paste-and-parse recipe flow remains incomplete.
+  - Prototype status: manual recipe builder is complete; URL recipe import exists separately; AI paste-and-parse is built (2026-11-14, see Phase P4a).
 - Add `SignalsCard` on home screen and `TrendsModal` showing all five derived signals.
   - Prototype status: not complete.
 - Add Day Detail Sheet:
@@ -900,7 +901,7 @@ code.
   more moves, aliases and a calf-raise naming fix. Leftovers from #143: the rest-day line offering a
   walk when walking is barred, sport drills dropped rather than replaced, the deload mark read only
   for Bodybuilding, "Easy cardio" offering only seated mobility, and duplicate note lines.
-- **AI recipe paste-and-parse** (Phase P4a). On-device; it does not need iOS 27.
+- **AI recipe paste-and-parse** (Phase P4a). On-device; it does not need iOS 27. Built 2026-11-14 (`PastedRecipeReader`).
 
 **World.**
 

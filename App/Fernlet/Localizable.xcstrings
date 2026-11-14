@@ -6062,6 +6062,7 @@
       }
     },
     "A recipe shared as text is for reading and won't import here. To save one, have it sent with Send in Messages or shared nearby." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11737,6 +11738,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Compáralos con tus límites"
+          }
+        }
+      }
+    },
+    "Check this match. You pasted “%@”." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa esta coincidencia. Has pegado “%@”."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa esta coincidencia. Pegaste “%@”."
           }
         }
       }
@@ -34840,6 +34857,7 @@
       }
     },
     "Paste Fernlet recipe data here" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -34903,6 +34921,22 @@
         }
       }
     },
+    "Paste a recipe from anywhere. I'll read its ingredients and steps, match each ingredient to a food, and open it for you to check before it's saved." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega una receta de cualquier sitio. Leeré sus ingredientes y pasos, emparejaré cada ingrediente con un alimento y te la abriré para que la revises antes de guardarla."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega una receta de cualquier lugar. Leeré sus ingredientes y pasos, emparejaré cada ingrediente con un alimento y te la abriré para que la revises antes de guardarla."
+          }
+        }
+      }
+    },
     "Paste a recipe link or Fernlet recipe data." : {
       "localizations" : {
         "es" : {
@@ -34915,6 +34949,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pega el enlace de una receta o datos de receta de Fernlet."
+          }
+        }
+      }
+    },
+    "Paste a recipe's text here" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega aquí el texto de una receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega aquí el texto de una receta"
           }
         }
       }
@@ -35622,6 +35672,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Elige un código distinto del que usas para desbloquear Fernlet. Fernlet no acepta el mismo para ambos."
+          }
+        }
+      }
+    },
+    "Pick a food for “%@”." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un alimento para “%@”."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un alimento para “%@”."
           }
         }
       }
@@ -37589,6 +37655,38 @@
         }
       }
     },
+    "Reading pasted recipe text" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lectura del texto de una receta pegada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lectura del texto de una receta pegada"
+          }
+        }
+      }
+    },
+    "Reading recipe" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leyendo la receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leyendo la receta"
+          }
+        }
+      }
+    },
     "Reading what you caught…" : {
       "localizations" : {
         "es" : {
@@ -37881,6 +37979,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Compartir recetas"
+          }
+        }
+      }
+    },
+    "Recipe text" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto de la receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto de la receta"
           }
         }
       }
@@ -43486,6 +43600,7 @@
       }
     },
     "Shared recipe text" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -48435,6 +48550,38 @@
         }
       }
     },
+    "The quiet helper is off or resting, so I read this line by line, and only its first part because it was long. Check the name, ingredients and steps." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El ayudante silencioso está apagado o descansando, así que he leído esto línea por línea, y solo la primera parte porque era largo. Revisa el nombre, los ingredientes y los pasos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El ayudante silencioso está apagado o descansando, así que leí esto línea por línea, y solo la primera parte porque era largo. Revisa el nombre, los ingredientes y los pasos."
+          }
+        }
+      }
+    },
+    "The quiet helper is off or resting, so I read this line by line. Check the name, ingredients and steps." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El ayudante silencioso está apagado o descansando, así que he leído esto línea por línea. Revisa el nombre, los ingredientes y los pasos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El ayudante silencioso está apagado o descansando, así que leí esto línea por línea. Revisa el nombre, los ingredientes y los pasos."
+          }
+        }
+      }
+    },
     "The recipe's photo goes along, if it has one." : {
       "localizations" : {
         "es" : {
@@ -48625,6 +48772,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El estante se va llenando"
+          }
+        }
+      }
+    },
+    "The text was long, so I read only its first part. Check that nothing is missing." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El texto era largo, así que solo he leído la primera parte. Comprueba que no falte nada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El texto era largo, así que solo leí la primera parte. Revisa que no falte nada."
           }
         }
       }
@@ -80529,6 +80692,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Obteniendo la receta..."
+          }
+        }
+      }
+    },
+    "recipeImport.pasted.noIngredients" : {
+      "comment" : "Import recipe screen: the pasted recipe text was read but no ingredient line was found. The quoted example is an ingredient line; translate it as a natural one.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I couldn't find any ingredients in that text. Put each ingredient on its own line, starting with its amount, like \"2 cups flour\"."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No he encontrado ningún ingrediente en ese texto. Pon cada ingrediente en su propia línea, empezando por la cantidad, como “2 tazas de harina”."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No encontré ningún ingrediente en ese texto. Pon cada ingrediente en su propia línea, empezando con la cantidad, como “2 tazas de harina”."
           }
         }
       }
