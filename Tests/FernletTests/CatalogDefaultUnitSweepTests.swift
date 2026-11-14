@@ -63,8 +63,12 @@ struct CatalogDefaultUnitSweepTests {
         let fileIDs = try Self.catalogIDs()
         try #require(fileIDs.count == FoodSearchCorpusTests.shippedRowCount,
                      "the sweep must read the whole shipped catalog")
-        let ids = fileIDs + BundledFoodSupplement.items().map(\.id)
-        try #require(ids.count == FoodSearchCorpusTests.loadedRowCount, "…and the rows served beside it")
+        let layerIDs = try (BundledFoodLayersTests.ids(inResource: BundledFoodLayers.surveyResourceName)
+            + BundledFoodLayersTests.ids(inResource: BundledFoodLayers.canadianNutrientFileResourceName))
+            .compactMap(UUID.init(uuidString:))
+        let ids = fileIDs + BundledFoodSupplement.items().map(\.id) + layerIDs
+        try #require(ids.count == FoodSearchCorpusTests.baseLoadedRowCount + FoodSearchCorpusTests.layerRowCount,
+                     "…and the rows served beside it: the supplement and the generic layers")
         let catalog = FoodCatalog.bundled()
         var failures: [String: Int] = [:]
         var swept = 0

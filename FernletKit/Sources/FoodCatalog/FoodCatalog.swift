@@ -90,17 +90,24 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     }
 
     /// Convenience for production: opens the bundled `FoodCatalog.sqlite` together with the rows that
-    /// ship beside it (``BundledFoodSupplement``, served through ``SupplementedBundledFoodSource``),
-    /// falling back to an empty catalog (user items only) if the database is missing. `bundle` defaults
-    /// to this module's resource bundle (`.module`); it is passed as `nil` here because `.module` is
-    /// synthesized as internal and cannot appear as a default-argument value in this public API.
-    public static func bundled(bundle: Bundle? = nil) -> FoodCatalog {
+    /// ship beside it (``BundledFoodSupplement``, served through ``SupplementedBundledFoodSource``) and
+    /// the generic layers (``BundledFoodLayers``: FNDDS survey foods and the Canadian Nutrient File,
+    /// unioned after the base through ``LayeredBundledFoodSource``), falling back to an empty catalog
+    /// (user items only) if the base database is missing. `bundle` defaults to this module's resource
+    /// bundle (`.module`); it is passed as `nil` here because `.module` is synthesized as internal and
+    /// cannot appear as a default-argument value in this public API. `includesLayers: false` serves the
+    /// base and its supplement only — the catalog as it was before the layers, which the search probes
+    /// replay to measure what the layers change.
+    public static func bundled(bundle: Bundle? = nil, includesLayers: Bool = true) -> FoodCatalog {
         guard let base = SQLiteBundledFoodSource(bundle: bundle) else {
             return FoodCatalog(source: InMemoryBundledFoodSource())
         }
-        return FoodCatalog(source: SupplementedBundledFoodSource(
+        let supplemented = SupplementedBundledFoodSource(
             primary: base, supplement: BundledFoodSupplement.items(bundle: bundle)
-        ))
+        )
+        let layers = includesLayers ? BundledFoodLayers.sources(bundle: bundle) : []
+        guard !layers.isEmpty else { return FoodCatalog(source: supplemented) }
+        return FoodCatalog(source: LayeredBundledFoodSource(layers: [supplemented] + layers))
     }
 
     private var userItems: [FoodItem] {

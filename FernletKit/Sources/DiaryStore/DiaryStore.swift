@@ -230,7 +230,7 @@ public final class DiaryStore {
         self.memories = snapshot.memories
         self.goals = snapshot.goals
         self.workshop = snapshot.workshop
-        self.foodItems = snapshot.foodItems.filter { $0.source != .usda }
+        self.foodItems = snapshot.foodItems.filter { !$0.source.isBundledReference }
         self.recipes = snapshot.recipes
         self.dailyScores = Self.boundedDailyScores(snapshot.dailyScores)
         self.companionThought = nil
@@ -2044,7 +2044,7 @@ public final class DiaryStore {
         memories = snapshot.memories
         goals = snapshot.goals
         workshop = snapshot.workshop
-        foodItems = snapshot.foodItems.filter { $0.source != .usda }
+        foodItems = snapshot.foodItems.filter { !$0.source.isBundledReference }
         recipes = snapshot.recipes
         // R3: a synced blob must not be able to reinstate an unbounded score history. Its rows carry
         // no day summaries (they stay on the device that wrote them); put this device's back.

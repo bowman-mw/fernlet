@@ -306,7 +306,7 @@ public nonisolated enum FoodItemSearch {
             entries
                 .filter { $0.normalizedName == normalizedName }
                 .sorted {
-                    if $0.foodItem.source != $1.foodItem.source {
+                    if FoodItemSearch.sourcePriority($0.foodItem.source) != FoodItemSearch.sourcePriority($1.foodItem.source) {
                         return FoodItemSearch.sourcePriority($0.foodItem.source) > FoodItemSearch.sourcePriority($1.foodItem.source)
                     }
                     return $0.foodItem.name.localizedStandardCompare($1.foodItem.name) == .orderedAscending
@@ -728,7 +728,7 @@ public nonisolated enum FoodItemSearch {
         // whole query and the product alone — so their scores cannot order them. Below history, so
         // the brand's product this person logs still comes first.
         if first.viaBrandField != second.viaBrandField { return second.viaBrandField }
-        if first.foodItem.source != second.foodItem.source {
+        if sourcePriority(first.foodItem.source) != sourcePriority(second.foodItem.source) {
             return sourcePriority(first.foodItem.source) > sourcePriority(second.foodItem.source)
         }
         if first.identity != second.identity { return first.identity > second.identity }
@@ -971,24 +971,31 @@ public nonisolated enum FoodItemSearch {
     nonisolated private static let cannedImpliedTokens: Set<String>  = ["canned", "tinned"]
     nonisolated private static let driedImpliedTokens: Set<String>   = ["dried", "jerky", "dehydrated"]
 
-    /// Step 2's source key. Every source carries a DISTINCT priority on purpose: the comparators
-    /// (`ranksAhead`, `Index.exactNameMatch`) return as soon as two rows' sources differ, so two
-    /// sources sharing a number would compare equal there and skip the data-type and score keys —
-    /// an inconsistent sort order, not merely a tie.
+    /// Step 2's source key. The comparators (`ranksAhead`, `Index.exactNameMatch`) compare these
+    /// PRIORITIES, not the sources themselves, so two sources sharing a number fall through to the
+    /// data-type and score keys together — a consistent order.
     ///
     /// `.openFoodFacts` sits just below `.manual`: a barcode product the user looked up, reviewed and
     /// chose to keep has the standing of the products they remember by hand (which is what the same
     /// screen saves without the lookup), minus the authorship — so it outranks reference and
     /// AI-estimated lookalikes, and never the user's own entry.
+    ///
+    /// `.canadianNutrientFile` SHARES `.usda`'s number (2026-11-13): both are bundled reference data, so
+    /// a Canadian Nutrient File row and a USDA row are ordered by data type and score like two USDA
+    /// rows — generic before branded — rather than one database always above the other.
     private static func sourcePriority(_ source: FoodItemSource) -> Int {
         switch source {
         case .manual: 4
         case .openFoodFacts: 3
-        case .usda: 2
+        case .usda, .canadianNutrientFile: 2
         case .aiResolved: 1
         }
     }
 
+    /// The data-type key. `.supplementalReference` (the bundled generic layers, 2026-11-13) sits below
+    /// every base reference tier and above branded data for a plain query, and last for a brand query:
+    /// measured on the corpus suites, ranking the FNDDS layer's rows as `.survey` handed 238 pinned
+    /// answers from SR Legacy ingredients to survey dishes ("salt" showed salted nuts).
     public static func dataTypePriority(_ dataType: FoodDataType, brandQuery: Bool) -> Int {
         if brandQuery {
             switch dataType {
@@ -997,12 +1004,14 @@ public nonisolated enum FoodItemSearch {
             case .foundation: return 3
             case .survey: return 2
             case .srLegacy: return 1
+            case .supplementalReference: return 0
             }
         } else {
             switch dataType {
-            case .foundation: return 5
-            case .survey: return 4
-            case .srLegacy: return 3
+            case .foundation: return 6
+            case .survey: return 5
+            case .srLegacy: return 4
+            case .supplementalReference: return 3
             case .branded: return 2
             case .restaurant: return 1
             }

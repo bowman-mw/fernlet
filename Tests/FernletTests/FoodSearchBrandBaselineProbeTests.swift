@@ -325,7 +325,7 @@ struct FoodSearchBrandBaselineProbeTests {
         try #require(BrandSearchPanel.panelFiles.contains(named), "unknown panel \(named)")
         let panel = try BrandSearchPanel.load(named: named)
         let out = env["FERNLET_REPLAY_OUT"] ?? env["TEST_RUNNER_FERNLET_REPLAY_OUT"]
-        let catalog = FoodCatalog.bundled()
+        let catalog = FoodCatalog.probeBundled()
         try #require(catalog.bundledCount > 100_000, "the shipped catalog must be loaded")
         let base = try #require(SQLiteBundledFoodSource())
         let baseWide = try #require(SQLiteBundledFoodSource(candidateCap: Self.gateCap))

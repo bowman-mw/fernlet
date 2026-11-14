@@ -285,9 +285,9 @@ public nonisolated enum FoodIngredientIdentity {
     /// only. A product description (branded, restaurant, a person's own food) is free-form and is read
     /// as one product phrase instead (``productPhraseCounts(_:personNamed:)``).
     public static func followsReferenceNaming(of foodItem: FoodItem) -> Bool {
-        guard foodItem.source == .usda else { return false }
+        guard foodItem.source.isBundledReference else { return false }
         switch foodItem.dataType {
-        case .foundation, .survey, .srLegacy: return true
+        case .foundation, .survey, .srLegacy, .supplementalReference: return true
         case .branded, .restaurant: return false
         }
     }

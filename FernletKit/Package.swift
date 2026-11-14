@@ -187,6 +187,11 @@ let package = Package(
                 // baking soda, waters, teas), served beside it by BundledFoodSupplement.
                 // Regenerated only by Scripts/food-catalog/sr_zero_energy_supplement.py.
                 .copy("Resources/FoodCatalogSupplement.json"),
+                // The generic layers unioned in by FoodCatalog.bundled (BundledFoodLayers): FNDDS
+                // 2021-2023's survey foods the base lacks, and the Canadian Nutrient File 2026 foods.
+                // Regenerated only by Scripts/food-catalog/generic_layers.py.
+                .copy("Resources/FoodCatalogSurvey.sqlite"),
+                .copy("Resources/FoodCatalogCNF.sqlite"),
             ]
         ),
         // Layer 2.5 — shared sealed-storage substrate on the PROTECTED side of the

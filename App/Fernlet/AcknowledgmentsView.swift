@@ -226,12 +226,46 @@ struct AcknowledgmentsView: View {
         }
     }
 
-    /// Where the food data comes from. Open Food Facts is also credited wherever its data appears.
+    /// Where the food data comes from. Open Food Facts is also credited wherever its data appears, and
+    /// so is the Canadian Nutrient File (its Open Government Licence – Canada line, a notice kept in
+    /// English here like the others, then a link to the licence, a "not fetched" row of
+    /// `NoTrackingBoundaryTests.permittedDestinations`).
     private var foodDataSection: some View {
         FernletFramedSection(header: Text("Food data")) {
-            paragraph(Text("Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain."))
+            paragraph(Text("Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). Most foods built into Fernlet come from USDA FoodData Central (SR Legacy, Foundation Foods, and the Food and Nutrient Database for Dietary Studies, FNDDS 2021–2023), which is in the public domain."))
+            paragraph(Text("Some built-in foods come from Health Canada's Canadian Nutrient File 2026: the foods that are Canadian rather than copies of USDA data. Fernlet rounds their protein, carbohydrate and fat to whole grams and keeps the other values as published."))
+            Text(verbatim: Self.canadianNutrientFileNotice)
+                .font(.fernlet(.body))
+                .italic()
+                .foregroundStyle(Color.bark)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            if let url = Self.openGovernmentLicenceCanadaURL {
+                Link(destination: url) {
+                    HStack(spacing: 6) {
+                        Text(verbatim: "Open Government Licence – Canada")
+                            .font(.fernlet(.label))
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(Color.mossInk)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityHint(Text("Opens the licence in Safari",
+                                        comment: "VoiceOver hint on the Open Government Licence – Canada link in Acknowledgments: it leaves Fernlet for the Government of Canada's licence page in Safari."))
+                .accessibilityIdentifier("acknowledgments.openGovernmentLicenceCanada")
+            }
         }
     }
+
+    /// The attribution the Open Government Licence – Canada asks for, as the licence words it (a notice,
+    /// never translated here; food rows carry the localized ``FoodItemSource/attributionLine``).
+    static let canadianNutrientFileNotice = "Contains information licensed under the Open Government Licence – Canada."
+
+    /// The licence's own page. A constant, checked by the host wall; Safari opens it, the app sends it nothing.
+    static let openGovernmentLicenceCanadaURL = URL(string: "https://open.canada.ca/en/open-government-licence-canada")
 
     /// Where the World map's atlas comes from (round 7, `Docs/World-Atlas-Pack.md`): Natural Earth, public
     /// domain, credited though it asks for none; and Beck et al.'s Köppen-Geiger maps under CC BY 4.0, whose

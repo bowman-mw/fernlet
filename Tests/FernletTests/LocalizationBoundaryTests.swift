@@ -1633,7 +1633,7 @@ struct LocalizationBoundaryTests {
         let strings = try Self.foodCatalogStrings("FernletKit/Sources/FernletDomainModel/Localizable.xcstrings")
         var keys = RecipeUnit.allCases.map { "recipeUnit.\(String(describing: $0))" }
         keys += BiologicalSex.allCases.map { "biologicalSex.\($0.rawValue)" }
-        keys += ["manual", "aiEstimate", "branded", "restaurant", "usda"].map { "foodItem.dataSource.\($0)" }
+        keys += ["manual", "aiEstimate", "branded", "restaurant", "usda", "canadianNutrientFile"].map { "foodItem.dataSource.\($0)" }
         let missing = keys.filter { strings[$0] == nil }
         #expect(missing.isEmpty, """
             \(missing.count) nutrition label key(s) are not in the FernletDomainModel catalog: \(missing). A label went \
