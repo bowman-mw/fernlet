@@ -228,7 +228,11 @@ final class VoiceOverTaskUITests: XCTestCase {
             walk.press("move.day.plan")
             walk.press("plan.suggest")
         }
-        walk.press("workout.suggest")
+        // With today's plan already committed the suggestion sheet opens on that plan, its rows'
+        // info buttons and all; only an uncommitted day shows the configurator and its Suggest.
+        if app.buttons["workout.suggest"].firstMatch.waitForExistence(timeout: 4) {
+            walk.press("workout.suggest")
+        }
         let info = app.buttons["workout.howTo.open"].firstMatch
         guard info.waitForExistence(timeout: 10) else {
             throw XCTSkip("today's suggested plan has no catalog exercise with a how-to")

@@ -1266,6 +1266,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///   - deviceOwnerVerifier: Replaces the `LAContext` device-owner check before an adoption.
     ///   - privatePersistenceController: Replaces the shared store whose sealed rows the service counts and rebuilds.
     ///   - biometricTypeOverride: Replaces the device's reported biometry type (tests only).
+    ///   - uptimeProvider: Replaces the monotonic clock cooldowns are measured on; nil uses the system uptime.
     public convenience init(
         keychainService: String = KeychainItem.productionService,
         sealedContentKeyServices: [String] = [KeychainItem.journalService],
