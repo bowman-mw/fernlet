@@ -1284,7 +1284,7 @@ extension ExerciseHowToCatalog {
             displayName: String(localized: "exercise.hamstringSliderCurl.name", defaultValue: "Hamstring slider curl",
                                 bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
             cues: [
-                String(localized: "exercise.hamstringSliderCurl.cue1", defaultValue: "Lie on your back, heels on sliders or a towel on smooth floor.",
+                String(localized: "exercise.hamstringSliderCurl.cue1", defaultValue: "Lie face up, heels on sliders or a towel on smooth floor.",
                        bundle: .module, comment: "Hamstring slider curl: how-to cue 1 of 4, a short imperative step"),
                 String(localized: "exercise.hamstringSliderCurl.cue2", defaultValue: "Lift your hips into a bridge.",
                        bundle: .module, comment: "Hamstring slider curl: how-to cue 2 of 4, a short imperative step"),
