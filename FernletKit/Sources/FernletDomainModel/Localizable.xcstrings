@@ -59880,6 +59880,30 @@
         }
       }
     },
+    "foodItem.dataSource.canadianNutrientFile" : {
+      "comment" : "Food search row tag: a reference food from Health Canada's Canadian Nutrient File. 'Health Canada' is the Canadian government department's name; use its official name in the target language.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health Canada"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health Canada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health Canada"
+          }
+        }
+      }
+    },
     "foodItem.dataSource.manual" : {
       "comment" : "Food search row tag: a food the person created themselves",
       "extractionState" : "extracted_with_value",
@@ -59948,6 +59972,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "USDA"
+          }
+        }
+      }
+    },
+    "foodItemSource.canadianNutrientFile.attribution" : {
+      "comment" : "Attribution shown wherever a food from Health Canada's Canadian Nutrient File is displayed. 'Open Government Licence – Canada' is the licence's name; use the licence's official name in the target language.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Contains information licensed under the Open Government Licence – Canada."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contiene información con licencia de la Open Government Licence – Canada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contiene información con licencia de la Open Government Licence – Canada."
           }
         }
       }
