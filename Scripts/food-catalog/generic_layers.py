@@ -25,7 +25,9 @@ THE FNDDS LAYER, by rule:
   `00000000-0000-5000-8000-<12-digit FDC id>`, so a saved recipe line resolves the same row whichever
   file serves it, and a base row is never duplicated. Rows mirror the base's 202 curated survey rows:
   brand provenance "USDA FDC <id>", category "Survey (FNDDS) - <WWEIA category>", tags
-  usda / survey / fndds / category, data type `survey`, source `usda` — but on the SR Legacy basis
+  usda / survey / fndds / category, source `usda` — but data type `supplementalReference` (the layers'
+  search tier, below the base's reference tiers; measured: as `survey` they displaced 238 pinned SR
+  answers) and on the SR Legacy basis
   (per 100 g, macros rounded half-up to whole grams, micronutrients per 100 g with true zeros kept).
   Portions are FNDDS's household measures ("1 banana" 126 g -> amount 1, unit "banana"); the
   "Quantity not specified" / "Guideline amount ..." default entries carry no amount and are left out.
@@ -42,7 +44,8 @@ THE CNF LAYER, by rule (5,993 foods in the 2026 file):
   Names are the English descriptions (French are not used yet). Ids are
   `00000000-0000-5000-8002-<12-digit CNF Food_Code>` — a namespace of their own, beside FDC's 8000
   and the one curated alias's 8001. Source token `canadianNutrientFile` (FoodItemSource), data type
-  `srLegacy` (the reference tier); brand provenance "CNF <Food_Code>"; category the CNF food group;
+  `supplementalReference` (the layers' tier; as `srLegacy` FoodCatalog's load-time F6 rule would also
+  retype every row filed outside an SR food group as branded); brand provenance "CNF <Food_Code>"; category the CNF food group;
   tags the base's own tags for the matching SR food group. Portions come from Measure_Name +
   Measure_Weight_Conversion (user-defined measures only; refuse and yield rows are not servings).
   In the 2026 CSV that column is the measure's weight in grams (every "100 g" measure reads 100), not
@@ -146,6 +149,8 @@ CNF_SERVING_MEASURE_TYPE = "6"      # "User-defined"; 3 is refuse and 9 is yield
 CNF_ID_PREFIX = "00000000-0000-5000-8002-"
 FDC_ID_PREFIX = "00000000-0000-5000-8000-"
 CNF_SOURCE_TOKEN = "canadianNutrientFile"
+# FoodDataType.supplementalReference: the layers' own search tier, below the base's reference tiers.
+LAYER_DATA_TYPE = "supplementalReference"
 LEADING_AMOUNT = re.compile(r"^(\d+(?:\.\d+)?(?:/\d+)?)\s+(\S.*)$")
 
 
@@ -274,7 +279,7 @@ def survey_rows(artifact_path, base_ids, report):
             alcohol.append(name)
             continue
         tags = ["usda", "survey", "fndds", category.lower()]
-        rows.append(row(uuid, name, f"USDA FDC {fdc_id}", f"Survey (FNDDS) - {category}", "usda", "survey",
+        rows.append(row(uuid, name, f"USDA FDC {fdc_id}", f"Survey (FNDDS) - {category}", "usda", LAYER_DATA_TYPE,
                         food_values, FDC_MICRONUTRIENTS, FDC_OMEGA3, FDC_MACROS, tags, portions.get(food_id, [])))
     report["counts"] = {"sourceFoods": len(foods), "alreadyInBase": already,
                         "droppedZeroMacroAlcohol": len(alcohol), "written": len(rows)}
@@ -357,7 +362,7 @@ def cnf_rows(tables, shipped_codes, group_tags, report):
         group = groups.get(food["CNF_Food_Group_Code"], "Canadian Nutrient File")
         tags = group_tags.get(group.lower()) or [w for w in normalized(group).split() if w != "and"]
         rows.append(row(CNF_ID_PREFIX + "%012d" % int(food["Food_Code"]), name, f"CNF {food['Food_Code']}", group,
-                        CNF_SOURCE_TOKEN, "srLegacy", food_values, CNF_MICRONUTRIENTS, CNF_OMEGA3, CNF_MACROS,
+                        CNF_SOURCE_TOKEN, LAYER_DATA_TYPE, food_values, CNF_MICRONUTRIENTS, CNF_OMEGA3, CNF_MACROS,
                         tags, portions.get(food["Food_Code"], [])))
         kept_by_source[source] = kept_by_source.get(source, 0) + 1
     report["counts"] = {"sourceFoods": len(foods), "droppedUSDANoChanges": dropped["usdaNoChanges"],

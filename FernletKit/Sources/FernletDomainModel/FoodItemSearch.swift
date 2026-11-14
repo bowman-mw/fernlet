@@ -938,6 +938,10 @@ public nonisolated enum FoodItemSearch {
         }
     }
 
+    /// The data-type key. `.supplementalReference` (the bundled generic layers, 2026-11-13) sits below
+    /// every base reference tier and above branded data for a plain query, and last for a brand query:
+    /// measured on the corpus suites, ranking the FNDDS layer's rows as `.survey` handed 238 pinned
+    /// answers from SR Legacy ingredients to survey dishes ("salt" showed salted nuts).
     public static func dataTypePriority(_ dataType: FoodDataType, brandQuery: Bool) -> Int {
         if brandQuery {
             switch dataType {
@@ -946,12 +950,14 @@ public nonisolated enum FoodItemSearch {
             case .foundation: return 3
             case .survey: return 2
             case .srLegacy: return 1
+            case .supplementalReference: return 0
             }
         } else {
             switch dataType {
-            case .foundation: return 5
-            case .survey: return 4
-            case .srLegacy: return 3
+            case .foundation: return 6
+            case .survey: return 5
+            case .srLegacy: return 4
+            case .supplementalReference: return 3
             case .branded: return 2
             case .restaurant: return 1
             }

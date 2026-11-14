@@ -41,8 +41,8 @@
       "output": {
         "file": "FernletKit/Sources/FoodCatalog/Resources/FoodCatalogSurvey.sqlite",
         "rows": 5219,
-        "bytes": 5853184,
-        "sha256": "57f8e2ac7aa327aa8d2718e46db5669229295ca0616b567a267af704bc4f201b"
+        "bytes": 5943296,
+        "sha256": "11c26590918efe767c852861eae88b73e931f4b32463070efbf471b521cda0e4"
       }
     },
     "cnf": {
@@ -92,8 +92,8 @@
       "output": {
         "file": "FernletKit/Sources/FoodCatalog/Resources/FoodCatalogCNF.sqlite",
         "rows": 2339,
-        "bytes": 2519040,
-        "sha256": "2df36094b8574c020c3d6a33bff56aae30793fbb3e0431f80ee4f55aa6d0e295"
+        "bytes": 2560000,
+        "sha256": "b78a5fe8653233193f7ea69f3f9a263bc32cbbfa67e09e94ebb3a97513e362e7"
       }
     }
   }

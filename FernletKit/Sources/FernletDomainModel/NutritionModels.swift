@@ -1253,6 +1253,14 @@ public nonisolated enum FoodDataType: String, Codable, Sendable {
     case srLegacy     // USDA SR Legacy reference
     case branded      // Commercial/branded product
     case restaurant   // Restaurant chain item
+    /// A reference food from one of the bundled generic LAYERS beside the base catalog (FoodCatalog's
+    /// `BundledFoodLayers`, 2026-11-13): FNDDS 2021-2023's survey foods the base does not ship, and the
+    /// Canadian Nutrient File's foods. A tier, not a dataset — `source` and `category` say where the row
+    /// came from ("Survey (FNDDS) - …" for FNDDS) — ranked below the base's own reference tiers and
+    /// above branded data for a plain query, so the 5,000-odd survey dishes and the Canadian foods fill
+    /// in where the base has no answer instead of displacing the SR Legacy ingredient it already gives.
+    /// A build that predates the token reads it as the `.srLegacy` default (``FoodItem``'s tolerant decode).
+    case supplementalReference
 }
 
 /// Who authored a food row: USDA data, an AI resolution, the user, or Open Food Facts contributors.
@@ -1533,7 +1541,7 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
             case .restaurant:
                 return nonEmptyBrandSource ?? String(localized: "foodItem.dataSource.restaurant", defaultValue: "Restaurant",
                                                      bundle: .module, comment: "Food search row tag: a restaurant item with no restaurant name on record")
-            case .foundation, .survey, .srLegacy:
+            case .foundation, .survey, .srLegacy, .supplementalReference:
                 return String(localized: "foodItem.dataSource.usda", defaultValue: "USDA", bundle: .module,
                               comment: "Food search row tag: a reference food from the US Department of Agriculture's database. 'USDA' is the agency's name.")
             }

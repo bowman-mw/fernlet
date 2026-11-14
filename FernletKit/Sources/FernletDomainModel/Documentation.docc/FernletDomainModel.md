@@ -309,7 +309,10 @@ Canadian Nutrient File (FoodCatalog's `FoodCatalogCNF.sqlite` layer). Its
 Canada" through ``FoodItem/dataSourceLabel``. ``FoodItemSource/isBundledReference`` (USDA's rows and
 these) is what "a catalog row, never a person's food" now asks, and ``FoodItemSearch``'s comparators
 compare source PRIORITIES, so this source shares USDA's tier and a CNF row is ordered with USDA rows by
-data type and score. Older builds park the token like `openFoodFacts`.
+data type and score. Older builds park the token like `openFoodFacts`. ``FoodDataType`` gained
+`supplementalReference` the same day: the search tier of every row of FoodCatalog's generic layers
+(FNDDS's survey foods beyond the base, and CNF), below the base's reference tiers and above branded data
+for a plain query (``FoodItemSearch/dataTypePriority(_:brandQuery:)``); older builds read it as `.srLegacy`.
 
 ``FoodItemSearch``'s comparator has one per-user input, research §26 fix 1.9's
 ``FoodSearchHistory``: the foods this person has logged, weighted by frequency and recency, read as

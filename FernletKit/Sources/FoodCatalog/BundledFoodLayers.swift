@@ -10,12 +10,18 @@ import FernletDomainModel
 /// ``FoodCatalog/bundled(bundle:)`` unions them in through ``LayeredBundledFoodSource``:
 ///
 /// - `FoodCatalogSurvey.sqlite` — FNDDS 2021-2023 (USDA, CC0): the 5,219 survey foods the base lacks,
-///   with the base's own FDC-derived ids (`00000000-0000-5000-8000-<fdcId>`), source `usda`, data type
-///   `survey`, per 100 g with FNDDS's household portions.
+///   with the base's own FDC-derived ids (`00000000-0000-5000-8000-<fdcId>`), source `usda`, category
+///   "Survey (FNDDS) - …", per 100 g with FNDDS's household portions.
 /// - `FoodCatalogCNF.sqlite` — Health Canada's Canadian Nutrient File 2026 (Open Government Licence –
 ///   Canada): the 2,339 foods that are Canadian rather than a copy of USDA data Fernlet already ships,
 ///   ids `00000000-0000-5000-8002-<Food_Code>`, source ``FoodItemSource/canadianNutrientFile`` (which
-///   carries the licence's attribution line), data type `srLegacy` (the reference tier).
+///   carries the licence's attribution line).
+///
+/// Every layer row is typed `FoodDataType.supplementalReference`, the layers' own search tier: below
+/// the base's foundation / survey / SR Legacy rows and above branded data for a plain query. Typed as
+/// `survey`, the FNDDS rows displaced 238 pinned answers across the corpus suites — SR Legacy
+/// ingredients lost to survey dishes ("salt" showed salted nuts) — so the layers fill in where the base
+/// has no answer rather than reorder the answers it gives.
 ///
 /// Both are generated, never authored: `Scripts/food-catalog/generic_layers.py` writes them by rule from
 /// manifest-pinned inputs (`FoodDataSource/FoodCatalogLayerManifest.json`) and refuses to run if an id

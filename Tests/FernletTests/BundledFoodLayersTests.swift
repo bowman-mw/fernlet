@@ -89,7 +89,7 @@ struct BundledFoodLayersTests {
         let souffle = try #require(catalog.item(id: id))
         #expect(souffle.name == "Cheese souffle")
         #expect(souffle.source == .canadianNutrientFile)
-        #expect(souffle.dataType == .srLegacy)
+        #expect(souffle.dataType == .supplementalReference, "a layer row ranks in the layers' own tier")
         #expect(souffle.source.attributionLine == FoodItemSource.canadianNutrientFileAttribution)
         #expect(FoodItemSource.canadianNutrientFileAttribution
                 == "Contains information licensed under the Open Government Licence – Canada.")
@@ -103,7 +103,7 @@ struct BundledFoodLayersTests {
         let catalog = FoodCatalog.bundled()
         let bananaID = try #require(Self.fnddsBananaID)
         let banana = try #require(catalog.item(id: bananaID))
-        #expect(banana.name == "Banana, raw" && banana.dataType == .survey && banana.source == .usda)
+        #expect(banana.name == "Banana, raw" && banana.dataType == .supplementalReference && banana.source == .usda)
         #expect(banana.portions.first { $0.unit == "banana" }?.gramWeight == 126)
         #expect(banana.dataSourceLabel == "USDA")
     }
@@ -125,16 +125,18 @@ struct BundledFoodLayersTests {
         #expect(future.source == FoodItemSource.manual && future.unknownSourceToken == "aSourceFromTheFuture")
     }
 
-    /// Plain generic queries keep their generic lead with the layers in (measured 2026-11-13).
-    @Test(arguments: [
-        ("banana", "Bananas, raw"),
-        ("chocolate chips", "Candies, semisweet chocolate"),
-        ("egg", "Egg, whole, raw, fresh"),
-    ])
-    func plainGenericQueriesKeepTheirTopRow(query: String, expected: String) throws {
+    /// Plain generic queries keep the generic top row they had before the layers, on the quick-log /
+    /// Food-tab order and on the recipe editor's identity order, and that row is not a layer row.
+    @Test(arguments: ["banana", "chocolate chips", "egg", "salt", "olive oil", "cheddar cheese", "milk"])
+    func plainGenericQueriesKeepTheirTopRow(query: String) throws {
         let catalog = FoodCatalog.bundled()
-        try #require(catalog.bundledCount > FoodSearchCorpusTests.baseLoadedRowCount, "the layers must be bundled")
-        let top = catalog.results(for: query, limit: 6, context: .userTyped).first
-        #expect(top?.name == expected, "\(query): top row \(top?.name ?? "none")")
+        let base = FoodCatalog.bundled(includesLayers: false)
+        try #require(catalog.bundledCount > base.bundledCount, "the layers must be bundled")
+        for ranking in [FoodSearchRanking.standard, .ingredientIdentity] {
+            let before = base.results(for: query, limit: 6, context: .userTyped, ranking: ranking).first
+            let after = catalog.results(for: query, limit: 6, context: .userTyped, ranking: ranking).first
+            #expect(after?.id == before?.id, "\(query): \(before?.name ?? "none") became \(after?.name ?? "none")")
+            #expect(after?.dataType != .supplementalReference)
+        }
     }
 }
