@@ -25,8 +25,8 @@ import FernletFoundation
 /// Protein over the last two weeks is context for the trend story when Workout setup's food-logs
 /// switch is on (G11); the newest calibration test dates the next one, and a "Not now" the caller
 /// passes in puts it off (w4, `WorkoutCalibrationDeferral`); the warm-up-sets setting and the lifter's
-/// level say whether heavy lifts get warm-up sets; and a week the person marked as a deload on the
-/// Bodybuilding calendar makes today's plan a deload (w5). Pure over its inputs.
+/// level say whether heavy lifts get warm-up sets; and a week the person marked as a deload (the
+/// Bodybuilding calendar, or Workout setup's "Lighter week" switch) makes today's plan a deload (w5). Pure over its inputs.
 enum WorkoutLoadContextBuilder {
     /// How far back sessions are read (the plateau's lookback).
     static let lookbackDays = WorkoutPlateau.lookbackDays
@@ -87,12 +87,11 @@ enum WorkoutLoadContextBuilder {
         )
     }
 
-    /// Whether `todayKey` falls in a week the person marked as a deload (w5): the Bodybuilding
-    /// calendar's marks, read only while Bodybuilding is the goal — the only time the calendar, and so
-    /// the way to unmark a week, is on screen.
+    /// Whether `todayKey` falls in a week the person marked as a deload (w5), whatever the goal: the
+    /// Bodybuilding calendar marks weeks, and Workout setup's "Lighter week" switch marks this one (and
+    /// shows the mark, so it can be cleared, under every goal).
     static func isDeloadWeek(todayKey: String, settings: FernletSettings, calendar: Calendar = BodybuildingWeeks.calendar()) -> Bool {
-        guard settings.selectedGoal == .bodybuilding,
-              let week = BodybuildingWeeks.weekStartKey(forDayKey: todayKey, calendar: calendar) else { return false }
+        guard let week = BodybuildingWeeks.weekStartKey(forDayKey: todayKey, calendar: calendar) else { return false }
         return settings.bodybuildingCalendar.isDeload(weekStart: week)
     }
 

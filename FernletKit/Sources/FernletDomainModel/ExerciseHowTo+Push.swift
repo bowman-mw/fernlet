@@ -48,6 +48,7 @@ extension ExerciseHowToCatalog {
             assistedDip,
             pecDeck,
             cableLateralRaise,
+            landminePress,
         ]
     }
 
@@ -864,6 +865,28 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Cable lateral raise: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.cableLateralRaise.easier", defaultValue: "Use a lighter weight, or do the band lateral raise.",
                            bundle: .module, comment: "Cable lateral raise: an easier version, as a short instruction")
+        )
+    }
+
+    static var landminePress: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Landmine press", keyStem: "landminePress",
+            displayName: String(localized: "exercise.landminePress.name", defaultValue: "Landmine press",
+                                bundle: .module, comment: "Exercise name shown on screen (barbell exercise)"),
+            cues: [
+                String(localized: "exercise.landminePress.cue1", defaultValue: "Wedge one end of a barbell into a corner or landmine.",
+                       bundle: .module, comment: "Landmine press: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.landminePress.cue2", defaultValue: "Hold the free end at your shoulder in one hand.",
+                       bundle: .module, comment: "Landmine press: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.landminePress.cue3", defaultValue: "Brace and press it up and forward until your arm is straight.",
+                       bundle: .module, comment: "Landmine press: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.landminePress.cue4", defaultValue: "Lower it back to your shoulder, then switch sides.",
+                       bundle: .module, comment: "Landmine press: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.landminePress.mistake", defaultValue: "Leaning back or twisting to finish the press.",
+                            bundle: .module, comment: "Landmine press: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.landminePress.easier", defaultValue: "Press from a half-kneeling position with a lighter load.",
+                           bundle: .module, comment: "Landmine press: an easier version, as a short instruction")
         )
     }
 }

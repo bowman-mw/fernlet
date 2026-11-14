@@ -195,9 +195,10 @@ struct WorkoutProgramTests {
     }
 
     @Test func granularEquipmentMapsToEngineCapabilities() {
-        // 36 items across 5 categories: the 22 older pieces, then each machine and the three small
-        // pieces that gained a row of their own (fix e5).
-        #expect(GymEquipment.allCases.count == 36)
+        // 38 items across 5 categories: the 22 older pieces, then each machine and the three small
+        // pieces that gained a row of their own (fix e5), then the trap bar and the sled (2026-11-13).
+        #expect(GymEquipment.allCases.count == 38)
+        #expect(GymEquipment.catalogAdditionPieces == [.trapBar, .sled])
         #expect(GymEquipment.originalPieces.count == 22 && GymEquipment.itemizedMachines.count == 11)
         for category in EquipmentCategory.allCases {
             #expect(GymEquipment.allCases.contains { $0.category == category })
@@ -1010,9 +1011,53 @@ struct WorkoutProgramTests {
         let cardio = try #require(shortPlan(WorkoutSplitCatalog.dailyMove, day: 1, profile: hip).sessions.first)
         #expect(cardio.suggestion.exercises == "Seated mobility - 20 min")
         #expect(cardio.suggestion.notes.contains("Seated mobility in place of cardio today, to work around your limits."))
+        #expect(!cardio.suggestion.notes.contains("Worked around your noted limits."), "the seated line already says so")
         #expect(cardio.workout(intensity: .light).duration == 20)
+        // G2: a stretch session, drawn as one; the stored name stays the cardio day's for the rotation.
+        #expect(cardio.kind == .mobility && cardio.isSeatedCardioSwap)
+        #expect(cardio.displayedName == "Seated mobility")
+        #expect(cardio.suggestion.name == "Easy cardio")
         let usual = try #require(shortPlan(WorkoutSplitCatalog.dailyMove, day: 1).sessions.first)
         #expect(WorkoutCardioMachines.machine(in: usual.suggestion.exercises) != nil)
+    }
+
+    /// G2 (#143 leftover): a sport session's drills are running and jumping, so a walk-barring injury
+    /// swaps them for an easy machine session where one suits the person, else seated mobility, and
+    /// says so once; they are never silently dropped.
+    @Test func sportDrillsAreReplacedWhenAWalkIsBarred() throws {
+        func sportPlan(_ profile: WorkoutProfile, at location: WorkoutLocation) throws -> WorkoutProgram.SessionSuggestion {
+            let split = probe([WorkoutSessions.sportConditioning])
+            return try #require(WorkoutProgram.dayPlan(goal: .sportsPrep, intensity: .moderate, profile: profile, location: location,
+                                                       context: "", split: split, rotationIndex: 0).sessions.first)
+        }
+        let soccer = WorkoutProfile(sport: "soccer", experience: .intermediate)
+        let usual = try sportPlan(soccer, at: .fullGym)
+        #expect(usual.exercises.contains { $0.name == "Soccer drills / conditioning - 15 min" })
+
+        var hip = soccer
+        hip.injuryAreas = [.hip: .severe]
+        try #require(hip.injuryLimits.barsWalking)
+        let gym = try sportPlan(hip, at: .fullGym)
+        try #require(!WorkoutProgram.isMobilityOffer(gym))
+        let lines = gym.exercises.filter { !$0.fromCatalog && $0.block == .cardio }.map(\.name)
+        #expect(!lines.contains { $0.contains("drills") }, "\(lines)")
+        let machine = lines.compactMap(WorkoutCardioMachines.machine(in:)).first
+        let seated = lines.contains { $0.hasPrefix(WorkoutProgram.seatedMobilityHead) }
+        #expect(machine != nil || seated, "\(lines)")
+        let note = gym.suggestion.notes
+        #expect(note.contains("in place of drills today, to work around your limits."), "\(note)")
+        #expect(!note.contains("Worked around your noted limits."), "\(note)")
+        if seated {
+            #expect(lines.contains("Seated mobility - 15 min"), "\(lines)")
+            #expect(note.contains("Seated mobility in place of drills today"), "\(note)")
+        }
+    }
+
+    /// G2 (#143 leftover): a note line two passes both add is said once.
+    @Test func aRepeatedNoteLineIsSaidOnce() {
+        let parts = [WorkoutNotePart(.session, "Home"), WorkoutNotePart(.session, "Worked around your noted limits."),
+                     WorkoutNotePart(.budget, ""), WorkoutNotePart(.session, "Worked around your noted limits.")]
+        #expect(WorkoutNotePart.text(of: parts) == "Home · Worked around your noted limits.")
     }
 
     /// The seated line is timed as a stretch session of sitting and lying stretches only, from the

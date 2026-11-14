@@ -56,7 +56,7 @@ struct ExerciseAreaLoadTests {
     @Test func everyBundledExerciseHasAnExplicitRecord() throws {
         let rows = try Self.rows()
         let raw = try Self.rawRecords()
-        #expect(rows.count == 199)
+        #expect(rows.count == 208)
         #expect(WorkoutExerciseCatalog.baseExercises.map(\.name) == rows.map(\.name), "the host bundle carries this catalogue")
         let areaTokens = Set(BodyArea.allCases.map(\.rawValue))
         let loadTokens = Set(AreaLoad.allCases.map(\.rawValue))

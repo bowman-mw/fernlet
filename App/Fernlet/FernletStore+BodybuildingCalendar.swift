@@ -31,6 +31,12 @@ extension FernletStore {
         BodybuildingWeeks.weekStartKey(forDayKey: dayKey ?? todayKey, calendar: bodybuildingWeekCalendar)
     }
 
+    /// Whether this week is marked as a deload week, under any goal (Workout setup's "Lighter week").
+    var isDeloadThisWeek: Bool {
+        guard let monday = bodybuildingWeekStart() else { return false }
+        return bodybuildingCalendarSettings.isDeload(weekStart: monday)
+    }
+
     /// Marks or clears the week starting on the Monday key `start` as a deload week ("Hold a week" →
     /// Deload week). A key that is not a Monday is moved to its week's Monday.
     func markDeloadWeek(start: String, isDeload: Bool) {

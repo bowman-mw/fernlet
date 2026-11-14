@@ -197,5 +197,14 @@
   {"name": "Hip abduction machine", "equipment": "machine", "id": "exercise-196", "duration": 5.2, "hold": false, "stillProgress": 0.5},
   {"name": "Hip adduction machine", "equipment": "machine", "id": "exercise-197", "duration": 5.2, "hold": false, "stillProgress": 0.5},
   {"name": "Cable pull-through", "equipment": "cable", "id": "exercise-198", "duration": 5.2, "hold": false, "stillProgress": 0.5},
-  {"name": "Donkey kick", "equipment": "bodyweight", "id": "exercise-199", "duration": 5.2, "hold": false, "stillProgress": 0.5}
+  {"name": "Donkey kick", "equipment": "bodyweight", "id": "exercise-199", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Trap-bar deadlift", "equipment": "barbell", "id": "exercise-200", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Sumo deadlift", "equipment": "barbell", "id": "exercise-201", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Hamstring slider curl", "equipment": "bodyweight", "id": "exercise-202", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Landmine press", "equipment": "barbell", "id": "exercise-203", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Single-leg hip thrust", "equipment": "bodyweight", "id": "exercise-204", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Tibialis raise", "equipment": "bodyweight", "id": "exercise-205", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Sled push", "equipment": "bodyweight", "id": "exercise-206", "duration": 5.2, "hold": false, "stillProgress": 0.5},
+  {"name": "Sled pull", "equipment": "bodyweight", "id": "exercise-207", "duration": 2.8, "hold": false, "stillProgress": 0.5},
+  {"name": "90/90 hip switch", "equipment": "bodyweight", "id": "exercise-208", "duration": 5.2, "hold": true, "stillProgress": 0}
 ]

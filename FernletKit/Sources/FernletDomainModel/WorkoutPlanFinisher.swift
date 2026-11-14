@@ -68,9 +68,12 @@ public nonisolated struct WorkoutNotePart: Equatable, Sendable {
         self.lifts = lifts
     }
 
-    /// The note for `parts`: every line that says something, in order.
+    /// The note for `parts`: every line that says something, in order, each said once (two passes
+    /// can each add the same line, and the note read it twice).
     public static func text(of parts: [WorkoutNotePart]) -> String {
-        parts.map(\.text).filter { !$0.isEmpty }.joined(separator: " · ")
+        var lines: [String] = []
+        for part in parts where !part.text.isEmpty && !lines.contains(part.text) { lines.append(part.text) }
+        return lines.joined(separator: " · ")
     }
 }
 

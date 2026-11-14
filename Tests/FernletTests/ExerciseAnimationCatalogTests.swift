@@ -10,18 +10,20 @@ import FernletDomainModel
 /// 2026-10-29).
 ///
 /// Pinned here: every bundled catalog exercise has exactly one animation, keyed by its normalized
-/// name, and a custom name has none; the 199 IDs are `exercise-001` through `exercise-199`; the
+/// name, and a custom name has none; the 208 IDs are `exercise-001` through `exercise-208`
+/// (200-208 are the 2026-11-13 additions, each reusing an approved motion; owner review owed); the
 /// committed rows carry the app catalog's exact names and equipment and the bundled engine's own
 /// loop lengths and holds; the character follows the profile's Sex; both stills of every exercise
 /// are in the built app at 640 × 480; and every approved file in the repository and in the built app
-/// is byte-identical to the package manifest.
+/// is byte-identical to the package manifest (whose `localAdditions` note says which hashes, the
+/// movements and the nine additions' stills, this repository changed since r12).
 struct ExerciseAnimationCatalogTests {
 
     static let catalogPath = "App/Fernlet/ExerciseAnimationCatalog.json"
     static let enginePath = "App/Fernlet/ExerciseAnimations.bundle"
     static let stillsPath = "App/Fernlet/ExerciseAnimationStills.bundle"
     static let manifestPath = "Tests/ExerciseAnimationReference/manifest.json"
-    static let expectedIDs = (1...199).map { String(format: "exercise-%03d", $0) }
+    static let expectedIDs = (1...208).map { String(format: "exercise-%03d", $0) }
 
     /// The committed rows, decoded the way the app decodes them.
     static func committedRows() throws -> [ExerciseAnimationCatalogRow] {
@@ -48,15 +50,15 @@ struct ExerciseAnimationCatalogTests {
 
     @Test func everyBundledExerciseHasAnAnimation() throws {
         let bundled = WorkoutExerciseCatalog.baseExercises
-        #expect(bundled.count == 199, "the hosted app's catalog has \(bundled.count) exercises")
-        #expect(ExerciseAnimationCatalog.entries.count == 199)
+        #expect(bundled.count == 208, "the hosted app's catalog has \(bundled.count) exercises")
+        #expect(ExerciseAnimationCatalog.entries.count == 208)
         var ids = Set<String>()
         for exercise in bundled {
             let entry = ExerciseAnimationCatalog.entry(forExerciseName: exercise.name)
             #expect(entry != nil, "\(exercise.name) has no animation")
             if let entry { ids.insert(entry.id) }
         }
-        #expect(ids == Set(Self.expectedIDs), "the bundled exercises do not map one-to-one onto the 199 IDs")
+        #expect(ids == Set(Self.expectedIDs), "the bundled exercises do not map one-to-one onto the 208 IDs")
     }
 
     @Test func lookupIgnoresCaseAndSpacingLikeTheCatalog() throws {
@@ -81,10 +83,10 @@ struct ExerciseAnimationCatalogTests {
 
     // MARK: - The committed rows
 
-    @Test func theIDsAreTheNumbered199() throws {
+    @Test func theIDsAreTheNumbered208() throws {
         let ids = try Self.committedRows().map(\.id)
         #expect(ids == Self.expectedIDs)
-        #expect(Set(ids).count == 199)
+        #expect(Set(ids).count == 208)
     }
 
     @Test func rowsCarryTheAppCatalogsExactNamesAndEquipment() throws {
@@ -110,7 +112,7 @@ struct ExerciseAnimationCatalogTests {
             #expect(movement.hold == row.hold, "\(row.id) hold differs from movements.js")
             #expect(row.stillProgress == (row.hold ? 0 : 0.5), "\(row.id) still progress")
         }
-        #expect(rows.filter(\.hold).count == 22)
+        #expect(rows.filter(\.hold).count == 23)
     }
 
     /// `movements.js` evaluated as the renderer evaluates it, read back through its `movements` global.
@@ -150,7 +152,7 @@ struct ExerciseAnimationCatalogTests {
     @Test func theApprovedFilesInTheRepositoryMatchTheManifest() throws {
         let manifest = try Self.manifestHashes()
         let files = Self.approvedFiles()
-        #expect(files.count == 3 + 398)
+        #expect(files.count == 3 + 416)
         for (packaged, repoPath) in files {
             let expected = try #require(manifest[packaged], "the manifest does not list \(packaged)")
             #expect(try Self.sha256(RepoRoot.url(repoPath)) == expected, "\(repoPath) differs from the approved \(packaged)")
@@ -166,7 +168,7 @@ struct ExerciseAnimationCatalogTests {
             #expect(try Self.sha256(inApp) == manifest[packaged], "the built app's \(inApp.lastPathComponent) differs from \(packaged)")
             checked += 1
         }
-        #expect(checked == 2 + 398)
+        #expect(checked == 2 + 416)
     }
 
     @Test func noExcludedPackageMaterialIsInTheRepositoryCopies() throws {

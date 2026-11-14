@@ -24,6 +24,14 @@ struct ExerciseDemonstrationTests {
     static let flaggedIDs = ["029213", "037813", "041013", "157613", "209913", "430113", "068413",
                              "394413", "600213", "600313", "086213", "120813", "022813", "088013", "232413"]
 
+    /// The 2026-11-13 additions, whose Gym Visual IDs are still owed: gymvisual.com refused automated
+    /// reads, so no ID was picked rather than one guessed. Each draws the placeholder until the owner
+    /// reads its IDs off Gym Visual and maps it (then it leaves this list). The README lists them too.
+    static let awaitingIDs: Set<String> = [
+        "Trap-bar deadlift", "Sumo deadlift", "Hamstring slider curl", "Landmine press", "Single-leg hip thrust",
+        "Tibialis raise", "Sled push", "Sled pull", "90/90 hip switch",
+    ]
+
     /// Every version of one exercise, with short IDs so the expectations read easily.
     static let everyVersion = ExerciseDemonstrationIDs(
         gifMale: "1113", gifFemale: "2213", illustrationMale: "11", illustrationFemale: "22")
@@ -110,8 +118,9 @@ struct ExerciseDemonstrationTests {
     @Test func theMappingDecodesAndNamesEveryCatalogExerciseByItsFrozenName() throws {
         let mapping = try Self.committedMapping()
         let names = try Self.catalogRows().map(\.name)
-        #expect(names.count == 199, "the catalog changed size: add the new exercise's Gym Visual IDs")
-        #expect(Set(mapping.keys) == Set(names),
+        #expect(names.count == 208, "the catalog changed size: add the new exercise's Gym Visual IDs")
+        #expect(Self.awaitingIDs.isSubset(of: names) && Self.awaitingIDs.isDisjoint(with: mapping.keys))
+        #expect(Set(mapping.keys) == Set(names).subtracting(Self.awaitingIDs),
                 "unmapped: \(Set(names).subtracting(mapping.keys).sorted()); not in the catalog: \(Set(mapping.keys).subtracting(names).sorted())")
         for (name, ids) in mapping {
             #expect(!ids.gifIDs(preferring: .male).isEmpty, "\(name) has no GIF")

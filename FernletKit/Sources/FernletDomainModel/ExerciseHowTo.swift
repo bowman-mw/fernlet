@@ -13,8 +13,9 @@ import Foundation
 ///
 /// Keyed by ``name``, the FROZEN catalog name (``ExerciseTarget/name``), which is never translated:
 /// plans, logs, history, progression keys, exports, AI prompts and the coach-plan wire all carry it.
-/// ``displayName`` is the only half a screen draws. In English the two are the same text today; a
-/// translation changes only ``displayName``. Every string resolves against this module's catalog
+/// ``displayName`` is the only half a screen draws. In English the two are the same text, save one:
+/// the bodyweight "Calf raise" draws as "Calf raise (body weight)" (2026-11-13), so it reads apart
+/// from the machine's Standing calf raise; a translation changes only ``displayName``. Every string resolves against this module's catalog
 /// under `exercise.<keyStem>.` (`.name`, `.cue1`…`.cue5`, `.mistake`, `.easier`), where
 /// ``keyStem`` is ``name`` in lower camel case ("Farmer's carry" → `farmersCarry`).
 ///

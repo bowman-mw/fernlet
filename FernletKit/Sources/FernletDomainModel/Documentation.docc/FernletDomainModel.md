@@ -542,9 +542,13 @@ exercises the score adds target fit, a tool preference by slot role and ``Experi
 first for trained lifters' main lifts, dumbbells and machines for beginners, bands and bodyweight as
 fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a tie. A row marked
 ``ExerciseTarget/variation`` (an easier or harder step, or a staple's work with another tool — 37 of
-the 59 rows the Gym Visual expansion added on 2026-10-21, and all 22 of the owner's additions on
-2026-10-27) competes only where no staple is eligible, or as the supported variant for a mild injury, so
-adding variations fills gaps without moving the plans people already follow. The picker's
+the 59 rows the Gym Visual expansion added on 2026-10-21, all 22 of the owner's additions on
+2026-10-27, and all nine of 2026-11-13) competes only where no staple is eligible, or as the supported
+variant for a mild injury, so adding variations fills gaps without moving the plans people already
+follow. A variation stretch (the 90/90 hip switch) joins a cool-down only where no staple stretch is
+feasible, for the same reason. The trap bar and the sled are gear of their own (``GymEquipment``,
+ticked by the Full gym preset only), so only a space that has one gets Trap-bar deadlift or the sled
+moves. The picker's
 `WorkoutExerciseCatalog.search` also matches `searchAliases`, the names people call a bundled exercise
 by ("ab roller" for the Ab wheel); an alias only adds results after the direct matches, so a lookup
 that takes the first result resolves as before.

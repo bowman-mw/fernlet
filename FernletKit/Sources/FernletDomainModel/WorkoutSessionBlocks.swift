@@ -91,8 +91,14 @@ public nonisolated enum WorkoutSessionBlocks {
     /// Chosen greedily for coverage: each pick is the stretch that reaches the most worked muscles
     /// not stretched yet (then overall overlap, then name), so a leg day ends on hamstrings, quads
     /// and glutes rather than four hamstring stretches.
+    ///
+    /// A stretch that is a ``ExerciseTarget/variation`` (the 90/90 hip switch, 2026-11-13) is drawn
+    /// only when no staple stretch is feasible, as a variation lift is for a slot, so adding one
+    /// never changes the cool-downs people already have.
     static func coolDown(worked: Set<MuscleGroup>, feasible: [ExerciseTarget]) -> [PrescribedExercise] {
-        var remaining = feasible.filter { $0.modality == .mobility && !warmUpDrills.contains($0.name) }
+        let stretches = feasible.filter { $0.modality == .mobility && !warmUpDrills.contains($0.name) }
+        let staples = stretches.filter { !$0.variation }
+        var remaining = staples.isEmpty ? stretches : staples
         var covered: Set<MuscleGroup> = []
         var picked: [ExerciseTarget] = []
         for _ in 0..<coolDownMoves {

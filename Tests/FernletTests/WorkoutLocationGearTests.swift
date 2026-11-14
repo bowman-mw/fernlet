@@ -111,6 +111,11 @@ struct WorkoutLocationGearTests {
         #expect(Self.added(by: [.dipBars]) == ["Dip"])
         #expect(Self.added(by: [.lowBar]) == ["Inverted row"])
         #expect(Self.added(by: [.abWheel]) == ["Ab wheel"])
+        // The 2026-11-13 pieces: the sled alone adds its two moves, the trap bar alone nothing (it
+        // still needs the plates and a barbell space), and with them only the trap-bar deadlift.
+        #expect(Self.added(by: [.sled]) == ["Sled push", "Sled pull"])
+        #expect(Self.added(by: [.trapBar]).isEmpty)
+        #expect(Self.added(by: [.barbell, .weightPlates, .trapBar]).subtracting(Self.added(by: [.barbell, .weightPlates])) == ["Trap-bar deadlift"])
     }
 
     /// A free barbell lift needs the barbell and plates — and the rack or bench it is done from.
@@ -122,7 +127,13 @@ struct WorkoutLocationGearTests {
             #expect(!WorkoutSafetyFilter.hasEquipment(for: row, at: Self.space([.barbell])))
             #expect(!WorkoutSafetyFilter.hasEquipment(for: row, at: Self.space([.weightPlates, .squatRack, .weightBench, .smithMachine])),
                     "\(row.name) is planned with no barbell")
-            #expect(WorkoutSafetyFilter.hasEquipment(for: row, at: Self.space([.barbell, .weightPlates, .squatRack, .weightBench])))
+            // A trap-bar lift needs the trap bar too (2026-11-13); every other one only the bar,
+            // the plates and the rack or bench.
+            let base: Set<GymEquipment> = [.barbell, .weightPlates, .squatRack, .weightBench]
+            #expect(WorkoutSafetyFilter.hasEquipment(for: row, at: Self.space(base.union(row.requiredGear.contains(.trapBar) ? [.trapBar] : []))))
+            if row.requiredGear.contains(.trapBar) {
+                #expect(!WorkoutSafetyFilter.hasEquipment(for: row, at: Self.space(base)), "\(row.name) is planned with no trap bar")
+            }
         }
         let bar = Self.added(by: [.barbell, .weightPlates])
         #expect(bar.isSuperset(of: ["Deadlift", "Overhead press", "Barbell row"]))

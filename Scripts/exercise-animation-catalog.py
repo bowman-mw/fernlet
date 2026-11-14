@@ -15,6 +15,10 @@ carries the engine (App/Fernlet/ExerciseAnimations.bundle) and, from this script
 Nothing else from the package comes in: no player, preview page, catalog/approval copies, GIFs or
 reference material. The script refuses a package whose files disagree with each other.
 
+Since 2026-11-13 the repository carries nine additions the r12 package does not (exercise-200 to
+-208, appended to movements.js with their stills; see Tests/ExerciseAnimationReference/manifest.json
+`localAdditions`). Re-running this on the r12 package drops them: use a package that includes them.
+
 Usage:  Scripts/exercise-animation-catalog.py <package dir>
 """
 import json

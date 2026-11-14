@@ -79,3 +79,23 @@ and skip or swap any that would teach the wrong form (with its paired illustrati
 | `232413` | Cable pull-through (female; a straight-legged rope version) |
 
 A swapped item needs its new ID in `ExerciseDemonstrations.json` too.
+
+## IDs still owed (2026-11-13 additions)
+
+These nine exercises joined the catalog on 2026-11-13 without Gym Visual IDs: gymvisual.com refused
+automated reads, and no ID was guessed. They draw the placeholder until mapped. To map one, open
+its item on gymvisual.com, read the "Reference" ID of the male and female GIFs and illustrations,
+add the entry to `ExerciseDemonstrations.json`, and remove the name from
+`ExerciseDemonstrationTests.awaitingIDs` (the test's counts then move with it). Check each by eye.
+
+| Exercise | What to look for on Gym Visual |
+| --- | --- |
+| Trap-bar deadlift | "Trap Bar Deadlift" (an animated GIF page exists; a female version may too) |
+| Sumo deadlift | "Barbell Sumo Deadlift" |
+| Hamstring slider curl | a lying sliding or towel leg curl, hips bridged |
+| Landmine press | a standing one-arm landmine press |
+| Single-leg hip thrust | a bodyweight single-leg hip thrust, shoulders on a bench |
+| Tibialis raise | a standing toe raise, back against a wall |
+| Sled push | a sled or prowler push |
+| Sled pull | a backward sled drag, or a sled pull |
+| 90/90 hip switch | a seated 90/90 hip switch or 90/90 stretch |
