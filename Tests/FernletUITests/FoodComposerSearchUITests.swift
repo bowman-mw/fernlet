@@ -208,15 +208,24 @@ final class FoodComposerSearchUITests: XCTestCase {
         XCTAssertTrue(create.waitForExistence(timeout: 8))
         create.tap()
 
-        let protein = app.buttons["0g"].firstMatch
+        // Each macro's tap-to-type button is named for its macro and reads its grams as its value
+        // (label "Protein", value "0g"); the stepper beside it shares the label but is no button.
+        let protein = macroButton("Protein", in: app)
         XCTAssertTrue(protein.waitForExistence(timeout: 3))
+        XCTAssertEqual(protein.value as? String, "0g")
         protein.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
         app.typeText(typed)
-        app.buttons["0g"].firstMatch.tap()
+        macroButton("Carbs", in: app).tap()
 
-        XCTAssertTrue(app.buttons[shown].firstMatch.waitForExistence(timeout: 3),
-                      "Protein should read \(shown) after typing \(typed)")
+        let committed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", shown), object: protein)
+        XCTAssertEqual(XCTWaiter().wait(for: [committed], timeout: 3), .completed,
+                       "Protein should read \(shown) after typing \(typed), reads \(String(describing: protein.value))")
+    }
+
+    /// The first ingredient's tap-to-type button for `macro` (Protein, Carbs, Fat).
+    private func macroButton(_ macro: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label == %@", macro)).firstMatch
     }
 
     @MainActor

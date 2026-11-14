@@ -10,7 +10,7 @@ import XCTest
 // pins both halves: the identifier still resolves to a hittable control, and finishing the share
 // actually runs the cleanup seam (the screen falls back to "Prepare summary").
 //
-// The route is the MOVE TAB, not Settings: the trainer screen moved there on 2026-08-12 when it
+// The route is the MOVE PANEL (the Move tab before the World look), not Settings: the trainer screen moved there on 2026-08-12 when it
 // gained its import half (a plan coming back belongs beside the plans). This suite drives the real
 // route rather than a launch hook, so it also pins that relocation — if the card ever drifts back
 // into Settings, or off Move, these tests fail rather than silently testing a screen nobody can
@@ -44,7 +44,8 @@ final class TrainerExportShareUITests: XCTestCase {
         element("trainer.share", in: app).tap()
 
         // The activity sheet is hosted inside this screen's own sheet, so its chrome is in-process.
-        let close = app.buttons["Close"]
+        // By its identifier: the Move panel's plate ✕ (`world.panel.close`) is also labelled "Close".
+        let close = app.buttons["header.closeButton"].firstMatch
         XCTAssertTrue(close.waitForExistence(timeout: 8), "the system share sheet never presented")
         close.tap()
 
@@ -58,14 +59,14 @@ final class TrainerExportShareUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Move tab → trainer sheet → "Prepare summary", leaving the screen on the prepared state with
+    /// Move panel → trainer sheet → "Prepare summary", leaving the screen on the prepared state with
     /// `trainer.share` on-screen.
     @MainActor
     private func launchToPreparedTrainerSummary() -> XCUIApplication {
         let app = UXTestApp.launch()
 
-        let move = app.buttons["Move"].firstMatch
-        XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move tab")
+        let move = app.buttons["world.item.move"].firstMatch
+        XCTAssertTrue(move.waitForExistence(timeout: 15), "the item bar has no Move slot")
         move.tap()
 
         // The "Share" header pill, which replaced "Suggest" on 2026-08-12. In the header, so it

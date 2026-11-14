@@ -23,16 +23,26 @@ final class FernletUITests: XCTestCase {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
+    /// Strength searches exercises, Cardio & activity searches workout types. In the World look the
+    /// Log sheet's strength side is a list of exercises: Add exercise opens the lift's own page, where
+    /// the exercise search lives (`b3-workout-exercise`), so the test reads it there, comes back, and
+    /// switches the kind.
     @MainActor
     func testKindToggleChangesSearchPlaceholder() throws {
         let app = launchCompletedApp()
         openWorkoutSheet(in: app)
 
+        let add = app.buttons["workout.log.addExercise"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 3), "the Log sheet has no Add exercise")
+        add.tap()
         let exerciseSearch = app.textFields["exercise.search"]
         XCTAssertTrue(exerciseSearch.waitForExistence(timeout: 3))
         XCTAssertEqual(exerciseSearch.value as? String, "Search exercise or muscle")
+        goBack(in: app)
 
-        app.buttons["Cardio & activity"].tap()
+        let cardio = app.buttons["Cardio & activity"]
+        XCTAssertTrue(cardio.waitForExistence(timeout: 3), "the lift page did not go back to the Log sheet")
+        cardio.tap()
         let activitySearch = app.textFields["activity.search"]
         XCTAssertTrue(activitySearch.waitForExistence(timeout: 3))
         XCTAssertEqual(activitySearch.value as? String, "Search workout type")
@@ -94,12 +104,22 @@ final class FernletUITests: XCTestCase {
         return app
     }
 
+    /// Back out of a page pushed inside a framed sheet: its Back (`sheet.back`, named for the page it
+    /// returns to, "Log workout").
+    @MainActor
+    private func goBack(in app: XCUIApplication) {
+        let back = app.buttons["sheet.back"].firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 3), "the pushed page has no sheet Back")
+        back.tap()
+    }
+
     @MainActor
     private func openWorkoutSheet(in app: XCUIApplication) {
-        let moveButton = app.buttons["Move"].firstMatch
-        XCTAssertTrue(moveButton.waitForExistence(timeout: 6))
+        // The map's item bar opens the Move panel; its header's Log opens the Log sheet.
+        let moveButton = app.buttons["world.item.move"].firstMatch
+        XCTAssertTrue(moveButton.waitForExistence(timeout: 30))
         moveButton.tap()
-        let logButton = app.buttons["Log"].firstMatch
+        let logButton = app.buttons["move.log"].firstMatch
         XCTAssertTrue(logButton.waitForExistence(timeout: 4))
         logButton.tap()
         XCTAssertTrue(app.staticTexts["Log workout"].waitForExistence(timeout: 3))

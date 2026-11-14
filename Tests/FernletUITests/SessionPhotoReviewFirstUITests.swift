@@ -9,11 +9,11 @@
 // ENDED session's awaiting review before the review's first evaluation (the same sealed pending
 // corpus and capture door a real session uses — never the wall), and then:
 //   1. the review's overlay is the first thing on screen, before any tab is touched;
-//   2. "Not now" hides it, answering nothing, and the Friends tab says photos are waiting;
+//   2. "Not now" hides it, answering nothing, and the Album panel says photos are waiting;
 //   3. a background/foreground cycle brings it back;
-//   4. "Keep selected" puts the photos in the Friends album.
+//   4. "Keep selected" puts the photos in the album.
 //
-// Deliberately NOT `UXTestApp.launch`: that helper waits for the Home tab to be hittable, and the
+// Deliberately NOT `UXTestApp.launch`: that helper waits for the map's status plate to be hittable, and the
 // overlay — which hides the main window from accessibility while it shows — is exactly what this
 // suite expects to be up first. Run it on a fresh simulator, serially (a run that dies between the
 // seed and the Keep leaves photos waiting for the next launch of the app on that simulator).
@@ -43,11 +43,14 @@ final class SessionPhotoReviewFirstUITests: XCTestCase {
 
         app.buttons["friends.review.notNow"].tap()
         XCTAssertTrue(overlay.waitForNonExistence(timeout: 10), "Not now hides the review")
-        let friendsTab = app.buttons["Album"].firstMatch
-        XCTAssertTrue(friendsTab.waitForExistence(timeout: 10), "the tab bar is back")
-        friendsTab.tap()
+        // The map is back with its item bar; the Album slot opens the Album panel.
+        let albumSlot = app.buttons["world.item.friends"].firstMatch
+        XCTAssertTrue(albumSlot.waitForExistence(timeout: 10), "the map's item bar is back")
+        albumSlot.tap()
+        let album = app.descendants(matching: .any)["screen.friends"].firstMatch
+        XCTAssertTrue(album.waitForExistence(timeout: 10), "the Album panel did not open")
         XCTAssertTrue(app.descendants(matching: .any)["friends.pendingReview.card"].waitForExistence(timeout: 10),
-                      "the Friends tab says photos are waiting")
+                      "the Album says photos are waiting")
 
         XCUIDevice.shared.press(.home)
         app.activate()
@@ -55,10 +58,15 @@ final class SessionPhotoReviewFirstUITests: XCTestCase {
 
         app.buttons["friends.review.saveSelected"].tap()
         XCTAssertTrue(overlay.waitForNonExistence(timeout: 15), "Keep selected answers and hides the review")
-        XCTAssertTrue(friendsTab.waitForExistence(timeout: 10))
-        friendsTab.tap()
+        // The review came back over the open Album panel, which it hands back to (the panel covers
+        // the item bar); reopen it only if the app went back to the map.
+        if !album.waitForExistence(timeout: 5) {
+            XCTAssertTrue(albumSlot.waitForExistence(timeout: 10), "neither the Album nor the map came back")
+            albumSlot.tap()
+            XCTAssertTrue(album.waitForExistence(timeout: 10), "the Album panel did not open")
+        }
         let kept = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo from"))
-        XCTAssertTrue(kept.firstMatch.waitForExistence(timeout: 10), "the kept photos are in the Friends album")
+        XCTAssertTrue(kept.firstMatch.waitForExistence(timeout: 10), "the kept photos are in the album")
         XCTAssertFalse(app.descendants(matching: .any)["friends.pendingReview.card"].exists,
                        "and nothing is waiting any more")
     }

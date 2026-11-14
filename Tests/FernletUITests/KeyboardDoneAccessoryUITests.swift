@@ -11,7 +11,8 @@ import XCTest
 /// pushed manual editor, the recipe sheet or the recipe book sheet, the tree had no accessory
 /// toolbar, and a number pad (the editor's "Qty") had no way to put itself away. A stack-less sheet
 /// (Sleep) did get one — but its button was labelled "selected" (the checkmark symbol's own
-/// label), so VoiceOver and these queries never heard "Done".
+/// label), so VoiceOver and these queries never heard "Done". (In the World look the Food tab is the
+/// Food panel, opened from the map's item bar, and its stack's pages carry the panel's plate.)
 ///
 /// Each test focuses a field, waits for the keyboard, asserts exactly one button labelled "Done"
 /// in the accessory band just above the keys (two declarations in one page stack two buttons),
@@ -22,7 +23,7 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    // MARK: - Food tab stack
+    // MARK: - Food panel stack
 
     @MainActor
     func testPushedRecipeBookSearchFieldHasOneKeyboardDone() {
@@ -69,12 +70,13 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
     @MainActor
     func testSettingsPushedCaloriePadHasOneKeyboardDone() {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "Settings did not open")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10),
+                      "Settings did not open")
         let row = app.buttons["Goal & nutrition"]
         for _ in 0..<8 where !(row.exists && row.isHittable) { app.swipeUp() }
         XCTAssertTrue(row.isHittable, "'Goal & nutrition' row not reachable")
         row.tap()
-        XCTAssertTrue(app.navigationBars["Goal & nutrition"].waitForExistence(timeout: 6), "did not push Goal & nutrition")
+        XCTAssertTrue(waitForPushedPage("Goal & nutrition", in: app), "did not push Goal & nutrition")
         let calories = app.textFields["nutritionTargets.calories"]
         for _ in 0..<10 where !(calories.exists && calories.isHittable) { app.swipeUp() }
         assertOneKeyboardDone(dismissing: calories, named: "settings calorie target", in: app)
@@ -108,7 +110,7 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         let app = UXTestApp.launch(bypassPrivateLock: true, extraEnvironment: ["FERNLET_UI_TEST_OPEN_DAY_EDIT": "1"])
         // The sheet's pinned header reads "Edit <weekday, month day>".
         let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Edit ")).firstMatch
-        openPrivateTab(until: header, in: app)
+        openPanel("personal", until: header, in: app)
         let hours = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "Hours (e.g. 7.5)")).firstMatch
         scrollUntilHittable(hours, in: app)
         assertOneKeyboardDone(dismissing: hours, named: "day edit sleep hours", in: app)
@@ -158,14 +160,14 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         assertOneKeyboardDone(dismissing: age, named: "onboarding age", in: app)
     }
 
-    /// Private → Worry box: a tab page with no stack, whose composer grows a line on Return.
+    /// Private → Worry box: a panel page with no stack, whose composer grows a line on Return.
     @MainActor
     func testWorryBoxComposerHasOneKeyboardDone() {
         let app = UXTestApp.launch(bypassPrivateLock: true)
-        // The hub opens on its Journal page; Home has a "Worry box" chip of its own.
-        openPrivateTab(until: app.descendants(matching: .any)["screen.journal"].firstMatch, in: app)
+        // The hub opens on its Journal page.
+        openPanel("personal", until: app.descendants(matching: .any)["screen.journal"].firstMatch, in: app)
         let section = app.buttons["Worry box"].firstMatch
-        XCTAssertTrue(section.waitForExistence(timeout: 8), "the Private hub has no Worry box section")
+        XCTAssertTrue(section.waitForExistence(timeout: 8), "the Private panel has no Worry box section")
         section.tap()
         XCTAssertTrue(app.descendants(matching: .any)["screen.worryBox"].waitForExistence(timeout: 6),
                       "the Worry box page did not open")
@@ -242,22 +244,15 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
 
     // MARK: - Navigation
 
-    /// Food tab → Recipe book (pushed inside the Food stack).
+    /// Food panel → Recipe book (pushed inside the Food panel's stack).
     @MainActor
     private func openRecipeBookFromFood(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        let page = app.descendants(matching: .any)["screen.food"].firstMatch
-        let tabs = app.buttons.matching(NSPredicate(format: "label == %@", "Food"))
-        // Bounded: one or two "Food"-labelled buttons; a tap in the first seconds can be lost.
-        for index in 0..<min(max(tabs.count, 1), 4) where !page.exists {
-            tabs.element(boundBy: index).tap()
-            _ = page.waitForExistence(timeout: 6)
-        }
-        XCTAssertTrue(page.exists, "the Food tab never showed", file: file, line: line)
+        openPanel("food", until: app.descendants(matching: .any)["screen.food"].firstMatch, in: app, file: file, line: line)
         let book = app.buttons["Recipe book"]
         XCTAssertTrue(book.waitForExistence(timeout: 6), "Recipe book button not found on Food", file: file, line: line)
+        scrollUntilHittable(book, in: app, file: file, line: line)
         book.tap()
-        XCTAssertTrue(app.navigationBars["Recipe book"].waitForExistence(timeout: 6), "the recipe book did not open",
-                      file: file, line: line)
+        XCTAssertTrue(waitForPushedPage("Recipe book", in: app), "the recipe book did not open", file: file, line: line)
     }
 
     /// From the open recipe book: Create → Manual entry.
@@ -269,21 +264,37 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         let manual = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Manual entry")).firstMatch
         XCTAssertTrue(manual.waitForExistence(timeout: 6), "the chooser has no Manual entry option", file: file, line: line)
         manual.tap()
-        XCTAssertTrue(app.navigationBars["New recipe"].waitForExistence(timeout: 6), "the manual editor did not open",
-                      file: file, line: line)
+        XCTAssertTrue(waitForPushedPage("New recipe", in: app), "the manual editor did not open", file: file, line: line)
     }
 
-    /// Taps the Private tab until `target` shows. Bounded: one or two "Private"-labelled buttons,
-    /// and a tap in the first seconds can be lost.
+    /// Opens the World panel `panel` from the map's item bar (`world.item.<panel>`) until `target`
+    /// shows. One retry: a tap in the first seconds after launch is occasionally lost.
     @MainActor
-    private func openPrivateTab(until target: XCUIElement, in app: XCUIApplication,
-                                file: StaticString = #filePath, line: UInt = #line) {
-        let tabs = app.buttons.matching(NSPredicate(format: "label == %@", "Private"))
-        for index in 0..<min(max(tabs.count, 1), 4) where !target.exists {
-            tabs.element(boundBy: index).tap()
+    private func openPanel(_ panel: String, until target: XCUIElement, in app: XCUIApplication,
+                           file: StaticString = #filePath, line: UInt = #line) {
+        let slot = app.buttons["world.item.\(panel)"].firstMatch
+        for _ in 0..<2 where !target.exists {
+            XCTAssertTrue(slot.waitForExistence(timeout: 30), "the item bar has no \(panel) slot", file: file, line: line)
+            slot.tap()
             _ = target.waitForExistence(timeout: 10)
         }
-        XCTAssertTrue(target.exists, "the Private tab never showed \(target)", file: file, line: line)
+        XCTAssertTrue(target.exists, "the \(panel) panel never showed \(target)", file: file, line: line)
+    }
+
+    /// Waits for a page titled `title` pushed inside a panel or a framed sheet: the World look draws
+    /// its title on the plate beside `plate.back` (whose own label names the page it returns to).
+    /// A classic navigation bar of that title counts too.
+    @MainActor
+    private func waitForPushedPage(_ title: String, in app: XCUIApplication, timeout: TimeInterval = 6) -> Bool {
+        let bar = app.navigationBars[title]
+        let back = app.buttons["plate.back"].firstMatch
+        let plateTitle = app.staticTexts[title].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if bar.exists || (back.exists && plateTitle.exists && back.label != "Back to \(title)") { return true }
+            _ = back.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return false
     }
 
     /// Swipes the page up until `element` can be tapped. Bounded: a sheet's form is a few screens.
