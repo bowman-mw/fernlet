@@ -427,6 +427,27 @@ public struct WebPageNutritionExtractionPayload: AIContextPayload {
     }
 }
 
+/// Fields allowed for reading pasted recipe text on device (roadmap G1, AI recipe paste-and-parse).
+///
+/// Built by `AIProviders`' `PastedRecipeReader` when the on-device model reads recipe text the person
+/// pasted. Only the text's length (and, outside English, the prompt language) is recorded; the text
+/// itself is never logged.
+public struct RecipeTextParsePayload: AIContextPayload {
+    /// Frozen English token — **DO NOT LOCALIZE**. Audit-log key and `MemoryAgent` gate input;
+    /// never rendered. See ``AIContextPayload/payloadKind``.
+    public let payloadKind = "recipe-text-parse"
+    public let pastedTextCharCount: Int
+    /// The language the person may paste in, and the name and steps are kept in.
+    public let promptLanguage: AIPromptLanguage
+
+    public var includedFieldNames: [String] { ["pastedTextCharCount"] + promptLanguage.includedFieldNames }
+
+    public init(pastedTextCharCount: Int, promptLanguage: AIPromptLanguage = .english) {
+        self.pastedTextCharCount = max(pastedTextCharCount, 0)
+        self.promptLanguage = promptLanguage
+    }
+}
+
 /// Fields allowed for on-device recipe extraction from a webpage.
 ///
 /// Built by `AIProviders`' `RecipeWebImporter` when the on-device model parses an already-fetched

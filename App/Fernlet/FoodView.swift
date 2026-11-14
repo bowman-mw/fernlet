@@ -821,6 +821,12 @@ private struct RecipeImportSheet: View {
     /// Backs the pushed detail's Share button — the proximity recipe-share sheet, wired the same
     /// way ``RecipeBookSheet`` does it.
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
+    /// AI recipe paste-and-parse (roadmap G1): pasted text that is not Fernlet recipe data is read into
+    /// a draft, and the manual editor is pushed pre-filled with it.
+    @State private var pastedSeed: PastedRecipeSeed?
+    @State private var showingPastedEditor = false
+    /// While the pasted text is being read; Import is disabled so only one read runs.
+    @State private var isReadingText = false
 
     var body: some View {
         importPresentations(importContent)
@@ -839,10 +845,10 @@ private struct RecipeImportSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 pasteURLButton
-                SectionLabel("Shared recipe text")
+                SectionLabel("Recipe text")
                     .padding(.top, 4)
-                SheetTextEditor(text: $importText, placeholder: "Paste Fernlet recipe data here", minHeight: 150)
-                Text("A recipe shared as text is for reading and won't import here. To save one, have it sent with Send in Messages or shared nearby.")
+                SheetTextEditor(text: $importText, placeholder: "Paste a recipe's text here", minHeight: 150)
+                Text("Paste a recipe from anywhere. I'll read its ingredients and steps, match each ingredient to a food, and open it for you to check before it's saved.")
                     .font(FernletFramedFont.body)
                     .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
@@ -856,9 +862,11 @@ private struct RecipeImportSheet: View {
                 #endif
                 HStack {
                     Spacer(minLength: 0)
-                    Button("Import") { importSharedText() }
+                    Button { importSharedText() } label: {
+                        if isReadingText { Text("Reading recipe") } else { Text("Import") }
+                    }
                         .buttonStyle(ActionPillButtonStyle(.primary))
-                        .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(isReadingText || importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("recipeImport.import")
                 }
             }
@@ -907,6 +915,9 @@ private struct RecipeImportSheet: View {
         do {
             let imported = try store.importRecipe(from: importText)
             finishImport(named: imported.name)
+        } catch RecipeImportError.missingPayload {
+            // Not Fernlet recipe data: read it as recipe text.
+            readPastedText()
         } catch let error as RecipeImportError {
             notice = error.message
         } catch {
@@ -914,10 +925,43 @@ private struct RecipeImportSheet: View {
         }
     }
 
+    /// Reads the pasted text (the on-device model when AI is on, else line by line) and pushes the
+    /// manual editor pre-filled with it; a text with no ingredient line says so instead.
+    private func readPastedText() {
+        guard !isReadingText else { return }
+        isReadingText = true
+        notice = nil
+        let text = importText
+        Task {
+            let seed = await store.pastedRecipeSeed(from: text)
+            isReadingText = false
+            guard let seed else {
+                notice = String(
+                    localized: "recipeImport.pasted.noIngredients",
+                    defaultValue: "I couldn't find any ingredients in that text. Put each ingredient on its own line, starting with its amount, like \"2 cups flour\".",
+                    comment: "Import recipe screen: the pasted recipe text was read but no ingredient line was found. The quoted example is an ingredient line; translate it as a natural one.")
+                return
+            }
+            pastedSeed = seed
+            showingPastedEditor = true
+        }
+    }
+
     /// The pushed detail for a matched already-saved recipe plus this sheet's own local editor/share
     /// sheets, in their original application order.
     private func importPresentations<V: View>(_ content: V) -> some View {
         content
+            .navigationDestination(isPresented: $showingPastedEditor) {
+                if let pastedSeed {
+                    RecipeSheet(
+                        store: store,
+                        pasted: pastedSeed,
+                        isEmbeddedInNavigationStack: true,
+                        onSaved: onSaved,
+                        onMealsLogged: onMealsLogged
+                    )
+                }
+            }
         #if canImport(UIKit)
             .navigationDestination(isPresented: $showingExistingRecipe) {
                 if let existingRecipe {
@@ -1454,10 +1498,16 @@ struct RecipeSheet: View {
     /// first row is minted with a fresh id each time, so an untouched editor read as dirty and asked
     /// "Discard your changes?" for nothing.
     @State private var originalDraft: RecipeDraftSnapshot
+    /// AI recipe paste-and-parse (roadmap G1): the "Check this match" / "Pick a food" note on each
+    /// pasted row the person should look at, keyed by row id. Empty for every other editor.
+    @State private var pastedRowNotes: [UUID: PastedRecipeSeed.RowNote] = [:]
+    /// The line above a pasted recipe's rows: read line by line, and/or the text was cut.
+    @State private var pastedReadNote: PastedReadNote?
 
     init(
         store: FernletStore,
         recipe: RecipeDefinition? = nil,
+        pasted: PastedRecipeSeed? = nil,
         isEmbeddedInNavigationStack: Bool = false,
         startsWithScanner: Bool = false,
         onSaved: ((String) -> Void)? = nil,
@@ -1495,6 +1545,21 @@ struct RecipeSheet: View {
                 ingredients: loadedIngredients,
                 steps: loadedSteps,
                 parts: loadedParts
+            ))
+        } else if let pasted {
+            // Pasted text opens as unsaved edits (the snapshot is a blank draft), so backing out asks
+            // first and nothing is saved until Save.
+            let rows = pasted.ingredients.isEmpty ? [ManualRecipeIngredientInput()] : pasted.ingredients
+            _name = State(initialValue: pasted.name)
+            _servings = State(initialValue: pasted.servings)
+            _notes = State(initialValue: pasted.notes)
+            _ingredients = State(initialValue: rows)
+            _steps = State(initialValue: pasted.steps)
+            _expandedId = State(initialValue: pasted.firstUnmatchedRowID)
+            _pastedRowNotes = State(initialValue: pasted.rowNotes)
+            _pastedReadNote = State(initialValue: PastedReadNote(seed: pasted))
+            _originalDraft = State(initialValue: RecipeDraftSnapshot(
+                name: "", servings: 1, notes: "", ingredients: [], steps: [], parts: []
             ))
         } else {
             let first = ManualRecipeIngredientInput()
@@ -1559,6 +1624,9 @@ struct RecipeSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     // Pushed pages title themselves in the nav bar (see `.navigationTitle` below);
                     // the sheet presentation titles itself in the draft guard's pinned header.
+                    if let pastedReadNote {
+                        pastedReadNoteView(pastedReadNote)
+                    }
                     SheetField("Recipe name") {
                         TextField("black bean bowls", text: $name, prompt: .fieldPrompt("black bean bowls"))
                             .submitLabel(.done)
@@ -1631,7 +1699,7 @@ struct RecipeSheet: View {
         SheetField("Ingredients") {
             VStack(spacing: 8) {
                 RecipeIngredientRows(ingredients: $ingredients, expandedId: $expandedId, store: store,
-                                     onRemove: removeIngredient)
+                                     onRemove: removeIngredient, pastedRowNotes: pastedRowNotes)
                 // Stacks at accessibility sizes: side by side, "Add ingredient" / "Scan barcode"
                 // squeezed to the edge and broke mid-word.
                 AdaptiveStack(spacing: 8) {
@@ -1655,6 +1723,14 @@ struct RecipeSheet: View {
                 .buttonStyle(ActionPillButtonStyle(.secondary))
             }
         }
+    }
+
+    /// The pasted recipe's opening line: it was read line by line, and/or the text was cut.
+    private func pastedReadNoteView(_ note: PastedReadNote) -> some View {
+        FernletNotice(text: note.text) {
+            WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
+        }
+        .accessibilityIdentifier("recipeEditor.pastedNote")
     }
 
     /// A multipart recipe's parts, each with its own ingredients and steps (see `RecipePartsEditor`).
