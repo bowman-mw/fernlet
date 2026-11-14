@@ -252,4 +252,31 @@ struct G1FoodSearchFixesTests {
         let top = try #require(catalog.results(for: "salmon", context: .userTyped, ranking: .ingredientIdentity).first)
         #expect(top.dataType != .supplementalReference, "top: \(top.name)")
     }
+
+    // MARK: - A "-y" singular reaches its "-ies" plural
+
+    /// `strawberry*` never matches "strawberries", and "strawberry" is no substring of the name, so the
+    /// typed singular neither retrieved nor scored *Strawberries, raw* (found in roadmap G1, 2026-11-13).
+    @Test func aConsonantYWordGainsItsIesPlural() {
+        #expect(FoodItemSearch.matchVariants(for: "strawberry") == ["strawberry", "strawberries"])
+        #expect(FoodItemSearch.matchVariants(for: "candy") == ["candy", "candies"])
+        #expect(FoodItemSearch.matchVariants(for: "turkey") == ["turkey"])
+        #expect(FoodItemSearch.matchVariants(for: "soy") == ["soy"])
+        #expect(FoodItemSearch.matchVariants(for: "berries") == ["berries", "berry", "berrie"])
+    }
+
+    /// Measured 2026-11-13 on the shipped catalog: before, typed "strawberry" never listed *Strawberries,
+    /// raw*; now it leads the typed six, and the machine-generated pool too. The sibling "-y" words
+    /// each reach a row named by their plural. ("berry" has no generic "Berries" row to reach.)
+    @Test func strawberryReachesStrawberriesRaw() {
+        let catalog = FoodCatalog.bundled()
+        #expect(catalog.results(for: "strawberry", context: .userTyped).first?.name == "Strawberries, raw")
+        #expect(catalog.results(for: "strawberry", context: .machineGenerated).first?.name == "Strawberries, raw")
+        let plurals = ["cherry": "Cherries, ", "blueberry": "Blueberries, raw", "raspberry": "Raspberries, raw",
+                       "anchovy": "Anchovies, ", "candy": "Candies, "]
+        for (query, plural) in plurals {
+            let names = catalog.results(for: query, context: .userTyped).map(\.name)
+            #expect(names.contains { $0.hasPrefix(plural) }, "\(query): \(names)")
+        }
+    }
 }

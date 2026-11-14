@@ -482,10 +482,25 @@ public nonisolated enum FoodItemSearch {
     ///   substring test is unchanged, and ``PreparedDishHeuristic`` reads it because a stripped word
     ///   is often the very word that reveals the intent: the head noun of `cheese pizza slice` is
     ///   "slice", which says a PIECE of something, not the assembled dish.
+    /// * `iesPhrase` — `effective` with each consonant-"y" word in its "-ies" plural, or nil when no
+    ///   word has one (2026-11-13). A regular plural keeps the singular as its prefix, so `egg` already
+    ///   earns *Eggs, raw* its prefix and substring bonuses; "strawberry" is no substring of
+    ///   "strawberries", so without this spelling *Strawberries, raw* scored 0 and the score floor
+    ///   refused it. Scored beside the other two phrasings, best wins; never used for the +60
+    ///   token-equality bonus, so a plural row earns exactly what *Eggs, raw* earns for `egg`.
     fileprivate struct SearchQuery {
         let tokens: [String]
         let effective: String
         let normalized: String
+        let iesPhrase: String?
+
+        init(tokens: [String], effective: String, normalized: String) {
+            self.tokens = tokens
+            self.effective = effective
+            self.normalized = normalized
+            let plurals = tokens.map { FoodItemSearch.iesPlural(of: $0) ?? $0 }
+            self.iesPhrase = plurals == tokens ? nil : plurals.joined(separator: " ")
+        }
     }
 
     /// Prepares `query`, or nil when it cannot search (too short, or no usable token).
@@ -874,7 +889,8 @@ public nonisolated enum FoodItemSearch {
         var score = 0
         let name = entry.normalizedName
         score += max(phraseScore(name: name, phrase: query.normalized),
-                     phraseScore(name: name, phrase: query.effective))
+                     phraseScore(name: name, phrase: query.effective),
+                     query.iesPhrase.map { phraseScore(name: name, phrase: $0) } ?? Int.min)
         score += query.tokens.reduce(0) { partial, queryToken in
             partial + (entry.nameTokens.contains(queryToken) ? 60 : 0)
         }
@@ -1220,12 +1236,16 @@ public nonisolated enum FoodItemSearch {
     /// `form*` prefix term by FTS, so the two paths stay in lockstep: a food token passes iff some
     /// variant is a prefix of it, exactly what `form*` matches in the index.
     ///
+    /// A consonant-"y" singular adds its "-ies" plural (``iesPlural(of:)``: "strawberry" →
+    /// "strawberries"), the one regular plural its own `form*` prefix does not reach.
+    ///
     /// In an active ``LanguagePack``'s language its plural rules add their singulars too (Spanish
     /// "limones" → "limon", "nueces" → "nuez"), so a Spanish plural the alias table does not know
     /// still reaches a singular catalog name. English alone returns exactly what it always did.
     nonisolated public static func matchVariants(for token: String) -> [String] {
         var forms = [token]
         for stem in singularStems(token) where stem != token && !forms.contains(stem) { forms.append(stem) }
+        if let plural = iesPlural(of: token) { forms.append(plural) }
         // R2: bounded by the active packs and their few rules.
         for pack in InputLanguages.current.packs {
             for form in pack.singularForms(of: token) where form.count >= 3 && !forms.contains(form) {
@@ -1258,6 +1278,22 @@ public nonisolated enum FoodItemSearch {
             stems.append(withoutES)
         }
         return stems
+    }
+
+    /// The "-ies" plural of a consonant-"y" word ("strawberry" → "strawberries", "candy" → "candies"),
+    /// or nil for any other word.
+    ///
+    /// Every other regular plural keeps its singular as a PREFIX, so the `form*` FTS term and the
+    /// scorer's prefix gate reach it from the singular for free (`egg*` matches "eggs"). A
+    /// consonant-"y" word is the one regular plural that does not — `strawberry*` never matches
+    /// "strawberries" — so typed "strawberry" never retrieved *Strawberries, raw* (found in roadmap
+    /// G1, 2026-11-13). A vowel before the "y" takes a plain `s` ("turkey" → "turkeys") and needs
+    /// nothing. Tokens under ``minimumStemTokenLength`` are left alone, as for the singular stems.
+    nonisolated static func iesPlural(of token: String) -> String? {
+        guard token.count >= minimumStemTokenLength, token.hasSuffix("y") else { return nil }
+        let beforeY = token.dropLast()
+        guard let previous = beforeY.last, previous.isLetter, !"aeiou".contains(previous) else { return nil }
+        return String(beforeY) + "ies"
     }
 
     /// The endings a noun takes `es` after ("sandwich", "dish", "box", "glass", "fizz", "tomato").
