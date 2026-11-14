@@ -14,7 +14,7 @@ import XCTest
 // Three screens are SCREENSHOT-ONLY — attached for the device pass, not audited — because their
 // findings would not be stable identities: the workout plan is today's plan (its title, exercises
 // and eyebrow change with the weekday), the manual Log sheet's Recent chips run off the edge in an
-// order set by the seed's dates, and the mood row is reached by a scroll whose stop moves. A frozen
+// order set by the seed's dates, and the Log panel's mood row is reached by a scroll whose stop moves. A frozen
 // line that rotates with the calendar is the time bomb `UXScreenProbe.auditBaselines`' notes
 // describe; the owner reads those three at AX5 instead.
 //
@@ -30,35 +30,45 @@ final class LargerTextAX5UITests: XCTestCase {
     }
 
     // MARK: Home: the way into every task
+    //
+    // World build: Home is the map (status plate and item bar); the quick-log tiles and the mood
+    // card moved into the item bar's Log panel.
 
+    /// Renamed from "AX5 · Home" (no baseline entry): Home is the map, not the card feed.
     @MainActor
     func testHomeAtAX5() throws {
         let app = launchAtAX5()
-        try UXScreenProbe(app, "AX5 · Home", in: self)
-            .assertOnScreen("screen.home")
+        try UXScreenProbe(app, "AX5 · Home · Map", in: self)
+            .assertOnScreen("world.statusPlate")
+            .assertOnScreen("world.itemBar")
             .capture()
     }
 
-    /// Log a mood: the one-tap row on Home.
+    /// Log a mood: the one-tap row in the Log panel. Screenshot-only (see the top of this file).
     @MainActor
     func testHomeMoodRowAtAX5() throws {
         let app = launchAtAX5()
+        let log = app.buttons["world.item.log"].firstMatch
+        XCTAssertTrue(log.waitForExistence(timeout: 10), "the item bar has no Log slot")
+        log.tap()
         let mood = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'quickMood.'")).firstMatch
         let title = app.staticTexts["How today felt"]
+        XCTAssertTrue(app.buttons["world.panel.close"].firstMatch.waitForExistence(timeout: 8),
+                      "the Log panel did not open")
         scrollUntilHittable(mood, in: app)
-        // Park the mood card's title just under the top edge: a swipe stops anywhere, and a stop
-        // that cuts the quick-log tiles in half reports them as clipped text that is not.
+        // Park the mood card's title just under the panel's title plate: a swipe stops anywhere, and
+        // a stop that cuts the quick-log tiles in half reports them as clipped text that is not.
         if title.exists {
-            let top = app.windows.firstMatch.frame.minY + 100
+            let top = app.windows.firstMatch.frame.minY + 160
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             let distance = title.frame.minY - top
             start.press(forDuration: 0.05,
                         thenDragTo: start.withOffset(CGVector(dx: 0, dy: -distance)),
                         withVelocity: .slow, thenHoldForDuration: 0.5)
         }
-        UXScreenProbe(app, "AX5 · Home · Mood", in: self)
+        UXScreenProbe(app, "AX5 · Log · Mood", in: self)
             .assertElementOnScreen(mood, "first quick-mood chip")
-        attachScreenshot(of: app, "AX5 · Home · Mood")
+        attachScreenshot(of: app, "AX5 · Log · Mood")
     }
 
     // MARK: Logging sheets
@@ -85,16 +95,20 @@ final class LargerTextAX5UITests: XCTestCase {
         try UXScreenProbe(app, "AX5 · Sheet · Workout suggestion", in: self)
             .assertOnScreen("sheet.workoutSuggestion")
             .capture()
+        // An uncommitted day shows the configurator and its Suggest; with today's plan already
+        // committed (the demo seed's) the sheet opens on that plan, Start now and all.
         let suggest = app.buttons["workout.suggest"]
-        XCTAssertTrue(suggest.waitForExistence(timeout: 8), "no Suggest button")
-        suggest.tap()
-        let approve = app.buttons["workout.approvePlan"]
-        XCTAssertTrue(approve.waitForExistence(timeout: 30), "the suggestion never produced a plan")
+        if suggest.waitForExistence(timeout: 4) {
+            suggest.tap()
+            let approve = app.buttons["workout.approvePlan"]
+            XCTAssertTrue(approve.waitForExistence(timeout: 30), "the suggestion never produced a plan")
+        }
         attachScreenshot(of: app, "AX5 · Sheet · Workout plan")
         // Only a guidable session offers Start now; a cardio-only day's plan does not, by design,
         // and the runner is then on the device-pass checklist rather than claimed here.
         let start = app.buttons["workout.startGuided"]
-        guard start.waitForExistence(timeout: 2) else {
+        scrollUntilHittable(start, in: app)
+        guard start.exists else {
             throw XCTSkip("Today's suggested session is not guidable, so the runner was not reached.")
         }
         start.tap()

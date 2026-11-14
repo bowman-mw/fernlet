@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Move tab's Weekly totals screen (comparison report idea 18), driven on the demo-seeded app:
+/// The Move panel's Weekly totals screen (comparison report idea 18), driven on the demo-seeded app:
 /// the link under Exercise history opens it, it audits clean under the shared probe (geometry plus
 /// the accessibility audit, whose Dynamic Type pass re-lays it out at the other text sizes), and it
 /// steps back a week and forward again but never past the current week.
@@ -11,7 +11,7 @@ final class WeeklyTotalsUITests: XCTestCase {
     @MainActor
     func testWeeklyTotalsOpensFromMoveStepsByWeekAndAuditsClean() throws {
         let app = UXTestApp.launch()
-        app.buttons["Move"].firstMatch.tap()
+        app.buttons["world.item.move"].firstMatch.tap()  // the item bar's Move slot
         XCTAssertTrue(app.descendants(matching: .any)["screen.move"].waitForExistence(timeout: 8), "Move did not open")
 
         let link = app.buttons["move.weeklyTotals"].firstMatch
@@ -44,18 +44,22 @@ final class WeeklyTotalsUITests: XCTestCase {
         XCTAssertTrue(next.waitForNonExistence(timeout: 4), "back on the current week, a step into the future appeared")
     }
 
-    // MARK: - Helpers (each suite keeps its own copy, as `TabReselectUITests` does)
+    // MARK: - Helpers (each suite keeps its own copy, as `HomeCardsRedesignUITests` does)
 
-    /// Drags the page until the element sits wholly between the status bar and the floating tab bar:
-    /// a tap whose point lands inside the bar's pill selects a tab instead.
+    /// Drags the page until the element sits wholly between the Move panel's title plate and the
+    /// bottom of the screen, and reports whether it got there. Hittable alone can be sampled while
+    /// the page is still moving, or with the element half under the plate, and the tap then lands on
+    /// whatever is drawn there. (The name is from the tab-bar era, when the floating bar covered the
+    /// page's bottom; the World panels cover the whole screen.)
     private func scrollClearOfTabBar(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         let window = app.windows.firstMatch
-        let topClear: CGFloat = 100
-        let tabBarClear: CGFloat = 16
+        // The page scrolls up under the panel's title plate; the home indicator sits at the bottom.
+        let topClear: CGFloat = 130
+        let bottomClear: CGFloat = 40
         for _ in 0..<14 {
             guard element.exists else { dragFeed(by: 300, in: app); continue }
             let frame = element.frame
-            let bottom = tabBarTop(in: app) - tabBarClear
+            let bottom = window.frame.maxY - bottomClear
             let top = window.frame.minY + topClear
             if frame.maxY > bottom {
                 dragFeed(by: frame.maxY - bottom + 40, in: app)
@@ -66,12 +70,6 @@ final class WeeklyTotalsUITests: XCTestCase {
             }
         }
         return false
-    }
-
-    /// The top of the floating tab bar, read off its Home tab.
-    private func tabBarTop(in app: XCUIApplication) -> CGFloat {
-        let homeTab = app.buttons["Home"].firstMatch
-        return homeTab.exists ? homeTab.frame.minY : app.windows.firstMatch.frame.maxY
     }
 
     /// Moves the page's content up by about `distance` points (down when negative) with a

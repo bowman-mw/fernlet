@@ -17,15 +17,36 @@ final class ScreenAppearanceUITests: XCTestCase {
         continueAfterFailure = true   // gallery run: capture every screen even if one is off
     }
 
-    // MARK: - Tabs
+    // MARK: - Home (the World map) and its panels
+    //
+    // The World look has no tab bar: Home is the live map, with the status plate at the top and the
+    // item bar at the bottom, and every other "tab" is a full-screen panel the item bar opens (its
+    // slots carry the old tab names, so the panel probes below keep their `… tab` names and
+    // baselines). Home's cards moved into the Today panel, which the status plate opens; that is
+    // audited as its own screen, `Today`.
 
     @MainActor
     func testHomeTabAppearance() throws {
         let app = UXTestApp.launch()
-        try UXScreenProbe(app, "Home tab", in: self)
-            .assertOnScreen("screen.home")
-            .assertBelowStatusBar("screen.home")
-            .assertAboveTabBar("screen.home")
+        // Renamed from "Home tab" (no baseline entry): the screen it audited, the card feed, is now
+        // the Today panel, and Home is the map.
+        try UXScreenProbe(app, "Home · Map", in: self)
+            .assertOnScreen("world.statusPlate")
+            .assertBelowStatusBar("world.statusPlate")
+            .assertOnScreen("world.itemBar")
+            .capture()
+    }
+
+    @MainActor
+    func testTodayPanelAppearance() throws {
+        let app = UXTestApp.launch()
+        let plate = app.buttons["world.statusPlate"].firstMatch
+        XCTAssertTrue(plate.waitForExistence(timeout: 10), "the map's status plate is missing")
+        plate.tap()
+        try UXScreenProbe(app, "Today", in: self)
+            .assertOnScreen("world.panel.close")
+            .assertBelowStatusBar("world.panel.close")
+            .assertNotEmpty(containing: "Arrange Today")
             .capture()
     }
 
@@ -142,8 +163,18 @@ final class ScreenAppearanceUITests: XCTestCase {
     func testHygieneSheetAppearance() throws           { try probeSheet("hygiene", "Sheet · Hygiene") }
     @MainActor
     func testTrendsSheetAppearance() throws            { try probeSheet("trends", "Sheet · Trends") }
+    /// Anchored on the Stamp book page inside the sheet: `MilestonesView` carries its own framed
+    /// sheet, so `sheet.milestones` sits OUTSIDE the frame and reports its 3pt border bleeding past
+    /// both screen edges, which is the frame's drawing, not clipped content.
     @MainActor
-    func testMilestonesSheetAppearance() throws        { try probeSheet("milestones", "Sheet · Milestones") }
+    func testMilestonesSheetAppearance() throws {
+        let app = UXTestApp.launch(openSheet: "milestones")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.milestones"].firstMatch.waitForExistence(timeout: 8),
+                      "the Milestones sheet did not open")
+        try UXScreenProbe(app, "Sheet · Milestones", in: self)
+            .assertOnScreen("screen.milestones")
+            .capture()
+    }
     @MainActor
     func testFirstAidSheetAppearance() throws          { try probeSheet("firstAid", "Sheet · First aid") }
     @MainActor

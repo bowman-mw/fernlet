@@ -104,8 +104,8 @@ struct ContrastCanvas {
     let scale: CGFloat
     /// RGBA8, row-major.
     let bytes: [UInt8]
-    /// The band the floating tab bar covers, in points, or `nil` when no tab bar is showing (a sheet
-    /// covers it). See ``UXScreenProbe/floatingTabBarBand()``.
+    /// The band the World item bar covers, in points, or `nil` when no bar is showing (a panel or a
+    /// sheet covers it). See ``UXScreenProbe/floatingTabBarBand()``.
     let tabBar: CGRect?
     /// The header, footer and keyboard pinned over the scrolling content: whichever the screen has.
     let bars: [PinnedBar]
@@ -165,7 +165,8 @@ extension UXScreenProbe {
             return ContrastVerdict(excuse: .disabled, ratio: nil, floor: floor)
         }
         let frame = element.frame
-        if isOccluded(frame, isTabItem: element.elementType == .button && Self.tabTitles.contains(element.label),
+        if isOccluded(frame, isTabItem: element.elementType == .button
+                        && element.identifier.hasPrefix(Self.itemBarSlotPrefix),
                       in: canvas) {
             return ContrastVerdict(excuse: .occluded, ratio: nil, floor: floor)
         }
@@ -175,12 +176,12 @@ extension UXScreenProbe {
     }
 
     /// Whether `frame` is not wholly on the visible canvas: past the window's edge, under a pinned
-    /// header or footer without being one of its own elements, or under the floating tab bar without
-    /// being one of its own five items.
+    /// header or footer without being one of its own elements, or under the World item bar without
+    /// being one of its own slots.
     ///
-    /// A tab item is a BUTTON carrying a tab title. The title alone is not enough: Home's quick-log
-    /// grid has a "Move" tile whose static text runs under the bar on the first viewport, and on
-    /// 2026-10-17 it was measured as if it were the Move tab.
+    /// A slot is a BUTTON carrying a `world.item.` identifier. A title alone would not be enough: the
+    /// tab-era bar was keyed on its titles, and Home's quick-log grid had a "Move" tile whose static
+    /// text ran under the bar and was measured as if it were the Move tab (2026-10-17).
     private func isOccluded(_ frame: CGRect, isTabItem: Bool, in canvas: ContrastCanvas?) -> Bool {
         guard window.frame.contains(frame) else { return true }
         if canvas?.barsCover(frame) == true { return true }
@@ -188,33 +189,26 @@ extension UXScreenProbe {
         return !(band.contains(frame) && isTabItem)
     }
 
-    /// The five tab titles, as `FernletTab` labels its buttons.
-    static let tabTitles = ["Home", "Food", "Move", "Album", "Private"]
+    /// The identifier prefix of the World item bar's slots (`WorldPanel.itemIdentifier`).
+    static let itemBarSlotPrefix = "world.item."
 
-    /// Points the floating bar's glass extends above its buttons: the bar's 6pt vertical padding
-    /// plus its 1pt stroke and a point of shadow.
-    static let tabBarOutset: CGFloat = 8
+    /// Points the item bar's drawing rises above its container's reported frame: Log's paper disc
+    /// sits 34pt above the bar (`WorldItemBar.slot`, `.padding(.top, -34)`) and its shadow 4pt more.
+    static let tabBarOutset: CGFloat = 38
 
-    /// The height of a non-compact tab button — icon, label and padding — as `ContentView`'s
-    /// tab-bar comment measures it ("the non-compact button already measures ~58pt tall").
-    static let tabButtonHeight: CGFloat = 58
-
-    /// The band the floating tab bar covers, from just above its buttons to the window's bottom
-    /// edge, or `nil` when it is not showing.
+    /// The band the World item bar covers, from just above its frame to the window's bottom edge, or
+    /// `nil` when it is not showing.
     ///
-    /// The bar is a custom SwiftUI container carrying `.isTabBar`, which XCUITest does NOT expose as
-    /// a `.tabBar` element — `app.tabBars` finds nothing (measured 2026-10-17: content under the bar
-    /// was measured through the glass). So the band is read off the Home tab's button, as
-    /// `assertAboveTabBar` already does: the five buttons share one row, and "Home" is the one title
-    /// no other control on a tab carries (Home's own quick-log grid has a "Move" tile). The button
-    /// can report only its label's 16pt row, so the band rises a full ``tabButtonHeight`` above the
-    /// row's bottom. It errs wide by a few points, which only ever moves an element from "measured"
-    /// to "occluded", and every occluded element is named in the attachment. A sheet leaves the
-    /// button in the tree but not hittable, and then there is no bar to account for.
+    /// World build: the floating tab bar is gone, and the item bar (`world.itemBar`) shows only over
+    /// the map — every panel and sheet covers it. Read off the bar's own container, which carries an
+    /// identifier (the tab-era bar did not, which is why it was read off its Home button). It errs
+    /// wide by ``tabBarOutset``, which only ever moves an element from "measured" to "occluded", and
+    /// every occluded element is named in the attachment. Under a panel or a sheet the bar is not
+    /// hittable or not in the tree, and then there is no bar to account for.
     func floatingTabBarBand() -> CGRect? {
-        let home = app.buttons["Home"].firstMatch
-        guard home.exists, home.isHittable else { return nil }
-        let top = home.frame.maxY - max(home.frame.height, Self.tabButtonHeight) - Self.tabBarOutset
+        let bar = app.descendants(matching: .any)["world.itemBar"].firstMatch
+        guard bar.exists, bar.isHittable else { return nil }
+        let top = bar.frame.minY - Self.tabBarOutset
         return CGRect(x: window.frame.minX, y: top, width: window.frame.width, height: window.frame.maxY - top)
     }
 

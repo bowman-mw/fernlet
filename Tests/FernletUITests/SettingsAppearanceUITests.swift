@@ -3,8 +3,9 @@ import XCTest
 // MARK: - Settings appearance
 //
 // Opens the Settings sheet and walks each settings sub-screen (NavigationLink → pushed
-// destination), capturing a labeled screenshot and asserting the screen's nav bar renders
-// on-screen. Privacy & Data is covered separately via its dedicated launch hooks (it is
+// destination), capturing a labeled screenshot and asserting the screen's title renders
+// on-screen. In the World look the Settings hub is a framed sheet with no navigation bar (its title
+// and Done sit inside the sheet); the pages it pushes keep the system bar. Privacy & Data is covered separately via its dedicated launch hooks (it is
 // gated by a fresh biometric/passcode check). Connection History is skipped: its list is
 // empty on a fresh simulator and its title is dynamic.
 
@@ -47,11 +48,10 @@ final class SettingsAppearanceUITests: XCTestCase {
     func testSettingsHubAndSubscreensAppearance() throws {
         let app = UXTestApp.launch(openSheet: "settings")
 
-        // Settings hub itself.
-        let settingsBar = app.navigationBars["Settings"]
+        // Settings hub itself: the framed sheet and its first row.
         try UXScreenProbe(app, "Settings · Hub", in: self)
             .assertOnScreen("sheet.settings")
-            .assertElementOnScreen(settingsBar, "Settings nav bar")
+            .assertOnScreen("settings.row.appearance")
             .capture()
 
         for screen in subscreens {
@@ -64,12 +64,13 @@ final class SettingsAppearanceUITests: XCTestCase {
     @MainActor
     func testNestedMemoryAndSignalsAppearance() throws {
         let app = UXTestApp.launch(openSheet: "settings")
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "settings sheet did not open")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.settings"].firstMatch.waitForExistence(timeout: 10),
+                      "settings sheet did not open")
 
         let aiRow = scrollToRow("settings.row.aiDataSources", app: app)
         XCTAssertTrue(aiRow.isHittable, "AI & data sources row not reachable")
         aiRow.tap()
-        XCTAssertTrue(app.navigationBars["AI & data sources"].waitForExistence(timeout: 4))
+        XCTAssertNotNil(pushedPageTitle("AI & data sources", in: app), "AI & data sources did not open")
 
         // Probe names spelled out for the same reason as `subscreens` above.
         let nested = [(label: "Core memory", title: "Core memory", probe: "Settings · Core memory"),
@@ -78,14 +79,13 @@ final class SettingsAppearanceUITests: XCTestCase {
             let link = scrollToRow(label, app: app)
             XCTAssertTrue(link.isHittable, "'\(label)' link not reachable inside AI & data sources")
             link.tap()
-            let bar = app.navigationBars[title]
+            let heading = pushedPageTitle(title, in: app) ?? app.staticTexts[title].firstMatch
             try UXScreenProbe(app, probe, in: self)
-                .assertElementOnScreen(bar, "\(title) nav bar")
+                .assertElementOnScreen(heading, "\(title) title")
                 .capture()
-            let back = bar.buttons.firstMatch
-            if back.exists { back.tap() }
-            XCTAssertTrue(app.navigationBars["AI & data sources"].waitForExistence(timeout: 4),
-                          "did not return to AI & data sources after '\(title)'")
+            goBack(from: title, in: app)
+            XCTAssertNotNil(pushedPageTitle("AI & data sources", in: app),
+                            "did not return to AI & data sources after '\(title)'")
         }
     }
 
@@ -118,16 +118,57 @@ final class SettingsAppearanceUITests: XCTestCase {
         XCTAssertTrue(row.isHittable, "settings row '\(label)' not reachable")
         row.tap()
 
-        let bar = app.navigationBars[title]
+        let heading = pushedPageTitle(title, in: app) ?? app.staticTexts[title].firstMatch
         try UXScreenProbe(app, probe, in: self)
-            .assertElementOnScreen(bar, "\(title) nav bar")
+            .assertElementOnScreen(heading, "\(title) title")
             .capture()
 
         // Pop back to the Settings list for the next row.
-        let back = bar.buttons.firstMatch
-        if back.exists { back.tap() }
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 4),
+        goBack(from: title, in: app)
+        XCTAssertTrue(app.navigationBars[title].waitForNonExistence(timeout: 4)
+                      && app.buttons["plate.back"].waitForNonExistence(timeout: 4)
+                      && app.buttons["settings.row.appearance"].waitForExistence(timeout: 4),
                       "did not return to Settings after '\(title)'")
+    }
+
+    /// The title of the page pushed inside Settings, once it is up, or nil when no such page appeared
+    /// within `timeout`. Opened as a framed sheet (the launch hook), Settings' pushed pages keep the
+    /// system navigation bar, whose Back names the page below (`fernletSheetToolbar`); inside the
+    /// World panel the wooden plate carries the title beside `plate.back` instead. Either is taken.
+    @MainActor
+    private func pushedPageTitle(_ title: String, in app: XCUIApplication,
+                                 timeout: TimeInterval = 6) -> XCUIElement? {
+        let bar = app.navigationBars[title]
+        let back = app.buttons["plate.back"].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if bar.exists { return bar }
+            if back.exists {
+                // The plate's title sits level with its Back; a row or a section heading carrying
+                // the same words sits lower, on the page.
+                let plateBand = back.frame.minY - 20 ... back.frame.maxY + 20
+                for candidate in app.staticTexts.matching(NSPredicate(format: "label == %@", title)).allElementsBoundByIndex
+                where candidate.exists && plateBand.contains(candidate.frame.midY) {
+                    return candidate
+                }
+            }
+            _ = bar.waitForExistence(timeout: 0.5)
+        } while Date() < deadline
+        return nil
+    }
+
+    /// Back from a pushed Settings page: the navigation bar's Back in the sheet, the plate's Back in
+    /// the panel.
+    @MainActor
+    private func goBack(from title: String, in app: XCUIApplication) {
+        let barBack = app.navigationBars[title].buttons.firstMatch
+        let plateBack = app.buttons["plate.back"].firstMatch
+        if barBack.exists {
+            barBack.tap()
+        } else {
+            XCTAssertTrue(plateBack.waitForExistence(timeout: 4), "the pushed page '\(title)' has no Back")
+            if plateBack.exists { plateBack.tap() }
+        }
     }
 
     /// Swipes the settings list up until the target row sits clearly above the sheet's floating

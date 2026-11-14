@@ -290,26 +290,6 @@ struct UXScreenProbe {
         return self
     }
 
-    /// The element does not overlap the floating bottom tab bar (content hidden behind it).
-    /// Uses the Home tab button as the tab-bar reference; skipped when no tab bar is shown
-    /// (e.g. inside a sheet).
-    @discardableResult
-    func assertAboveTabBar(
-        _ identifier: String,
-        file: StaticString = #file,
-        line: UInt = #line
-    ) -> Self {
-        let tabButton = app.buttons["Home"]
-        let el = element(identifier)
-        guard tabButton.exists, tabButton.isHittable, el.exists else { return self }
-        XCTAssertLessThanOrEqual(
-            el.frame.maxY, tabButton.frame.minY + tolerance,
-            "[\(name)] '\(identifier)' overlaps / sits behind the tab bar (bottom \(el.frame.maxY) > tab-bar top \(tabButton.frame.minY))",
-            file: file, line: line
-        )
-        return self
-    }
-
     /// Proves the screen isn't blank by finding an expected/seeded piece of content.
     @discardableResult
     func assertNotEmpty(
@@ -1441,22 +1421,24 @@ extension UXScreenProbe {
         // says, not as defects anyone has seen, and the owner's AX5 device pass is what decides.
         // The two Settings lines are system-drawn (the navigation bar's Done, `.searchable`'s
         // field). The other AX5 screens audit clean, so they have no key.
+        // WORLD LOOK RE-MEASURE (2026-11-14), the AX5 and Settings lines deleted as stale:
+        // * `Text clipped — “Search settings” (45)` (here and on `Settings · Hub`): the system search
+        //   drawer it named is gone; Settings draws its own `SettingsSearchField` (`settings.search`),
+        //   whose clipping reports as a NEW finding and is left failing, not re-keyed.
+        // * `AX5 · Sheet · Meal`'s two lines: the same labels stopped clipping on `Sheet · Meal` at
+        //   `large` in runs that reported other findings, and the AX5 screenshot shows both whole.
+        // * `AX5 · Sheet · Workout suggestion`'s three lines named the configurator; the demo seed's
+        //   committed plan now opens the sheet on today's plan, so the configurator is not on screen.
+        // * `Settings · Core memory`'s `Text clipped — <no label> (49)` was the old memory search text
+        //   field, replaced by `SettingsSearchField` (`settings.memorySearch`, reported as new).
+        // * `Settings · Hub`'s `PRIVACY & DATA` Dynamic Type line: `absentFromScreen(_:)` found the
+        //   heading no longer on the hub's first screen.
         "AX5 · Settings · Hub": [
             "Dynamic Type font sizes are partially unsupported — “Done” id=settings.done (9)",
-            "Text clipped — “Search settings” (45)",
-        ],
-        "AX5 · Sheet · Meal": [
-            "Text clipped — “Log meal” (48)",
-            "Text clipped — “WHAT DID YOU EAT?” (48)",
         ],
         // 2026-10-20: `Text clipped — “Full gym · # items” (48)` deleted — it stopped reproducing in
         // bundle 3 once the session-length row moved the space row down (see the `HOW LONG?`
         // AuditExemption).
-        "AX5 · Sheet · Workout suggestion": [
-            "Text clipped — “SPACE & EQUIPMENT” (48)",
-            "Text clipped — “Suggest” (48)",
-            "Text clipped — “Suggest” id=workout.suggest (9)",
-        ],
         // "POTENTIALLY INACCESSIBLE TEXT" ADDED (2026-09-26), element-less, 2 raw issues. Copied
         // from the "not in baseline" listing of runs on two independent, freshly created iPhone 17
         // simulators (iPhone18,3, portrait, `large`, en_US, light), clean build, nothing else
@@ -1537,14 +1519,9 @@ extension UXScreenProbe {
         "Onboarding · Personal details": [
             "Text clipped — “Your name” id=onboarding.displayName (49)",
         ],
-        "Settings · Core memory": [
-            "Text clipped — <no label> (49)",
-        ],
         "Settings · Hub": [
             "Dynamic Type font sizes are partially unsupported — “Done” id=settings.done (9)",
-            "Dynamic Type font sizes are partially unsupported — “PRIVACY & DATA” (48)",
             "Dynamic Type font sizes are unsupported",
-            "Text clipped — “Search settings” (45)",
         ],
         // CREATED 2026-09-26, and the only line is the audit's, not the editor's. With no override
         // pinned there is still no Reset control to be too small (that finding lives in the pinned
@@ -1597,20 +1574,21 @@ extension UXScreenProbe {
         "Sheet · Goals": [
             "Text clipped — <no label> (49)",
         ],
+        // WORLD LOOK RE-MEASURE (2026-11-14): the framed World sheets were rebuilt, and their walled
+        // lines below were deleted because they stopped reproducing: on three separate invocations
+        // (the whole ScreenAppearanceUITests suite, six sheets, and one test alone) on the pinned
+        // simulator, `Sheet · Hygiene`, `Sheet · Sleep`, `Sheet · Water`, `Sheet · Workout` and
+        // `Sheet · Workout suggestion` audited to 0 raw issues and `Sheet · Meal` and `Sheet · Saved
+        // recipe notes` reported findings but none of the deleted lines. The attached screenshots
+        // show the redesigned sheets with every named label drawn whole. The auditor was not dead in
+        // those runs: the same runs' contrast pass nominated the Workout and Meal sheets' Save pill.
+        // The under-reporting `Potentially inaccessible text` lines are kept (excused when absent,
+        // and element-less, so no run can prove them gone).
         "Sheet · Hygiene": [
             "Potentially inaccessible text",
-            "Text clipped — “Brush teeth AM” (48)",
-            "Text clipped — “Deodorant” (48)",
-            "Text clipped — “Personal care” (48)",
-            "Text clipped — “Shower” (48)",
-            "Text clipped — “Skincare AM” (48)",
-            "Text clipped — “Sunscreen” (48)",
         ],
         "Sheet · Meal": [
             "Potentially inaccessible text",
-            "Text clipped",
-            "Text clipped — “Log meal” (48)",
-            "Text clipped — “WHAT DID YOU EAT?” (48)",
         ],
         // Same identity-key migration as `Sheet · Edit recipe` above — the two sheets share the
         // ingredient search field that gained `recipeIngredient.search` in 525b0c8.
@@ -1622,15 +1600,9 @@ extension UXScreenProbe {
         ],
         "Sheet · Saved recipe notes": [
             "Potentially inaccessible text",
-            "Text clipped — “Delete recipe” (48)",
-            "Text clipped — “Demo recipe” (48)",
         ],
         "Sheet · Sleep": [
-            "Hit area is too small — <no label> (49)",
             "Potentially inaccessible text",
-            "Text clipped — “HOURS (OPTIONAL)” (48)",
-            "Text clipped — “NOTE (OPTIONAL)” (48)",
-            "Text clipped — “restorative, woke easy” (48)",
         ],
         // FIXED, NOT DRIFTED (2026-08-27): `Label not human-readable — “face.smiling”` is gone
         // because `SignalDetailRow` (HomeView.swift) now hides its decorative glyph from
@@ -1642,7 +1614,6 @@ extension UXScreenProbe {
         ],
         "Sheet · Water": [
             "Potentially inaccessible text",
-            "Text clipped",
         ],
         // T1-9 (CHIP 44PT GROWTH, 2026-08-23): `kindField`'s Strength/Cardio chips are the FIRST
         // child of this sheet's ScrollView VStack, directly above `recentExerciseChips` ->
@@ -1654,10 +1625,6 @@ extension UXScreenProbe {
         // Re-verified deterministic across two independent `xcodebuild test` runs before removing.
         "Sheet · Workout": [
             "Potentially inaccessible text",
-            "Text clipped",
-            "Text clipped — “Bench press” (48)",
-            "Text clipped — “Log workout” (48)",
-            "Text clipped — “Overhead press” (48)",
         ],
         // T1-9 (CHIP 44PT GROWTH, 2026-08-23): `feelingSection`'s Light/Moderate/Hard chips sit
         // directly above `SheetField("Anything else?")` in `configuratorContent`. That content was
@@ -1682,10 +1649,6 @@ extension UXScreenProbe {
         // the clip moved to that row's caption (the `HOW LONG?` AuditExemption).
         "Sheet · Workout suggestion": [
             "Potentially inaccessible text",
-            "Text clipped",
-            "Text clipped — “SPACE & EQUIPMENT” (48)",
-            "Text clipped — “Suggest a workout” id=workout.suggest (9)",
-            "Text clipped — “Suggest workout” (48)",
         ],
         "Studio · Confirmation (flagged name)": [
             "Dynamic Type font sizes are partially unsupported",
