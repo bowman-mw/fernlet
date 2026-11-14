@@ -307,7 +307,9 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
         // parameter's doc records, not sufficient). FTS5 has no built-in stopword support, so a
         // stripped term simply is never emitted. Each token expands
         // to its singular/plural match variants (`FoodItemSearch.matchVariants`) so the FTS surfaces
-        // the same rows the scorer will accept — a plural query reaches the singular canonical food.
+        // the same rows the scorer will accept — a plural query reaches the singular canonical food,
+        // and a consonant-"y" singular its "-ies" plural (`strawberry*` OR `strawberries*`), the one
+        // plural its own prefix term misses.
         // The variants are OR'd (a token passes on any form) and the tokens AND'd, matching the gate's
         // "every query token must match" semantics. FTS5 requires an explicit `AND` between grouped
         // terms. Tokens/variants are normalized to letters/digits, so none collide with FTS syntax.
