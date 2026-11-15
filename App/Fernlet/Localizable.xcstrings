@@ -101706,6 +101706,30 @@
         }
       }
     },
+    "worldView.flights.arc.spoken.planned" : {
+      "comment" : "Your world: VoiceOver name of a dimmed dashed arc whose flights haven't left yet, e.g. Planned flights, Portland and Tokyo, 1 planned",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Planned flights, %1$@ and %2$@, %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos previstos, %1$@ y %2$@, %3$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelos programados, %1$@ y %2$@, %3$@"
+          }
+        }
+      }
+    },
     "worldView.flights.card" : {
       "comment" : "Your world: the card of a tapped flight arc: the two cities, the flights both ways, the distance",
       "extractionState" : "extracted_with_value",
