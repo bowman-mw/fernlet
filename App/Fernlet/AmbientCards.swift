@@ -45,6 +45,9 @@ struct AmbientCardsView: View {
     @State private var forgottenWorkout: String?
     /// Today's gentle reminders after the caps (meal chips and the workout nudge among them).
     @State private var reminders: [AmbientReminder] = []
+    /// Today's friend card after the caps (one at most), and what its send button did.
+    @State private var friendNudge: AmbientFriendNudge?
+    @State private var friendNudgeOutcome: FriendNudgeOutcome?
     @State private var weatherPrompt: String?
     @State private var walkComfort: WeatherComfort?
 
@@ -68,6 +71,7 @@ struct AmbientCardsView: View {
             macroGapCard
             forgottenFavoritesCard
             forgottenWorkoutCard
+            friendNudgeCard
             gentleReminderCards
             weatherCard
             periodPredictionBubble
@@ -87,6 +91,9 @@ struct AmbientCardsView: View {
             let workout = computeForgottenWorkout(days: days)
             forgottenFavorites = favorites
             forgottenWorkout = workout
+            // The friend card is chosen first, so a friend in the shared two-a-day limit comes before
+            // the forgotten things and the seasons.
+            friendNudge = chooseFriendNudge()
             reminders = chooseReminders(days: days, hasForgottenMeals: !favorites.isEmpty, hasForgottenWorkout: workout != nil)
             if store.settings.weatherPromptsEnabled {
                 // Both reads share the service's ≤90-min conditions cache (one fetch, two prompts).
@@ -435,6 +442,112 @@ struct AmbientCardsView: View {
         }
     }
 
+    /// What a friend card's "Send a heart" did: accepted for delivery, or the app's own refusal line.
+    enum FriendNudgeOutcome: Equatable {
+        /// The drop-off queue accepted the heart.
+        case sent
+        /// The queue refused it; the line is `AwayHeartsCopy.queueLine`'s answer.
+        case refused(String)
+    }
+
+    /// The friend card: the owner's draft with "Send a heart" and "Not now", then "Heart on its way"
+    /// once the queue accepted the heart.
+    @ViewBuilder
+    private var friendNudgeCard: some View {
+        if let nudge = friendNudge {
+            let companion = store.worldCompanionName
+            let sent = friendNudgeOutcome == .sent
+            let title = sent ? AmbientReminderCopy.friendSentTitle
+                : AmbientReminderCopy.friendTitle(nudge.draft, name: nudge.firstName, companion: companion)
+            let sentence = sent ? AmbientReminderCopy.friendSentBody(name: nudge.firstName)
+                : AmbientReminderCopy.friendBody(nudge.draft, name: nudge.firstName, companion: companion)
+            FernletCard {
+                HStack(alignment: .top, spacing: 12) {
+                    ambientIcon("heart", tint: .dustyRose)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(title)
+                            .font(.fernlet(.header))
+                            .foregroundStyle(Color.bark)
+                            .fernletWrappingText()
+                        Text(sentence)
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                        if case .refused(let line) = friendNudgeOutcome {
+                            Text(line)
+                                .font(.fernlet(.bodySmall))
+                                .foregroundStyle(Color.goldenrodInk)
+                                .fernletWrappingText()
+                                .accessibilityIdentifier("home.friendNudge.refused")
+                        }
+                        if !sent {
+                            FlowLayout(spacing: 8) {
+                                if friendNudgeOutcome == nil {
+                                    Button { sendFriendHeart(nudge) } label: {
+                                        Text(AmbientReminderCopy.friendSend)
+                                            .font(.fernlet(.label))
+                                            .foregroundStyle(Color.bark)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 6)
+                                            .frame(minHeight: 44)
+                                            .background(Color.dustyRose.opacity(0.18), in: Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("home.friendNudge.send")
+                                }
+                                Button { putAwayFriend(nudge) } label: {
+                                    Text(AmbientReminderCopy.notNow)
+                                        .font(.fernlet(.label))
+                                        .foregroundStyle(Color.slate)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .frame(minHeight: 44)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("home.friendNudge.notNow")
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .accessibilityIdentifier("home.friendNudge.\(nudge.kind.rawValue)")
+        }
+    }
+
+    /// "Send a heart": the same away-heart queue as the friend's row on Friends. "Heart on its way"
+    /// only when the queue accepted it; otherwise the app's own line for why not. Either way the
+    /// friend's cards rest for a month.
+    private func sendFriendHeart(_ nudge: AmbientFriendNudge) {
+        guard let peer = store.trustedProximityPeers.first(where: { $0.fingerprint == nudge.fingerprint }) else {
+            friendNudgeOutcome = .refused(AwayHeartsCopy.queueLine(for: .failed, firstName: nudge.firstName, problem: nil))
+            return
+        }
+        let outcome = store.heartDropService.queueHeart(to: peer)
+        FernletFeedback.system.play(FriendListView.awayHeartEvent(for: outcome))
+        friendNudgeOutcome = Self.friendNudgeOutcome(for: outcome, firstName: nudge.firstName)
+        var schedule = AmbientReminderMemory.schedule()
+        schedule.hideFriend(nudge.fingerprint, now: Date())
+        AmbientReminderMemory.save(schedule)
+    }
+
+    /// What the card shows for a queue answer: "Heart on its way" only for `.queued`.
+    static func friendNudgeOutcome(for outcome: HeartDropService.QueueOutcome, firstName: String) -> FriendNudgeOutcome {
+        guard outcome == .queued else {
+            return .refused(AwayHeartsCopy.queueLine(for: outcome, firstName: firstName, problem: nil))
+        }
+        return .sent
+    }
+
+    /// "Not now" on a friend card: that friend's cards rest for a month.
+    private func putAwayFriend(_ nudge: AmbientFriendNudge) {
+        var schedule = AmbientReminderMemory.schedule()
+        schedule.hideFriend(nudge.fingerprint, now: Date())
+        AmbientReminderMemory.save(schedule)
+        friendNudge = nil
+        friendNudgeOutcome = nil
+    }
+
     /// One reminder: its title and sentence, its open button when it has one, and "Not now".
     private func gentleReminderCard(_ reminder: AmbientReminder) -> some View {
         FernletCard {
@@ -548,6 +661,36 @@ struct AmbientCardsView: View {
         return found.filter { chosen.contains($0.kind) }
     }
 
+    /// Today's friend card after the caps; none while the Gentle reminders switch is off. Reads only
+    /// what Friends shows unlocked (CAP-2): names and last-met dates from the trust vault, and the
+    /// fuzzy vibe a friend shared in person.
+    private func chooseFriendNudge() -> AmbientFriendNudge? {
+        guard store.settings.gentleRemindersEnabled else { return nil }
+        let now = Date()
+        let found = AmbientFriendNudgeFinder.candidates(friends: nudgeFriends(), dayKey: store.todayKey, now: now)
+        var schedule = AmbientReminderMemory.schedule()
+        let chosen = schedule.chooseFriend(from: found, dayKey: store.todayKey, now: now)
+        AmbientReminderMemory.save(schedule)
+        return chosen
+    }
+
+    /// The kept friends as the friend nudges see them. A heart can go only while hearts and delivery
+    /// while apart are on with nothing failing (Home has no consent step of its own), the friend is
+    /// not blocked or revoked, and no heart to them is settling.
+    private func nudgeFriends() -> [AmbientFriend] {
+        let awayReady = store.settings.allowNearbyHearts && store.settings.heartsAwayDelivery
+            && store.heartDropService.deliveryProblem == nil
+        return store.trustedProximityPeers.map { peer in
+            let canSend = awayReady && peer.blockedAt == nil && peer.revokedAt == nil
+                && !peer.keyAgreementPublicKey.isEmpty && store.heartLedger.canSendHeart(to: peer.fingerprint)
+            return AmbientFriend(
+                fingerprint: peer.fingerprint,
+                firstName: PeerNameDisplay.firstName(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met, in: .fernlet),
+                lastVibeWasLow: store.cachedFriendState(fingerprint: peer.fingerprint)?.fuzzyState == .struggling,
+                lastMetAt: peer.lastSeenAt,
+                canReceiveHeart: canSend)
+        }
+    }
 
     // MARK: - Weather-aware recovery
 

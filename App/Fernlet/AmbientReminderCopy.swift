@@ -156,4 +156,61 @@ nonisolated enum AmbientReminderCopy {
         return String(localized: "home.forgotten.calm.breatheNow", defaultValue: "Breathe now",
                       comment: "Home 'It's still here' card: opens slow breathing on the pattern the card named.")
     }
+
+    // MARK: - Friend nudges (owner's drafts A–D, 2026-11-15)
+
+    /// A friend card's title. `name` is the friend's first name; `companion` the companion's name.
+    /// No wording mentions how anyone feels.
+    static func friendTitle(_ draft: AmbientFriendNudgeDraft, name: String, companion: String) -> String {
+        switch draft {
+        case .a:
+            String(localized: "home.friendNudge.a.title", defaultValue: "Send \(name) a heart?",
+                   comment: "Home friend card title: invites sending a heart to a friend. The placeholder is the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.")
+        case .b:
+            String(localized: "home.friendNudge.b.title", defaultValue: "Thinking of \(name)",
+                   comment: "Home friend card title. The placeholder is the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.")
+        case .c:
+            String(localized: "home.friendNudge.c.title", defaultValue: "\(companion) has an idea",
+                   comment: "Home friend card title. The placeholder is the person's companion's name (default 'Sprout').")
+        case .d:
+            String(localized: "home.friendNudge.d.title", defaultValue: "A heart for \(name)?",
+                   comment: "Home friend card title for a friend met in person this week. The placeholder is the friend's first name; keep the friend's gender neutral.")
+        }
+    }
+
+    /// A friend card's sentence. `name` is the friend's first name; `companion` the companion's name.
+    static func friendBody(_ draft: AmbientFriendNudgeDraft, name: String, companion: String) -> String {
+        switch draft {
+        case .a:
+            String(localized: "home.friendNudge.a.body", defaultValue: "A little warmth goes a long way.",
+                   comment: "Home friend card under 'Send {Name} a heart?'. Never mentions how the friend feels.")
+        case .b:
+            String(localized: "home.friendNudge.b.body", defaultValue: "A heart could brighten \(name)'s day.",
+                   comment: "Home friend card under 'Thinking of {Name}'. The placeholder is the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.")
+        case .c:
+            String(localized: "home.friendNudge.c.body", defaultValue: "\(companion) thinks \(name) would love a heart today.",
+                   comment: "Home friend card under '{Companion} has an idea'. %1$@ is the companion's name, %2$@ the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.")
+        case .d:
+            String(localized: "home.friendNudge.d.body", defaultValue: "You and \(name) met this week. Want to send a little warmth?",
+                   comment: "Home friend card for a friend met in person this week. The placeholder is the friend's first name; keep the friend's gender neutral.")
+        }
+    }
+
+    /// The friend card's send button.
+    static var friendSend: String {
+        String(localized: "home.friendNudge.send", defaultValue: "Send a heart",
+               comment: "Home friend card button: sends the friend a heart, delivered while apart.")
+    }
+
+    /// The title the friend card turns into once the heart was accepted for delivery.
+    static var friendSentTitle: String {
+        String(localized: "home.friendNudge.sent.title", defaultValue: "Heart on its way",
+               comment: "Home friend card after tapping Send a heart: the heart was saved for delivery.")
+    }
+
+    /// The sentence under "Heart on its way". `name` is the friend's first name.
+    static func friendSentBody(name: String) -> String {
+        String(localized: "home.friendNudge.sent.body", defaultValue: "\(name) will feel it next time they open Fernlet.",
+               comment: "Home friend card after sending a heart. The placeholder is the friend's first name; keep the friend's gender neutral.")
+    }
 }
