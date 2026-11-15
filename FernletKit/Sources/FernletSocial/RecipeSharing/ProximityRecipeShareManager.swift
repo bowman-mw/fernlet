@@ -161,6 +161,13 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         }
     }
 
+    /// Ends the name-disclosure rotation if the manager is released without `stop()` (the production
+    /// instance never is: it lives on the store for the process). `isolated`: the handle is main-actor
+    /// state.
+    isolated deinit {
+        nameDisclosureRotationTask?.cancel()
+    }
+
     // MARK: - Who sees your name (SEC-L29)
 
     /// Whether the recipe radio shows this device's name to everyone nearby: the pair session's
