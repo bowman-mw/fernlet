@@ -1,6 +1,6 @@
 # Recipes as reusable building blocks: design (2026-11-15)
 
-Status: **DRAFT, awaiting the owner's picks.** Nothing is built. ROADMAP item "Recipes as reusable
+Status: **APPROVED by the owner 2026-11-15 (all 12 picks: the recommended option, no notes).** Nothing is built yet. ROADMAP item "Recipes as reusable
 building blocks" (owner direction 2026-11-15).
 
 ## What the owner asked for
@@ -215,7 +215,22 @@ Pick (owner): also offer the button in the ingredient search's empty state ("No 
 Approval page: https://claude.ai/artifact/8qRX5nb61a9s5c1VenkrQk (12 picks, P01–P12, recommended option
 marked on each). Answers are recorded below once given.
 
-_(pending)_
+Answered 2026-11-15 on the approval page. Every pick took the recommended option (a); no notes.
+
+| Pick | Answer |
+|---|---|
+| P01 How a recipe becomes an ingredient | (a) recipe food with id = recipe id, source `.recipe` (§ core idea) |
+| P02 Amounts | (a) servings or part of a batch always; cups/grams once the recipe has a "Makes" amount (§2) |
+| P03 Nesting depth | (a) 3 levels; loops always refused (§4) |
+| P04 Steps | (a) sub-recipe sections first, live; cooking mode "Already made? Skip" (§5) |
+| P05 Editing a used recipe | (a) "Used in Pasta and 2 more. They'll use the new version." on save (§6) |
+| P06 Deleting a used recipe | (a) parents keep a fixed ingredient with last nutrition, and its steps are copied in (§6) |
+| P07 Existing multipart recipes | (a) convert all once on first launch, one note (§7) |
+| P08 Logging | (a) one meal item per sub-recipe with full nutrition (§8) |
+| P09 Sharing | (a) send the children too; reuse ones the receiver has (§9) |
+| P10 Ingredient search | (a) recipe editor only: "Your recipes" (up to 3) + "From your recipes" (§11) |
+| P11 Make a recipe for it | (a) on unmatched pasted lines and in empty ingredient search (§12) |
+| P12 New recipe prefill | (a) name from the line, Servings 1, Makes = the line's amount (§12) |
 
 ## Build plan (PR-sized, after approval)
 
@@ -236,3 +251,14 @@ _(pending)_
 8. **Localization** (es, es-MX complete) and accessibility pass, sim look, device check.
 
 Steps 1–2 first; 3, 4 and 6 can run in parallel after 2; 5 after 3; 7 after 3.
+
+Build notes:
+- Hotspot files: `NutritionModels.swift`, `FoodView.swift`, `FernletStore.swift`, `Localizable.xcstrings`.
+  One writer at a time per file; check running sessions first.
+- Step 1 adds `FoodItemSource.recipe`: every `switch` over the source (attribution lines, data-source
+  labels, export) needs a case, and "My foods" / the meal composer's search must filter it out.
+- Step 5's migration needs a nutrition-equality test per fixture recipe (old multipart vs migrated)
+  and an idempotence test (run twice, two devices, same child ids).
+- Step 6 needs wire-compat fixtures: a v1 reader without `subRecipes`, and the exchange packet bump.
+- Every step: S3 module, no-tracking, Power-of-10 and localization walls green; targeted suites only
+  (never the full FernletTests without asking); builds under the heavy-job lock.
