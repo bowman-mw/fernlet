@@ -299,7 +299,7 @@ final class FernletStore {
         features.friendState.isEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
         features.friendState.payloadProvider = { [weak self] in
             guard let self, self.settings.allowNearbyFriendState else { return nil }
-            return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance)
+            return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance.forFriends)
         }
         features.friendState.onFriendStateReceived = { [weak self] fingerprint, payload in
             self?.receiveFriendState(fingerprint: fingerprint, payload: payload)

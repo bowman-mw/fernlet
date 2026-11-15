@@ -199,6 +199,15 @@ struct WidgetCompanionLook: Codable, Equatable {
     var sideItemColorHex: String? = nil
     /// The Creation Studio pieces worn, in their place and size on the 24 × 24 item frame (W-07).
     var items: [ItemArt]? = nil
+    /// G8 (2026-11-15), ADDITIVE and optional, nil for today's look: the app's FROZEN
+    /// `CompanionHairStyle` token and the hair's `#RRGGBB`, the `CompanionEyes` token and the eyes'
+    /// colour, the `CompanionPattern` token and the `CompanionBackground` token.
+    var hairRaw: String? = nil
+    var hairColorHex: String? = nil
+    var eyesRaw: String? = nil
+    var eyeColorHex: String? = nil
+    var patternRaw: String? = nil
+    var backgroundRaw: String? = nil
 
     /// One worn piece: its top-left cell in the companion's body coordinates, its size, its palette
     /// (`#RRGGBB`) and its row-major palette indices (−1 clear). Byte-identical twin of the app's

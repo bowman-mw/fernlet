@@ -138,6 +138,30 @@ public nonisolated struct CompanionAppearance: Codable, Equatable, Sendable {
     }
     public var unknownSideItemColorToken: String? = nil
     public var sideItemCustomColorHex: String?
+    // G8 (owner's picks, 2026-11-15): hair, eyes, pattern and background. Each defaults to today's
+    // look, so an appearance saved before them paints pixel for pixel as it did.
+    public var hairStyle: CompanionHairStyle = .none {
+        didSet { unknownHairStyleToken = nil }
+    }
+    public var unknownHairStyleToken: String? = nil
+    /// The hair's colour as `#RRGGBB` (a suggested swatch or the person's own); nil wears the default
+    /// brown. Free text like the other `*CustomColorHex` strings, so it is clamped at the wire.
+    public var hairColorHex: String?
+    public var eyeStyle: CompanionEyes = .round {
+        didSet { unknownEyeStyleToken = nil }
+    }
+    public var unknownEyeStyleToken: String? = nil
+    /// The eyes' colour as `#RRGGBB`; nil is the face's ink. Only Big and Button eyes show it.
+    public var eyeColorHex: String?
+    public var pattern: CompanionPattern = .plain {
+        didSet { unknownPatternToken = nil }
+    }
+    public var unknownPatternToken: String? = nil
+    /// The scene behind the companion off the map. Never sent to friends (owner, 2026-11-15).
+    public var background: CompanionBackground = .none {
+        didSet { unknownBackgroundToken = nil }
+    }
+    public var unknownBackgroundToken: String? = nil
 
     /// The immutable default appearance. `CompanionAppearance` and its cosmetic enums are
     /// `Sendable` value types, so this constant is concurrency-safe by construction.
@@ -156,7 +180,13 @@ public nonisolated struct CompanionAppearance: Codable, Equatable, Sendable {
         clothingCustomColorHex: String? = nil,
         sideItem: CompanionSideItem = .none,
         sideItemColor: CompanionAssetColor = .bark,
-        sideItemCustomColorHex: String? = nil
+        sideItemCustomColorHex: String? = nil,
+        hairStyle: CompanionHairStyle = .none,
+        hairColorHex: String? = nil,
+        eyeStyle: CompanionEyes = .round,
+        eyeColorHex: String? = nil,
+        pattern: CompanionPattern = .plain,
+        background: CompanionBackground = .none
     ) {
         self.bodyStyle = bodyStyle
         self.palette = palette
@@ -171,6 +201,12 @@ public nonisolated struct CompanionAppearance: Codable, Equatable, Sendable {
         self.sideItem = sideItem
         self.sideItemColor = sideItemColor
         self.sideItemCustomColorHex = sideItemCustomColorHex
+        self.hairStyle = hairStyle
+        self.hairColorHex = hairColorHex
+        self.eyeStyle = eyeStyle
+        self.eyeColorHex = eyeColorHex
+        self.pattern = pattern
+        self.background = background
     }
 
     public init(from decoder: Decoder) throws {
@@ -216,6 +252,38 @@ public nonisolated struct CompanionAppearance: Codable, Equatable, Sendable {
         sideItemColor = sideItemColorSplit.value
         unknownSideItemColorToken = sideItemColorSplit.parkedToken
         sideItemCustomColorHex = try container.decodeIfPresent(String.self, forKey: .sideItemCustomColorHex)
+        try decodeLooks(from: decoder)
+    }
+
+    /// The G8 slots (hair, eyes, pattern, background), each tolerant like the closet enums above.
+    private mutating func decodeLooks(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let hair = try container.decodeTolerantEnum(
+            CompanionHairStyle.self, forKey: .hairStyle, parkedTokenKey: .unknownHairStyleToken, default: .none)
+        hairStyle = hair.value
+        unknownHairStyleToken = hair.parkedToken
+        hairColorHex = try container.decodeIfPresent(String.self, forKey: .hairColorHex)
+        let eyes = try container.decodeTolerantEnum(
+            CompanionEyes.self, forKey: .eyeStyle, parkedTokenKey: .unknownEyeStyleToken, default: .round)
+        eyeStyle = eyes.value
+        unknownEyeStyleToken = eyes.parkedToken
+        eyeColorHex = try container.decodeIfPresent(String.self, forKey: .eyeColorHex)
+        let pattern = try container.decodeTolerantEnum(
+            CompanionPattern.self, forKey: .pattern, parkedTokenKey: .unknownPatternToken, default: .plain)
+        self.pattern = pattern.value
+        unknownPatternToken = pattern.parkedToken
+        let background = try container.decodeTolerantEnum(
+            CompanionBackground.self, forKey: .background, parkedTokenKey: .unknownBackgroundToken, default: .none)
+        self.background = background.value
+        unknownBackgroundToken = background.parkedToken
+    }
+
+    /// The appearance a friend receives: everything but the background, which stays on this phone.
+    public var forFriends: CompanionAppearance {
+        var copy = self
+        copy.background = .none
+        copy.unknownBackgroundToken = nil
+        return copy
     }
 }
 

@@ -156,9 +156,13 @@ struct CompanionCustomizationPage: View {
     }
 }
 
-/// The four slots' names, for their pages' titles on the plate (and the sheet's bar).
+/// The slots' names, for their pages' titles on the plate (and the sheet's bar).
 nonisolated enum CustomizeSlotTitle {
     static let body = LocalizedStringResource("Body", comment: "Customize: the body slot's page title and row name")
+    static let hair = LocalizedStringResource("Hair", comment: "Customize: the hair slot's page title and row name")
+    static let eyes = LocalizedStringResource("Eyes", comment: "Customize: the eyes slot's page title and row name")
+    static let pattern = LocalizedStringResource("Pattern", comment: "Customize: the slot for a pattern on the companion's body (freckles, stripes…): its page title and row name")
+    static let background = LocalizedStringResource("Background", comment: "Customize: the slot for the little scene behind the companion: its page title and row name")
     static let accessory = LocalizedStringResource("Accessory", comment: "Customize: the accessory slot's page title and row name")
     static let clothing = LocalizedStringResource("Clothing", comment: "Customize: the clothing slot's page title and row name")
     static let sideItem = LocalizedStringResource("Side item", comment: "Customize: the side-item slot's page title and row name")

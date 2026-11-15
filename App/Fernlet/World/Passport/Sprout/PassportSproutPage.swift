@@ -142,7 +142,8 @@ struct PassportSproutPage: View {
         return PassportSproutPhoto(
             grid: WorldCompanionPainter.paint(state: now.state, look: now.look, pose: pose, increasedContrast: highContrast),
             ghost: WorldCompanionPainter.paint(state: now.state, look: now.look, pose: now.pose, increasedContrast: highContrast),
-            reaction: reaction, petCount: petCount)
+            reaction: reaction, petCount: petCount,
+            scene: WorldCompanionSceneKind(model.appearance.background), light: WorldSceneLight(now.pose))
             .contentShape(Rectangle())
             .onTapGesture(perform: pet)
             .accessibilityElement(children: .ignore)

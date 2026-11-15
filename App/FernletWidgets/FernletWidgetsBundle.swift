@@ -171,6 +171,14 @@ struct FernletCompanionEntry: TimelineEntry {
         return grid
     }
 
+    /// The person's background scene behind the companion (G8): night while it sleeps, dimmed in dark
+    /// mode; nil for none, an unknown token, or no snapshot yet.
+    func homeScreenScene(dark: Bool) -> [UInt32]? {
+        guard snapshot != nil,
+              let kind = WidgetPixelLook.token(look.backgroundRaw, in: WidgetCompanionSceneKind.allCases) else { return nil }
+        return WidgetCompanionScene.paint(kind, light: hidesTheDay ? .night : .day, dark: dark)
+    }
+
     /// The pixel companion for this entry, its outline darker with Increase Contrast (W-03), as the
     /// map draws it.
     func companionGrid(increasedContrast: Bool) -> WidgetCompanionGrid {

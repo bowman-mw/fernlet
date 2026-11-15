@@ -10,17 +10,26 @@ import UIKit
 // passport (World-Passport-Spec §4): Customize's slot rows and page 1's slot buttons read one summary and push
 // one page per slot, so the two can never show different values or pick through different code.
 
-/// One of the companion's four slots: Body, Accessory, Clothing and Side item, in Customize's order.
+/// One of the companion's slots, in Customize's order: Body, Hair, Eyes and Pattern (the creature), then
+/// Accessory, Clothing and Side item (what it wears), then Background (G8, 2026-11-15).
 nonisolated enum CustomizeSlot: CaseIterable, Hashable, Sendable {
     case body
+    case hair
+    case eyes
+    case pattern
     case accessory
     case clothing
     case sideItem
+    case background
 
     /// The slot's name: its page's title and its row's caption.
     var title: LocalizedStringResource {
         switch self {
         case .body: CustomizeSlotTitle.body
+        case .hair: CustomizeSlotTitle.hair
+        case .eyes: CustomizeSlotTitle.eyes
+        case .pattern: CustomizeSlotTitle.pattern
+        case .background: CustomizeSlotTitle.background
         case .accessory: CustomizeSlotTitle.accessory
         case .clothing: CustomizeSlotTitle.clothing
         case .sideItem: CustomizeSlotTitle.sideItem
@@ -30,7 +39,7 @@ nonisolated enum CustomizeSlot: CaseIterable, Hashable, Sendable {
     /// The Creation Studio slots folded into this one (none for the body).
     var customSlots: [ItemSlot] {
         switch self {
-        case .body: []
+        case .body, .hair, .eyes, .pattern, .background: []
         case .accessory: [.hat, .face]
         case .clothing: [.body]
         case .sideItem: [.heldItem]
@@ -41,6 +50,10 @@ nonisolated enum CustomizeSlot: CaseIterable, Hashable, Sendable {
     var token: String {
         switch self {
         case .body: "body"
+        case .hair: "hair"
+        case .eyes: "eyes"
+        case .pattern: "pattern"
+        case .background: "background"
         case .accessory: "accessory"
         case .clothing: "clothing"
         case .sideItem: "sideItem"
@@ -94,6 +107,11 @@ nonisolated struct CustomizeSlotSummary: Equatable, Sendable {
         let builtIn: (label: String, empty: Bool)
         switch slot {
         case .body: return CustomizeSlotSummary(slot: slot, value: appearance.bodyStyle.label, isEmpty: false)
+        case .hair: return CustomizeSlotSummary(slot: slot, value: appearance.hairStyle.label, isEmpty: appearance.hairStyle == .none)
+        case .eyes: return CustomizeSlotSummary(slot: slot, value: appearance.eyeStyle.label, isEmpty: false)
+        case .pattern: return CustomizeSlotSummary(slot: slot, value: appearance.pattern.label, isEmpty: appearance.pattern == .plain)
+        case .background:
+            return CustomizeSlotSummary(slot: slot, value: appearance.background.label, isEmpty: appearance.background == .none)
         case .accessory: builtIn = (appearance.accessory.label, appearance.accessory == .none)
         case .clothing: builtIn = (appearance.clothing.label, appearance.clothing == .none)
         case .sideItem: builtIn = (appearance.sideItem.label, appearance.sideItem == .none)
@@ -105,7 +123,7 @@ nonisolated struct CustomizeSlotSummary: Equatable, Sendable {
         return CustomizeSlotSummary(slot: slot, value: item.name.isEmpty ? item.slot.label : item.name, isEmpty: false)
     }
 
-    /// The four summaries for the store's companion now.
+    /// Every slot's summary for the store's companion now.
     @MainActor
     static func current(store: FernletStore) -> [CustomizeSlotSummary] {
         CustomizeSlot.allCases.map { make($0, appearance: store.settings.companionAppearance, equipped: store.equippedCustomItems) }
@@ -135,6 +153,8 @@ struct CustomizeSlotIcon: View {
         case .sideItem:
             CustomizePieceIcon(sprite: CustomizeSlotArt.sprite(for: appearance.sideItem),
                                systemImage: appearance.sideItem.systemImage, scale: scale)
+        case .hair, .eyes, .pattern, .background:
+            CustomizeLookIcon(slot: slot, appearance: appearance, state: state, scale: scale)
         }
     }
 }
@@ -201,6 +221,8 @@ struct CustomizeSlotPage: View {
                                        state: store.liveCompanionState, showsColor: appearance.sideItem != .none) { item in
                 CustomizePieceLabel(name: item.label, sprite: CustomizeSlotArt.sprite(for: item), systemImage: item.systemImage)
             }
+        case .hair, .eyes, .pattern, .background:
+            CustomizeLookChoices(store: store, slot: slot)
         }
     }
 }
@@ -371,13 +393,14 @@ private extension Color {
 /// Generic over the slot's item type so one card serves body styles, accessories, clothing, and
 /// side items; selection and color flow back through the bindings ``CustomizeAppearanceBindings`` builds
 /// onto the store.
-private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
+struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
     /// The slot's name ("Accessory"), a catalog resource.
     var title: LocalizedStringResource
     var items: [Item]
     @Binding var selection: Item
-    var colorTitle: LocalizedStringKey
-    var color: CustomizeColorBindings
+    /// The colour row's title and bindings; nil for a slot whose colour lives elsewhere (the G8 slots).
+    var colorTitle: LocalizedStringKey? = nil
+    var color: CustomizeColorBindings? = nil
     var state: CompanionState
     /// Whether the built-in recolor control is shown. Off when no built-in is equipped in this slot —
     /// custom items carry their own painted colors and get no color control.
@@ -394,8 +417,8 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                         itemChip(item)
                     }
                 }
-                if showsColor {
-                    colorSection
+                if showsColor, let colorTitle, let color {
+                    colorSection(title: colorTitle, color: color)
                 }
             }
         }
@@ -420,23 +443,23 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private var colorSection: some View {
+    private func colorSection(title: LocalizedStringKey, color: CustomizeColorBindings) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                SectionLabel(colorTitle)
+                SectionLabel(title)
                 Spacer()
                 ColorPicker("Custom color", selection: color.custom, supportsOpacity: false)
                     .labelsHidden()
             }
             LazyVGrid(columns: columns(3), spacing: 10) {
                 ForEach(CompanionAssetColor.allCases) { preset in
-                    colorButton(for: preset)
+                    colorButton(for: preset, color: color)
                 }
             }
         }
     }
 
-    private func colorButton(for preset: CompanionAssetColor) -> some View {
+    private func colorButton(for preset: CompanionAssetColor, color: CustomizeColorBindings) -> some View {
         let isSelected = color.customHex.wrappedValue == nil && color.preset.wrappedValue == preset
         return Button {
             if !isSelected { FernletFeedback.system.play(.tick) }

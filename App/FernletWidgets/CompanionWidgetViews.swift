@@ -33,7 +33,8 @@ struct CompanionSmallView: View {
                 HStack(alignment: .top, spacing: 4) {
                     WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 3,
                                           ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
-                                          motif: entry.homeScreenMotif, makesRoomForALeftMotif: true)
+                                          motif: entry.homeScreenMotif, makesRoomForALeftMotif: true,
+                                          scene: mono ? nil : entry.homeScreenScene(dark: scheme == .dark))
                     Spacer(minLength: 0)
                     if let name = entry.companionName {
                         Text(verbatim: name)
@@ -79,7 +80,7 @@ struct CompanionThoughtView: View {
             VStack(spacing: 8) {
                 WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 4,
                                       ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
-                                      motif: entry.homeScreenMotif)
+                                      motif: entry.homeScreenMotif, scene: mono ? nil : entry.homeScreenScene(dark: scheme == .dark))
                 if let score = entry.careScore {
                     WidgetHeartRow(score: score, goldHearts: entry.goldHearts, mono: mono)
                 }

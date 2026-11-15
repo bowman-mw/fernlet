@@ -76,6 +76,10 @@ struct PassportSproutPhoto: View {
     let reaction: WorldCloseUpReaction
     /// Changes with every pet, so the hearts start again.
     let petCount: Int
+    /// The person's background scene behind the companion (G8); none keeps the mint ground.
+    var scene = WorldCompanionSceneKind.none
+    /// The scene's light, following the companion's night.
+    var light = WorldSceneLight.day
 
     /// The frame's size.
     static let size = CGSize(width: 100, height: 122)
@@ -84,7 +88,11 @@ struct PassportSproutPhoto: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            PassportSproutInk.photo
+            if scene == .none {
+                PassportSproutInk.photo
+            } else {
+                WorldCompanionSceneBackdrop(kind: scene, light: light)
+            }
             Ellipse()
                 .fill(WorldPalette.ink.opacity(0.14))
                 .frame(height: 10)
