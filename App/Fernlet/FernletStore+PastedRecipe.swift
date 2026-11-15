@@ -25,6 +25,9 @@ struct PastedRecipeSeed {
         /// the row still holds it — picking another food answers the question.
         let seededFoodItemId: UUID?
 
+        /// Nothing matched the line: the row waits for a food.
+        var isUnmatched: Bool { match == .noMatch }
+
         func applies(to row: ManualRecipeIngredientInput) -> Bool {
             row.selectedFoodItemId == seededFoodItemId
         }

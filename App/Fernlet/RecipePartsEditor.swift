@@ -33,9 +33,15 @@ struct RecipeIngredientRows: View {
 
     var body: some View {
         ForEach($ingredients) { $ingredient in
+            // A row nothing matched opens expanded with its suggestions, so its "Pick a food" note
+            // goes above it, where it stays in view; a "Check this match" note sits under its row.
+            let note = pastedRowNotes[ingredient.id].flatMap { $0.applies(to: ingredient) ? $0 : nil }
             VStack(alignment: .leading, spacing: 4) {
+                if let note, note.isUnmatched {
+                    PastedRowNoteView(note: note)
+                }
                 row($ingredient)
-                if let note = pastedRowNotes[ingredient.id], note.applies(to: ingredient) {
+                if let note, !note.isUnmatched {
                     PastedRowNoteView(note: note)
                 }
             }

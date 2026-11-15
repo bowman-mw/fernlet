@@ -6120,6 +6120,12 @@ final class FernletStore {
         MealBuilder.macroTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
+    /// The recipe's own lines saved with no nutrition, which leave its totals low (owner decision
+    /// 2026-11-15; ``RecipeNutritionGaps``).
+    func linesWithoutNutrition(in recipe: RecipeDefinition) -> Int {
+        RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
+    }
+
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
         MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
