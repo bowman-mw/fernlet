@@ -142,6 +142,58 @@ struct PastedRecipeReaderTests {
         }
     }
 
+    @Test func aMatchThatAddsAVarietyIsToCheckButPreparationWordsAreNot() {
+        // Owner decision 2026-11-15: "300 g spaghetti" quietly bound to spinach spaghetti.
+        #expect(!PastedRecipeReader.nameAddsOnlyPreparation("Spaghetti, spinach, cooked", query: "spaghetti"))
+        #expect(!PastedRecipeReader.nameAddsOnlyPreparation("Spaghetti, protein-fortified, dry", query: "spaghetti"))
+        #expect(PastedRecipeReader.nameAddsOnlyPreparation("Garlic, raw", query: "garlic"))
+        #expect(PastedRecipeReader.nameAddsOnlyPreparation("Tomatoes, raw", query: "tomato"))
+        #expect(PastedRecipeReader.nameAddsOnlyPreparation("Chicken breast, roasted", query: "chicken breasts"))
+        #expect(PastedRecipeReader.nameAddsOnlyPreparation("Cheese, parmesan, grated", query: "grated parmesan"))
+        #expect(PastedRecipeReader.nameAddsOnlyPreparation("Butter, salted", query: "butter"))
+    }
+
+    @Test func spinachSpaghettiOnTheShippedCatalogIsAMatchToCheck() throws {
+        let catalog = FoodCatalog.bundled()
+        try #require(catalog.bundledCount > 100_000, "the shipped catalog must be loaded")
+        let line = PastedIngredientLine(original: "300 g spaghetti", quantity: 300, unit: "g", food: "spaghetti")
+        let row = PastedRecipeReader.bind(line, catalog: catalog)
+        let name = try #require(row.input.selectedFoodItemId.flatMap { catalog.items(ids: [$0]).first?.name })
+        if !PastedRecipeReader.nameAddsOnlyPreparation(name, query: "spaghetti") {
+            #expect(row.match == .check, "bound to \(name)")
+        }
+    }
+
+    // MARK: - Lines with no nutrition
+
+    @Test func rowsAndLinesWithNoNutritionAreCounted() {
+        let rows = [
+            ManualRecipeIngredientInput(name: "salt and pepper to taste"),
+            ManualRecipeIngredientInput(name: "olive oil", fat: 14),
+            ManualRecipeIngredientInput(name: ""),
+            ManualRecipeIngredientInput(name: "Ramen", selectedFoodItemId: UUID())
+        ]
+        #expect(RecipeNutritionGaps.rowsWithoutNutrition(rows) == 1)
+
+        func food(_ name: String, fat: Int, category: String, source: FoodItemSource) -> FoodItem {
+            FoodItem(name: name, servingSize: 1, servingUnit: "serving",
+                     macros: Macros(protein: 0, carbs: 0, fat: fat), micronutrients: Micronutrients(),
+                     category: category, source: source, tags: [])
+        }
+        let salt = food("salt and pepper", fat: 0, category: "custom ingredient", source: .manual)
+        let shared = food("sauce", fat: 0, category: "recipe ingredient", source: .manual)
+        let oil = food("olive oil", fat: 14, category: "custom ingredient", source: .manual)
+        let water = food("Water", fat: 0, category: "Beverages", source: .usda)
+        #expect(salt.isCustomIngredientWithoutNutrition && shared.isCustomIngredientWithoutNutrition)
+        #expect(!oil.isCustomIngredientWithoutNutrition && !water.isCustomIngredientWithoutNutrition)
+
+        let recipe = RecipeDefinition(
+            name: "Bowl", servings: 2,
+            ingredients: [salt, oil, water, shared].map { RecipeIngredient(foodItemId: $0.id, quantity: 1, unit: "serving") },
+            source: "manual", createdAt: .now, updatedAt: .now)
+        #expect(RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: [salt, oil, water, shared]) == 2)
+    }
+
     // MARK: - Editor seed
 
     @Test func theSeedNotesOnlyRowsToLookAtAndANotePassesOnceAnotherFoodIsPicked() throws {

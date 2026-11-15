@@ -423,6 +423,7 @@ struct FoodView: View {
             isSaved: isSaved,
             perServing: perServing,
             calories: calories,
+            linesWithoutNutrition: isSaved ? 0 : store.linesWithoutNutrition(in: recipe),
             onLog: { mealType in logRecipe(recipe, mealType: mealType, isSaved: isSaved) },
             onShare: { recipeShareDraft = store.recipeShareDraft(for: recipe) }
         )
@@ -1815,6 +1816,7 @@ struct RecipeSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Per serving")
                 RecipeMacroTags(macros: perServingTotals, showsCalories: store.settings.showCalories)
+                WebImportEstimateNote(linesWithoutNutrition: RecipeNutritionGaps.rowsWithoutNutrition(allIngredientInputs))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -6092,7 +6094,8 @@ struct RecipeDetailView: View {
             totalsLine: totalsLine,
             estimateNote: WebImportEstimateNote(
                 uncountedLines: recipe.webImport?.uncountedIngredientLines,
-                estimatedLines: recipe.webImport?.estimatedIngredientLines
+                estimatedLines: recipe.webImport?.estimatedIngredientLines,
+                linesWithoutNutrition: recipe.webImport == nil ? store.linesWithoutNutrition(in: recipe) : nil
             )
         )
     }
@@ -6576,7 +6579,7 @@ private struct RecipeCreationOptionsView: View {
                 Button { step = .importing } label: {
                     RecipeCreationOptionRow(
                         title: "Import recipe",
-                        subtitle: Text("Paste a recipe link or Fernlet recipe data."),
+                        subtitle: Text("Paste a recipe link, a recipe's text, or Fernlet recipe data."),
                         sprite: WorldSprites.box
                     )
                 }
@@ -6998,7 +7001,8 @@ struct RecipeBookSheet: View {
             macros: perServingMacros(recipe),
             showsCalories: store.settings.showCalories,
             estimateNote: isSaved ? WebImportEstimateNote(uncountedLines: recipe.webImport?.uncountedIngredientLines,
-                                                          estimatedLines: recipe.webImport?.estimatedIngredientLines) : nil,
+                                                          estimatedLines: recipe.webImport?.estimatedIngredientLines)
+                : lowTotalsNote(store.linesWithoutNutrition(in: recipe)),
             onLog: { mealType in
                 logRecipe(recipe, mealType: mealType, isSaved: isSaved)
                 dismissIfPresented()
@@ -7020,6 +7024,11 @@ struct RecipeBookSheet: View {
             .buttonStyle(.plain)
             #endif
         }
+    }
+
+    /// The low-totals line for a manual recipe's card, or nil when every line has nutrition.
+    private func lowTotalsNote(_ lines: Int) -> WebImportEstimateNote? {
+        lines > 0 ? WebImportEstimateNote(linesWithoutNutrition: lines) : nil
     }
 
     /// A recipe's per-serving macros: a web import's own figures (nil when its page carried none),

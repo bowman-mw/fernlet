@@ -58,12 +58,17 @@ struct FoodRootRecipeCard: View {
     let perServing: Macros?
     /// Per-serving calories, when Show calories is on.
     var calories: Int? = nil
+    /// Lines saved with no nutrition, which leave the totals low (``RecipeNutritionGaps``).
+    var linesWithoutNutrition = 0
     let onLog: (MealType) -> Void
     let onShare: () -> Void
 
     var body: some View {
         RecipeBookCard(macros: perServing.map { MacroTotals(protein: $0.protein, carbs: $0.carbs, fat: $0.fat) },
-                       showsCalories: calories != nil, onLog: onLog, onShare: onShare) {
+                       showsCalories: calories != nil,
+                       estimateNote: linesWithoutNutrition > 0
+                           ? WebImportEstimateNote(linesWithoutNutrition: linesWithoutNutrition) : nil,
+                       onLog: onLog, onShare: onShare) {
             NavigationLink(value: FoodRoute.recipeDetail(id: recipe.id, isSaved: isSaved)) {
                 FoodRecipeCardSummary(recipe: recipe, isSaved: isSaved)
                     .frame(maxWidth: .infinity, alignment: .leading)
