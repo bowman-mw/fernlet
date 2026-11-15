@@ -65,15 +65,21 @@ struct PassportAirportStampsTests {
         #expect(share > 0.04 && share < 0.1)
     }
 
-    /// The jet for every airport, the four approved pictures for Denver, LAX, Changi and JFK.
+    /// The jet for every airport, an approved picture for each famous one: the first four and the owner's 2026-11-15
+    /// thirteen. Each fits the ticket's art box (at most 17 wide and 12 tall, as drawn) and differs from the jet.
     @Test func famousAirportsGetTheirOwnPicture() {
-        #expect(PassportAirportStamp.art(for: "PDX") == PassportStampArt.pixels(PassportAirportStamp.jetSide))
+        #expect(PassportAirportStamp.art(for: "HEL") == PassportStampArt.pixels(PassportAirportStamp.jetSide))
         #expect(PassportAirportStamp.jetSide.count == 7 && PassportAirportStamp.jetSide.allSatisfy { $0.count == 15 })
-        for code in ["DEN", "LAX", "SIN", "JFK"] {
-            #expect(PassportAirportStamp.hasOwnArt(code))
+        let famous = ["DEN", "LAX", "SIN", "JFK", "PDX", "DXB", "HKG", "PKX", "MAD", "IAD", "CDG", "DOH", "SYD", "IST",
+                      "ICN", "HND", "ATL"]
+        #expect(Set(PassportAirportStamp.famous.keys) == Set(famous))
+        for code in famous {
+            #expect(PassportAirportStamp.hasOwnArt(code) && PassportAirportStamp.hasOwnArt(code.lowercased()))
             let rows = PassportAirportStamp.famous[code] ?? []
             #expect(!rows.isEmpty && Set(rows.map(\.count)).count == 1, "\(code)'s rows are one width")
-            #expect(PassportAirportStamp.art(for: code) != PassportAirportStamp.art(for: "PDX"))
+            #expect(rows.count <= 12 && (rows.first?.count ?? 0) <= 17, "\(code) fits the art box")
+            #expect(rows.allSatisfy { $0.allSatisfy { $0 == "k" || $0 == "." } }, "\(code) is one ink")
+            #expect(PassportAirportStamp.art(for: code) != PassportAirportStamp.art(for: "HEL"))
         }
         #expect(!PassportAirportStamp.hasOwnArt("HEL"))
     }
