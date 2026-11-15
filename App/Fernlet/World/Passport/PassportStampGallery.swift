@@ -83,11 +83,12 @@ struct PassportStampGallery: View {
         grid(["az", "vn", "cf", "ba"].map { .country($0) }, scale: 1.25, names: true)
     }
 
-    /// One of the sample traveller's stamp pages: six stamps, two across and three down, 172 pt a row.
+    /// One of the sample traveller's stamp pages (``PassportStampEntry/perPage`` stamps), two across, 172 pt a row.
     @ViewBuilder
     private func page(_ index: Int) -> some View {
         let pages = PassportStampEntry.pages(Self.sampleLog)
-        heading(index == 0 ? "STAMPS · Aug – Sep 2026" : "STAMPS · Oct 2026")
+        let dates = pages.indices.contains(index) ? pages[index].map(\.date) : []
+        heading("STAMPS · " + (dates.first.map { PassportBookDates.months(from: $0, to: dates.last ?? $0) } ?? ""))
         if pages.indices.contains(index) {
             let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 2)
             LazyVGrid(columns: columns, spacing: 0) {

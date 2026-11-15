@@ -81,8 +81,8 @@ nonisolated struct PassportStampEntry: Hashable, Sendable {
 
     // MARK: Order and pages
 
-    /// How many stamps a page holds: two across, three down.
-    static let perPage = 6
+    /// How many stamps a page holds: two across, five down (owner 2026-11-15: "fit more stamps"; six before).
+    static let perPage = 10
     /// The most entries ordered (a lifetime of trips, with room).
     static let maxEntries = 20_000
 

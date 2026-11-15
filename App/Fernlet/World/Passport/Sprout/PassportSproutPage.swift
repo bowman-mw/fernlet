@@ -17,8 +17,9 @@ import WorldMapStore
 ///
 /// **In the book.** The book shows this as page 1's content and wraps the book in a `NavigationStack`: this view
 /// fills the paper inside the page's 2-pt border, draws its own insets (``contentInsets``: the gutter on the
-/// spine side, room for the page number at the foot), scrolls inside the page when it doesn't fit (the largest
-/// text) with a fade at the foot, and pushes its pages with `navigationDestination`. It names its stack
+/// spine side, room for the page number at the foot), fits the page without scrolling (``PassportSproutFit``:
+/// tighter spacing, then a step or more smaller text) and scrolls with a fade at the foot only when nothing fits
+/// (the largest text on the shortest iPhones), and pushes its pages with `navigationDestination`. It names its stack
 /// "Passport", so each pushed page's Back reads "Passport". The Remember this place sheet (This is home) and
 /// Settings › Home map (Manage) are its own sheets. Pass `isStudioDraftDirty` to block the book's close while
 /// a Creation Studio pushed from here holds unsaved paint.
@@ -85,48 +86,71 @@ struct PassportSproutPage: View {
         }
     }
 
-    /// The page itself, its clock moved on each minute.
+    /// The page itself, its clock moved on each minute, fitted to the page (owner 2026-11-15: page 1 no longer
+    /// scrolls): the first of ``PassportSproutFit/rungs(for:)`` that fits, else, only when none does (the largest
+    /// text on the shortest iPhones), the page scrolling inside the book with a fade at its foot.
     private var page: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = companion(at: context.date)
             let model = makeModel(now: now, date: context.date)
-            ScrollView {
-                // The page grows with the text to the first accessibility size, then scrolls (§4).
-                content(model: model, now: now)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                    .padding(Self.contentInsets)
+            ViewThatFits(in: .vertical) {
+                ForEach(PassportSproutFit.rungs(for: dynamicTypeSize), id: \.self) { rung in
+                    fitted(model: model, now: now, rung: rung)
+                }
+                scrolling(model: model, now: now)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height > 4
-            } action: { _, hasMore in
-                showsFade = hasMore
-            }
-            // The book's swipe down closes only from the top, so it never fights the page's own scroll.
-            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y <= $0.contentInsets.top * -1 + 2 } action: { _, top in
-                onTop(top)
-            }
-            .overlay(alignment: .bottom) { if showsFade { PassportSproutFade() } }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 
-    /// The page's contents, top to bottom.
-    private func content(model: PassportSproutModel, now: WorldCompanionNow) -> some View {
-        VStack(spacing: 10) {
+    /// The page at one rung, standing still in the book (the swipe down closes it from anywhere).
+    private func fitted(model: PassportSproutModel, now: WorldCompanionNow, rung: PassportSproutFit) -> some View {
+        content(model: model, now: now, rung: rung)
+            .dynamicTypeSize(rung.size)
+            .padding(Self.contentInsets)
+            .onAppear { onTop(true) }
+    }
+
+    /// The last resort: the page at the person's own size (to the first accessibility size) scrolling inside the
+    /// book, with the fade at the foot while there is more below.
+    private func scrolling(model: PassportSproutModel, now: WorldCompanionNow) -> some View {
+        let rung = PassportSproutFit(size: min(dynamicTypeSize, .accessibility1), compact: true)
+        return ScrollView {
+            content(model: model, now: now, rung: rung)
+                .dynamicTypeSize(rung.size)
+                .padding(Self.contentInsets)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height > 4
+        } action: { _, hasMore in
+            showsFade = hasMore
+        }
+        // The book's swipe down closes only from the top, so it never fights the page's own scroll.
+        .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y <= $0.contentInsets.top * -1 + 2 } action: { _, top in
+            onTop(top)
+        }
+        .overlay(alignment: .bottom) { if showsFade { PassportSproutFade() } }
+    }
+
+    /// The page's contents, top to bottom, at `rung`'s spacing.
+    private func content(model: PassportSproutModel, now: WorldCompanionNow, rung: PassportSproutFit) -> some View {
+        VStack(spacing: rung.compact ? 6 : 10) {
             PassportSproutHeader()
-            identity(model: model, now: now)
+            identity(model: model, now: now, rung: rung)
             PassportSproutLine(text: reaction.line ?? store.companionAmbientThought(addressing: termOfAddress))
             PassportSproutMachineLines(lines: model.machineLines)
             PassportSproutWearing(model: model, act: act)
             PassportSproutShop(model: model, act: act)
             PassportSproutBottomRow(model: model, act: act)
         }
+        .environment(\.passportSproutCompact, rung.compact)
     }
 
     /// The photo beside the details; the details under it at the largest text sizes.
-    private func identity(model: PassportSproutModel, now: WorldCompanionNow) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+    private func identity(model: PassportSproutModel, now: WorldCompanionNow, rung: PassportSproutFit) -> some View {
+        let layout = rung.size.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: rung.compact ? 6 : 10))
             : AnyLayout(HStackLayout(alignment: .top, spacing: 11))
         return layout {
             photo(model: model, now: now)
@@ -245,6 +269,38 @@ struct PassportSproutPage: View {
             friendShopMinutes: WorldShopButton.minutesLeft(store: store, at: date), place: place(),
             counts: PassportSproutCounts(progress: library.progress(of: store.worldFog.atlas.book)), isDecoy: decoy)
     }
+}
+
+/// One way of laying page 1 out to fit the page without scrolling (owner 2026-11-15): a Dynamic Type size and
+/// whether the spacing is tightened. ``rungs(for:)`` lists them best first; the page takes the first that fits.
+nonisolated struct PassportSproutFit: Hashable, Sendable {
+    /// The text size the page is drawn at.
+    let size: DynamicTypeSize
+    /// Whether the gaps between the page's parts are tightened.
+    let compact: Bool
+
+    /// The most steps smaller than the person's text the page may go below the accessibility sizes.
+    static let maxSteps = 3
+    /// The most steps smaller at the accessibility sizes (their text stays large; past this the page scrolls).
+    static let maxAccessibilitySteps = 1
+
+    /// The rungs for the person's text size `size` (taken to the first accessibility size at most, as the page
+    /// grows no further): their size as laid out, then tightened, then tightened at each of up to ``maxSteps`` sizes
+    /// smaller (``maxAccessibilitySteps`` at the accessibility sizes), never below the smallest.
+    static func rungs(for size: DynamicTypeSize) -> [PassportSproutFit] {
+        let capped = min(size, .accessibility1)
+        let sizes = DynamicTypeSize.allCases
+        guard let at = sizes.firstIndex(of: capped) else { return [PassportSproutFit(size: capped, compact: true)] }
+        let steps = capped.isAccessibilitySize ? maxAccessibilitySteps : maxSteps
+        let smaller = sizes[max(at - steps, 0) ..< at].reversed().map { PassportSproutFit(size: $0, compact: true) }
+        assert(smaller.count <= maxSteps)
+        return [PassportSproutFit(size: capped, compact: false), PassportSproutFit(size: capped, compact: true)] + smaller
+    }
+}
+
+extension EnvironmentValues {
+    /// Whether page 1 is drawn with its spacing tightened (``PassportSproutFit/compact``).
+    @Entry var passportSproutCompact = false
 }
 
 /// Where page 1 goes: each pushed page (`b2-slot-picker`, `b2-wardrobe`, `b2-studio`, `b2-shop-editor`,
