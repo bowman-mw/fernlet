@@ -102,9 +102,15 @@ There is no snap-to-road or map-matching code in the app. Douglas–Peucker alre
 
 ## 8. Owner's answers (2026-11-15)
 
-Answered on the review page: calls 4 and 8. Calls 1, 2, 3, 5, 6 and 7 are still open (not saved).
+All eight calls are answered on the review page (db collection `calls`).
 
-- **Call 4, where:** walked paths on **Home only**. Roads can also show on **Your world**, if they are long enough.
+- **Call 1, option: B straight away.** Worn footpaths and frequent roads ship together, as one build.
+- **Call 2, thresholds: the draft numbers.** Paths change shade at 2 / 5 / 15 passes; roads at 3 / 10 / 30 drives.
+- **Call 3, trails: the worn path replaces the green 30-day trail** where they overlap.
+- **Call 4, where:** walked paths on **Home only**. Roads can also show on **Your world**, if they are long enough. **New ask:** trains, subways and ferries get **their own paths**.
+- **Call 5, switch:** "Show worn paths" is **on by default**.
+- **Call 6, widget: show them** (against the recommendation). The widget picture (`WidgetMap.plist`) has file protection but is not sealed, and it is deleted by every wipe; it already carries saved trails. The policy's widget sentence ("with your marked places and saved trails") gains "and the paths and roads you use most".
+- **Call 7, policy: "approve as written". This conflicts with call 8.** The approved sentence says "with no dates", but fading stores a last-used date. Redraft for the owner to approve: "If you turn on background mapping, Fernlet also counts how often you pass along each part of the map and when you last did, so the roads you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it."
 - **Call 8, fading: yes.**
   - Every 30 days without travel on a path drops it one level.
   - At the bottom it does not disappear. It becomes an **abandoned path** (a fourth look).
@@ -115,3 +121,9 @@ Answered on the review page: calls 4 and 8. Calls 1, 2, 3, 5, 6 and 7 are still 
 - **Roads (B).** The counter needs a last-used day (or month) per cell next to the count, so it can fade. That is still small (about 250k × 6 bytes at most), but it is date-bearing routine data. The policy sentence in §5 drops "with no dates" and needs a new draft.
 - **Art.** An abandoned path needs its own look: for example faint, broken dirt with grass pixels growing through. It still shows only on uncovered ground.
 - **Your world roads.** "Long enough" needs a number. Draft: a road run of at least 2 km of connected frequent cells, about 6 of Your world's finest hexes.
+
+**Trains, subways and ferries (call 4 note): not detectable today.** `WorldRideMode` is only `onFoot`, `driving` or `cycling`. CoreMotion's `automotive` covers cars, buses and trains alike, so #162 simply counts them as drives.
+- **Ferry:** feasible. A driving-speed stretch whose fixes lie over water in the bundled shore pack (`atlas.isWater` is already used by the fog keeper). Draw it as a dashed wake line over water.
+- **Train (overground):** hard. Possible signals: no car Bluetooth during the ride (the car book already tracks this), long straight runs at steady speed, and stops that don't match roads. Without rail data this guess will be wrong sometimes. A bundled rail layer (Natural Earth railroads are public domain and small) would make it much more reliable.
+- **Subway:** GPS drops underground, so there is no line. At most a dotted straight hop between where the signal was lost and where it came back.
+- This needs its own detection design before it can be built, so it goes as a follow-up investigation. The roads build should leave room for a per-cell "kind" (road / rail / ferry) beside the count and date.
