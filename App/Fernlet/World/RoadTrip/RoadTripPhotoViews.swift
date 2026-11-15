@@ -1,5 +1,6 @@
 import FernletDomainModel
 import FernletFoundation
+import FernletProximityUI
 import FernletUI
 import SwiftUI
 import WorldMapStore
@@ -47,6 +48,9 @@ struct RoadTripPhotoMarkerView: View {
 /// Road trip photos opened full screen (`rt-map`): each photo in the album post's pager, then its caption, "Road trip
 /// to the coast · Nov 10 · Rae" (VoiceOver: "Photo from the road trip to the coast, by Rae"), and **Hide from the
 /// map**, which takes that photo off the map (it stays on this iPhone), offered only while the photo is on the map.
+/// Every photo also gets the "Just you" set's **Save**, **Favorite** and **Delete** (owner's pick 2026-11-13): Save to
+/// the Photos library, Favorite as the trip's Album cover, Delete from this iPhone (friends keep their copies, and a
+/// catch-up never sends it back).
 ///
 /// - **From a print on the map** (``Origin/map``): the print's photos still on the map, under "Road trip", closed
 ///   with ✕; it closes itself when the last photo is hidden.
@@ -72,6 +76,11 @@ struct RoadTripPhotoViewer: View {
     let onDismiss: () -> Void
     @State private var details: [RoadTripPhotoDetail] = []
     @State private var selection: UUID
+    @State private var pendingDeleteID: UUID?
+    @State private var saveFailure: PhotoSaveFailure?
+    @State private var savedIDs: Set<UUID> = []
+    /// Photos with a save running, at most one per photo (R3).
+    @State private var savingIDs: Set<UUID> = []
 
     /// The viewer of `place`'s photos, opened from the map.
     init(store: FernletStore, place: WorldPhotoPlace, onDismiss: @escaping () -> Void) {
@@ -115,6 +124,13 @@ struct RoadTripPhotoViewer: View {
         }
         .onAppear(perform: read)
         .onChange(of: store.duressSessionActive) { _, _ in read() }
+        .alert("Delete this picture?", isPresented: $pendingDeleteID.isPresent()) {
+            Button("Delete", role: .destructive) { deletePending() }
+            Button("Cancel", role: .cancel) { pendingDeleteID = nil }
+        } message: {
+            Text("This removes it from this device. It can't be undone.")
+        }
+        .photoSaveFailureAlert("Couldn't Save Photo", failure: $saveFailure)
         .accessibilityIdentifier("roadTrip.photoViewer")
     }
 
@@ -139,16 +155,23 @@ struct RoadTripPhotoViewer: View {
             .accessibilityLabel(Text(verbatim: details.first { $0.id == id }?.spoken ?? ""))
     }
 
-    /// The paper card: the caption, then Hide from the map while the photo is on the map.
+    /// The paper card: the caption with Save, Favorite and Delete (owner's pick 2026-11-13, the "Just you" set's
+    /// actions), then Hide from the map while the photo is on the map.
     @ViewBuilder
     private var card: some View {
         if let shown {
             VStack(alignment: .leading, spacing: 12) {
-                Text(verbatim: shown.caption)
-                    .font(FernletFramedFont.cardTitle)
-                    .foregroundStyle(WorldPalette.bark)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 10) {
+                        caption(shown)
+                        Spacer(minLength: 6)
+                        actions(shown)
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        caption(shown)
+                        actions(shown)
+                    }
+                }
                 if Self.offersHide(shown) {
                     Button { hide(shown.id) } label: { Text(RoadTripCopy.hideFromMap) }
                         .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
@@ -160,6 +183,36 @@ struct RoadTripPhotoViewer: View {
                 }
             }
             .albumPostCard()
+        }
+    }
+
+    /// The photo's caption, a heading.
+    private func caption(_ shown: RoadTripPhotoDetail) -> some View {
+        Text(verbatim: shown.caption)
+            .font(FernletFramedFont.cardTitle)
+            .foregroundStyle(WorldPalette.bark)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Save, Favorite (the trip's Album cover) and Delete for the photo on screen, as on a "Just you" set.
+    private func actions(_ shown: RoadTripPhotoDetail) -> some View {
+        let isSaved = savedIDs.contains(shown.id)
+        return HStack(spacing: 8) {
+            AlbumPostActionButton(sprite: isSaved ? WorldSprites.check : FriendsSprites.download,
+                                  accessibilityLabel: isSaved ? "Saved to Photos" : "Save this picture to your Photos library") {
+                save(shown)
+            }
+            .accessibilityIdentifier("roadTrip.photo.save")
+            AlbumPostActionButton(sprite: shown.isFavorite ? WorldSprites.heartSm : FriendsSprites.heartOutline,
+                                  accessibilityLabel: "Favorite this photo", selected: shown.isFavorite) {
+                favorite(shown)
+            }
+            .accessibilityIdentifier("roadTrip.photo.favorite")
+            AlbumPostActionButton(sprite: FriendsSprites.trash, accessibilityLabel: "Delete this picture") {
+                pendingDeleteID = shown.id
+            }
+            .accessibilityIdentifier("roadTrip.photo.delete")
         }
     }
 
@@ -189,6 +242,42 @@ struct RoadTripPhotoViewer: View {
         let hidden = store.hideRoadTripPhoto(id)
         FernletFeedback.system.play(hidden ? .done : .failed)
         read()
+    }
+
+    /// Favorite: the photo becomes its trip's Album cover, or stops being it.
+    private func favorite(_ shown: RoadTripPhotoDetail) {
+        if store.favoriteRoadTripPhoto(shown.id, !shown.isFavorite) { FernletFeedback.system.play(.tick) }
+        read()
+    }
+
+    /// Deletes the photo the alert asked about from this iPhone; the viewer shows the next one, or closes.
+    private func deletePending() {
+        if let id = pendingDeleteID, !store.deleteRoadTripPhoto(id) {
+            FernletAuditLog.log("roadTrip.photoDeleteNotApplied")
+        }
+        pendingDeleteID = nil
+        read()
+    }
+
+    /// Saves one photo to the Photos library through the app's one save path, never a false success.
+    private func save(_ shown: RoadTripPhotoDetail) {
+        guard !savedIDs.contains(shown.id), !savingIDs.contains(shown.id) else { return }
+        guard let data = store.roadTripPhotoImage(shown.id) else {
+            saveFailure = .generic
+            return
+        }
+        savingIDs.insert(shown.id)
+        let payload = FriendPhotoPayload(id: shown.id, imageData: data, addedAt: shown.takenAt ?? Date(), senderName: "")
+        Task {
+            defer { savingIDs.remove(shown.id) }
+            do {
+                try await FriendPhotoLibrarySaver.save([payload])
+                savedIDs.insert(shown.id)
+                FernletFeedback.system.play(.done)
+            } catch {
+                saveFailure = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: 1)
+            }
+        }
     }
 
     /// Show on the map (from the Album, where hidden photos are listed): the photo goes back on the map and the card

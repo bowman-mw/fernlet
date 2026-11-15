@@ -31,6 +31,10 @@ nonisolated struct RoadTripPhotoDetail: Equatable, Identifiable, Sendable {
     let hasPlace: Bool
     /// Whether it was hidden from the map.
     let isHidden: Bool
+    /// Whether it is its trip's Album cover.
+    var isFavorite = false
+    /// When the shutter fired (Save gives it to the Photos library as the photo's date).
+    var takenAt: Date?
 
     /// Whether it sits on the map: shown, with a place.
     var isOnMap: Bool { hasPlace && !isHidden }
@@ -201,7 +205,8 @@ extension FernletStore {
             let author = roadTripPhotoAuthor(photo.authorID, in: trip)
             return RoadTripPhotoDetail(id: id, caption: RoadTripCopy.photoCaption(trip: trip, takenAt: photo.takenAt, author: author),
                                        spoken: RoadTripCopy.photoSpoken(trip: trip, author: author),
-                                       hasPlace: places[id] != nil, isHidden: !photo.isShown)
+                                       hasPlace: places[id] != nil, isHidden: !photo.isShown,
+                                       isFavorite: photo.isFavorite == true, takenAt: photo.takenAt)
         }
     }
 
@@ -222,6 +227,21 @@ extension FernletStore {
     func showRoadTripPhoto(_ id: UUID) -> Bool {
         guard !duressSessionActive else { return false }
         return roadTripPhotos.show(id)
+    }
+
+    /// Favorite (owner's pick 2026-11-13, the "Just you" actions): trip photo `id` becomes its trip's Album cover, or
+    /// stops being it (`favorite` false; the newest is the cover again). Whether it went; nothing in a decoy.
+    func favoriteRoadTripPhoto(_ id: UUID, _ favorite: Bool) -> Bool {
+        guard !duressSessionActive else { return false }
+        return roadTripPhotos.setFavorite(id, favorite)
+    }
+
+    /// Delete (owner's pick 2026-11-13): trip photo `id`, a friend's or this iPhone's, leaves this iPhone with its
+    /// place; friends keep their copies, and a catch-up never sends it here again. Whether it is gone; nothing in a
+    /// decoy.
+    func deleteRoadTripPhoto(_ id: UUID) -> Bool {
+        guard !duressSessionActive else { return false }
+        return roadTripPhotos.delete([id])
     }
 
     /// The trip's photos on this iPhone, this person's and friends' (Trip info's "6 photos", the catch-up note).

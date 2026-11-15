@@ -123,6 +123,35 @@ struct RoadTripPhotoTests {
         #expect(roll.purgeAll() && !FileManager.default.fileExists(atPath: directory.path))
     }
 
+    /// A deleted photo is remembered by who took it and its id on their phone, so it is refused if sent again and
+    /// counts as held at the next catch-up; a favorite is one per trip.
+    @Test func aDeletedPhotoNeverComesBackAndAFavoriteIsOneATrip() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RoadTripPhotoTests-\(UUID().uuidString)")
+        defer { _ = RoadTripPhotoStore(directory: directory).purgeAll() }
+        let roll = RoadTripPhotoStore(directory: directory, keyProvider: InMemoryPrivateMediaKeyProvider(key: SymmetricKey(size: .bits256)))
+        let trip = UUID(), other = UUID(), bytes = try Self.jpeg()
+        let raes = RoadTripPhoto(tripID: trip, authorID: "rae", sourceID: UUID(), takenAt: Self.at(1))
+        let mine = RoadTripPhoto(tripID: trip, authorID: "me", sourceID: UUID(), takenAt: Self.at(2))
+        let elsewhere = RoadTripPhoto(tripID: other, authorID: "me", sourceID: UUID(), takenAt: Self.at(3))
+        for photo in [raes, mine, elsewhere] {
+            guard case .added = roll.add(photo, imageData: bytes, perAuthor: 5, perTrip: 5) else { throw CancellationError() }
+        }
+        #expect(roll.setFavorite(raes.id, true) && roll.setFavorite(elsewhere.id, true) && roll.setFavorite(mine.id, true))
+        guard case .loaded(let favorites) = roll.load() else { throw CancellationError() }
+        #expect(favorites.photos.map(\.isFavorite) == [nil, true, true], "one a trip, each trip its own")
+        #expect(roll.setFavorite(mine.id, false) && !roll.setFavorite(UUID(), true))
+
+        #expect(roll.delete([raes.id]) && roll.imageData(for: raes.id) == nil)
+        guard case .loaded(let index) = roll.load() else { throw CancellationError() }
+        #expect(index.photos.map(\.id) == [mine.id, elsewhere.id])
+        #expect(index.removed == [RoadTripPhotoRemoval(raes)])
+        #expect(index.sourceIDs(trip: trip, author: "rae") == [raes.sourceID], "told as held: never sent again")
+        let again = RoadTripPhoto(tripID: trip, authorID: "rae", sourceID: raes.sourceID, takenAt: Self.at(1))
+        #expect(roll.add(again, imageData: bytes, perAuthor: 5, perTrip: 5) == .duplicate)
+        let older = try JSONDecoder().decode(RoadTripPhotoIndex.self, from: Data(#"{"schemaVersion":1,"photos":[]}"#.utf8))
+        #expect(older.removed == nil, "an index from before deletes reads as none removed")
+    }
+
     // MARK: Who gets what
 
     /// A member is sent only this iPhone's own shown photos, taken from their first presence on, that they lack; a
