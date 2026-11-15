@@ -120,9 +120,12 @@ struct WorldFlightGateTests {
         let fog = store.worldFog.visibleCells
         #expect(!fog.contains(MercatorHexGrid.cell(containing: Self.overFrance.offset(east: 4_000, north: 0))))
         #expect(!fog.contains(MercatorHexGrid.cell(containing: Self.pdxPoint.offset(east: 5_000, north: 0))), "the climb-out")
-        #expect(fog.contains(MercatorHexGrid.cell(containing: Self.cdgPoint)), "the landing lifts as any reading")
+        #expect(!fog.contains(MercatorHexGrid.cell(containing: Self.cdgPoint)),
+                "taxiing in lifts nothing: inside an airport's grounds only walking clears (owner, 2026-11-13)")
         #expect(source.latest?.point == Self.cdgPoint)
         #expect(!source.rides.isDriving)
+        source.deliver(Self.reading(Self.cdgPoint.offset(east: 30, north: 0), 9 * 3_600 + 180, kmh: 4))
+        #expect(store.worldFog.visibleCells.contains(MercatorHexGrid.cell(containing: Self.cdgPoint)), "walking off the plane clears")
     }
 
     /// A window seat over France stamps nothing; the landing finds CDG and keeps PDX to CDG as two airports and
