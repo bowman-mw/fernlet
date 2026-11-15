@@ -10,6 +10,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import FernletFoundation
+import FernletSocial
 @testable import Fernlet
 
 /// Fixed UTC calendar and dates, so a season boundary never moves with the machine's time zone.
@@ -389,13 +390,155 @@ struct AmbientReminderMemoryTests {
     }
 }
 
+// MARK: - Friend nudges
+
+struct AmbientFriendNudgeTests {
+    private let day1 = AmbientFixture.date(2026, 11, 15)
+    private func later(_ days: Double) -> Date { day1.addingTimeInterval(days * 86_400) }
+    private func key(_ date: Date) -> String {
+        let parts = AmbientFixture.calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    private func friend(_ fingerprint: String, low: Bool = false, metDaysAgo: Double = 20, ready: Bool = true,
+                        at now: Date? = nil) -> AmbientFriend {
+        AmbientFriend(fingerprint: fingerprint, firstName: "Name\(fingerprint)", lastVibeWasLow: low,
+                      lastMetAt: (now ?? day1).addingTimeInterval(-metDaysAgo * 86_400), canReceiveHeart: ready)
+    }
+
+    private func nudges(_ friends: [AmbientFriend], on date: Date) -> [AmbientFriendNudge] {
+        AmbientFriendNudgeFinder.candidates(friends: friends, dayKey: key(date), now: date)
+    }
+
+    @Test func aLowVibeFriendGetsADraftThatHoldsAllDay() {
+        let first = nudges([friend("aa", low: true)], on: day1)
+        #expect(first.map(\.kind) == [.lowVibe])
+        #expect(nudges([friend("aa", low: true)], on: day1) == first, "the same friend and day keep their words")
+        let draft = AmbientFriendNudgeFinder.lowVibeDraft(fingerprint: "aa", dayKey: key(day1))
+        #expect(first.first?.draft == draft)
+        #expect(AmbientFriendNudgeFinder.lowVibeDraft(fingerprint: "aa", dayKey: key(day1)) == draft)
+    }
+
+    @Test func theLowVibeDraftsRotateThroughABAndC() {
+        let drafts = Set((0..<60).map { AmbientFriendNudgeFinder.lowVibeDraft(fingerprint: "friend\($0)", dayKey: "2026-11-15") })
+        #expect(drafts == [.a, .b, .c], "all three drafts come round, and never D")
+    }
+
+    @Test func onlyFriendsWhoCanReceiveAHeart() {
+        #expect(nudges([friend("aa", low: true, ready: false), friend("bb", metDaysAgo: 2, ready: false)], on: day1).isEmpty)
+    }
+
+    @Test func metThisWeekIsOnlyForAMeetingInTheLastSevenDays() {
+        let found = nudges([friend("aa", metDaysAgo: 3), friend("bb", metDaysAgo: 8), friend("cc", low: true, metDaysAgo: 2)], on: day1)
+        #expect(found.map(\.kind) == [.lowVibe, .metThisWeek], "low vibe first, one card per friend")
+        #expect(found.last?.fingerprint == "aa")
+        #expect(found.last?.draft == .d)
+        #expect(!found.contains { $0.fingerprint == "bb" }, "eight days ago is not this week")
+    }
+
+    @Test func metThisWeekShowsAtMostOnceAWeek() {
+        var schedule = AmbientReminderSchedule()
+        #expect(schedule.chooseFriend(from: nudges([friend("aa", metDaysAgo: 1)], on: day1), dayKey: key(day1), now: day1)?.fingerprint == "aa")
+        let soon = later(3)
+        #expect(schedule.chooseFriend(from: nudges([friend("bb", metDaysAgo: 1, at: soon)], on: soon), dayKey: key(soon), now: soon) == nil,
+                "a different friend still waits for the week")
+        let week = later(7)
+        #expect(schedule.chooseFriend(from: nudges([friend("bb", metDaysAgo: 1, at: week)], on: week), dayKey: key(week), now: week)?.fingerprint == "bb")
+    }
+
+    @Test func aLowVibeCardRestsAMonthPerFriend() {
+        var schedule = AmbientReminderSchedule()
+        let both = [friend("aa", low: true, metDaysAgo: 2), friend("bb", low: true, metDaysAgo: 5)]
+        #expect(schedule.chooseFriend(from: nudges(both, on: day1), dayKey: key(day1), now: day1)?.fingerprint == "aa")
+        #expect(schedule.chooseFriend(from: nudges(both, on: later(1)), dayKey: key(later(1)), now: later(1))?.fingerprint == "bb",
+                "the next day it is the other friend's turn")
+        #expect(schedule.chooseFriend(from: nudges(both, on: later(2)), dayKey: key(later(2)), now: later(2)) == nil)
+        #expect(schedule.chooseFriend(from: nudges(both, on: later(30)), dayKey: key(later(30)), now: later(30))?.fingerprint == "aa")
+    }
+
+    @Test func notNowHidesThatFriendForAMonth() {
+        var schedule = AmbientReminderSchedule()
+        let both = [friend("aa", low: true, metDaysAgo: 2), friend("bb", metDaysAgo: 3)]
+        #expect(schedule.chooseFriend(from: nudges(both, on: day1), dayKey: key(day1), now: day1)?.fingerprint == "aa")
+        schedule.hideFriend("aa", now: day1)
+        #expect(schedule.chooseFriend(from: nudges(both, on: day1), dayKey: key(day1), now: day1) == nil,
+                "a put-away card still counts as today's friend card")
+        #expect(schedule.isFriendHidden("aa", now: later(29)))
+        #expect(!schedule.isFriendHidden("bb", now: later(1)), "only that friend")
+        #expect(schedule.chooseFriend(from: nudges(both, on: later(1)), dayKey: key(later(1)), now: later(1))?.fingerprint == "bb")
+        #expect(!schedule.isFriendHidden("aa", now: later(31)))
+    }
+
+    @Test func friendCardsShareTheTwoADayLimit() {
+        var full = AmbientReminderSchedule()
+        _ = full.choose(from: [.forgottenRecipe, .forgottenCalm], dayKey: key(day1), now: day1)
+        #expect(full.chooseFriend(from: nudges([friend("aa", low: true)], on: day1), dayKey: key(day1), now: day1) == nil)
+
+        var schedule = AmbientReminderSchedule()
+        #expect(schedule.chooseFriend(from: nudges([friend("aa", low: true)], on: day1), dayKey: key(day1), now: day1) != nil)
+        #expect(schedule.choose(from: [.forgottenRecipe, .forgottenCalm], dayKey: key(day1), now: day1) == [.forgottenRecipe],
+                "the friend card took one of today's two")
+        #expect(schedule.chooseFriend(from: nudges([friend("aa", low: true)], on: day1), dayKey: key(day1), now: day1)?.fingerprint == "aa",
+                "the same day keeps its friend card")
+    }
+
+    @Test func oneFriendCardADay() {
+        var schedule = AmbientReminderSchedule()
+        let both = [friend("aa", low: true, metDaysAgo: 2), friend("bb", low: true, metDaysAgo: 5)]
+        #expect(schedule.chooseFriend(from: nudges(both, on: day1), dayKey: key(day1), now: day1)?.fingerprint == "aa")
+        #expect(schedule.shownToday.count == 1)
+    }
+
+    @Test func expiredFriendEntriesAreDropped() {
+        var schedule = AmbientReminderSchedule()
+        _ = schedule.chooseFriend(from: nudges([friend("aa", low: true)], on: day1), dayKey: key(day1), now: day1)
+        schedule.hideFriend("aa", now: day1)
+        schedule.pruneFriendTokens(now: later(31))
+        #expect(!schedule.hiddenUntil.keys.contains { $0.contains("aa") })
+        #expect(!schedule.lastShown.keys.contains { $0.contains("aa") })
+    }
+
+    @Test func theCopyNeverMentionsHowAnyoneFeels() {
+        let words: Set<String> = ["mood", "moods", "vibe", "vibes", "low", "sad", "struggling", "down", "upset", "tired", "okay", "bad"]
+        var lines: [String] = []
+        for draft in AmbientFriendNudgeDraft.allCases {
+            lines.append(AmbientReminderCopy.friendTitle(draft, name: "Ana", companion: "Sprout"))
+            lines.append(AmbientReminderCopy.friendBody(draft, name: "Ana", companion: "Sprout"))
+        }
+        lines += [AmbientReminderCopy.friendSend, AmbientReminderCopy.friendSentTitle, AmbientReminderCopy.friendSentBody(name: "Ana")]
+        for line in lines {
+            let tokens = line.lowercased().split { !$0.isLetter }.map(String.init)
+            #expect(Set(tokens).isDisjoint(with: words), "\(line)")
+        }
+        #expect(AmbientReminderCopy.friendTitle(.c, name: "Ana", companion: "Pip") == "Pip has an idea", "the companion's own name")
+        #expect(AmbientReminderCopy.friendBody(.c, name: "Ana", companion: "Pip") == "Pip thinks Ana would love a heart today.")
+    }
+
+    @MainActor @Test func heartOnItsWayOnlyWhenTheQueueAcceptedIt() {
+        let refused: [HeartDropService.QueueOutcome] = [.rateLimited, .backlogFull, .dailyLimitReached, .disabled, .storageUnavailable, .failed]
+        #expect(AmbientCardsView.friendNudgeOutcome(for: .queued, firstName: "Ana") == .sent)
+        for outcome in refused {
+            let shown = AmbientCardsView.friendNudgeOutcome(for: outcome, firstName: "Ana")
+            #expect(shown == .refused(AwayHeartsCopy.queueLine(for: outcome, firstName: "Ana", problem: nil)), "\(outcome)")
+        }
+    }
+
+    @Test func theSwitchHidesTheFriendCardsToo() throws {
+        let cards = try RepoRoot.source("App/Fernlet/AmbientCards.swift")
+        let start = try #require(cards.range(of: "private func chooseFriendNudge"))
+        let body = cards[start.lowerBound...].prefix(400)
+        #expect(body.contains("guard store.settings.gentleRemindersEnabled else { return nil }"))
+    }
+}
+
 // MARK: - CAP-2: never the sealed stores
 
 struct AmbientRemindersSealedBoundaryTests {
     /// The files the gentle reminders are made of.
     static let files = [
         "App/Fernlet/AmbientReminders.swift", "App/Fernlet/AmbientReminderFinder.swift",
-        "App/Fernlet/AmbientReminderMemory.swift", "App/Fernlet/AmbientReminderCopy.swift"
+        "App/Fernlet/AmbientReminderMemory.swift", "App/Fernlet/AmbientReminderCopy.swift",
+        "App/Fernlet/AmbientFriendNudges.swift"
     ]
 
     /// Names of sealed or Private-hub stores and reads that must never appear in their code.
