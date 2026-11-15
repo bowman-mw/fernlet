@@ -155,6 +155,9 @@ struct PrivacyPolicyParityTests {
     /// - `to notice a trip starting` — it asks iOS to tell it when the person leaves a place, then checks for a
     ///   couple of minutes (the leaving fence and its listen);
     /// - `so your trips map properly` — why it reads motion data at all.
+    ///
+    /// The two markers added 2026-11-15 (hotel check-in) pin the drive-end lookup: Apple Maps is asked what is
+    /// nearby when a drive ends, and only that location is sent.
     private static let substanceMarkers = [
         // World Friends (2026-10-31): what the tap sends before both say yes, and that the rings tell.
         "only short-lived random codes",
@@ -218,6 +221,9 @@ struct PrivacyPolicyParityTests {
         "the road you drove together and the photos you took on the trip",
         "Each person gets only the stretch they were there for",
         "(apart from a road trip's road, below)",
+        // Hotel check-in (2026-11-15, owner's request): the drive-end Apple Maps lookup and what it sends.
+        "When a drive ends, Fernlet asks Apple Maps which places are nearby",
+        "only that location is sent, with nothing about you attached",
         // Travel-day memories (2026-11-15): the one travel fact that may reach the AI, a city, on the iPhone only.
         "Sprout's memory can note which city you travelled to",
         "only the city, never the airport, times or where you were"

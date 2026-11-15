@@ -299,7 +299,7 @@ final class FernletStore {
         features.friendState.isEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
         features.friendState.payloadProvider = { [weak self] in
             guard let self, self.settings.allowNearbyFriendState else { return nil }
-            return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance)
+            return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance.forFriends)
         }
         features.friendState.onFriendStateReceived = { [weak self] fingerprint, payload in
             self?.receiveFriendState(fingerprint: fingerprint, payload: payload)
@@ -6127,6 +6127,12 @@ final class FernletStore {
         MealBuilder.macroTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
+    /// The recipe's own lines saved with no nutrition, which leave its totals low (owner decision
+    /// 2026-11-15; ``RecipeNutritionGaps``).
+    func linesWithoutNutrition(in recipe: RecipeDefinition) -> Int {
+        RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
+    }
+
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
         MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
@@ -7458,6 +7464,9 @@ final class FernletStore {
         // The companion-feelings settings (owner 2026-11-13: Delete everything "really means
         // everything"): the appetite-cues switch and the sleep window go back to their defaults.
         CompanionEmotionPreferences.clearAll()
+        // G8: the gentle reminders' record — breathing and grounding finish dates and which cards
+        // showed or were put off when.
+        AmbientReminderMemory.clearAll()
         // Three traces of use nobody decided should survive (the former "Open gaps"): the
         // day-summary backfill's last-run day, and the past-day journal scrub's latch and retry
         // counter. Post-wipe both jobs simply run once more over an empty store.

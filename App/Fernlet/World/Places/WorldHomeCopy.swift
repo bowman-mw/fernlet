@@ -65,7 +65,7 @@ nonisolated enum WorldHomeCopy {
                comment: "Remember this place sheet with Home picked: the lock note; the companion's name, e.g. Sprout")
     }
     static let hotelNote = LocalizedStringResource("worldHome.hotel.note",
-                                                   defaultValue: "Your hotel stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it until you check out or get home.",
+                                                   defaultValue: "Your hotel stays encrypted on this iPhone only. Fernlet uncovers the map for 500 m around it until you check out or get home.",
                                                    comment: "Remember this place sheet with Hotel picked: the lock note")
     static let makeHome = LocalizedStringResource("worldHome.save", defaultValue: "Make it home",
                                                   comment: "Remember this place sheet with Home picked: the main button")

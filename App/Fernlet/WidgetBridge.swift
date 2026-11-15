@@ -78,6 +78,15 @@ struct WidgetSnapshot: Codable, Equatable {
         /// The Creation Studio pieces worn, already in their place and size on the 24 × 24 item frame
         /// (W-07): never in a decoy session.
         var items: [ItemArt]? = nil
+        /// G8 (2026-11-15), ADDITIVE and optional like the keys above, nil for today's look: the hair's
+        /// FROZEN `CompanionHairStyle` token and `#RRGGBB`, the eyes' `CompanionEyes` token and
+        /// colour, the `CompanionPattern` token and the `CompanionBackground` token.
+        var hairRaw: String? = nil
+        var hairColorHex: String? = nil
+        var eyesRaw: String? = nil
+        var eyeColorHex: String? = nil
+        var patternRaw: String? = nil
+        var backgroundRaw: String? = nil
 
         /// One worn piece, as the painter draws it: its top-left cell in the companion's body
         /// coordinates, its size, its palette (`#RRGGBB`) and its row-major palette indices (−1 clear).

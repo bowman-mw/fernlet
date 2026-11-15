@@ -97,8 +97,8 @@ struct PassportStampsTests {
     // MARK: Visit order
 
     /// Stamps land in visit order: by day, then reading time; a country then its continent at the same moment;
-    /// the specials mixed in on their day; six to a page; the input's order never matters.
-    @Test func stampsLandInVisitOrderSixToAPage() throws {
+    /// the specials mixed in on their day; ten to a page; the input's order never matters.
+    @Test func stampsLandInVisitOrderTenToAPage() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
         let morning = Self.t1, noon = Self.t1.addingTimeInterval(3_600)
@@ -122,7 +122,7 @@ struct PassportStampsTests {
         #expect(ordered.suffix(2).map(\.token) == ["Q1247", "JP"])
         #expect(PassportStampEntry.ordered(Array(entries.reversed()), calendar: calendar) == ordered)
         let pages = PassportStampEntry.pages(entries, calendar: calendar)
-        #expect(pages.map(\.count) == [6, 6] && pages.joined().map(\.self) == ordered)
+        #expect(pages.map(\.count) == [10, 2] && pages.joined().map(\.self) == ordered)
         #expect(PassportStampEntry.pages([], calendar: calendar).isEmpty)
     }
 

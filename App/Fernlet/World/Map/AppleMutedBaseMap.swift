@@ -584,3 +584,47 @@ private final class AppleMapFrameTarget: NSObject {
         driver.frame(at: link.targetTimestamp)
     }
 }
+
+/// The nearby-places seam's Apple Maps side (``WorldNearbyFinding``; owner, 2026-11-15, the hotel check-in): one
+/// `MKLocalPointsOfInterestRequest` round the point, filtered to the asked-for kinds. Only the point, the radius and
+/// the filter go to Apple, the map's own destination; nothing about the person is attached. What comes back is turned
+/// into plain values here (kind, name, point) and nothing else of the answer is kept.
+final class AppleNearbyFinder: WorldNearbyFinding {
+    /// The most places one answer hands on.
+    static let maxPlaces = 20
+
+    func places(around point: GeoPoint, radius: Double, categories: [WorldNearbyCategory]) async -> [WorldNearbyPlace]? {
+        guard point.isValid, radius > 0, !categories.isEmpty else { return nil }
+        let request = MKLocalPointsOfInterestRequest(center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
+                                                     radius: radius)
+        request.pointOfInterestFilter = MKPointOfInterestFilter(including: categories.map(Self.appleCategory))
+        let response: MKLocalSearch.Response
+        do {
+            response = try await MKLocalSearch(request: request).start()
+        } catch let error as MKError where error.code == .placemarkNotFound {
+            return []
+        } catch {
+            return nil   // offline or throttled: no answer, no offer
+        }
+        return response.mapItems.prefix(Self.maxPlaces).compactMap { item in
+            guard let name = item.name, !name.isEmpty,
+                  let category = item.pointOfInterestCategory.flatMap(Self.category(of:)) else { return nil }
+            let at = item.location.coordinate
+            return WorldNearbyPlace(category: category, name: name, point: GeoPoint(at.latitude, at.longitude))
+        }
+    }
+
+    /// Apple's category for one of Fernlet's kinds.
+    static func appleCategory(_ category: WorldNearbyCategory) -> MKPointOfInterestCategory {
+        switch category {
+        case .hotel: .hotel
+        case .restaurant: .restaurant
+        case .gym: .fitnessCenter
+        }
+    }
+
+    /// Fernlet's kind for Apple's category, nil for one it never asks for.
+    static func category(of apple: MKPointOfInterestCategory) -> WorldNearbyCategory? {
+        WorldNearbyCategory.allCases.first { appleCategory($0) == apple }
+    }
+}

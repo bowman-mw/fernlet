@@ -30,6 +30,8 @@ enum FernletWidgetKind {
     static let stamp = "FernletStamp"
     /// The map widget (`FernletMapWidget`): Sprout on a picture of the map around you, large.
     static let map = "FernletMap"
+    /// The drive widget (`FernletDriveWidget`): a drive's new tiles, or Sprout, small (what CarPlay shows).
+    static let drive = "FernletDrive"
 }
 
 /// The deep links a widget tap opens. The app's `FernletWidgetLinkRouter` reads the same
@@ -56,6 +58,7 @@ struct FernletWidgetsBundle: WidgetBundle {
         FernletWaterControl()
         FernletStampWidget()
         FernletMapWidget()
+        FernletDriveWidget()
         WorkoutLiveActivity()
         CookingLiveActivity()
     }
@@ -169,6 +172,14 @@ struct FernletCompanionEntry: TimelineEntry {
                                 look: WidgetPixelLook(look: look, state: state, asleep: hidesTheDay),
                                 pose: WidgetCompanionPose(asleep: hidesTheDay), increasedContrast: increasedContrast)
         return grid
+    }
+
+    /// The person's background scene behind the companion (G8): night while it sleeps, dimmed in dark
+    /// mode; nil for none, an unknown token, or no snapshot yet.
+    func homeScreenScene(dark: Bool) -> [UInt32]? {
+        guard snapshot != nil,
+              let kind = WidgetPixelLook.token(look.backgroundRaw, in: WidgetCompanionSceneKind.allCases) else { return nil }
+        return WidgetCompanionScene.paint(kind, light: hidesTheDay ? .night : .day, dark: dark)
     }
 
     /// The pixel companion for this entry, its outline darker with Increase Contrast (W-03), as the

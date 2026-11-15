@@ -54,6 +54,47 @@ struct WorldFlightArcsTests {
         #expect(map.flightCount == 4)
     }
 
+    /// A flight still to come draws a planned arc after the flown ones and stays out of the plate's count; a
+    /// planned route that was also flown keeps its flown arc (owner's pick 2026-11-13).
+    @Test func plannedFlightsDrawApartAndAreNotCounted() throws {
+        var book = PassportBook()
+        book.addFlights([try Self.flight("PDX", "MEX", days: 0, .fernlet), try Self.flight("PDX", "HND", days: 30, .flighty),
+                         try Self.flight("MEX", "PDX", days: 31, .flighty)])
+        let found = [(code: "PDX", airport: try #require(Self.airports["PDX"]))]
+        let now = Self.day.addingTimeInterval(10 * 86_400)
+        let map = WorldFlightMap.make(book: book, found: found, now: now) { Self.airports[$0] }
+        #expect(map.arcs.map(\.id) == ["MEX-PDX", "HND-PDX"])
+        #expect(map.arcs.map(\.isPlanned) == [false, true])
+        #expect(map.arcs[0].flights == 1)
+        #expect(map.flightCount == 1)
+        #expect(!map.rings.contains { $0.code == "HND" })
+        let later = WorldFlightMap.make(book: book, found: found, now: Self.day.addingTimeInterval(40 * 86_400)) { Self.airports[$0] }
+        #expect(later.arcs.allSatisfy { !$0.isPlanned } && later.flightCount == 3)
+    }
+
+    /// A connection under way counts as flown, as on the passport: once its first leg has left, its later leg is
+    /// flown too.
+    @Test func aConnectionUnderWayIsFlown() throws {
+        let first = try #require(PassportFlight(from: "PDX", to: "HNL", departure: Self.day, arrival: Self.day.addingTimeInterval(6 * 3_600),
+                                                sources: .flighty))
+        let second = try #require(PassportFlight(from: "HNL", to: "HND", departure: Self.day.addingTimeInterval(8 * 3_600), sources: .flighty))
+        let split = WorldFlightArcs.split([first, second], now: Self.day.addingTimeInterval(3_600))
+        #expect(split.flown.count == 2 && split.planned.isEmpty)
+        let before = WorldFlightArcs.split([first, second], now: Self.day.addingTimeInterval(-3_600))
+        #expect(before.flown.isEmpty && before.planned.count == 2)
+    }
+
+    /// A planned arc's card and VoiceOver name say "planned", never a flown count.
+    @Test func aPlannedArcSaysPlanned() throws {
+        var book = PassportBook()
+        book.addFlights([try Self.flight("PDX", "HND", days: 30, .flighty)])
+        let map = WorldFlightMap.make(book: book, found: [], now: Self.day) { Self.airports[$0] }
+        let arc = try #require(map.arcs.first)
+        #expect(arc.isPlanned)
+        #expect(WorldFlightCopy.card(arc).contains("1 planned"))
+        #expect(WorldFlightCopy.spoken(arc).hasPrefix("Planned flights"))
+    }
+
     /// A decoy's book is empty, so its map draws nothing.
     @Test func anEmptyBookDrawsNothing() {
         let map = WorldFlightMap.make(book: PassportBook(), found: []) { Self.airports[$0] }

@@ -80,7 +80,9 @@ public nonisolated struct FriendStatePayload: Codable, Equatable {
         a.accessoryCustomColorHex = FriendStatePayload.cleanHex(a.accessoryCustomColorHex)
         a.clothingCustomColorHex = FriendStatePayload.cleanHex(a.clothingCustomColorHex)
         a.sideItemCustomColorHex = FriendStatePayload.cleanHex(a.sideItemCustomColorHex)
-        return a
+        a.hairColorHex = FriendStatePayload.cleanHex(a.hairColorHex)
+        a.eyeColorHex = FriendStatePayload.cleanHex(a.eyeColorHex)
+        return a.forFriends
     }
 
     private static func cleanHex(_ hex: String?) -> String? {

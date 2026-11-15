@@ -112,6 +112,42 @@ struct RoadTripAlbumTests {
         #expect(store.roadTripPhotoDetails([hiddenID], includingHidden: true).map(\.id) == [hiddenID], "the Album's does")
     }
 
+    /// Favorite (owner's pick 2026-11-13): the favorite is its trip's cover, one per trip, and clearing it gives the
+    /// newest back the cover; Delete takes a photo off this iPhone, and its set with it once it was the last.
+    @Test func favoriteIsTheCoverAndDeleteRemovesThePhoto() throws {
+        let keeper = store.worldFog.roadTrip
+        keeper.load()
+        #expect(keeper.start(Self.trip(name: "Out")))
+        #expect(store.takeRoadTripPhoto(try RoadTripPhotoTests.jpeg(), fix: Self.fix(1), now: Self.at(1)) == .kept)
+        #expect(store.takeRoadTripPhoto(try RoadTripPhotoTests.jpeg(.systemPink), fix: Self.fix(2), now: Self.at(2)) == .kept)
+        let set = try #require(store.roadTripAlbumSets().first)
+        let older = try #require(set.photoIDs.last), newer = try #require(set.photoIDs.first)
+        #expect(set.cover == newer, "no favorite: the newest")
+
+        #expect(store.favoriteRoadTripPhoto(older, true))
+        #expect(store.roadTripAlbumSets().first?.cover == older)
+        #expect(store.roadTripPhotoDetails([older]).first?.isFavorite == true)
+        #expect(store.favoriteRoadTripPhoto(newer, true))
+        #expect(store.roadTripPhotoDetails([older, newer]).map(\.isFavorite) == [false, true], "one favorite a trip")
+        #expect(store.favoriteRoadTripPhoto(newer, false))
+        #expect(store.roadTripAlbumSets().first?.cover == newer && store.roadTripPhotoDetails([newer]).first?.isFavorite == false)
+
+        #expect(store.deleteRoadTripPhoto(newer))
+        #expect(store.roadTripAlbumSets().first?.photoIDs == [older])
+        #expect(store.roadTripPhotoImage(newer) == nil && !store.roadTripPhotoMarkers().flatMap(\.photoIDs).contains(newer))
+        #expect(store.deleteRoadTripPhoto(older) && store.roadTripAlbumSets().isEmpty, "the last photo takes its set")
+    }
+
+    /// The favorite photo is the set's cover, else the newest.
+    @Test func aFavoriteIsTheSetsCover() throws {
+        let trip = UUID()
+        var favorite = Self.photo(trip, by: "me", at: 1)
+        favorite.isFavorite = true
+        let newest = Self.photo(trip, by: "me", at: 5)
+        #expect(RoadTripAlbum.sets(from: [favorite, newest], trips: [], names: [:]).first?.cover == favorite.id)
+        #expect(RoadTripAlbum.sets(from: [Self.photo(trip, by: "me", at: 1), newest], trips: [], names: [:]).first?.cover == newest.id)
+    }
+
     /// "Show on the map" (owner 2026-11-12): a hidden photo with a place offers it in the Album's viewer and goes back
     /// on the map, offering Hide again; once Delete map history took its place, it offers neither.
     @Test func aHiddenPhotoGoesBackOnTheMapUntilItsPlaceIsGone() throws {

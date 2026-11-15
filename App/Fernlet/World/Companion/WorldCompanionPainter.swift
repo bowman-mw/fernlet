@@ -162,23 +162,27 @@ nonisolated enum WorldCompanionPiece: Equatable, Sendable {
     case studio(Int)
     /// The side item.
     case side
+    /// The hair (G8): worn on the head, ranked between the body and the scarf.
+    case hair
 
     /// Part of the face: eyes, mouth, blush, the tear and the glasses.
     var isFace: Bool {
         switch self {
         case .eye, .mouth, .blush, .tear, .glasses: true
-        case .body, .sprout, .flower, .flowerCentre, .scarf, .cap, .studio, .side: false
+        case .body, .sprout, .flower, .flowerCentre, .scarf, .cap, .studio, .side, .hair: false
         }
     }
 
     /// Cut out of the one colour: the face (the glasses with it) and the flower's centre.
     var isCutOut: Bool { isFace || self == .flowerCentre }
 
-    /// Its place from the bottom in the one-colour rule: the body, sprout and flower 0, the scarf 2, the
-    /// cap 3, Studio piece *i* 4 + *i*, the side item 9; nil for a cut-out, which takes no line.
+    /// Its place from the bottom in the one-colour rule: the body, sprout and flower 0, the hair 1, the
+    /// scarf 2, the cap 3, Studio piece *i* 4 + *i*, the side item 9; nil for a cut-out, which takes no
+    /// line.
     var rank: Int? {
         switch self {
         case .body, .sprout, .flower: 0
+        case .hair: 1
         case .scarf: 2
         case .cap: 3
         case .studio(let index): 4 + index
@@ -191,7 +195,7 @@ nonisolated enum WorldCompanionPiece: Equatable, Sendable {
     var isWorn: Bool {
         switch self {
         case .body, .eye, .mouth, .blush, .tear: false
-        case .sprout, .flower, .flowerCentre, .glasses, .scarf, .cap, .studio, .side: true
+        case .sprout, .flower, .flowerCentre, .glasses, .scarf, .cap, .studio, .side, .hair: true
         }
     }
 }
@@ -488,6 +492,16 @@ nonisolated struct WorldCompanionLook: Equatable, Sendable {
     var sideColor: UInt32
     /// Creation Studio pieces, in paint order (outfit, held item, face, hat).
     var items: [WorldCompanionItemArt]
+    /// The hair (G8); none paints nothing.
+    var hair: WorldCompanionHair = .none
+    /// The hair's colour.
+    var hairColor: UInt32 = WorldCompanionLook.hairBrown
+    /// The eyes (G8); round is the original face.
+    var eyes: WorldCompanionEyes = .round
+    /// The eyes' colour: shown by the large eyes only, the others stay ink.
+    var eyeColor: UInt32 = WorldCompanionPainter.ink
+    /// The body's pattern (G8); plain paints nothing.
+    var pattern: WorldCompanionPattern = .plain
 
     /// The design's leaf and the app's fern, which the sprout keeps when its slot is left on Fern.
     static let leaf: UInt32 = 0x72A364
@@ -499,6 +513,8 @@ nonisolated struct WorldCompanionLook: Equatable, Sendable {
     static let capBlue: UInt32 = 0x6E86B0
     /// The side items' bark, when the side item follows the state.
     static let bark: UInt32 = 0x3A2414
+    /// The hair's colour until the person picks one: a warm brown.
+    static let hairBrown: UInt32 = 0x6B4A2E
 
     /// A look built from plain values.
     init(body: UInt32, shape: WorldCompanionShape = .circle, topper: WorldCompanionTopper = .sprout,
@@ -666,15 +682,18 @@ nonisolated enum WorldCompanionPainter {
         let body = WorldCompanionBody(state: state, shape: look.shape, color: look.body, pose: pose,
                                       increasedContrast: increasedContrast)
         paintBody(&grid, body: body, sick: state == .sick)
-        // The cap and a drawn hat cover the head, so the sprout and the flower step aside.
-        if look.cap == nil && !look.items.contains(where: \.coversHead) {
-            if look.topper == .sprout { paintSprout(&grid, top: body.top, leaf: look.topperColor) }
-            if look.topper == .flower { paintFlower(&grid, top: body.top, petal: look.topperColor) }
-        }
         let layout = WorldCompanionFaceLayout(body: body, face: .state(state, pose: pose))
-        paintFace(&grid, body: body, layout: layout, state: state, pose: pose)
+        paintPattern(&grid, body: body, layout: layout, pattern: look.pattern, sick: state == .sick)
+        // The cap and a drawn hat cover the head, so the hair, the sprout and the flower step aside.
+        if look.cap == nil && !look.items.contains(where: \.coversHead) {
+            paintHair(&grid, body: body, hair: look.hair, color: look.hairColor)
+            let top = body.top - look.hair.lift
+            if look.topper == .sprout { paintSprout(&grid, top: top, leaf: look.topperColor) }
+            if look.topper == .flower { paintFlower(&grid, top: top, petal: look.topperColor) }
+        }
+        paintFace(&grid, body: body, layout: layout, state: state, pose: pose, eyes: look.eyes, eyeColor: look.eyeColor)
         if look.topper == .glasses && !closesEyes(state: state, pose: pose) {
-            paintGlasses(&grid, eyeRow: layout.eye, color: glassesColor(look.topperColor))
+            paintGlasses(&grid, eyeRow: layout.eye, color: glassesColor(look.topperColor), eyes: look.eyes)
         }
         if let scarf = look.scarf { paintScarf(&grid, body: body, color: scarf) }
         if let cap = look.cap { paintCap(&grid, body: body, color: cap) }
@@ -726,20 +745,25 @@ nonisolated enum WorldCompanionPainter {
     /// Eyes, mouth and blush, by the band (the design's table) or the settled pose, on the rows and
     /// cheeks the body's ``WorldCompanionFaceLayout`` gives the band's face.
     private static func paintFace(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, layout: WorldCompanionFaceLayout,
-                                  state: WorldCompanionMood, pose: WorldCompanionPose) {
+                                  state: WorldCompanionMood, pose: WorldCompanionPose,
+                                  eyes: WorldCompanionEyes = .round, eyeColor: UInt32 = ink) {
         let eyeRow = layout.eye, mouthRow = layout.mouth
+        let closed = closesEyes(state: state, pose: pose)
         if pose.settled {
-            paintSettledFace(&grid, layout: layout, closed: closesEyes(state: state, pose: pose) || state == .tired)
+            // Petted (owner, 2026-11-15): the round eyes keep today's happy arcs; every other style keeps
+            // its own eyes, under the same smile and blush.
+            guard eyes != .round, !closed, state != .tired else {
+                paintSettledFace(&grid, layout: layout, closed: closed || state == .tired, eyes: eyes)
+                return
+            }
+            paintEyes(&grid, body: body, eyeRow: eyeRow, eyes: eyes, color: eyeColor, tired: false)
+            paintSettledMouth(&grid, layout: layout)
             return
         }
-        if closesEyes(state: state, pose: pose) {
-            for x in [6, 7, 12, 13] { grid.put(x, eyeRow + 1, ink, as: .eye) }
+        if closed {
+            paintClosedEyes(&grid, eyeRow: eyeRow, eyes: eyes)
         } else {
-            for x in [7, 12] {
-                // A tired day's upper lid is body, so one colour keeps it filled and the eye half-lidded (W-11).
-                grid.put(x, eyeRow, state == .tired ? body.dark : ink, as: state == .tired ? .body : .eye)
-                grid.put(x, eyeRow + 1, ink, as: .eye)
-            }
+            paintEyes(&grid, body: body, eyeRow: eyeRow, eyes: eyes, color: eyeColor, tired: state == .tired)
         }
         let row = state == .sick ? mouthRow - 1 : mouthRow
         // Winding down (`b1-home-night`) draws the sleepy face whatever the band: the resting mouth, no
@@ -767,14 +791,24 @@ nonisolated enum WorldCompanionPainter {
     }
 
     /// The settled pose: happy-arc eyes (closed lids on a low-energy day), a wide smile and a blush.
-    private static func paintSettledFace(_ grid: inout WorldCompanionGrid, layout: WorldCompanionFaceLayout, closed: Bool) {
-        let eyeRow = layout.eye, mouthRow = layout.mouth
+    private static func paintSettledFace(_ grid: inout WorldCompanionGrid, layout: WorldCompanionFaceLayout, closed: Bool,
+                                         eyes: WorldCompanionEyes = .round) {
+        let eyeRow = layout.eye
         for x in [7, 12] {
             grid.put(x - 1, eyeRow + 1, ink, as: .eye)
             grid.put(x, closed ? eyeRow + 1 : eyeRow, ink, as: .eye)
             if !closed { grid.put(x + 1, eyeRow + 1, ink, as: .eye) }
         }
-        for (x, dy) in [(8, 0), (9, 1), (10, 1), (11, 0)] { grid.put(x, mouthRow + dy, ink, as: .mouth) }
+        if closed && eyes == .lashes {
+            grid.put(5, eyeRow + 1, ink, as: .eye)
+            grid.put(13, eyeRow + 1, ink, as: .eye)
+        }
+        paintSettledMouth(&grid, layout: layout)
+    }
+
+    /// The settled pose's wide smile and blush.
+    private static func paintSettledMouth(_ grid: inout WorldCompanionGrid, layout: WorldCompanionFaceLayout) {
+        for (x, dy) in [(8, 0), (9, 1), (10, 1), (11, 0)] { grid.put(x, layout.mouth + dy, ink, as: .mouth) }
         paintCheeks(&grid, layout: layout)
     }
 
@@ -792,20 +826,107 @@ nonisolated enum WorldCompanionPainter {
         return (0.299 * red + 0.587 * green + 0.114 * blue) / 255
     }
 
-    /// Round glasses over both eyes, joined by a bridge.
-    private static func paintGlasses(_ grid: inout WorldCompanionGrid, eyeRow: Int, color: UInt32) {
-        for ex in [7, 12] {
-            for gx in (ex - 1)...(ex + 1) {
-                grid.put(gx, eyeRow - 1, color, as: .glasses)
-                grid.put(gx, eyeRow + 2, color, as: .glasses)
+    /// Round glasses over both eyes, joined by a bridge. The lenses follow the eyes (owner, 2026-11-15):
+    /// round over the small eyes, set wider for wide-set eyes, and bigger round the big and button eyes.
+    private static func paintGlasses(_ grid: inout WorldCompanionGrid, eyeRow: Int, color: UInt32,
+                                     eyes: WorldCompanionEyes = .round) {
+        let lens = eyes.lens
+        for left in lens.lefts {
+            let right = left + lens.width - 1
+            for gx in left...right {
+                grid.put(gx, eyeRow + lens.top, color, as: .glasses)
+                grid.put(gx, eyeRow + lens.bottom, color, as: .glasses)
             }
-            for gy in [eyeRow, eyeRow + 1] {
-                grid.put(ex - 1, gy, color, as: .glasses)
-                grid.put(ex + 1, gy, color, as: .glasses)
+            for gy in (eyeRow + lens.top + 1)..<(eyeRow + lens.bottom) {
+                grid.put(left, gy, color, as: .glasses)
+                grid.put(right, gy, color, as: .glasses)
             }
         }
-        grid.put(9, eyeRow, color, as: .glasses)
-        grid.put(10, eyeRow, color, as: .glasses)
+        let bridgeFrom = lens.lefts[0] + lens.width, bridgeTo = lens.lefts[1] - 1
+        for gx in bridgeFrom...bridgeTo { grid.put(gx, eyeRow + lens.top + 1, color, as: .glasses) }
+    }
+
+    /// Open eyes in `eyes`' style. A tired day's upper lid is body, so one colour keeps it filled and the
+    /// eye half-lidded (W-11). Only the large eyes take `color`; the others stay ink.
+    private static func paintEyes(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, eyeRow e: Int,
+                                  eyes: WorldCompanionEyes, color: UInt32, tired: Bool) {
+        let fill = eyes.isLarge ? color : ink
+        for column in eyes.columns {
+            for (dx, dy) in eyes.cells {
+                let lid = tired && dy < eyes.lidBelow
+                let shine = !tired && eyes == .big && dx == 0 && dy == -1
+                let hex: UInt32 = lid ? body.dark : (shine ? 0xFFFFFF : fill)
+                grid.put(column + dx, e + dy, hex, as: lid ? .body : .eye)
+            }
+        }
+        if eyes == .lashes {
+            grid.put(6, e - 1, ink, as: .eye)
+            grid.put(13, e - 1, ink, as: .eye)
+        }
+    }
+
+    /// Closed eyes: today's two short lines for every style, with the lashes' outer flick.
+    private static func paintClosedEyes(_ grid: inout WorldCompanionGrid, eyeRow: Int, eyes: WorldCompanionEyes) {
+        for x in [6, 7, 12, 13] { grid.put(x, eyeRow + 1, ink, as: .eye) }
+        if eyes == .lashes {
+            grid.put(5, eyeRow + 1, ink, as: .eye)
+            grid.put(14, eyeRow + 1, ink, as: .eye)
+        }
+    }
+
+    /// The hair (G8): a cap of hair over the head's top rows inside the outline, darker at its edge, and
+    /// each style's own pixels above or below it.
+    private static func paintHair(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, hair: WorldCompanionHair,
+                                  color: UInt32) {
+        guard hair != .none else { return }
+        let top = body.top, dark = mix(color, shade, 0.3), light = mix(color, 0xFFFFFF, 0.25)
+        let palette: [Character: UInt32] = ["c": color, "d": dark, "l": light]
+        for y in top..<(top + hair.capRows) {
+            for x in 0..<WorldCompanionGrid.width where body.contains(x, y) {
+                grid.put(x, y, body.isOutline(x, y) ? dark : color, as: .hair)
+            }
+        }
+        if hair == .long { paintLongSides(&grid, body: body, color: color, dark: dark) }
+        if hair == .curly {
+            // A row of curls above the head, one pair for every other column the head is wide.
+            for x in stride(from: 4, through: 15, by: 2) where body.contains(x, top + 1) {
+                grid.put(x, top - 1, color, as: .hair)
+                grid.put(x + 1, top - 1, dark, as: .hair)
+            }
+        }
+        for (x, dy, key) in hair.extras {
+            guard let hex = palette[key] else { continue }
+            if hair.extrasInsideOnly && !body.contains(x, top + dy) { continue }
+            grid.put(x, top + dy, hex, as: .hair)
+        }
+    }
+
+    /// Long hair's sides: two pixels in from each edge, down to the cheeks.
+    private static func paintLongSides(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, color: UInt32, dark: UInt32) {
+        for y in (body.top + 3)...(body.top + 8) {
+            for x in 0..<WorldCompanionGrid.width where body.contains(x, y) && (!body.contains(x - 2, y) || !body.contains(x + 2, y)) {
+                grid.put(x, y, body.isOutline(x, y) ? dark : color, as: .hair)
+            }
+        }
+    }
+
+    /// The body's pattern (G8), in shades of the body's own colour (moss is always green), painted as
+    /// body so the one-colour widgets drop it, and never on the outline or under the sick day's blanket.
+    private static func paintPattern(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, layout: WorldCompanionFaceLayout,
+                                     pattern: WorldCompanionPattern, sick: Bool) {
+        guard pattern != .plain else { return }
+        let darker = mix(body.base, shade, 0.38), lighter = mix(body.base, 0xFFFFFF, 0.45)
+        for (x, y, tone) in pattern.cells(body: body, eye: layout.eye, mouth: layout.mouth) {
+            guard body.contains(x, y), !body.isOutline(x, y) else { continue }
+            if sick && Double(y) >= (body.cy + 1.5).rounded() { continue }
+            let hex: UInt32 = switch tone {
+            case .darker: darker
+            case .lighter: lighter
+            case .moss: WorldCompanionLook.leaf
+            case .mossDark: 0x557E4A
+            }
+            grid.put(x, y, hex, as: .body)
+        }
     }
 
     /// A scarf wrapped low on the body, with a tail.
@@ -876,6 +997,279 @@ nonisolated enum WorldCompanionPainter {
         }
         return blend(16) | blend(8) | blend(0)
     }
+}
+
+/// The hair's styles in pixels (G8, the owner's picks on 2026-11-15).
+nonisolated enum WorldCompanionHair: Equatable, Sendable, CaseIterable {
+    case none, tuft, fringe, spiky, bun, curly, long, swoop
+
+    /// Rows of hair over the head, from its top row, inside the outline.
+    var capRows: Int {
+        switch self {
+        case .none, .tuft: 0
+        case .spiky, .bun, .swoop: 2
+        case .fringe, .curly, .long: 3
+        }
+    }
+
+    /// How many rows higher the sprout and the flower grow, so they come up through the hair.
+    var lift: Int {
+        switch self {
+        case .curly, .bun, .swoop: 1
+        case .none, .tuft, .fringe, .spiky, .long: 0
+        }
+    }
+
+    /// Whether the extras are kept inside the body (the fringe's and curls' lower ends).
+    var extrasInsideOnly: Bool { self == .fringe || self == .curly }
+
+    /// The style's own pixels: (column, row from the head's top row, `c` colour / `d` darker / `l` lighter).
+    var extras: [(Int, Int, Character)] {
+        switch self {
+        case .none, .long: []
+        case .tuft: [(9, -1, "c"), (10, -1, "c"), (11, -2, "c"), (8, -2, "d"), (12, -3, "c"), (9, 0, "c"), (10, 0, "c"), (11, 0, "c")]
+        case .fringe: [(5, 3, "c"), (8, 3, "c"), (11, 3, "c"), (14, 3, "c"), (6, 2, "l"), (9, 2, "l"), (12, 2, "l")]
+        case .spiky: [(5, -1, "d"), (7, -1, "c"), (7, -2, "d"), (9, -1, "d"), (12, -1, "c"), (12, -2, "d"), (14, -1, "d")]
+        case .bun: [(9, -1, "d"), (10, -1, "c"), (11, -1, "d"), (9, -2, "c"), (10, -2, "l"), (11, -2, "c"), (10, -3, "d")]
+        case .curly: [(5, 3, "c"), (9, 3, "c"), (13, 3, "c")]
+        case .swoop: [(8, -1, "c"), (9, -1, "l"), (10, -1, "l"), (11, -1, "c"), (12, -1, "c"), (13, 0, "c"), (13, 1, "c"), (12, 2, "c"), (14, 2, "c")]
+        }
+    }
+}
+
+/// The eyes' styles in pixels (G8). Every style keeps today's closed lines and its half lid when tired.
+nonisolated enum WorldCompanionEyes: Equatable, Sendable, CaseIterable {
+    case round, dot, big, button, lashes, wide
+
+    /// The large eyes: they show a colour, and the glasses' lenses grow round them.
+    var isLarge: Bool { self == .big || self == .button }
+
+    /// Each eye's left column.
+    var columns: [Int] {
+        switch self {
+        case .round, .dot, .lashes: [7, 12]
+        case .big, .button: [6, 12]
+        case .wide: [6, 13]
+        }
+    }
+
+    /// One eye's cells from its left column and the eye row.
+    var cells: [(Int, Int)] {
+        switch self {
+        case .round, .lashes, .wide: [(0, 0), (0, 1)]
+        case .dot: [(0, 1)]
+        case .big: [(0, -1), (1, -1), (0, 0), (1, 0), (0, 1), (1, 1)]
+        case .button: [(0, 0), (1, 0), (0, 1), (1, 1)]
+        }
+    }
+
+    /// A tired day's lid covers every cell of the eye on a row above this offset from the eye row.
+    var lidBelow: Int {
+        switch self {
+        case .round, .lashes, .wide: 1
+        case .dot: 0
+        case .big, .button: 1
+        }
+    }
+
+    /// The glasses' lenses round these eyes: each lens's left column, its width, and its top and
+    /// bottom rows from the eye row.
+    var lens: (lefts: [Int], width: Int, top: Int, bottom: Int) {
+        switch self {
+        case .round, .dot, .lashes: ([6, 11], 3, -1, 2)
+        case .wide: ([5, 12], 3, -1, 2)
+        case .big, .button: ([5, 11], 4, -2, 2)
+        }
+    }
+}
+
+/// The body's patterns in pixels (G8).
+nonisolated enum WorldCompanionPattern: Equatable, Sendable, CaseIterable {
+    case plain, freckles, belly, stripes, moss
+
+    /// A pattern cell's shade.
+    enum Tone: Equatable, Sendable { case darker, lighter, moss, mossDark }
+
+    /// The pattern's cells on `body`, around the face at `eye` and `mouth`; the painter skips the
+    /// outline and anything outside the body.
+    func cells(body: WorldCompanionBody, eye: Int, mouth: Int) -> [(Int, Int, Tone)] {
+        switch self {
+        case .plain: []
+        case .freckles:
+            [(4, eye + 2, .darker), (5, eye + 3, .darker), (4, eye + 4, .darker),
+             (15, eye + 2, .darker), (14, eye + 3, .darker), (15, eye + 4, .darker)]
+        case .belly: bellyCells(body: body, mouth: mouth)
+        case .stripes:
+            stride(from: body.top + 1, to: eye - 1, by: 2).flatMap { y in (0..<WorldCompanionGrid.width).map { ($0, y, Tone.darker) } }
+                + [mouth + 3, mouth + 5].flatMap { y in (0..<WorldCompanionGrid.width).filter { $0 < 6 || $0 > 13 }.map { ($0, y, Tone.darker) } }
+        case .moss:
+            (body.top...(body.top + 3)).flatMap { y in
+                (0..<WorldCompanionGrid.width).filter { ($0 * 3 + y * 7) % 5 < 2 }.map { ($0, y, ($0 + y) % 3 == 0 ? Tone.mossDark : Tone.moss) }
+            }
+        }
+    }
+
+    /// A lighter oval on the lower middle of the body.
+    private func bellyCells(body: WorldCompanionBody, mouth: Int) -> [(Int, Int, Tone)] {
+        var cells: [(Int, Int, Tone)] = []
+        for y in (mouth + 1)..<WorldCompanionGrid.height {
+            for x in 6...13 {
+                let dx = (Double(x) + 0.5 - 10) / 4.2, dy = (Double(y) + 0.5 - (body.cy + body.ry - 1.5)) / 3.4
+                if dx * dx + dy * dy <= 1 { cells.append((x, y, .lighter)) }
+            }
+        }
+        return cells
+    }
+}
+
+/// The light a background scene is drawn in: it follows the map's day (owner, 2026-11-15).
+nonisolated enum WorldSceneLight: Equatable, Sendable {
+    case day, dusk, night
+
+    /// How far the scene's colours move toward the night's blue.
+    var dimming: Double {
+        switch self {
+        case .day: 0
+        case .dusk: 0.25
+        case .night: 0.45
+        }
+    }
+}
+
+/// The scenes behind the companion off the map (G8): 32 × 28 cells, the companion's 24 × 24 frame
+/// standing at (4, 3) with its feet on the ground. Opaque; ``WorldCompanionSceneKind/none`` draws no scene.
+nonisolated enum WorldCompanionScene {
+    /// The scene's columns.
+    static let width = 32
+    /// The scene's rows.
+    static let height = 28
+    /// Where the companion's frame stands in the scene.
+    static let frameOrigin = (x: 4, y: 3)
+    /// The row the ground starts on.
+    static let ground = 24
+    /// The night blue a scene darkens toward at dusk and at night.
+    static let nightTint: UInt32 = 0x1E2440
+
+    /// `kind` in `light`, dimmed a little more in dark mode; nil for no scene.
+    static func paint(_ kind: WorldCompanionSceneKind, light: WorldSceneLight, dark: Bool) -> [UInt32]? {
+        guard kind != .none else { return nil }
+        var cells = [UInt32](repeating: 0, count: width * height)
+        draw(kind, into: &cells)
+        // The night sky is already night: it only takes dark mode's dimming.
+        let tint = kind == .night ? 0 : light.dimming
+        return cells.map { hex in
+            let lit = tint > 0 ? WorldCompanionPainter.mix(hex, nightTint, tint) : hex
+            return dark ? WorldCompanionPainter.mix(lit, 0x000000, 0.2) : lit
+        }
+    }
+
+    /// A scene's own drawing, by kind.
+    private static func draw(_ kind: WorldCompanionSceneKind, into c: inout [UInt32]) {
+        switch kind {
+        case .none: return
+        case .meadow: meadow(&c)
+        case .forest: forest(&c)
+        case .beach: beach(&c)
+        case .night: night(&c)
+        case .snow: snow(&c)
+        case .room: room(&c)
+        case .rain: rain(&c)
+        }
+    }
+
+    private static func put(_ c: inout [UInt32], _ x: Int, _ y: Int, _ v: UInt32) {
+        guard x >= 0, x < width, y >= 0, y < height else { return }
+        c[y * width + x] = v
+    }
+
+    private static func fill(_ c: inout [UInt32], _ x0: Int, _ y0: Int, _ x1: Int, _ y1: Int, _ v: UInt32) {
+        for y in y0...y1 { for x in x0...x1 { put(&c, x, y, v) } }
+    }
+
+    /// A fixed scatter: true for about one cell in `m`.
+    private static func scatter(_ x: Int, _ y: Int, _ m: Int) -> Bool { (x * 73 + y * 151 + x * y * 7) % m == 0 }
+
+    /// A small pixel sun, its top-left at (x, y).
+    private static func sun(_ c: inout [UInt32], _ x: Int, _ y: Int) {
+        for (dx, dy) in [(1, 1), (2, 1), (1, 2), (2, 2), (0, 1), (3, 2), (1, 0), (2, 3)] { put(&c, x + dx, y + dy, 0xF6D57A) }
+    }
+
+    private static func meadow(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, 9, 0xBFE0EC); fill(&c, 0, 10, 31, 17, 0xD3EBEF)
+        fill(&c, 0, 18, 31, ground - 1, 0xA9D18E); fill(&c, 0, ground, 31, 27, 0x7FB069)
+        sun(&c, 24, 2)
+        for (x, y) in [(3, 5), (4, 5), (5, 5), (4, 4), (6, 6), (2, 6), (3, 6), (4, 6), (5, 6)] { put(&c, x, y, 0xFFFFFF) }
+        for x in stride(from: 1, to: width, by: 5) { put(&c, x, ground + 1, 0xF3E6CB); put(&c, x + 2, ground + 2, 0xE8A3A0) }
+        for x in 0..<width where scatter(x, 18, 3) { put(&c, x, 18, 0x93C27A) }
+    }
+
+    private static func forest(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, ground - 1, 0xCFE0C3); fill(&c, 0, ground, 31, 27, 0x5E844D)
+        for tx in [2, 11, 22, 29] {
+            let top = tx % 2 == 0 ? 4 : 6
+            for y in top..<ground {
+                let half = min((y - top) / 2 + 1, 4)
+                for x in (tx - half)...(tx + half) {
+                    let trunk = y > ground - 4 && abs(x - tx) < 1
+                    put(&c, x, y, trunk ? 0x6B4A2E : (abs(x - tx) == half ? 0x3F6B3A : 0x4F7D45))
+                }
+            }
+        }
+        for x in 0..<width where scatter(x, 26, 4) { put(&c, x, 26, 0x72A364) }
+    }
+
+    private static func beach(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, 13, 0xBFE0EC); fill(&c, 0, 14, 31, 19, 0x6FA8C9)
+        fill(&c, 0, 20, 31, 20, 0xF3F7F8); fill(&c, 0, 21, 31, 27, 0xEBD5A4)
+        for x in 0..<width where scatter(x, 16, 4) { put(&c, x, 16, 0x8DBCD6) }
+        sun(&c, 4, 2)
+        for x in 0..<width where scatter(x, 24, 6) { put(&c, x, 24, 0xD9BF88) }
+        put(&c, 27, 25, 0xE8A3A0); put(&c, 28, 25, 0xE8A3A0); put(&c, 27, 26, 0xD9532F)
+    }
+
+    private static func night(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, ground - 1, 0x26314F); fill(&c, 0, ground, 31, 27, 0x2F4A3A)
+        for y in 0..<20 { for x in 0..<width where scatter(x, y, 37) { put(&c, x, y, 0xF3E6CB) } }
+        for (x, y) in [(25, 3), (26, 3), (27, 4), (27, 5), (26, 6), (25, 6), (24, 5), (24, 4), (25, 4), (25, 5)] { put(&c, x, y, 0xF6EBC6) }
+        put(&c, 26, 4, 0x26314F); put(&c, 26, 5, 0x26314F)
+        for x in 0..<width where scatter(x, 25, 5) { put(&c, x, 25, 0x3D5C47) }
+    }
+
+    private static func snow(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, ground - 1, 0xDDE6EE); fill(&c, 0, ground, 31, 27, 0xF7F9FB)
+        for y in 0..<ground { for x in 0..<width where scatter(x, y, 23) { put(&c, x, y, 0xFFFFFF) } }
+        for x in 0..<width where scatter(x, ground, 3) { put(&c, x, ground - 1, 0xF7F9FB) }
+        for tx in [3, 28] {
+            for y in 12..<ground {
+                let half = min((y - 12) / 3 + 1, 3)
+                for x in (tx - half)...(tx + half) { put(&c, x, y, y % 3 == 0 ? 0xF7F9FB : 0x557E4A) }
+            }
+        }
+    }
+
+    private static func room(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, ground - 1, 0xEFD9B8); fill(&c, 0, ground, 31, 27, 0xB07A4F)
+        for x in stride(from: 0, to: width, by: 6) { for y in ground...27 { put(&c, x, y, 0x8E5E3A) } }
+        fill(&c, 20, 3, 29, 12, 0x6B4A2E); fill(&c, 21, 4, 28, 11, 0xBFE0EC)
+        fill(&c, 24, 4, 25, 11, 0x6B4A2E); fill(&c, 21, 7, 28, 8, 0x6B4A2E)
+        put(&c, 22, 10, 0x7FB069); put(&c, 27, 5, 0xFFFFFF)
+        fill(&c, 2, 5, 6, 9, 0x8E5E3A); fill(&c, 3, 6, 5, 8, 0xE8A3A0)
+        fill(&c, 1, 25, 30, 26, 0xD9532F)
+        for x in stride(from: 2, to: 30, by: 3) { put(&c, x, 25, 0xF3E6CB) }
+    }
+
+    private static func rain(_ c: inout [UInt32]) {
+        fill(&c, 0, 0, 31, ground - 1, 0xA9B4BE); fill(&c, 0, ground, 31, 27, 0x6E8463)
+        fill(&c, 3, 2, 6, 2, 0xD6DCE1); fill(&c, 2, 3, 7, 3, 0xD6DCE1)
+        fill(&c, 20, 4, 24, 4, 0xD6DCE1); fill(&c, 19, 5, 25, 5, 0xD6DCE1)
+        for y in 6..<ground { for x in 0..<width where (x * 5 + y * 3) % 17 == 0 { put(&c, x, y, 0x7C93AB); put(&c, x, y + 1, 0x7C93AB) } }
+        for x in [6, 7, 8, 24, 25, 26, 27] { put(&c, x, 26, 0x8AA6BE) }
+    }
+}
+
+/// The painter's name for a background scene, as the app's `CompanionBackground` tokens name them.
+nonisolated enum WorldCompanionSceneKind: Equatable, Sendable, CaseIterable {
+    case none, meadow, forest, beach, night, snow, room, rain
 }
 
 // MARK: - Twin: end

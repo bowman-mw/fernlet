@@ -2,10 +2,17 @@ import FernletUI
 import SwiftUI
 import WorldMapStore
 
-/// A stamp page (World-Passport-Spec §6): the header with the months it covers, then its stamps in visit order,
-/// two across and three down (172 pt a row), each at its seeded nudge and tilt with its date box. No dashed spaces:
-/// on the newest page (unless every stamp is found) the next free spot shows a faint dotted "The next stamp lands here". A fresh passport's page
-/// shows the dashed postmark, "No stamps yet" and where stamps come from.
+/// A stamp page (World-Passport-Spec §6; owner 2026-11-15, denser and hand-stamped): the header with the months it
+/// covers, then its stamps in visit order, two across and five down (``PassportStampEntry/perPage``), each pressed
+/// by hand (``PassportStampHand``: a seeded turn of up to ±8° and a few points' shift) at 1.5× with its date box.
+/// No dashed spaces: on the newest page (unless every stamp is found) the next free spot shows a faint dotted "The
+/// next stamp lands here". A fresh passport's page shows the dashed postmark, "No stamps yet" and where stamps come
+/// from.
+///
+/// **Overlaps.** The rows sit closer than the tallest stamp, so a round or hex stamp's foot can rest over the top
+/// of the stamp below it. Each row is drawn over the rows below it, so what overlaps is only ever the lower stamp's
+/// art under the upper stamp's date box, never a name or a date. Across a row the cells keep the stamps apart.
+/// VoiceOver reads the stamps in visit order, row by row.
 ///
 /// `landing` lands with a thump (``PassportLandingStamp``); `wiggle` gives that stamp a small wiggle (a name tapped
 /// in the index).
@@ -18,7 +25,15 @@ struct PassportStampsPage: View {
     var wiggle: PassportWiggle?
     /// Whether every stamp is found (no next spot then).
     var full = false
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The words' share of a row (a name and a date box), grown with Dynamic Type; the art's share is fixed.
+    @ScaledMetric(relativeTo: .caption) private var wordsBand: CGFloat = 32
+
+    /// Stamps across a row.
+    static let across = 2
+    /// The stamps' scale on a page (a country's 84 × 66 pt, a round or hex stamp's 72 pt).
+    static let stampScale: CGFloat = 1.5
+    /// The art's share of a row, in points (a round or hex stamp at ``stampScale`` is 72, with a little air).
+    static let artBand: CGFloat = 76
 
     var body: some View {
         let stamps = book.stamps(onStampPage: index)
@@ -27,17 +42,39 @@ struct PassportStampsPage: View {
             if stamps.isEmpty {
                 PassportFreshStamps()
             } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 0) {
-                    ForEach(stamps, id: \.self) { entry in
-                        cell(entry)
-                            .frame(maxWidth: .infinity, minHeight: rowHeight)
-                    }
-                    if !full && book.isNewestStampPage(index) && stamps.count < PassportStampEntry.perPage {
-                        PassportNextSpot()
-                            .frame(maxWidth: .infinity, minHeight: rowHeight)
+                grid(stamps)
+            }
+        }
+    }
+
+    /// The stamps in rows of ``across``, each row over the ones below it, then the next spot where there is room.
+    private func grid(_ stamps: [PassportStampEntry]) -> some View {
+        let showsNext = !full && book.isNewestStampPage(index) && stamps.count < PassportStampEntry.perPage
+        let slots = stamps.map(Optional.some) + (showsNext ? [nil] : [])
+        let rows = stride(from: 0, to: slots.count, by: Self.across).map { Array(slots[$0 ..< min($0 + Self.across, slots.count)]) }
+        return VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { row, slots in
+                HStack(spacing: 4) {
+                    ForEach(0 ..< Self.across, id: \.self) { column in
+                        slot(column < slots.count ? slots[column] : nil, filled: column < slots.count)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: Self.artBand + wordsBand)
                     }
                 }
+                .zIndex(Double(rows.count - row))
             }
+        }
+    }
+
+    /// One place in a row: a stamp, the next spot (`entry` nil and `filled`), or nothing.
+    @ViewBuilder
+    private func slot(_ entry: PassportStampEntry?, filled: Bool) -> some View {
+        if let entry {
+            cell(entry)
+        } else if filled {
+            PassportNextSpot()
+        } else {
+            Color.clear.accessibilityHidden(true)
         }
     }
 
@@ -47,7 +84,7 @@ struct PassportStampsPage: View {
         if let landing, PassportStampKey(landing) == PassportStampKey(entry) {
             PassportLandingStamp(entry: entry, library: library)
         } else {
-            PassportPlacedStamp(entry: entry, library: library)
+            PassportPlacedStamp(entry: entry, library: library, scale: Self.stampScale, hand: PassportStampHand(entry))
                 .modifier(PassportWiggleEffect(trigger: wiggle?.matches(entry) == true ? wiggle?.count ?? 0 : 0))
         }
     }
@@ -55,11 +92,6 @@ struct PassportStampsPage: View {
     /// The months the page covers ("AUG – SEP 2026"), or nil on a fresh page.
     private var months: String? {
         book.dates(onStampPage: index).map { PassportBookDates.months(from: $0.first, to: $0.last) }
-    }
-
-    /// 172 pt a row; taller with the largest text (the page scrolls inside the book).
-    private var rowHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 200 : 172
     }
 }
 
@@ -105,7 +137,7 @@ struct PassportFreshStamps: View {
 }
 
 /// A new stamp landing (World-Passport-Spec §6, `ps-new`): it thumps down 12 % big and still, then settles to its
-/// tilt and nudge with a burst of ink pixels (0.4 s) and one firm haptic. Reduce Motion: it fades in. VoiceOver
+/// hand placement (``PassportStampHand``) with a burst of ink pixels (0.4 s) and one firm haptic. Reduce Motion: it fades in. VoiceOver
 /// announces "New stamp, Sea of Japan, 24 October 2026".
 struct PassportLandingStamp: View {
     let entry: PassportStampEntry
@@ -115,7 +147,8 @@ struct PassportLandingStamp: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        PassportPlacedStamp(entry: entry, library: library, still: !settled && !reduceMotion)
+        PassportPlacedStamp(entry: entry, library: library, scale: PassportStampsPage.stampScale,
+                            still: !settled && !reduceMotion, hand: PassportStampHand(entry))
             .scaleEffect(settled || reduceMotion ? 1 : 1.12)
             .opacity(reduceMotion && !settled ? 0 : 1)
             .overlay { if !reduceMotion { PassportInkBurst(active: burst) } }

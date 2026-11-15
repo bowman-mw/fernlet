@@ -34,6 +34,16 @@ import WorldMapStore
 /// then draws no map (a decoy's map is none). ``widgetMapGeneration`` moves each time, so a picture rendered
 /// across one of them is never written (`WorldWidgetMapWriter`).
 ///
+/// **The drive widget** (owner's pick 2026-11-13, the CarPlay small widget): ``driveWidget`` counts a drive's new
+/// tiles, those also while the phone is locked if the history was read before it locked, and goes with the picture.
+/// The widget runs on the iPhone like the rest of Fernlet, so it saves no battery itself: what a drive costs is the
+/// trace's (`WorldLocationSource`).
+///
+/// **Inside an airport's grounds only walking clears** (owner 2026-11-02, decided 2026-11-13): a reading there faster
+/// than walking (the plane train, a people mover, a taxiing plane, a car on the airport's roads) lifts nothing, so
+/// the terminals and concourses walked through clear under the grounds' see-through fog and the ones passed under or
+/// by do not.
+///
 /// **The passport and the odd hidden tiles** (round 7). ``atlas`` reads only the readings this keeper accepts,
 /// only while the phone is unlocked and never in a decoy, and goes with every wipe through ``clearAll()``.
 /// A lift also lifts any single cell it left fogged with all six neighbours open (`FogGapCloser`), in a
@@ -104,6 +114,12 @@ final class WorldFogKeeper {
     @ObservationIgnored var widgetMapReload: @MainActor () -> Void
     /// Moves each time the widget's picture is deleted (a wipe, Delete map history, a decoy).
     @ObservationIgnored private(set) var widgetMapGeneration = 0
+    /// The drive widget's count and file (tests point it at their own folder).
+    @ObservationIgnored var driveWidget = WorldDriveWidgetKeeper()
+    /// Cells a drive uncovered while the phone was locked, counted once until the unlock merges them.
+    @ObservationIgnored private var lockedFresh: Set<HexCell> = []
+    /// How many cells the last lift newly uncovered (counted also while locked, against the history read before).
+    @ObservationIgnored private var lastFresh = 0
 
     /// A keeper over `vault`. `isProtectedDataAvailable` reports whether the phone is unlocked (the
     /// app's `UIApplication` answer by default; tests inject one).
@@ -188,7 +204,12 @@ final class WorldFogKeeper {
     func handle(_ fix: WorldFix, saveNow: Bool = false, thinLine: Bool = false) -> Int {
         let added: Int
         let accepted = accepts(fix)
-        if thinLine {
+        lastFresh = 0
+        if Self.ridesThroughAirport(fix) {
+            // The plane train, a people mover, a car on the airport's roads: nothing lifts, and no lane joins across.
+            laneFrom = nil
+            added = 0
+        } else if thinLine {
             added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point), driving: true)
             if accepted { laneFrom = fix.point }
         } else {
@@ -197,7 +218,13 @@ final class WorldFogKeeper {
         }
         if accepted { roadTrip.record(fix, saveNow: saveNow) }
         if saveNow, added > 0 { flush() }
+        if accepted, !isDecoy { driveWidget.note(driving: thinLine, newTiles: thinLine ? lastFresh : 0, at: fix.at) }
         return added
+    }
+
+    /// Whether `fix` is inside an airport's grounds faster than walking: it lifts nothing (only walking clears there).
+    static func ridesThroughAirport(_ fix: WorldFix) -> Bool {
+        fix.atAirport && (fix.speed ?? 0) > WorldRideWatch.walkingSpeed
     }
 
     /// The cells a drive reading at `point` lifts: ``driveRadius`` around it and around the points every
@@ -227,6 +254,7 @@ final class WorldFogKeeper {
         guard accepts(fix) else { return 0 }
         guard !isDecoy else { return liftDecoy(cells, driving: driving) }
         guard isProtectedDataAvailable(), store.isLoaded else {
+            if driving, store.isLoaded { countLockedFresh(cells) }
             bufferWhileLocked(cells, driving: driving)
             return 0
         }
@@ -234,6 +262,7 @@ final class WorldFogKeeper {
         let lifted = store.lift(cells)
         let gaps = FogGapCloser.closing(around: cells, in: store.cells)
         let added = lifted + store.lift(gaps)
+        if driving { lastFresh = added }
         if driving { driven.add(fresh + gaps) } else { driven.remove(cells + gaps) }
         // Inside the grounds just landed at, the passport waits for the person to leave (the flight gate).
         if !fix.atLandedAirport { atlas.observe(point: fix.point, at: fix.at) }
@@ -311,7 +340,9 @@ final class WorldFogKeeper {
             flush()
             // The decoy's map widget has no map: the real picture goes before anything of the decoy shows.
             if !removeWidgetMap() { FernletAuditLog.log("worldMap.widgetMap.decoyDeleteFailed") }
+            if !driveWidget.clear() { FernletAuditLog.log("worldMap.widgetDrive.decoyDeleteFailed") }
         }
+        lockedFresh = []
         isDecoy = on
         atlas.setDecoy(on)
         cornerNudge.setDecoy(on)
@@ -334,10 +365,12 @@ final class WorldFogKeeper {
         drivenCells = []
         sinceSave = 0
         let pictureGone = removeWidgetMap()
+        let driveGone = driveWidget.clear()
+        lockedFresh = []
         let passportGone = atlas.clearAll()
         let cornerGone = cornerNudge.clearAll()
         let vaultGone = vault.clearAll()
-        return vaultGone && pictureGone && passportGone && cornerGone
+        return vaultGone && pictureGone && driveGone && passportGone && cornerGone
     }
 
     /// This week's new corner near `home` (the person's first home, `HomeBook.homes.first?.point`), picked
@@ -359,6 +392,7 @@ final class WorldFogKeeper {
     /// ``load()`` once the history is read: saves the unsaved cells, merges the locked-phone buffer, and
     /// shows what it added.
     private func mergeWhileLoaded() {
+        lockedFresh = []
         flush()
         do {
             try store.drainPending()
@@ -369,6 +403,15 @@ final class WorldFogKeeper {
         } catch {
             FernletAuditLog.log("worldMap.fog.loadDeferred")
         }
+    }
+
+    /// Counts the cells of a drive while the phone is locked that the history (read before it locked) doesn't hold and
+    /// that weren't counted since: the drive widget's new tiles. Bounded by WorldDriveWidget/maxLockedCells.
+    private func countLockedFresh(_ cells: [HexCell]) {
+        guard lockedFresh.count < WorldDriveWidget.maxLockedCells else { return }
+        let fresh = cells.filter { !store.cells.contains($0) && !lockedFresh.contains($0) }
+        lockedFresh.formUnion(fresh)
+        lastFresh = fresh.count
     }
 
     /// Puts cells lifted while the phone is locked into the buffer for the next unlock: a drive's into the driven

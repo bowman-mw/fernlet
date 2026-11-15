@@ -76,6 +76,10 @@ struct PassportSproutPhoto: View {
     let reaction: WorldCloseUpReaction
     /// Changes with every pet, so the hearts start again.
     let petCount: Int
+    /// The person's background scene behind the companion (G8); none keeps the mint ground.
+    var scene = WorldCompanionSceneKind.none
+    /// The scene's light, following the companion's night.
+    var light = WorldSceneLight.day
 
     /// The frame's size.
     static let size = CGSize(width: 100, height: 122)
@@ -84,7 +88,11 @@ struct PassportSproutPhoto: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            PassportSproutInk.photo
+            if scene == .none {
+                PassportSproutInk.photo
+            } else {
+                WorldCompanionSceneBackdrop(kind: scene, light: light)
+            }
             Ellipse()
                 .fill(WorldPalette.ink.opacity(0.14))
                 .frame(height: 10)
@@ -113,10 +121,11 @@ struct PassportSproutPhoto: View {
 /// is one VoiceOver element, "Name, Sprout".
 struct PassportSproutDetails: View {
     let model: PassportSproutModel
+    @Environment(\.passportSproutCompact) private var compact
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            field(PassportSproutCopy.nameLabel, spoken: model.name) {
+        VStack(alignment: .leading, spacing: compact ? 2 : 5) {
+            field(PassportSproutCopy.nameLabel, spoken: model.name, inline: false) {
                 Text(verbatim: model.name).font(PassportSproutFont.name)
             }
             field(PassportSproutCopy.feelingLabel, spoken: model.feeling) {
@@ -134,27 +143,56 @@ struct PassportSproutDetails: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// One labelled field: the caps label over its value, read as one element ("Name, Sprout").
-    private func field<Value: View>(_ label: String, spoken: String, @ViewBuilder value: () -> Value) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(verbatim: label)
-                .font(PassportSproutFont.caps(9.5))
-                .textCase(.uppercase)
-                .tracking(0.9)
-                .foregroundStyle(PassportSproutInk.dim)
-            value()
-                .foregroundStyle(PassportSproutInk.text)
-                .fixedSize(horizontal: false, vertical: true)
+    /// One labelled field: the caps label over its value, read as one element ("Name, Sprout"). On a compact page
+    /// (``PassportSproutFit``) a field that may sit `inline` puts its label beside its value when the value fits
+    /// there on one line, saving a line; otherwise the label stays over it.
+    @ViewBuilder
+    private func field<Value: View>(_ label: String, spoken: String, inline: Bool = true,
+                                    @ViewBuilder value: () -> Value) -> some View {
+        let shown = value()
+        Group {
+            if compact && inline {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 6) {
+                        caption(label)
+                        shown.foregroundStyle(PassportSproutInk.text).lineLimit(1).fixedSize()
+                    }
+                    stacked(label, shown)
+                }
+            } else {
+                stacked(label, shown)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: label))
         .accessibilityValue(Text(verbatim: spoken))
+    }
+
+    /// The caps label over `value`.
+    private func stacked(_ label: String, _ value: some View) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            caption(label)
+            value
+                .foregroundStyle(PassportSproutInk.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A field's caps label.
+    private func caption(_ label: String) -> some View {
+        Text(verbatim: label)
+            .font(PassportSproutFont.caps(9.5))
+            .textCase(.uppercase)
+            .tracking(0.9)
+            .foregroundStyle(PassportSproutInk.dim)
     }
 }
 
 /// Sprout's line in the light bubble (it stays light in dark mode), its tail pointing up at the photo.
 struct PassportSproutLine: View {
     let text: String
+    @Environment(\.passportSproutCompact) private var compact
 
     var body: some View {
         Text(verbatim: text)
@@ -163,7 +201,7 @@ struct PassportSproutLine: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, compact ? 5 : 7)
             .background(PassportSproutInk.bubble, in: RoundedRectangle(cornerRadius: 4))
             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
             .overlay(alignment: .topLeading) {

@@ -64,10 +64,12 @@ struct PassportSproutButtonFace<Icon: View, Trailing: View>: View {
 struct PassportSproutPairs<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.passportSproutCompact) private var compact
 
     var body: some View {
         let columns = dynamicTypeSize.isAccessibilitySize ? 1 : 2
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: columns), spacing: 6) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: columns),
+                  spacing: compact ? 4 : 6) {
             content()
         }
     }
@@ -78,9 +80,10 @@ struct PassportSproutWearing: View {
     let model: PassportSproutModel
     let act: (PassportSproutAction) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.passportSproutCompact) private var compact
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: compact ? 4 : 6) {
             PassportSproutHeading(text: PassportSproutCopy.wearingHeader(name: model.name))
             PassportSproutPairs {
                 ForEach(model.slots, id: \.slot) { summary in
@@ -140,13 +143,14 @@ struct PassportSproutWearing: View {
 struct PassportSproutShop: View {
     let model: PassportSproutModel
     let act: (PassportSproutAction) -> Void
+    @Environment(\.passportSproutCompact) private var compact
 
     /// How many items a shop can list.
     static let shopSpots = ClothingShopLimits.maxListedItems
 
     var body: some View {
         let listed = PassportSproutCopy.listed(model.listed, of: Self.shopSpots)
-        VStack(spacing: 6) {
+        VStack(spacing: compact ? 4 : 6) {
             PassportSproutHeading(text: PassportSproutCopy.shopHeader)
             Button { act(.yourShop) } label: {
                 PassportSproutButtonFace(label: PassportSproutCopy.yourShop, value: listed) {

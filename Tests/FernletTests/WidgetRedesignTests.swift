@@ -93,7 +93,7 @@ struct WidgetRedesignTests {
         #expect(widget.contains(glasses) && app.contains(glasses))
         #expect(widget.contains("pose: WidgetCompanionPose(asleep: asleep)"), "the widget's pose is asleep or awake")
         #expect(widget.contains("case .silhouette(let hex): return grid.takesOneColour(frameX: x, y: y) ? hex : nil"))
-        #expect(app.contains("grid.put(gx, eyeRow - 1, color, as: .glasses)"), "the glasses are tagged as theirs")
+        #expect(app.contains("grid.put(gx, eyeRow + lens.top, color, as: .glasses)"), "the glasses are tagged as theirs")
         #expect(app.contains("case .eye, .mouth, .blush, .tear, .glasses: true"), "and are part of the cut-out face")
     }
 

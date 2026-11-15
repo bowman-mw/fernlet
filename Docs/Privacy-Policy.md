@@ -115,7 +115,12 @@
      can mention it — the city only, never the airport, times or where you were, and only while the AI
      runs on the iPhone. It stays on the device like every sensitive memory (§2).
      Everything stays on the device; nothing new is sent to the developer and no promise is weakened
-     under §13). Before
+     under §13), and 2026-11-15 (hotel check-in, asked for by the owner on 2026-11-15: "Ask apple maps
+     whats nearby every time a drive ends. Add a privacy policy change"): §6 adds that when a drive
+     ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at
+     a hotel, sending only that location. Apple Maps is already the map's destination and the point is
+     where the person stopped; the answer is held in memory only, and a hotel is kept only if the person
+     checks in. Nothing new is sent to the developer and no promise is weakened under §13. Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -480,6 +485,7 @@ To name a place you stop at, or to check where a photo you take on your own was 
 Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
 keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
 you look at your places.
+When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at a hotel; only that location is sent, with nothing about you attached.
 
 **Airports and flights.** With Airports and flights on, Fernlet notes the airports you visit and the flights you take from your location, and keeps them in your passport, encrypted on this iPhone and carried only in the passport's own sealed backup if you use it.
 If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports and gate times; it doesn't keep the file and never contacts Flighty.

@@ -41,6 +41,9 @@ struct WorldQuickStartButton: View {
     /// "Trip to Honolulu" on the day of a calendar flight, at its airport (World-Airports-Spec §10.7): it slides
     /// out for 3 seconds, and the name says it ("Quick start, Trip to Honolulu").
     var tripLabel: String? = nil
+    /// "Check in at the Ace" after a drive ended at a hotel (owner, 2026-11-15): it slides out for 30 seconds, and
+    /// the name says it ("Quick start, Check in at the Ace").
+    var checkInLabel: String? = nil
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -59,8 +62,8 @@ struct WorldQuickStartButton: View {
         }
         .buttonStyle(.plain)
         // Refinement 6 (`ref-blue-how`): the action's word slides out when it changes; the name always says it.
-        .worldQuickStartLabel(for: glyph, tripTo: tripLabel)
-        .accessibilityLabel(Text(verbatim: WorldQuickStartLabel.buttonName(for: glyph, trip: tripLabel)))
+        .worldQuickStartLabel(for: glyph, tripTo: tripLabel, checkIn: checkInLabel)
+        .accessibilityLabel(Text(verbatim: WorldQuickStartLabel.buttonName(for: glyph, trip: tripLabel ?? checkInLabel)))
         .accessibilityValue(Text(verbatim: spokenStatus ?? ""))
         .accessibilityHint(Text(WorldQuickStartCopy.buttonHint))
         .accessibilityInputLabels([Text(WorldQuickStartCopy.buttonLabel)])
@@ -191,6 +194,7 @@ struct WorldQuickStartOptionRow: View {
         case .loopFromDoor: WorldSprites.shoe
         case .cookSomething: WorldSprites.bowlInk
         case .roomWorkout: WorldPlaceSprites.suitcase
+        case .checkIn: WorldPlaceSprites.hotel
         }
     }
 
@@ -216,6 +220,7 @@ struct WorldQuickStartOptionRow: View {
         case .loopFromDoor: "loopFromDoor"
         case .cookSomething: "cookSomething"
         case .roomWorkout: "roomWorkout"
+        case .checkIn: "checkIn"
         }
     }
 }

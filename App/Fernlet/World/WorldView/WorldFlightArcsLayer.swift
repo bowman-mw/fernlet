@@ -38,9 +38,11 @@ nonisolated enum WorldFlightCopy {
                                                          comment: "Your world: a flight route's great-circle distance in kilometres, e.g. 3,620 km"))
     }
 
-    /// An arc's card line: "Portland – Mexico City · 2 flights · 3,620 km".
+    /// An arc's card line: "Portland – Mexico City · 2 flights · 3,620 km", or "· 1 planned ·" for a route
+    /// still to come (the passport's own "planned" words).
     static func card(_ arc: WorldFlightArc) -> String {
-        let from = arc.fromName, to = arc.toName, count = flights(arc.flights), length = distance(arc.kilometres)
+        let from = arc.fromName, to = arc.toName, length = distance(arc.kilometres)
+        let count = arc.isPlanned ? String(localized: PassportFlightsCopy.planned(arc.flights)) : flights(arc.flights)
         return String(localized: LocalizedStringResource("worldView.flights.card", defaultValue: "\(from) – \(to) · \(count) · \(length)",
                                                          comment: "Your world: the card of a tapped flight arc: the two cities, the flights both ways, the distance"))
     }
@@ -49,6 +51,12 @@ nonisolated enum WorldFlightCopy {
     /// flight on it was imported.
     static func spoken(_ arc: WorldFlightArc) -> String {
         let from = arc.fromName, to = arc.toName, count = flights(arc.flights)
+        if arc.isPlanned {
+            let planned = String(localized: PassportFlightsCopy.planned(arc.flights))
+            return String(localized: LocalizedStringResource("worldView.flights.arc.spoken.planned",
+                                                             defaultValue: "Planned flights, \(from) and \(to), \(planned)",
+                                                             comment: "Your world: VoiceOver name of a dimmed dashed arc whose flights haven't left yet, e.g. Planned flights, Portland and Tokyo, 1 planned"))
+        }
         guard arc.allImported else {
             return String(localized: LocalizedStringResource("worldView.flights.arc.spoken", defaultValue: "Flights, \(from) and \(to), \(count)",
                                                              comment: "Your world: VoiceOver name of a flight arc, a button that opens its card"))
@@ -88,6 +96,13 @@ nonisolated enum WorldFlightInk {
     static let lineWidth = 2.6
     /// The dot line's dash: a dot every 6 pt.
     static let dash: [CGFloat] = [0.1, 6]
+    /// A planned arc's dash: the passport's Planned stub dash (6 on, 4 off), so it reads apart from the flown dots
+    /// without relying on how dim it is.
+    static let plannedDash: [CGFloat] = [6, 4]
+    /// A planned arc's line width.
+    static let plannedLineWidth = 1.6
+    /// A planned arc's ink opacity (dimmed, owner's pick 2026-11-13).
+    static let plannedOpacity = 0.5
     /// How far (points) a tap may land from an arc and still pick it.
     static let tapReach = 16.0
     /// How far (points) a tap may land from a ring and still name it.
@@ -122,7 +137,8 @@ nonisolated struct WorldFlightPick: Equatable, Sendable {
 
 /// The flights' dotted great-circle arcs on Your world (spec §8, screen 22): every route one arc, a 5-pt edge
 /// at 55 % under a 2.6-pt dot line (dash 0.1 6, round caps), all in two strokes so crossings never darken; the
-/// picked arc's edge is drawn solid and wider. Cut where an arc wraps round the world, and only the pieces on
+/// picked arc's edge is drawn solid and wider. A planned route is dimmed and dashed (6 on, 4 off) like the passport's
+/// Planned stubs. Cut where an arc wraps round the world, and only the pieces on
 /// screen are drawn. Decoration to VoiceOver (``WorldFlightArcButtons`` carries each arc).
 struct WorldFlightArcsLayer: View {
     let camera: WorldViewCamera
@@ -136,11 +152,12 @@ struct WorldFlightArcsLayer: View {
         let dark = colorScheme == .dark
         Canvas(rendersAsynchronously: false) { context, _ in
             let drawn = WorldFlightArcs.projected(arcs, camera: camera, margin: WorldFlightInk.cullMargin)
-            var all = Path(), chosen = Path()
+            var all = Path(), planned = Path(), chosen = Path()
+            let plannedIDs = Set(arcs.lazy.filter(\.isPlanned).map(\.id))
             // Bounded: the arcs drawn (WorldFlightArcs.maxRoutes), pointsPerArc points each.
             for arc in drawn {
                 for piece in arc.pieces {
-                    all.addLines(piece)
+                    if plannedIDs.contains(arc.id) { planned.addLines(piece) } else { all.addLines(piece) }
                     if arc.id == picked { chosen.addLines(piece) }
                 }
             }
@@ -150,6 +167,9 @@ struct WorldFlightArcsLayer: View {
             context.stroke(chosen, with: .color(edge), style: round(WorldFlightInk.edgeWidth + 3))
             context.stroke(all, with: .color(ink), style: StrokeStyle(lineWidth: WorldFlightInk.lineWidth, lineCap: .round,
                                                                        lineJoin: .round, dash: WorldFlightInk.dash))
+            context.stroke(planned, with: .color(ink.opacity(WorldFlightInk.plannedOpacity)),
+                           style: StrokeStyle(lineWidth: WorldFlightInk.plannedLineWidth, lineCap: .butt, lineJoin: .round,
+                                              dash: WorldFlightInk.plannedDash))
         }
         .frame(width: camera.size.width, height: camera.size.height)
         .allowsHitTesting(false)

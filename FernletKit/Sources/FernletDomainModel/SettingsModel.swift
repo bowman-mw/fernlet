@@ -132,6 +132,10 @@ public nonisolated struct FernletSettings: Codable {
     /// small wellness reflection + capped score nudge. Default off. Only this flag syncs — the stress
     /// baselines/EWMA state stay in a device-local sidecar (see `StressService`), never in any synced store.
     public var stressAwarenessEnabled: Bool = false
+    /// Home's gentle reminders (G8, 2026-11-15): the forgotten-good-things and seasonal-rhythm cards, the
+    /// forgotten-favourite meal chips and the forgotten-workout nudge, under one switch in Settings ›
+    /// Your day › Reminders. Default ON; a record from before the key decodes ON.
+    public var gentleRemindersEnabled: Bool = true
     public var userProfile: UserNutritionProfile = UserNutritionProfile()
     public var nutritionPreferences: UserNutritionPreferences = UserNutritionPreferences()
     /// User-set macro *target* overrides. `nil` means "derive from goal, profile, activity and eating
@@ -502,6 +506,7 @@ public nonisolated struct FernletSettings: Codable {
         periodAwareScoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .periodAwareScoringEnabled) ?? false
         periodContextPrimerSeen = try container.decodeIfPresent(Bool.self, forKey: .periodContextPrimerSeen) ?? false
         stressAwarenessEnabled = try container.decodeIfPresent(Bool.self, forKey: .stressAwarenessEnabled) ?? false
+        gentleRemindersEnabled = try container.decodeIfPresent(Bool.self, forKey: .gentleRemindersEnabled) ?? true
     }
 
     /// The nutrition profile, preferences, the three pinned macro-target overrides, and the Weight
@@ -751,7 +756,7 @@ public nonisolated struct FernletSettings: Codable {
              unknownWebNutritionLookupConsentToken, weatherPromptsEnabled,
              showCalories, hasCompletedOnboarding, periodTrackingVisible, didMigratePeriodVisibility,
              intimacyTrackingVisible, hidePredictions, hideFertileWindow, periodAwareScoringEnabled,
-             periodContextPrimerSeen, stressAwarenessEnabled, userProfile, nutritionPreferences,
+             periodContextPrimerSeen, stressAwarenessEnabled, gentleRemindersEnabled, userProfile, nutritionPreferences,
              calorieTargetOverride, proteinTargetOverride, fatTargetOverride,
              weightManagementDeficitPercent, quickLogItems,
              unknownQuickLogTokens, homeWidgets, unknownHomeWidgetTokens,
@@ -842,6 +847,7 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(periodAwareScoringEnabled, forKey: .periodAwareScoringEnabled)
         try container.encode(periodContextPrimerSeen, forKey: .periodContextPrimerSeen)
         try container.encode(stressAwarenessEnabled, forKey: .stressAwarenessEnabled)
+        try container.encode(gentleRemindersEnabled, forKey: .gentleRemindersEnabled)
     }
 
     /// Mirror of `decodeNutrition(from:)` + `decodeHomeLayout(from:)`.

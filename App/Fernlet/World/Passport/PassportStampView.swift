@@ -97,6 +97,8 @@ struct PassportStampView: View {
     let library: PassportLibrary
     /// The drawing's scale (points per postmark point; a special's points per pixel).
     let scale: CGFloat
+    /// A postmark's turn in place of its seeded tilt (``PassportPostmark/tilt``), or nil.
+    var tilt: Double?
 
     var body: some View {
         switch model.kind {
@@ -106,7 +108,7 @@ struct PassportStampView: View {
                 .accessibilityLabel(Text(PassportCopy.special(allOceans: allOceans, earned: model.isEarned)))
         default:
             if model.isEarned, let drawing = library.drawing(of: model.kind) {
-                PassportPostmark(stamp: drawing, shape: model.kind.shape, scale: scale)
+                PassportPostmark(stamp: drawing, shape: model.kind.shape, scale: scale, tilt: tilt)
                     .accessibilityElement()
                     .accessibilityLabel(Text(library.stampLabel(of: model.kind)))
             } else {
@@ -116,28 +118,34 @@ struct PassportStampView: View {
     }
 }
 
-/// A stamp as it lands on a page of Sprout's passport (World-Passport-Spec §6): the art at 1.9×, nudged off the grid
-/// by its seed (−7…+7 pt across, −5…+5 down), the name underneath for a continent, ocean or sea (DM Sans Bold 12; a
-/// country's stamp and an airport's ticket carry their own), and its date box. One VoiceOver element: "Canada,
-/// stamp, 2 September 2026"; an airport's "Heathrow, LHR, stamp, 3 October 2026" or "Helsinki Airport, HEL,
-/// transit stamp, 21 October 2026" (World-Airports-Spec §4.2).
+/// A stamp as it lands on a page of Sprout's passport (World-Passport-Spec §6): the art at the page's scale, the
+/// name underneath for a continent, ocean or sea (DM Sans Bold 12; a country's stamp and an airport's ticket carry
+/// their own), and its date box. One VoiceOver element: "Canada, stamp, 2 September 2026"; an airport's "Heathrow,
+/// LHR, stamp, 3 October 2026" or "Helsinki Airport, HEL, transit stamp, 21 October 2026" (World-Airports-Spec §4.2).
 ///
-/// `still` drops the nudge (the moment a new stamp lands, before it settles). The page around it is another
-/// piece's; this view only places itself.
+/// Placed by `hand` (a stamp page, owner 2026-11-15): the whole stamp, art, name and date box together, turned and
+/// shifted as one press by its ``PassportStampHand``, the art drawn without its own tilt and the date box turned a
+/// little less than the stamp (0.6 × in all). Without `hand` (the stamp book's gallery): the art at its own seeded
+/// tilt, nudged off the grid by its seed (−7…+7 pt across, −5…+5 down).
+///
+/// `still` drops the nudge and the turn (the moment a new stamp lands, before it settles). The page around it is
+/// another piece's; this view only places itself.
 struct PassportPlacedStamp: View {
     let entry: PassportStampEntry
     let library: PassportLibrary
-    /// The page's stamp scale (1.9 in the book); a special is drawn at 4 pt a pixel at 1.9.
+    /// The page's stamp scale (1.9 in the gallery); a special is drawn at 4 pt a pixel at 1.9.
     var scale: CGFloat = 1.9
     var still = false
+    /// The hand placement on a stamp page, or nil for the gallery's seeded nudge.
+    var hand: PassportStampHand?
 
     var body: some View {
         if let kind = entry.stampKind {
-            let nudge = still ? (across: 0, down: 0) : PassportStampSeed.nudge(kind.seedKey)
+            let placement = placement(of: kind)
             let name = library.name(of: kind, onPage: true)
             VStack(spacing: 4) {
                 PassportStampView(model: PassportStampModel(kind: kind, firstVisit: entry.date), library: library,
-                                  scale: kind.isSpecial ? scale * 4 / 1.9 : scale)
+                                  scale: kind.isSpecial ? scale * 4 / 1.9 : scale, tilt: hand == nil ? nil : 0)
                 if !kind.carriesOwnName {
                     Text(verbatim: name)
                         .font(.custom(FernletFontName.dmSansBold, size: 12, relativeTo: .caption))
@@ -145,25 +153,36 @@ struct PassportPlacedStamp: View {
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
                 }
-                PassportDateBox(date: entry.date, ink: library.ink(of: kind),
-                                tilt: kind.isSpecial ? 0 : PassportStampSeed.tilt(kind.seedKey))
+                PassportDateBox(date: entry.date, ink: library.ink(of: kind), tilt: placement.dateTilt)
             }
-            .offset(x: CGFloat(nudge.across), y: CGFloat(nudge.down))
+            .rotationEffect(.degrees(placement.turn))
+            .offset(x: placement.across, y: placement.down)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(library.placedLabel(of: kind, on: PassportDates.long(entry.date))))
         }
+    }
+
+    /// Where `kind`'s stamp sits: its turn, its date box's own turn on top, and its shift.
+    private func placement(of kind: PassportStampKind) -> (turn: Double, dateTilt: Double, across: Double, down: Double) {
+        if still { return (0, 0, 0, 0) }
+        if let hand {
+            return (hand.degrees, -0.4 * hand.degrees, hand.across, hand.down)
+        }
+        let nudge = PassportStampSeed.nudge(kind.seedKey)
+        let tilt = kind.isSpecial ? 0 : Double(PassportStampSeed.tilt(kind.seedKey))
+        return (0, 0.6 * tilt, Double(nudge.across), Double(nudge.down))
     }
 }
 
 /// A stamp's date box (World-Passport-Spec §6): "14 AUG 2026" in DM Sans Bold 11 with 0.07 em letter spacing, in a
 /// 1.5 pt box on the passport's paper, in the stamp's ink made readable (``PassportInk/dateInk(_:dark:increasedContrast:)``:
-/// 4.6:1, 7:1 with Increase Contrast), turned 0.6 × the stamp's tilt. It grows with Dynamic Type.
+/// 4.6:1, 7:1 with Increase Contrast), turned by `tilt` (0.6 × the stamp's tilt). It grows with Dynamic Type.
 struct PassportDateBox: View {
     let date: Date
     /// The stamp's light-mode ink.
     let ink: UInt32
-    /// The stamp's tilt in degrees.
-    let tilt: Int
+    /// The box's own turn in degrees.
+    let tilt: Double
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
     @ScaledMetric(relativeTo: .caption2) private var tracking: CGFloat = 0.77
@@ -180,7 +199,7 @@ struct PassportDateBox: View {
             .padding(EdgeInsets(top: 3, leading: 5, bottom: 2, trailing: 5))
             .background(RoundedRectangle(cornerRadius: 3).fill(PassportInk.color(PassportInk.paper(dark: dark))))
             .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(colour, lineWidth: 1.5))
-            .rotationEffect(.degrees(0.6 * Double(tilt)))
+            .rotationEffect(.degrees(tilt))
             .accessibilityHidden(true)
     }
 }

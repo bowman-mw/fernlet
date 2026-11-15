@@ -48,6 +48,9 @@ nonisolated struct WorldFlightArc: Identifiable, Sendable {
     let kilometres: Double
     /// The great circle's points in Mercator units, `from` to `to` (at most ``WorldFlightArcs/pointsPerArc``).
     let path: [CGPoint]
+    /// Whether every flight on it is still to come (owner's pick 2026-11-13): drawn dimmed and dashed like the
+    /// passport's Planned stubs, and its flights stay out of the plate's count. A route also flown is never planned.
+    var isPlanned = false
 
     var id: String { route.id }
 
@@ -79,7 +82,7 @@ nonisolated struct WorldFlightMap: Sendable {
     var found: [WorldFlightAirportMark]
     /// How many airports the passport keeps (the plate's count).
     var airportCount: Int
-    /// How many flights the passport keeps (the plate's count).
+    /// How many flights the passport keeps that have left (the plate's count; planned ones aren't counted).
     var flightCount: Int
     /// The found airports whose grounds and runways the map draws (``WorldViewAirportTiles``).
     var grounds: [WorldAirport] = []
@@ -133,6 +136,27 @@ nonisolated enum WorldFlightArcs {
             }
         }
         return order.compactMap { route in tallies[route].map { (route: route, tally: $0) } }
+    }
+
+    /// `flights` split into those flown and those still to come at `now`, by the passport's own trips
+    /// (``PassportFlightTrip/isPlanned``): a trip whose first leg hasn't left is planned, and a connection under way
+    /// counts as flown. Both halves keep the book's order. Bounded: `PassportBook/maxFlights`.
+    static func split(_ flights: [PassportFlight], now: Date,
+                      calendar: Calendar = .current) -> (flown: [PassportFlight], planned: [PassportFlight]) {
+        let sorted = flights.prefix(PassportBook.maxFlights).sorted { $0.departure < $1.departure }
+        // Bounded: the trips of at most maxFlights flights.
+        let planned = PassportFlightsModel.trips(sorted, calendar: calendar)
+            .filter { ($0.first?.departure ?? now) > now }
+            .flatMap { $0 }
+        guard !planned.isEmpty else { return (Array(flights.prefix(PassportBook.maxFlights)), []) }
+        let keys = Set(planned.map(key))
+        let kept = flights.prefix(PassportBook.maxFlights)
+        return (kept.filter { !keys.contains(key($0)) }, kept.filter { keys.contains(key($0)) })
+    }
+
+    /// A flight's identity within one book: its route and departure.
+    private static func key(_ flight: PassportFlight) -> String {
+        "\(flight.from)-\(flight.to)@\(flight.departure.timeIntervalSince1970)"
     }
 
     // MARK: The sphere
@@ -279,7 +303,7 @@ nonisolated extension WorldFlightMap {
     /// The map for `book`: an arc for every route whose two airports `lookup` places, the most-flown first; a
     /// ring at every arc end that isn't among `found` (the found airports, by code); and the passport's counts.
     /// Bounded: ``WorldFlightArcs/maxRoutes`` routes, ``WorldFlightArcs/maxMarks`` marks of each kind.
-    static func make(book: PassportBook, found: [(code: String, airport: Airport)],
+    static func make(book: PassportBook, found: [(code: String, airport: Airport)], now: Date = Date(),
                      lookup: (String) -> Airport?) -> WorldFlightMap {
         let foundMarks = found.prefix(WorldFlightArcs.maxMarks).map { mark($0.code, $0.airport) }
         let foundCodes = Set(foundMarks.map(\.code))
@@ -292,22 +316,39 @@ nonisolated extension WorldFlightMap {
         }
         var arcs: [WorldFlightArc] = []
         var ringCodes: [String] = []
+        let (flown, planned) = WorldFlightArcs.split(book.flights, now: now)
         // Bounded: at most WorldFlightArcs.maxRoutes routes.
-        for (route, tally) in WorldFlightArcs.routes(book.flights) {
+        for (route, tally) in WorldFlightArcs.routes(flown) {
             guard let from = place(tally.from), let to = place(tally.to) else { continue }
-            arcs.append(WorldFlightArc(route: route, from: tally.from, to: tally.to, fromName: from.name,
-                                       toName: to.name, flights: tally.flights, allImported: tally.allImported,
-                                       kilometres: WorldFlightArcs.kilometres(from.point, to.point),
-                                       path: WorldFlightArcs.mercatorPath(from: from.point, to: to.point)))
+            arcs.append(arc(route, tally, from, to, planned: false))
             ringCodes.append(contentsOf: [tally.from, tally.to].filter { !foundCodes.contains($0) })
         }
+        let flownRoutes = Set(arcs.map(\.route))
+        var plannedArcs: [WorldFlightArc] = []
+        // Bounded: at most WorldFlightArcs.maxRoutes routes; a planned route already flown keeps its flown arc.
+        for (route, tally) in WorldFlightArcs.routes(planned) where !flownRoutes.contains(route)
+            && arcs.count + plannedArcs.count < WorldFlightArcs.maxRoutes {
+            guard let from = place(tally.from), let to = place(tally.to) else { continue }
+            plannedArcs.append(arc(route, tally, from, to, planned: true))
+        }
         arcs.sort { ($0.flights, $1.id) > ($1.flights, $0.id) }
+        plannedArcs.sort { ($0.flights, $1.id) > ($1.flights, $0.id) }
+        arcs += plannedArcs
         var seen = Set<String>()
         // Bounded: two codes per arc drawn, at most maxMarks kept.
         let rings = ringCodes.filter { seen.insert($0).inserted }.prefix(WorldFlightArcs.maxMarks)
             .compactMap { code in place(code).map { mark(code, $0) } }
         return WorldFlightMap(arcs: arcs, rings: Array(rings), found: foundMarks,
-                              airportCount: book.count(of: .airport), flightCount: book.flights.count)
+                              airportCount: book.count(of: .airport), flightCount: flown.count)
+    }
+
+    /// The arc for `route` between `from` and `to`.
+    private static func arc(_ route: WorldFlightRoute, _ tally: WorldFlightArcs.Tally, _ from: Airport, _ to: Airport,
+                            planned: Bool) -> WorldFlightArc {
+        WorldFlightArc(route: route, from: tally.from, to: tally.to, fromName: from.name, toName: to.name,
+                       flights: tally.flights, allImported: tally.allImported,
+                       kilometres: WorldFlightArcs.kilometres(from.point, to.point),
+                       path: WorldFlightArcs.mercatorPath(from: from.point, to: to.point), isPlanned: planned)
     }
 
     /// The person's map from the bundled pack: the found airports (the book's airport tokens the pack knows) and
@@ -315,7 +356,7 @@ nonisolated extension WorldFlightMap {
     static func live(book: PassportBook, airports: WorldAirports?) -> WorldFlightMap {
         guard let airports else {
             return WorldFlightMap(arcs: [], rings: [], found: [], airportCount: book.count(of: .airport),
-                                  flightCount: book.flights.count)
+                                  flightCount: WorldFlightArcs.split(book.flights, now: Date()).flown.count)
         }
         let spanish = WorldViewNames.language == .spanish
         // Bounded: the book's airports, at most maxMarks.

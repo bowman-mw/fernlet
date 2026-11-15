@@ -113,8 +113,9 @@ extension View {
     /// The blue button's label (`ref-blue-how`, form answer 28): watches `glyph` and, every time the action
     /// changes, slides the action's word out beside the button for 30 seconds and says it to VoiceOver. A
     /// `tripTo` ("Trip to Honolulu", World-Airports-Spec §10.7) slides out for 3 seconds when it arrives.
-    func worldQuickStartLabel(for glyph: WorldQuickStartGlyph, tripTo: String? = nil) -> some View {
-        modifier(WorldQuickStartLabelModifier(glyph: glyph, tripTo: tripTo))
+    /// A `checkIn` ("Check in at the Ace", owner 2026-11-15) slides out for 30 seconds when it arrives.
+    func worldQuickStartLabel(for glyph: WorldQuickStartGlyph, tripTo: String? = nil, checkIn: String? = nil) -> some View {
+        modifier(WorldQuickStartLabelModifier(glyph: glyph, tripTo: tripTo, checkIn: checkIn))
     }
 }
 
@@ -123,6 +124,8 @@ struct WorldQuickStartLabelModifier: ViewModifier {
     let glyph: WorldQuickStartGlyph
     /// "Trip to Honolulu", while it applies.
     var tripTo: String? = nil
+    /// "Check in at the Ace", while the offer stands.
+    var checkIn: String? = nil
     @State private var rule = WorldQuickStartLabelRule()
     @State private var showing: Text?
     @State private var isOut = false
@@ -150,6 +153,9 @@ struct WorldQuickStartLabelModifier: ViewModifier {
             .onChange(of: tripTo) { _, next in
                 if let next { showTrip(next) } else { tuckAway() }
             }
+            .onChange(of: checkIn) { _, next in
+                if let next { showOffer(next) } else { tuckAway() }
+            }
     }
 
     /// Notes the first glyph (where the button starts, not a change). DEBUG screenshots (`label`) show
@@ -159,6 +165,11 @@ struct WorldQuickStartLabelModifier: ViewModifier {
         // On the day of a calendar flight, arriving at its airport (the button appears with it): "Trip to Honolulu".
         if let tripTo {
             showTrip(tripTo, holds: UITestSupport.tripScene == "today")
+            return
+        }
+        // Arriving at a hotel a drive just ended at (the button appears with it): "Check in at the Ace".
+        if let checkIn {
+            showOffer(checkIn)
             return
         }
         guard UITestSupport.worldHomeScenes.contains("label"), let label = WorldQuickStartLabel.label(for: glyph) else { return }
@@ -175,6 +186,11 @@ struct WorldQuickStartLabelModifier: ViewModifier {
     private func showTrip(_ words: String, holds: Bool = false) {
         present(Text(verbatim: words), announcement: WorldQuickStartLabel.spokenChange(words),
                 hold: holds ? nil : WorldQuickStartLabelRule.tripHoldDuration)
+    }
+
+    /// Slides "Check in at the Ace" out, says it, holds it 30 seconds, then slides it back in.
+    private func showOffer(_ words: String) {
+        present(Text(verbatim: words), announcement: WorldQuickStartLabel.spokenChange(words), hold: WorldQuickStartLabelRule.holdDuration)
     }
 
     /// Slides `title` out, says `announcement` politely, and after `hold` seconds (never, for nil) slides it back in.

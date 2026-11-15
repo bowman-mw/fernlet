@@ -390,12 +390,54 @@ public enum PastedRecipeReader {
     }
 
     /// The meal-review confidence rule on one bind: the row's cold score for `query` reaches
-    /// `FoodItemSearch.confidentBindScore` and its name states `query` as words.
+    /// `FoodItemSearch.confidentBindScore` and its name states `query` as words. Pasted recipes add one
+    /// more (owner decision 2026-11-15): the name says nothing BUT the query and how it is prepared
+    /// (``nameAddsOnlyPreparation(_:query:)``), so "300 g spaghetti" bound to "Spaghetti, spinach,
+    /// cooked" is a row to check, not a quiet match.
     nonisolated static func isConfident(_ item: FoodItem, query: String, catalog: FoodCatalog) -> Bool {
         guard FoodItemSearch.nameStatesQueryAsWords(item.name, query: query),
+              nameAddsOnlyPreparation(item.name, query: query),
               let score = catalog.scoredResults(for: query, limit: 25).first(where: { $0.item.id == item.id })?.score
         else { return false }
         return score >= FoodItemSearch.confidentBindScore
+    }
+
+    /// Words a catalog name may add to the pasted food and still name the same food: how it is cooked,
+    /// cut, kept or salted, a plain/regular marker, and the USDA class a name opens with ("Cheese,
+    /// parmesan"). Anything else — a variety (spinach, whole-wheat), an add-in, a brand — is a
+    /// different food the person should look at.
+    nonisolated static let preparationWords: Set<String> = [
+        "cooked", "uncooked", "raw", "dry", "dried", "boiled", "drained", "steamed", "baked", "roasted",
+        "grilled", "fried", "broiled", "braised", "stewed", "poached", "sauteed", "toasted", "fresh",
+        "frozen", "canned", "chopped", "minced", "sliced", "diced", "grated", "shredded", "ground",
+        "crushed", "peeled", "whole", "plain", "regular", "original", "natural", "salted", "unsalted",
+        "sweetened", "unsweetened", "enriched", "unenriched", "prepared", "unprepared", "boneless",
+        "skinless", "skin", "meat", "only", "mature", "ripe", "with", "without", "added", "salt", "no",
+        "and", "or", "of", "all", "purpose",
+        "cheese", "chicken", "beef", "pork", "turkey", "lamb", "veal", "duck", "fish", "egg", "eggs",
+        "spices", "nuts", "seeds", "beverages", "cereals", "peppers", "onions", "mushrooms", "squash",
+        "lettuce", "cabbage"
+    ]
+
+    /// Longest catalog name read, in characters (R2: the word walk is bounded by it).
+    nonisolated static let maxNameCharacters = 200
+
+    /// True when every word of `name` is a word of `query` (any plural or singular form) or a
+    /// ``preparationWords`` word.
+    nonisolated static func nameAddsOnlyPreparation(_ name: String, query: String) -> Bool {
+        func words(_ text: String) -> [String] {
+            String(text.lowercased().prefix(maxNameCharacters))
+                .split { !$0.isLetter }
+                .map(String.init)
+        }
+        var queryForms: Set<String> = []
+        for word in words(query) {
+            queryForms.formUnion(FoodIngredientIdentity.forms(of: word))
+        }
+        // Both sides singularized: "tomato" names "Tomatoes, raw", "chicken breasts" names "Chicken breast".
+        return words(name).allSatisfy {
+            preparationWords.contains($0) || !FoodIngredientIdentity.forms(of: $0).isDisjoint(with: queryForms)
+        }
     }
 }
 

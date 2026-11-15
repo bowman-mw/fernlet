@@ -29,8 +29,8 @@ extension FernletStore {
     static let maxCaughtUpRides = 64
 
     /// Wires the ride keeper's callbacks to the store and reads Motion only when allowed
-    /// (``worldRidesReadMotion(defaults:)``); and wires the flight gate (``wireWorldFlights()``). Safe to call more
-    /// than once (each front edge does).
+    /// (``worldRidesReadMotion(defaults:)``); and wires the flight gate (``wireWorldFlights()``) and the hotel check-in
+    /// offer's gate (``wireWorldHotelOffers()``). Safe to call more than once (each front edge does).
     func wireWorldRides() {
         let rides = worldLocation.rides
         rides.onBikeRide = { [weak self] ride in self?.logWorldBikeRide(ride) }
@@ -38,6 +38,7 @@ extension FernletStore {
         // The car book learns, shows and asks nothing in a decoy (owner 2026-11-09, car signals).
         worldLocation.cars.isDecoy = duressSessionActive
         wireWorldFlights()
+        wireWorldHotelOffers()
     }
 
     /// Whether the ride keeper may read Motion now: Motion & Fitness allowed, no decoy, and "Log my bike rides" or
