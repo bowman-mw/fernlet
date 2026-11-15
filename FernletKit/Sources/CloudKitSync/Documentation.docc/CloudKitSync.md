@@ -63,6 +63,15 @@ from `FernletFoundation`, which is where it lives rather than here so the local-
 custom-item stores are thin wrappers over one internal load/upsert engine (`AppendOnlyRowStore`,
 parameterized by entity name and labels); the engine deliberately has no delete method, so each
 repository's deletion policy stays visible on the repository type itself.
+``CustomItemRepository`` and ``SavedRecipeRepository`` SOFT-delete (G9-1): `delete(ids:)` writes a
+separate, content-free tombstone row (`idString = "tombstone:" + uuid`, payload `id` + `deletedAt` +
+`format`) and hard-deletes the live row in one save, through the internal `RowTombstones` helper.
+The tombstone is its own CloudKit record, so another phone's stale edit of the live item (which
+upserts the plain-uuid row) cannot overwrite it; reads hide every tombstoned id and heal a live row
+that came back, and upserts skip tombstoned ids. Tombstones are kept for good (no pruning) and
+`deleteAll()` removes them with everything else. A tombstone from a later build (higher `format`)
+is still honoured as a delete and never rewritten. Pre-G9 builds drop tombstone rows on read (their
+payload does not decode as an item; for recipes the `idString` is not a UUID and `name` is nil).
 Because CloudKit mirrors by record identity rather than by logical id, two devices can produce
 duplicate rows for one logical key. Days avoid the problem by construction since G9-1
 (Docs/G9-Data-Integrity-Recovery-Plan-2026-11-15.md, Part 1): each device writes ONLY its own

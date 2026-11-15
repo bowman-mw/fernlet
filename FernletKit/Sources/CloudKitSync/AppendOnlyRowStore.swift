@@ -52,6 +52,11 @@ struct AppendOnlyRowStore<Entry: Codable> {
     let idString: (Entry) -> String
     /// Maps an entry to its `createdAt` attribute value (the load sort key).
     let createdAt: (Entry) -> Date
+    /// An optional filter on the load fetch. `CustomItemRepository` passes
+    /// ``RowTombstones/liveRowsPredicate`` so its tombstone rows (G9-1 soft delete) never reach the
+    /// `Entry` decode; `nil` (the ledgers) fetches every row. Writes are unaffected: `append` fetches
+    /// by the entries' own ids, which never match a tombstone's prefixed `idString`.
+    var loadPredicate: NSPredicate? = nil
 
     /// The audit context every failure record from this engine carries — which row store it was.
     private var auditContext: [String: String] { ["store": auditStore] }
@@ -70,6 +75,7 @@ struct AppendOnlyRowStore<Entry: Codable> {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
         request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+        request.predicate = loadPredicate
         let records: [NSManagedObject]
         do {
             records = try context.fetch(request)

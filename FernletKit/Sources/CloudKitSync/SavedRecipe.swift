@@ -149,11 +149,17 @@ nonisolated enum SavedRecipeMapping {
 /// (guarded by a UserDefaults flag). Same upsert-only row discipline as the sibling stores:
 /// never deletes rows it wasn't handed. `@MainActor`, working on ``PersistenceController``'s
 /// view context; failed saves assert in Debug, roll back, and return `false`.
+///
+/// `delete(ids:)` is a SOFT delete (G9-1): a content-free ``RowTombstones`` row per id, kept for
+/// good, plus a hard delete of the live row. Reads hide and heal tombstoned ids and `upsert` skips
+/// them, so a delete on one phone survives another phone's stale edit; `deleteAll()` removes
+/// tombstones with everything else.
 @MainActor
 public struct SavedRecipeRepository {
     private let controller: PersistenceController
     private let legacyRepository: LegacySavedRecipeJSONRepository
     private let defaults: UserDefaults
+    private let tombstones: RowTombstones
 
     public init() {
         self.init(controller: .shared, legacyRepository: LegacySavedRecipeJSONRepository(), defaults: .standard)
@@ -163,6 +169,12 @@ public struct SavedRecipeRepository {
         self.controller = controller
         self.legacyRepository = legacyRepository
         self.defaults = defaults
+        self.tombstones = RowTombstones(
+            controller: controller,
+            entityName: "SavedRecipeRecord",
+            dateKey: "savedAt",
+            auditStore: "savedRecipe"
+        )
     }
 
     private static let migrationCompletedKey = "com.fernlet.savedRecipeMigrationCompleted"
@@ -182,11 +194,11 @@ public struct SavedRecipeRepository {
                         FernletAuditLog.log("savedRecipe.legacyMigration.failed", context: [
                             "count": "\(migrated.count)"
                         ])
-                        return migrated
+                        return visible(migrated)
                     }
                 }
                 defaults.set(true, forKey: Self.migrationCompletedKey)
-                return migrated
+                return visible(migrated)
             }
             return recipes
         }
@@ -207,11 +219,11 @@ public struct SavedRecipeRepository {
                     FernletAuditLog.log("savedRecipe.legacyMigration.failed", context: [
                         "count": "\(migrated.count)"
                     ])
-                    return migrated
+                    return visible(migrated)
                 }
             }
             defaults.set(true, forKey: Self.migrationCompletedKey)
-            return migrated
+            return visible(migrated)
         }
     }
 
@@ -219,6 +231,7 @@ public struct SavedRecipeRepository {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
         request.sortDescriptors = [NSSortDescriptor(key: "savedAt", ascending: false)]
+        request.predicate = RowTombstones.liveRowsPredicate
 
         let records: [NSManagedObject]
         do {
@@ -229,11 +242,29 @@ public struct SavedRecipeRepository {
             return []
         }
 
-        return records.compactMap(Self.recipe(from:))
+        return visible(records.compactMap(Self.recipe(from:)))
+    }
+
+    /// Drops tombstoned recipes (G9-1 soft delete) from `recipes` and heals any live row that came
+    /// back for one (another phone's stale edit). A failed tombstone lookup serves the empty list,
+    /// like the fetch failure above, rather than risk showing deleted recipes.
+    private func visible(_ recipes: [RecipeDefinition]) -> [RecipeDefinition] {
+        guard !recipes.isEmpty else { return recipes }
+        let deleted: Set<UUID>
+        do {
+            deleted = try tombstones.allTombstonedIDs(in: controller.container.viewContext)
+        } catch {
+            PersistenceFailureAudit.record("savedRecipe.fetch.failed", error: error)
+            return []
+        }
+        guard !deleted.isEmpty else { return recipes }
+        tombstones.heal(ids: Set(recipes.map(\.id)).intersection(deleted))
+        return recipes.filter { !deleted.contains($0.id) }
     }
 
     /// Inserts or updates the given recipes by UUID (writing both representations), never
-    /// deleting rows it wasn't handed.
+    /// deleting rows it wasn't handed. Recipes whose id has a tombstone are skipped (and audited by
+    /// count): a deleted recipe is never re-created (G9-1).
     ///
     /// A recipe whose structured blob will not encode still succeeds: `apply` clears `payloadData`
     /// and the row persists legacy-only, so the return value stays `true`. That is deliberate — the
@@ -245,11 +276,23 @@ public struct SavedRecipeRepository {
     public func upsert(_ recipes: [RecipeDefinition]) -> Bool {
         guard !recipes.isEmpty else { return true }
         let context = controller.container.viewContext
+        let deleted: Set<UUID>
+        do {
+            deleted = try tombstones.tombstonedIDs(among: recipes.map(\.id), in: context)
+        } catch {
+            PersistenceFailureAudit.record("savedRecipe.upsert.failed", error: error)
+            return false
+        }
+        let live = recipes.filter { !deleted.contains($0.id) }
+        if live.count < recipes.count {
+            FernletAuditLog.log("savedRecipe.upsert.skippedDeleted", context: ["count": "\(recipes.count - live.count)"])
+        }
+        guard !live.isEmpty else { return true }
         // Fetch ONLY the rows we're about to touch (predicate IN), then upsert by idString. We never delete
         // rows we weren't handed (unlike the old full-replace `save`), so flushing a stale set can't wipe
         // rows synced in from another device.
         let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
-        request.predicate = NSPredicate(format: "idString IN %@", recipes.map { $0.id.uuidString })
+        request.predicate = NSPredicate(format: "idString IN %@", live.map { $0.id.uuidString })
 
         do {
             var existingByID: [String: NSManagedObject] = [:]
@@ -258,7 +301,7 @@ public struct SavedRecipeRepository {
                     existingByID[idString] = record
                 }
             }
-            for recipe in recipes {
+            for recipe in live {
                 let record = existingByID[recipe.id.uuidString]
                     ?? NSEntityDescription.insertNewObject(forEntityName: "SavedRecipeRecord", into: context)
                 Self.apply(recipe, to: record)
@@ -274,25 +317,14 @@ public struct SavedRecipeRepository {
         }
     }
 
-    /// Deletes only the rows with the listed ids.
+    /// Soft-deletes the listed ids (G9-1): writes one content-free tombstone row per id and
+    /// hard-deletes the live rows, in one save. A no-op write for ids already tombstoned.
+    ///
+    /// The tombstone row leaves every legacy text column empty (`name` nil) and its `idString` is
+    /// `"tombstone:<uuid>"`, not a UUID, so a pre-G9 build's `legacyRecipe(from:)` returns `nil` for it
+    /// and its `SavedRecipePayload` decode fails (no `recipe` key): old builds drop the row.
     public func delete(ids: [UUID]) -> Bool {
-        guard !ids.isEmpty else { return true }
-        let context = controller.container.viewContext
-        let request = NSFetchRequest<NSManagedObject>(entityName: "SavedRecipeRecord")
-        request.predicate = NSPredicate(format: "idString IN %@", ids.map { $0.uuidString })
-        do {
-            for record in try context.fetch(request) {
-                context.delete(record)
-            }
-            if context.hasChanges {
-                try context.save()
-            }
-            return true
-        } catch {
-            PersistenceFailureAudit.record("savedRecipe.delete.failed", error: error)
-            context.rollback()
-            return false
-        }
+        tombstones.softDelete(ids: ids, at: Date())
     }
 
     /// Removes every saved-recipe row — the delete-all/reset path.
@@ -341,7 +373,10 @@ public struct SavedRecipeRepository {
     /// lines, summary, servings, macros, micronutrients, and `savedAt` itself (which feeds `createdAt`,
     /// part of `RecipeDefinition` equality). `lastPayloadEncodedAt` is retained inside the blob as
     /// write-time provenance for auditing and future conflict logic.
-    private static func recipe(from record: NSManagedObject) -> RecipeDefinition? {
+    ///
+    /// Internal (not private) so `SavedRecipeSoftDeleteTests` can run this unchanged pre-G9 row reader
+    /// over a tombstone row and confirm an old build drops it.
+    static func recipe(from record: NSManagedObject) -> RecipeDefinition? {
         if let payloadData = record.value(forKey: "payloadData") as? Data,
            let payload = try? RowPayloadCoders.makeDecoder().decode(SavedRecipePayload.self, from: payloadData) {
             guard let legacy = legacyRecipe(from: record) else {
