@@ -381,8 +381,10 @@ struct WorldMapHome: View {
                     }
                     // Riding along (`b1-home-car`, `ref-ride-home`): quick starts pause until the person is on foot.
                     if !isRiding, let glyph = WorldQuickStart.glyph(for: buttonContext) {
-                        WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
-                                              tripLabel: trip.todayLabel, action: toggleCard)
+                        let buttonCard = WorldQuickStart.card(for: buttonContext)
+                        WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(buttonCard),
+                                              tripLabel: trip.todayLabel,
+                                              checkInLabel: buttonCard?.checkInHotel.map(WorldQuickStartCopy.checkIn(at:)), action: toggleCard)
                     }
                 }
             }
@@ -713,6 +715,9 @@ struct WorldMapHome: View {
         case .roomWorkout:
             store.prepareRoomWorkout()
             onSheet(.workoutSuggestion)
+        case .checkIn:
+            // The stay starts; the map greets the person once it sees them there (`ref-hotel`).
+            store.checkInAtWorldHotelOffer()
         }
     }
 

@@ -711,6 +711,40 @@ struct NoTrackingBoundaryTests {
         )
     }
 
+    /// Apple Maps' points-of-interest requests, each a reviewed purpose (Docs/No-Tracking-Wall.md §4a, "Apple Maps
+    /// (MapKit)"): the requests a file may make, with why. MapKit reaches Apple through the system framework with no
+    /// host in our source, so the destination allowlist cannot see it; this pins how many place lookups exist and
+    /// where, so a new one is a review moment like a new host.
+    private static let permittedAppleMapsPlaceRequests: [String: (count: Int, reasons: [String])] = [
+        "AppleMutedBaseMap.swift": (2, [
+            // ApplePlaceLookup: the stop and solo-photo lookup, within 300 m, in the foreground.
+            "Where you've been's stops and a solo photo's place: Apple's points of interest round where the person stands",
+            // AppleNearbyFinder (owner 2026-11-15): the drive-end hotel lookup, within 150 m, the hotel kind only.
+            "When a drive ends: hotels within 150 m of where it ended, for the check-in offer; only the point and the kind go"
+        ])
+    ]
+
+    /// `MKLocalPointsOfInterestRequest` appears exactly where ``permittedAppleMapsPlaceRequests`` says, as many times.
+    @Test func appleMapsPlaceLookupsAreExactlyTheReviewedOnes() throws {
+        let repoRoot = Self.repoRoot()
+        var found: [String: Int] = [:]
+        for root in Self.shippingSwiftRoots {
+            for url in Self.swiftFiles(under: root, repoRoot: repoRoot) {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                let calls = source.split(separator: "\n")
+                    .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                    .reduce(0) { $0 + $1.components(separatedBy: "MKLocalPointsOfInterestRequest(").count - 1 }
+                if calls > 0 { found[url.lastPathComponent] = calls }
+            }
+        }
+        let expected = Self.permittedAppleMapsPlaceRequests.mapValues(\.count)
+        #expect(found == expected,
+                "Apple Maps place lookups \(found) differ from the reviewed \(expected). A new lookup needs an entry here AND a line in Docs/No-Tracking-Wall.md §4a and the privacy policy, in the same commit.")
+        for (file, entry) in Self.permittedAppleMapsPlaceRequests {
+            #expect(entry.reasons.count == entry.count, "\(file): one reason per lookup")
+        }
+    }
+
     /// The two network permit sets share no file, and the two marker families share no marker.
     ///
     /// The invariant that makes two families worth having. If one file were on both lists it would

@@ -12,7 +12,9 @@ public nonisolated enum HomeKind: String, Codable, CaseIterable, Sendable {
 
 /// A home or a hotel the person marked (`ref-home-set`): their own name for it and the point they chose on
 /// the map. Nothing of Apple's: the person picks the spot and the name (World build round 6; the MapKit
-/// terms keep at most a reference, and a home keeps none).
+/// terms keep at most a reference, and a home keeps none). The one exception is a hotel checked in at from the blue
+/// button's offer after a drive (owner, 2026-11-15): it starts with Apple's name for the hotel and its point, which
+/// the person then keeps as their own (and can rename).
 ///
 /// Frozen at rest: `id`, `kind`, `label` and `point` are field names of the places file's device side.
 public nonisolated struct HomePlace: Codable, Equatable, Identifiable, Sendable {
@@ -29,6 +31,15 @@ public nonisolated struct HomePlace: Codable, Equatable, Identifiable, Sendable 
         self.kind = kind
         self.label = PlaceRecord.validLabel(label) ?? ""
         self.point = point
+    }
+
+    /// How far around it the map is uncovered, in metres: ``HomeBook/uncoverRadius`` for a home,
+    /// ``HomeBook/hotelUncoverRadius`` (half as wide) for a hotel.
+    public var uncoverRadius: Double {
+        switch kind {
+        case .home: HomeBook.uncoverRadius
+        case .hotel: HomeBook.hotelUncoverRadius
+        }
     }
 }
 
@@ -101,8 +112,9 @@ public nonisolated struct HomeMove: Equatable, Sendable {
 /// The person's homes and hotel (owner, 2026-10-25, `ref-home-*`, `ref-hotel`): up to two homes, one hotel
 /// at a time, the hotels stayed at before (for a welcome back), and where the person was last seen.
 ///
-/// Each home and the current hotel uncovers the map for ``uncoverRadius`` around it (drawn, never written
-/// into the fog, so removing one fogs its circle again except where the person has actually been). Getting
+/// Each home uncovers the map for ``uncoverRadius`` around it and the current hotel for
+/// ``hotelUncoverRadius``, a circle half as wide (owner, 2026-11-15); drawn, never written into the fog, so
+/// removing one fogs its circle again except where the person has actually been. Getting
 /// home ends a hotel stay; a hotel left is remembered in ``pastHotels``.
 ///
 /// Kept in the places file's device side (`PlaceDeviceState/homes`), sealed on this iPhone: never synced,
@@ -115,8 +127,11 @@ public nonisolated struct HomeBook: Codable, Equatable, Sendable {
     public static let maxHomes = 2
     /// The most hotels remembered for a welcome back.
     public static let maxPastHotels = 30
-    /// How far around a home or the hotel the map is uncovered, in metres.
+    /// How far around a home the map is uncovered, in metres.
     public static let uncoverRadius = 1_000.0
+    /// How far around the current hotel the map is uncovered, in metres: half a home's circle (owner,
+    /// 2026-11-15: "a circle half the diameter of the home circle").
+    public static let hotelUncoverRadius = uncoverRadius / 2
     /// How near a reading must be to count as being there, in metres.
     public static let atRadius = 120.0
     /// How long away before getting home is greeted.

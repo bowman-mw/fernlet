@@ -109,6 +109,9 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     var nearbyFriends: [String] = []
     /// The home or hotel the person stands at (never in a decoy: a decoy has no homes).
     var base: Base?
+    /// The hotel a drive just ended at, by Apple's name, to offer a check-in (owner, 2026-11-15): nil at a home or the
+    /// current hotel, once the person left, and in a decoy.
+    var hotelOffer: String?
     /// A workout space the person set up at that home (its pin near the home, or the space they stand
     /// at): "Suggest today's workout · Home space" leads the home card only with one (draft 2's note).
     var homeSpace: Space?
@@ -180,6 +183,8 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case cookSomething
     /// "Suggest a room workout" at a hotel: Move's suggestion with no equipment, so nothing to set up.
     case roomWorkout(gentle: Bool)
+    /// "Check in at the Ace" after a drive ended at a hotel (owner, 2026-11-15): starts the stay there.
+    case checkIn(hotel: String)
 }
 
 /// The card the blue button opens (the design's `.qs` card): a heading, an optional line, and the
@@ -272,6 +277,8 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 /// 4. **In a session** the session's camera, then Walk together.
 /// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a hangout with Sam,
 ///    Start an activity, and the usual choices below so nothing is taken away.
+/// 6c. **Where a drive just ended at a hotel** (owner, 2026-11-15), away from a home and the current hotel: the
+///    hotel's name, Check in at it first, then Walk or run together.
 /// 6h. **At a home** (`ref-home-blue` draft 2) its name, "You're home. Here's what's handy.": Suggest today's
 ///    workout first only with a workout space at that home, Around the block again (the latest loop from the
 ///    door), Cook something, Walk or run together. **At a hotel** its name: Suggest a room workout (no
@@ -367,6 +374,9 @@ nonisolated enum WorldQuickStart {
     private static func usual(_ context: WorldQuickStartContext, walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
         if let airport = context.airportName, let trip = context.tripOption { return atAirport(airport, trip: trip, walk: walk) }
         if let base = context.base { return home(base, context, walk: walk) }
+        if let hotel = context.hotelOffer {
+            return WorldQuickStartCard(heading: .hotel(hotel), note: nil, options: [.checkIn(hotel: hotel)] + walk)
+        }
         if context.space == nil, let place = context.eatingPlace { return eating(place, context) }
         if context.isResting { return resting(context, walk: walk) }
         if let space = context.space {
@@ -445,6 +455,16 @@ nonisolated enum WorldQuickStart {
     private static func camera(_ context: WorldQuickStartContext) -> WorldQuickStartOption? {
         if let session = context.session { return .sessionCamera(shotsLeft: session.shotsLeft) }
         return context.soloCameraAvailable ? .soloCamera : nil
+    }
+}
+
+extension WorldQuickStartCard {
+    /// The hotel the card offers a check-in at, for the word beside the button; nil when it offers none.
+    nonisolated var checkInHotel: String? {
+        for option in options {
+            if case .checkIn(let hotel) = option { return hotel }
+        }
+        return nil
     }
 }
 
