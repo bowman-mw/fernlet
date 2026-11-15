@@ -99,3 +99,19 @@ There is no snap-to-road or map-matching code in the app. Douglas–Peucker alre
 6. Keep worn paths out of the map widget? (Recommended: yes.)
 7. For B: count only from now on (no backfill possible), and approve the policy sentence in §5.
 8. Should a "worn path" count fade if unused for a long time? This needs dates, which A has none of. Recommended: no fading.
+
+## 8. Owner's answers (2026-11-15)
+
+Answered on the review page: calls 4 and 8. Calls 1, 2, 3, 5, 6 and 7 are still open (not saved).
+
+- **Call 4, where:** walked paths on **Home only**. Roads can also show on **Your world**, if they are long enough.
+- **Call 8, fading: yes.**
+  - Every 30 days without travel on a path drops it one level.
+  - At the bottom it does not disappear. It becomes an **abandoned path** (a fourth look).
+  - The first time back on an abandoned path cleans it up to level 1.
+
+**What the fading answer changes:**
+- **Paths (A).** Route points have no times, but each route file is keyed by its workout ID, and the workout has `completedAt`. So a dated pass list can be derived per cell with nothing new stored. The level is then replayed in date order: +passes, −1 level per 30 idle days, floored at "abandoned", and a pass on an abandoned cell goes to level 1. The cost is finding each workout's day: `loadDay` per day across the whole history. If that is too slow at launch, the fallback is a small sealed index (workout ID → day) in `WorldMapVault`. That is new stored data, so it needs a privacy wording check.
+- **Roads (B).** The counter needs a last-used day (or month) per cell next to the count, so it can fade. That is still small (about 250k × 6 bytes at most), but it is date-bearing routine data. The policy sentence in §5 drops "with no dates" and needs a new draft.
+- **Art.** An abandoned path needs its own look: for example faint, broken dirt with grass pixels growing through. It still shows only on uncovered ground.
+- **Your world roads.** "Long enough" needs a number. Draft: a road run of at least 2 km of connected frequent cells, about 6 of Your world's finest hexes.
