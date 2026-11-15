@@ -7,7 +7,7 @@ import PrivateMediaStore
 /// first, like a "Just you" set.
 ///
 /// Built only from photos that are here (``RoadTripAlbum/sets(from:trips:names:)``), so it always has a cover: the
-/// newest photo. Its title is the trip's name while the trip's record is on this iPhone; once Delete map history has
+/// photo chosen with Favorite, else the newest (as a "Just you" set). Its title is the trip's name while the trip's record is on this iPhone; once Delete map history has
 /// taken the record, "Road trip" and the days the photos were taken (``RoadTripAlbum/title(trip:first:last:)``). The
 /// photo store keeps no trip name, so nothing of the deleted map history comes back through the Album.
 nonisolated struct RoadTripAlbumSet: Identifiable, Equatable, Sendable {
@@ -17,7 +17,7 @@ nonisolated struct RoadTripAlbumSet: Identifiable, Equatable, Sendable {
     let tripID: UUID
     /// The photos' ids on this iPhone, newest first; never empty.
     let photoIDs: [UUID]
-    /// The tile's photo: the newest.
+    /// The tile's photo: the favorite, else the newest.
     let cover: UUID
     /// When the newest photo was taken: the set's place in the album.
     let date: Date
@@ -52,7 +52,7 @@ nonisolated enum RoadTripAlbum {
         let authorIDs = Set(ordered.map(\.authorID)).sorted()
         let authors = authorIDs.compactMap { id in trip?.members.first { $0.id == id }?.firstName ?? names[id] }
         return RoadTripAlbumSet(id: "roadTrip-\(tripID.uuidString)", tripID: tripID, photoIDs: ordered.map(\.id),
-                                cover: newest.id, date: newest.takenAt,
+                                cover: ordered.first { $0.isFavorite == true }?.id ?? newest.id, date: newest.takenAt,
                                 title: title(trip: trip, first: oldest.takenAt, last: newest.takenAt), authors: authors)
     }
 

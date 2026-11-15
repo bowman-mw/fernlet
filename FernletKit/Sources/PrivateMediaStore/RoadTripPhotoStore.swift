@@ -13,9 +13,10 @@ import FernletFoundation
 ///   id on their phone: the pair is how a photo is recognised again at a later catch-up (dedupe), and the only id a
 ///   friend is ever told (``RoadTripPhotoIndex/sourceIDs(trip:author:)``).
 /// - ``isHidden``: "Hide from the map" (any trip photo, a friend's or this iPhone's).
+/// - ``isFavorite``: the trip's Album cover (owner's pick 2026-11-13, "Add all three"), at most one per trip.
 ///
-/// Frozen at rest: `id`, `tripID`, `authorID`, `sourceID`, `takenAt` and `isHidden` are field names of the sealed
-/// index. Concurrency: a `Sendable` value type.
+/// Frozen at rest: `id`, `tripID`, `authorID`, `sourceID`, `takenAt`, `isHidden` and `isFavorite` are field names of
+/// the sealed index. Concurrency: a `Sendable` value type.
 public nonisolated struct RoadTripPhoto: Codable, Equatable, Hashable, Identifiable, Sendable {
     /// The longest author id kept (a member id is a 16-character fingerprint).
     public static let maxAuthorIDLength = 128
@@ -32,15 +33,19 @@ public nonisolated struct RoadTripPhoto: Codable, Equatable, Hashable, Identifia
     public let takenAt: Date
     /// Whether it is hidden from the map; nil when it is not.
     public var isHidden: Bool?
+    /// Whether it is its trip's chosen cover in the Album; nil when it is not.
+    public var isFavorite: Bool?
 
     /// Creates an entry.
-    public init(id: UUID = UUID(), tripID: UUID, authorID: String, sourceID: UUID, takenAt: Date, isHidden: Bool? = nil) {
+    public init(id: UUID = UUID(), tripID: UUID, authorID: String, sourceID: UUID, takenAt: Date, isHidden: Bool? = nil,
+                isFavorite: Bool? = nil) {
         self.id = id
         self.tripID = tripID
         self.authorID = authorID
         self.sourceID = sourceID
         self.takenAt = takenAt
         self.isHidden = isHidden
+        self.isFavorite = isFavorite
     }
 
     /// Whether its fields are within their bounds.
@@ -52,10 +57,33 @@ public nonisolated struct RoadTripPhoto: Codable, Equatable, Hashable, Identifia
     public var isShown: Bool { isHidden != true }
 }
 
-/// The trip photos' durable truth, sealed at rest as `RoadTripPhotoIndex.sealed`: every photo, oldest first.
+/// A trip photo deleted from this iPhone (owner's pick 2026-11-13): who took it and its id on their phone, so a later
+/// catch-up never hands it over again. No bytes, no time, no place.
 ///
-/// Frozen at rest: `schemaVersion` and `photos` are field names, and `schemaVersion` only ever rises — an older
-/// build reading a newer file defers rather than purging it. Concurrency: a `Sendable` value type.
+/// Frozen at rest: `tripID`, `authorID` and `sourceID` are field names of the sealed index. Concurrency: a `Sendable`
+/// value type.
+public nonisolated struct RoadTripPhotoRemoval: Codable, Equatable, Hashable, Sendable {
+    /// The road trip it was taken on.
+    public let tripID: UUID
+    /// Who took it.
+    public let authorID: String
+    /// Its id on the author's phone.
+    public let sourceID: UUID
+
+    /// The record of `photo`'s deletion.
+    public init(_ photo: RoadTripPhoto) {
+        tripID = photo.tripID
+        authorID = photo.authorID
+        sourceID = photo.sourceID
+    }
+}
+
+/// The trip photos' durable truth, sealed at rest as `RoadTripPhotoIndex.sealed`: every photo, oldest first, and the
+/// photos deleted here (``removed``), so they never arrive again.
+///
+/// Frozen at rest: `schemaVersion`, `photos` and `removed` are field names, and `schemaVersion` only ever rises — an
+/// older build reading a newer file defers rather than purging it. `removed` is optional, so files written before it
+/// read as none removed. Concurrency: a `Sendable` value type.
 public nonisolated struct RoadTripPhotoIndex: Codable, Equatable, Sendable {
     /// The format this build writes and the only one it reads.
     public static let schemaVersion = 1
@@ -66,11 +94,15 @@ public nonisolated struct RoadTripPhotoIndex: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     /// Every photo, oldest first. At most ``RoadTripPhotoStore/maxPhotos``.
     public var photos: [RoadTripPhoto]
+    /// The photos deleted here, oldest first; nil when none. At most ``RoadTripPhotoStore/maxPhotos`` (the oldest go
+    /// first past it).
+    public var removed: [RoadTripPhotoRemoval]?
 
     /// Creates an index in the current format.
-    public init(photos: [RoadTripPhoto]) {
+    public init(photos: [RoadTripPhoto], removed: [RoadTripPhotoRemoval]? = nil) {
         self.schemaVersion = Self.schemaVersion
         self.photos = photos
+        self.removed = removed
     }
 
     /// The photos of trip `trip`, oldest first.
@@ -83,15 +115,18 @@ public nonisolated struct RoadTripPhotoIndex: Codable, Equatable, Sendable {
         photos.lazy.filter { $0.tripID == trip && $0.authorID == author }.count
     }
 
-    /// The ids (on `author`'s phone) of the photos of trip `trip` they took that this iPhone holds: what a catch-up
-    /// tells them, so they send only the ones missing.
+    /// The ids (on `author`'s phone) of the photos of trip `trip` they took that this iPhone holds or deleted: what a
+    /// catch-up tells them, so they send only the ones missing (a deleted one never comes back).
     public func sourceIDs(trip: UUID, author: String) -> [UUID] {
-        photos.filter { $0.tripID == trip && $0.authorID == author }.map(\.sourceID)
+        let held = photos.filter { $0.tripID == trip && $0.authorID == author }.map(\.sourceID)
+        let gone = (removed ?? []).filter { $0.tripID == trip && $0.authorID == author }.map(\.sourceID)
+        return held + gone.filter { !held.contains($0) }
     }
 
-    /// Whether this iPhone holds `author`'s photo `sourceID` of trip `trip`.
+    /// Whether this iPhone holds `author`'s photo `sourceID` of trip `trip`, or deleted it.
     public func holds(trip: UUID, author: String, sourceID: UUID) -> Bool {
         photos.contains { $0.tripID == trip && $0.authorID == author && $0.sourceID == sourceID }
+            || (removed ?? []).contains { $0.tripID == trip && $0.authorID == author && $0.sourceID == sourceID }
     }
 }
 
@@ -352,14 +387,36 @@ public struct RoadTripPhotoStore {
         return prepareDirectory() && writeIndex(index) != nil
     }
 
-    /// Deletes the photos in `ids`: the index entries first, then their files.
+    /// Makes photo `id` its trip's Album cover (`favorite`), clearing any other cover of that trip, or clears it, in
+    /// one sealed write.
+    ///
+    /// - Returns: whether the index now says so (false when the photo isn't here or the write failed).
+    public func setFavorite(_ id: UUID, _ favorite: Bool) -> Bool {
+        guard case .success(var index) = writeBase(),
+              let trip = index.photos.first(where: { $0.id == id })?.tripID else { return false }
+        var changed = false
+        // R2: bounded by the photo cap.
+        for position in index.photos.indices where index.photos[position].tripID == trip {
+            let wanted: Bool? = favorite && index.photos[position].id == id ? true : nil
+            if index.photos[position].isFavorite != wanted {
+                index.photos[position].isFavorite = wanted
+                changed = true
+            }
+        }
+        return !changed || (prepareDirectory() && writeIndex(index) != nil)
+    }
+
+    /// Deletes the photos in `ids`: the index entries first (each remembered in ``RoadTripPhotoIndex/removed``, so a
+    /// catch-up never sends it again), then their files.
     ///
     /// - Returns: whether they are gone (true when none was here).
     public func delete(_ ids: Set<UUID>) -> Bool {
         guard case .success(var index) = writeBase() else { return false }
         let before = index.photos.count
+        let gone = index.photos.filter { ids.contains($0.id) }.map(RoadTripPhotoRemoval.init)
         index.photos.removeAll { ids.contains($0.id) }
         if index.photos.count != before {
+            index.removed = Array(((index.removed ?? []) + gone).suffix(Self.maxPhotos))
             guard prepareDirectory(), writeIndex(index) != nil else { return false }
         }
         // R2: bounded by the photo cap (the caller passes ids it read from the index).

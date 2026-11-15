@@ -91,6 +91,13 @@ final class RoadTripPhotoRoll {
         return true
     }
 
+    /// Makes photo `id` its trip's Album cover (`favorite`), or clears it. Whether the roll now says so.
+    func setFavorite(_ id: UUID, _ favorite: Bool) -> Bool {
+        guard !isDecoy, store.setFavorite(id, favorite) else { return false }
+        revision &+= 1
+        return true
+    }
+
     /// Deletes the photos in `ids` and their places. Whether they are gone.
     func delete(_ ids: Set<UUID>) -> Bool {
         guard !isDecoy, store.delete(ids) else { return false }
