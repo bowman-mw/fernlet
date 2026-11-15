@@ -28,6 +28,9 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// reads nothing from it, so a country and its continent stamp only once the person leaves (World-Airports-Spec
     /// §4.2, the owner's note on 9).
     var atLandedAirport = false
+    /// Whether the reading is inside an airport's grounds, not flying (the flight gate's current airport): there only
+    /// walking lifts the fog (owner 2026-11-02, decided 2026-11-13), so the plane train clears no concourse.
+    var atAirport = false
     /// The reading's altitude above sea level and its accuracy, in metres; nil when CoreLocation gave none (the
     /// flight gate tells a climb-out from a train leaving an airport's station by it).
     var altitude: Double? = nil
@@ -712,6 +715,7 @@ final class WorldLocationSource: NSObject {
         var stamped = fix
         stamped.inCar = rides.inCarFlag
         stamped.atLandedAirport = flights.layoverAirport != nil
+        stamped.atAirport = flights.currentAirport != nil
         latest = stamped
         onFix?(stamped)
         cars.noteReading(stamped, mode: rides.mode)

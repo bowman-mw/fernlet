@@ -131,6 +131,113 @@ struct WorldDrivenTilesTests {
         #expect(!NatureFogClearing(lifted: [cell]).isDriven(cell))
         #expect(NatureFogDrawer.drivenOpacity == 0.3 && NatureFogDrawer.veilOpacity == 0.5)
     }
+
+    // MARK: The drive widget (owner's pick 2026-11-13, the CarPlay small widget)
+
+    /// The tally starts a drive with its first reading, hands a moving count over at most every five minutes (with a
+    /// heartbeat every twenty when nothing moves), and ends it at a reading on foot.
+    @Test func theDriveTallyHandsOverSparingly() {
+        var tally = WorldDriveTally()
+        let at = { (seconds: TimeInterval) in Self.now.addingTimeInterval(seconds) }
+        let every = WorldDriveWidget.writeEvery, beat = WorldDriveWidget.heartbeat
+        let nothingToEnd = tally.note(driving: false, newTiles: 0, at: at(0))
+        let started = tally.note(driving: true, newTiles: 3, at: at(0))
+        let tooSoon = tally.note(driving: true, newTiles: 4, at: at(60))
+        let seven = tally.state?.tiles
+        let moved = tally.note(driving: true, newTiles: 1, at: at(every))
+        let still = tally.note(driving: true, newTiles: 0, at: at(every * 2))
+        let heartbeat = tally.note(driving: true, newTiles: 0, at: at(every + beat))
+        let ended = tally.note(driving: false, newTiles: 0, at: at(3_600))
+        let last = tally.state
+        let next = tally.note(driving: true, newTiles: 0, at: at(7_200))
+        #expect(!nothingToEnd && started && !tooSoon && seven == 7, "no drive to end; the first reading starts one")
+        #expect(moved && !still && heartbeat, "a moving count every five minutes, a still one every twenty")
+        #expect(ended && last?.isDriving == false && last?.tiles == 8)
+        #expect(next && tally.state?.tiles == 0, "the next drive counts afresh")
+    }
+
+    /// The keeper counts a drive's new tiles (none for ground walked or driven before, also while the phone is locked
+    /// once the history was read), writes the widget's file with a count and two times only, and the wipe and a decoy
+    /// delete it.
+    @Test func theKeeperCountsADrivesNewTilesForTheWidget() throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let unlocked = LockFlag(true)
+        let keeper = try Self.keeper(vault, unlocked: unlocked)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("WorldDriveWidget-\(UUID().uuidString)")
+        defer { _ = try? FileManager.default.removeItem(at: folder) }
+        var reloads = 0
+        keeper.driveWidget = WorldDriveWidgetKeeper(file: WorldDriveWidgetFile(directory: folder)) { reloads += 1 }
+        keeper.handle(Self.fix(Self.here))
+        let road = (0...4).map { Self.here.offset(east: Double($0) * 100, north: 0) }
+        for point in road { keeper.handle(Self.fix(point), thinLine: true) }
+        let counted = try #require(keeper.driveWidget.state)
+        #expect(counted.isDriving && counted.tiles > 0 && counted.tiles == keeper.drivenCells.count, "walked ground isn't new")
+        let file = WorldDriveWidgetFile(directory: folder)
+        #expect(file.read()?.isDriving == true && reloads == 1, "the first reading hands the drive over")
+        let data = try Data(contentsOf: file.fileURL)
+        let keys = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any]).keys
+        #expect(Set(keys) == ["version", "tiles", "startedAt", "updatedAt", "isDriving"], "a count and two times only")
+
+        unlocked.isOn = false
+        let before = counted.tiles
+        let locked = (5...7).map { Self.here.offset(east: Double($0) * 100, north: 0) }
+        for point in locked { keeper.handle(Self.fix(point), thinLine: true) }
+        for point in locked { keeper.handle(Self.fix(point), thinLine: true) }
+        let lockedCount = try #require(keeper.driveWidget.state?.tiles)
+        #expect(lockedCount > before, "while locked, counted against the history read before")
+        let again = lockedCount
+        keeper.handle(Self.fix(locked[2]), thinLine: true)
+        #expect(keeper.driveWidget.state?.tiles == again, "a cell counts once while locked")
+
+        unlocked.isOn = true
+        keeper.handle(Self.fix(Self.here))
+        #expect(keeper.driveWidget.state?.isDriving == false, "a reading on foot ends it")
+        #expect(file.read()?.isDriving == false)
+        keeper.setDecoy(true)
+        #expect(!FileManager.default.fileExists(atPath: file.fileURL.path) && keeper.driveWidget.state == nil, "a decoy shows Sprout")
+        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0)), thinLine: true)
+        #expect(keeper.driveWidget.state == nil, "a decoy's drive counts nothing")
+        keeper.setDecoy(false)
+        keeper.handle(Self.fix(Self.here.offset(east: 5_000, north: 0)), thinLine: true)
+        #expect(file.read() != nil)
+        #expect(keeper.clearAll() && !FileManager.default.fileExists(atPath: file.fileURL.path), "the wipe deletes it")
+    }
+
+    /// The widget reads what the app writes: the same kind, file name and keys, small only, and Sprout redacts.
+    @Test func theDriveWidgetAndTheAppAgree() throws {
+        let widget = try RepoRoot.source("App/FernletWidgets/DriveWidget.swift")
+        let bundle = try RepoRoot.source("App/FernletWidgets/FernletWidgetsBundle.swift")
+        #expect(bundle.contains("static let drive = \"\(WorldDriveWidget.kind)\"") && bundle.contains("FernletDriveWidget()"))
+        #expect(widget.contains("static let fileName = \"\(WorldDriveWidget.fileName)\""))
+        for field in ["var version: Int", "var tiles: Int", "var startedAt: Date", "var updatedAt: Date", "var isDriving: Bool"] {
+            #expect(widget.contains(field), "the widget's twin lost \(field)")
+        }
+        #expect(widget.contains(".supportedFamilies([.systemSmall])") && widget.contains(".privacySensitive()"))
+    }
+
+    // MARK: Inside an airport, only walking clears (owner 2026-11-02, decided 2026-11-13)
+
+    /// Inside an airport's grounds a reading faster than walking (the plane train, a people mover, the airport's
+    /// roads) lifts nothing and joins no lane across; walking there lifts as anywhere.
+    @Test func insideAnAirportOnlyWalkingClears() throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = try Self.keeper(vault, unlocked: LockFlag(true))
+        var train = WorldFix(point: Self.here, accuracy: 8, at: Self.now, isPrecise: true, speed: 12)
+        train.atAirport = true
+        #expect(WorldFogKeeper.ridesThroughAirport(train))
+        #expect(keeper.handle(train) == 0 && keeper.visibleCells.isEmpty, "the plane train lifts nothing")
+        var road = WorldFix(point: Self.here.offset(east: 400, north: 0), accuracy: 8, at: Self.now, isPrecise: true, speed: 12)
+        road.atAirport = true
+        #expect(keeper.handle(road, thinLine: true) == 0 && keeper.visibleCells.isEmpty, "nor a car on its roads")
+        var walk = WorldFix(point: Self.here.offset(east: 800, north: 0), accuracy: 8, at: Self.now, isPrecise: true, speed: 1.3)
+        walk.atAirport = true
+        #expect(!WorldFogKeeper.ridesThroughAirport(walk) && keeper.handle(walk) > 0, "a concourse walked clears")
+        var outside = train
+        outside.atAirport = false
+        #expect(!WorldFogKeeper.ridesThroughAirport(outside), "outside the grounds a drive lifts as ever")
+    }
 }
 
 /// Whether the test's phone is unlocked, which the test turns.

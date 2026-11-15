@@ -30,6 +30,8 @@ enum FernletWidgetKind {
     static let stamp = "FernletStamp"
     /// The map widget (`FernletMapWidget`): Sprout on a picture of the map around you, large.
     static let map = "FernletMap"
+    /// The drive widget (`FernletDriveWidget`): a drive's new tiles, or Sprout, small (what CarPlay shows).
+    static let drive = "FernletDrive"
 }
 
 /// The deep links a widget tap opens. The app's `FernletWidgetLinkRouter` reads the same
@@ -56,6 +58,7 @@ struct FernletWidgetsBundle: WidgetBundle {
         FernletWaterControl()
         FernletStampWidget()
         FernletMapWidget()
+        FernletDriveWidget()
         WorkoutLiveActivity()
         CookingLiveActivity()
     }

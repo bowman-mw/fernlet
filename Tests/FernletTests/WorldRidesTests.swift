@@ -131,6 +131,62 @@ struct WorldRidesTests {
         #expect(!jam.watch.isDriving && jam.drivesEnded == 1, "walking away ends it")
     }
 
+    // MARK: Bus and train (owner's pick 2026-11-13: transit lifts tiles as a drive does)
+
+    /// A city bus with no Motion: short runs at a bus's speed between stops, half a minute at each stop, a crawl
+    /// away from it, is one drive; the passenger walking off ends it on foot.
+    @Test func aCityBusIsOneDriveUntilThePassengerWalksOff() {
+        var bus = Stream()
+        var second = 0.0, east = 0.0
+        for _ in 0..<10 {
+            for _ in 0..<8 {
+                second += 5
+                east += 50
+                bus.read(east, second, speed: 10)
+            }
+            for _ in 0..<2 {
+                second += 5
+                east += 7.5
+                bus.read(east, second, speed: 1.5)
+            }
+            second += 30
+            bus.read(east, second, speed: 0)
+        }
+        #expect(bus.watch.isDriving && bus.drivesStarted == 1 && bus.drivesEnded == 0, "stops are no parking")
+        for _ in 0..<24 {
+            second += 5
+            east += 7
+            bus.read(east, second, speed: 1.4)
+        }
+        #expect(!bus.watch.isDriving && bus.drivesEnded == 1, "walking off the bus ends it")
+    }
+
+    /// A train at 80 m/s with two minutes at each station is one drive (a flight needs 450 km/h or a climb out of an
+    /// airport, ``FlightDetector``); with Motion, its automotive activity holds the drive through a slow platform.
+    @Test func aTrainIsOneDriveThroughItsStations() {
+        var train = Stream()
+        var second = 0.0, east = 0.0
+        for _ in 0..<4 {
+            for _ in 0..<30 {
+                second += 4
+                east += 320
+                train.read(east, second, speed: 80)
+            }
+            second += 120
+            train.read(east, second, speed: 0)
+        }
+        #expect(train.watch.isDriving && train.drivesStarted == 1 && train.drivesEnded == 0)
+        #expect(80 < FlightDetector.anywhereSpeed, "a train is no flight")
+
+        var tram = Stream(usesMotion: true)
+        tram.motion(.automotive, 0, through: WorldRideWatch.motionHold)
+        #expect(tram.watch.isDriving, "Motion's automotive is set on buses and trains too")
+        for step in 1...12 {
+            tram.read(Double(step) * 12, WorldRideWatch.motionHold + Double(step) * 10, speed: 1.2)
+        }
+        #expect(tram.watch.isDriving, "a slow stretch with Motion saying vehicle is still the ride")
+    }
+
     /// Without Motion a drive starts by speed: readings at a car's speed spanning half a minute, each within a
     /// minute of the last (two further apart are not), and one alone never, even at highway speed; it ends on
     /// foot after a minute at walking pace.
