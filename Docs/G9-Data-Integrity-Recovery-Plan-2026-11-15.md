@@ -1,6 +1,6 @@
 # G9 Data integrity & recovery: plan (2026-11-15)
 
-Status: **plan, awaiting owner approval. Nothing is built.** Each "Owner call" below is also on
+Status: **plan, all 17 owner calls answered 2026-11-15. Nothing is built.** Each "Owner call" below is also on
 the review page; the recommended option is marked. Code references are against `origin/main`
 db319b76.
 
@@ -332,12 +332,22 @@ and delete", "Turn off, keep them"). Stored in settings (synced with the blob, s
 agree).
 
 **Tier-2 wipe (M3 = A)** — "Forget patterns" on the same page, explaining in one line what
-patterns are. It purges `TierTwoMemoryStore` and records a device-local "learn from" date of
-today, so the engine only reads days after it. Without the date the next save would rebuild the
-same patterns from history, making the wipe meaningless. The date gets a wipe-boundary row and is
-cleared by Delete Everything.
+patterns are. It purges `TierTwoMemoryStore` and records a "learn from" date of today, so the
+engine only reads days after it. Without the date the next save would rebuild the same patterns
+from history, making the wipe meaningless. **The date is a synced setting (in the blob, like the
+M2 switch), not device-local:** patterns are rebuilt on each device from the same synced days, so
+a device-local date would leave the iPad showing patterns the phone was told to forget. When a
+remote change brings a newer date, the device purges its own `TierTwoMemoryStore` and rebuilds
+from that date. Newest date wins; Delete Everything clears it.
 
-**Natural-language forget (M4 = A)** — the Settings field accepts a sentence ("forget the stuff
+**Forget by filters (M4 = B, the owner's pick 2026-11-15)** — the Core memory page's field keeps
+its word search and gains a date range and feeling chips; the matches fill a checklist preview and
+nothing is deleted until the person taps "Forget these". No AI is involved, so it behaves the same
+on the phone and the iPad whatever on-device AI each has, and every path runs in the simulator.
+The sentence form below is **not built in G9-3**; it can be added later as a layer that only fills
+in these filters.
+
+**Natural-language forget (M4 = A, deferred)** — the Settings field accepts a sentence ("forget the stuff
 about my sister", "forget everything from August"). When on-device AI is ready, a new Foundation
 stage (pattern of `FoundationJournalSummary`) turns **only the sentence** into a query
 `{keywords, categories, dateRange}`; it never sees any memory. Fernlet matches memories itself
@@ -383,7 +393,7 @@ The new file gets a wipe-boundary row and a `DataExportBuilder` entry.
 
 - `MemoryNote.userEdited` (payload, additive).
 - Settings: `memoryExtractionEnabled` (default true; blob, additive).
-- Device-local: `tierTwoLearnFrom` date (wipe-boundary row).
+- Settings: `tierTwoLearnFrom` date (blob, additive, synced; newest wins).
 - M1 = A: new Core Data entity `MemoryRecord` (`idString`, `payloadData`, `updatedAt`); CloudKit
   production schema deploy (owner).
 - M6 = A: new sealed table in `PrivateStoreCore`'s model + purpose registry entry; private
@@ -394,7 +404,8 @@ The new file gets a wipe-boundary row and a `DataExportBuilder` entry.
 ### Tests (targeted suites)
 
 New `MemoryControlsTests` (userEdited survives summarizer + cap, wipe-all, switch off stops both
-writers, Tier-2 learn-from date), `MemoryForgetQueryTests` (sentence → query, keyword fallback,
+writers, Tier-2 learn-from date incl. a newer remote date purging and rebuilding),
+`MemoryForgetFilterTests` (words, date range, feeling chips,
 preview never deletes on its own), `PrivateMemoryRepositoryTests`, `PrivateMemoryBackupTests` (export, restore, unknown-section
 skip), `MemoryRowMigrationTests`;
 extend `JournalMemoryCaptureTests`, `TierTwoDeviceLocalTests`, `DeleteAllDataTests`,
@@ -403,7 +414,7 @@ extend `JournalMemoryCaptureTests`, `TierTwoDeviceLocalTests`, `DeleteAllDataTes
 
 ### Phone checks owed
 
-Forget by sentence with AI on and off; switch off then write a journal entry (no new memory);
+Forget by words, by date range and by feeling; switch off then write a journal entry (no new memory);
 Forget patterns then save a day (no patterns come back); Keep private then lock (row hidden);
 a private memory restores from the encrypted backup on a second device;
 forget on A stays forgotten on B; VoiceOver on the preview checklist.
@@ -444,10 +455,10 @@ All builds and tests run under `lockf -k ~/Library/Caches/heavy-job.lock`, targe
 | R7 | Test a code later | A: "Check my code" on the Recovery code row |
 | M1 | Where Core memories live | A: own synced rows with soft delete (owner: memories should follow to another device) |
 | M2 | Extraction switch | A: one switch, "Let Fernlet remember", for journal memories and patterns |
-| M3 | Tier-2 wipe | A: wipe and learn only from days after today |
-| M4 | Natural-language forget | A: on-device AI reads only the sentence; checklist preview; keyword fallback (B: no-AI filters) |
+| M3 | Tier-2 wipe | A: wipe and learn only from days after today; the date syncs so every device forgets |
+| M4 | Natural-language forget | B: no-AI filters (words, date range, feeling) with a checklist preview; the sentence form is a later layer |
 | M5 | Natural-language edit | A: not built; inline Edit stays |
 | M6 | Sensitive category | A: "Keep private" moves a memory into the sealed store, included in the encrypted backup |
 
 R2 (construction) was an owner call until the 2026-11-15 review; it is now settled as design:
-a recovery key pair, escrow keys sealed to it with HPKE. Already answered on the page: R3–R6, all A.
+a recovery key pair, escrow keys sealed to it with HPKE. All 17 calls are answered on the page (2026-11-15): every recommended option above. The owner asked for the 13 that were open to be recorded from the reviewed recommendations, with ease of use between devices as the primary goal.
