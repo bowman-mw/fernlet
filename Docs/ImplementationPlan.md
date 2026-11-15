@@ -30,7 +30,7 @@ Legend: ✅ shipped · ⚠️ partial (residuals on the tracker) · ⏸ deferred
 | **M1** — Meal-tracking & food-search overhaul | ⚠️ | Core shipped (data-type classification, generic-first ranking, SQLite catalog). Residue: chain-restaurant importer, dynamic product-image discovery — see [Meal-Estimation-Overhaul-Plan.md](Meal-Estimation-Overhaul-Plan.md). |
 | **P3** — Memory, derived signals, trends | ⚠️ | Derived signals + trends shipped. Outstanding: editable Core Memory UI, natural-language forget/edit, derived-signal inspection. |
 | **P4a** — Food KB, recipes, micronutrients | ⚠️ | Backend shipped (`micronutrientTotals(for:)`); no recipe-builder UI binding yet. |
-| **P4** — Ambient, recipe, day-history features | ⚠️ | Mostly done. Day Detail, most ambient cards (the gentle-offer nudge among them, see Phase 16) and the overnight `daySummaryText` batch are built — the batch is `backfillDaySummaries` in `LaunchPreparationService`, on-device only. AI recipe paste-and-parse is built (2026-11-14). Residue: seasonal rhythm, forgotten-good-things prompts. |
+| **P4** — Ambient, recipe, day-history features | ⚠️ | Mostly done. Day Detail, most ambient cards (the gentle-offer nudge among them, see Phase 16) and the overnight `daySummaryText` batch are built — the batch is `backfillDaySummaries` in `LaunchPreparationService`, on-device only. AI recipe paste-and-parse is built (2026-11-14). Forgotten-good-things prompts and seasonal rhythm are built (G8, 2026-11-15: `AmbientReminders.swift` and `AmbientReminderFinder.swift`, one "Gentle reminders" switch; the World-places and winter-sleep cards wait on data Home may read). |
 | **1** — Baseline hygiene & file split | ✅ | |
 | **2** — Scoring v3 | ✅ | |
 | **3 / S3** — Privacy modules, AI boundary, sealed stores | ✅ | The `FernletKit` carve-up + compile-time S3 wall, CI-enforced (`Scripts/spm-wall-check.sh`). One optional carve item remains (AI-file inversions, [SPM-Module-Carveup-Plan.md](SPM-Module-Carveup-Plan.md) §14). |
@@ -382,13 +382,13 @@ Exit criteria:
 Goal: add low-cost delight, utility, and day history browsing without touching deferred systems.
 
 Tasks:
-- Phase 4 status (2026-11-14): mostly done — Day Detail, most ambient cards, the overnight day-summary batch and AI recipe paste-and-parse are built; seasonal rhythm and forgotten-good-things prompts remain. The per-task notes below are as written in 2026-05.
+- Phase 4 status (2026-11-14): mostly done — Day Detail, most ambient cards, the overnight day-summary batch and AI recipe paste-and-parse are built; seasonal rhythm and forgotten-good-things prompts are built too (G8, 2026-11-15). The per-task notes below are as written in 2026-05.
 - Add year-ago journal card.
   - Prototype status: partially present through journal history surfaces; a dedicated year-ago ambient card still needs review.
 - Add macro-gap meal suggestions from meal history.
   - Prototype status: not complete.
 - Add forgotten-good-things prompts from meal/workout history.
-  - Prototype status: not complete.
+  - Status (2026-11-15, G8): built — meal chips, workout, recipe and calm-tool cards, each at most once a month, at most two reminders a day.
 - Add preventive-care thought bubbles.
   - Prototype status: not complete.
 - Add "Today's intent" empty-state line (after 14:00 local with nothing logged).
@@ -914,7 +914,7 @@ code.
 
 - **Sounds & haptics Tier C:** a cooking sound, breathing taps, a Core Haptics time-up.
 - **Customization slots:** background, hair, eyes, skin (Phase 15 residue).
-- **Ambient leftovers:** seasonal rhythm, forgotten-good-things prompts, friend mood nudges.
+- **Ambient leftovers:** friend mood nudges (owner undecided). Seasonal rhythm and forgotten-good-things prompts built (G8, 2026-11-15); their World-places card and winter-sleep card wait on data Home may read under CAP-2.
 
 **Privacy, safety and memory.**
 

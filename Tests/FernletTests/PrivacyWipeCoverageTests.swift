@@ -192,6 +192,8 @@ struct PrivacyWipeCoverageTests {
         // the three former open gaps — the day-summary backfill's day key and the journal scrub's
         // latch and retry counter.
         "CompanionEmotionPreferences.clearAll",
+        // G8 (2026-11-15): the gentle reminders' device-local record (calm finish dates, card schedule).
+        "AmbientReminderMemory.clearAll",
         "LaunchPreparationService.clearDaySummaryRunMarker",
         "pastDayJournalScrubDefaults.removeObject",
         // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of

@@ -38,6 +38,8 @@ extension SettingsSearchSynonyms {
         "Daily check-in reminder": ["recordatorio diario", "recordatorio", "aviso", "alerta"],
         "Notifications": ["notificaciones", "notificación", "alertas", "recordatorios", "avisos"],
         "Reminder time": ["hora del recordatorio", "hora", "cuándo", "horario"],
+        "Gentle reminders": ["recordatorios amables", "olvidado", "temporada", "estación", "el año pasado", "sopa",
+                             "receta"],
         "Water bottle size": ["tamaño de la botella de agua", "agua", "hidratación", "botella", "onzas", "beber"],
         "Daily water target": ["objetivo diario de agua", "agua", "hidratación", "objetivo", "botellas", "beber",
                                "meta"],

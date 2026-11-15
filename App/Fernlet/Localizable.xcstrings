@@ -22415,6 +22415,22 @@
         }
       }
     },
+    "Gentle reminders" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordatorios amables"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordatorios amables"
+          }
+        }
+      }
+    },
     "Gentle stretch" : {
       "comment" : "Voice Control name for the rest day's optional 'Guide me through a gentle stretch' button.",
       "localizations" : {
@@ -32853,6 +32869,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ahora"
+          }
+        }
+      }
+    },
+    "Now and then Home brings back a good thing from before — a recipe, a calm tool, a favourite meal — or what this time of year was like for you last year. Never more than two a day." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De vez en cuando, Inicio te trae algo bueno de antes —una receta, una herramienta para calmarte, una comida favorita— o cómo fue para ti esta época el año pasado. Nunca más de dos al día."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De vez en cuando, Inicio te trae algo bueno de antes —una receta, una herramienta para calmarte, una comida favorita— o cómo fue para ti esta época el año pasado. Nunca más de dos al día."
           }
         }
       }
@@ -68490,6 +68522,30 @@
         }
       }
     },
+    "home.ambient.notNow" : {
+      "comment" : "Home gentle reminder card: the button that puts the reminder away for a month. Calm, never a refusal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
     "home.customize.wardrobe.itemCount" : {
       "comment" : "Customize sheet: the Wardrobe row's count of companion items the user designed. Needs a plural variation per language; English says '1 item'.",
       "localizations" : {
@@ -68629,6 +68685,246 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@–%2$@"
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.body" : {
+      "comment" : "Home 'It's still here' card. The placeholder is a calm tool's name, e.g. 'Box breathing' or 'Grounding', starting the sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has helped you settle before. It's here whenever you want it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ te ha ayudado a calmarte otras veces. Está aquí cuando quieras."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ te ha ayudado a calmarte otras veces. Está aquí cuando quieras."
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.breatheNow" : {
+      "comment" : "Home 'It's still here' card: opens slow breathing on the pattern the card named.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathe now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Respirar ahora"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Respirar ahora"
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.startGrounding" : {
+      "comment" : "Home 'It's still here' card: opens the 5-4-3-2-1 grounding exercise.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start grounding"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar el anclaje"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar el anclaje"
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.title" : {
+      "comment" : "Home card title over a breathing or grounding tool that helped the person before.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's still here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue aquí"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue aquí"
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.tool.box" : {
+      "comment" : "Name of the box breathing pattern (in 4, hold 4, out 4, hold 4), starting a sentence on a Home card.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Box breathing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La respiración cuadrada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La respiración cuadrada"
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.tool.grounding" : {
+      "comment" : "Name of the 5-4-3-2-1 grounding exercise, starting a sentence on a Home card.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grounding"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anclaje"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anclaje"
+          }
+        }
+      }
+    },
+    "home.forgotten.calm.tool.relax" : {
+      "comment" : "Name of the 4-7-8 relaxing breathing pattern, starting a sentence on a Home card.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Relax breathing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La respiración relajante"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La respiración relajante"
+          }
+        }
+      }
+    },
+    "home.forgotten.recipe.action" : {
+      "comment" : "Home 'Still sound good?' card: opens the recipe.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open recipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir receta"
+          }
+        }
+      }
+    },
+    "home.forgotten.recipe.body" : {
+      "comment" : "Home 'Still sound good?' card. The placeholder is the name of one of the person's own recipes. Never a count, never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've made %@ a few times, but not lately."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has preparado %@ unas cuantas veces, pero últimamente no."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparaste %@ varias veces, pero no últimamente."
+          }
+        }
+      }
+    },
+    "home.forgotten.recipe.title" : {
+      "comment" : "Home card title over a recipe the person made a few times but not lately.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still sound good?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Te sigue apeteciendo?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Todavía se te antoja?"
           }
         }
       }
@@ -69401,6 +69697,342 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "home.seasonal.soup.action" : {
+      "comment" : "Home 'Soup season' card: opens the recipe book to find a soup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Find a soup"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar una sopa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar una sopa"
+          }
+        }
+      }
+    },
+    "home.seasonal.soup.body.autumn" : {
+      "comment" : "Home 'Soup season' card: last autumn the person made a lot of soup. Never a comparison with now, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last autumn you made a lot of soup. It's that time of year again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El otoño pasado hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El otoño pasado hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        }
+      }
+    },
+    "home.seasonal.soup.body.spring" : {
+      "comment" : "Home 'Soup season' card: last spring the person made a lot of soup. Never a comparison with now, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last spring you made a lot of soup. It's that time of year again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La primavera pasada hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La primavera pasada hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        }
+      }
+    },
+    "home.seasonal.soup.body.summer" : {
+      "comment" : "Home 'Soup season' card: last summer the person made a lot of soup. Never a comparison with now, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last summer you made a lot of soup. It's that time of year again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El verano pasado hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El verano pasado hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        }
+      }
+    },
+    "home.seasonal.soup.body.winter" : {
+      "comment" : "Home 'Soup season' card: last winter the person made a lot of soup. Never a comparison with now, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last winter you made a lot of soup. It's that time of year again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El invierno pasado hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El invierno pasado hiciste mucha sopa. Vuelve a ser esa época del año."
+          }
+        }
+      }
+    },
+    "home.seasonal.soup.title" : {
+      "comment" : "Home card title: last year at this time of year the person made a lot of soup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soup season"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporada de sopas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temporada de sopa"
+          }
+        }
+      }
+    },
+    "home.seasonal.thisTimeLastYear.title" : {
+      "comment" : "Home card title over a note about what the person did around this time last year. Never a comparison with now.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This time last year"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Por estas fechas el año pasado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Por estas fechas el año pasado"
+          }
+        }
+      }
+    },
+    "home.seasonal.walks.body" : {
+      "comment" : "Home 'This time last year' card: around this time last year the person walked a lot. Never a comparison with now, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Around now last year you went on lots of walks. The paths are still there."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Por estas fechas el año pasado saliste mucho a caminar. Los caminos siguen ahí."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Por estas fechas el año pasado saliste mucho a caminar. Los caminos siguen ahí."
+          }
+        }
+      }
+    },
+    "home.seasonal.water.body.summer" : {
+      "comment" : "Home 'Warm days ahead' card as summer comes. Never a comparison with now, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last summer you kept the water coming on the hot days. It's warming up again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El verano pasado no te faltó el agua en los días de calor. Ya vuelve a hacer calor."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El verano pasado no te faltó el agua en los días de calor. Ya vuelve a hacer calor."
+          }
+        }
+      }
+    },
+    "home.seasonal.water.title" : {
+      "comment" : "Home card title as summer comes: last summer the person drank plenty of water on hot days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm days ahead"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llegan días de calor"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llegan días de calor"
+          }
+        }
+      }
+    },
+    "home.seasonal.workouts.body.autumn" : {
+      "comment" : "Home 'This time last year' card: last autumn was a busy stretch of workouts; however this autumn goes is fine. Never a comparison, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last autumn was a busy stretch of workouts for you. However this autumn goes is fine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El otoño pasado entrenaste mucho. Vaya como vaya este otoño, está bien."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El otoño pasado entrenaste mucho. Vaya como vaya este otoño, está bien."
+          }
+        }
+      }
+    },
+    "home.seasonal.workouts.body.spring" : {
+      "comment" : "Home 'This time last year' card: last spring was a busy stretch of workouts; however this spring goes is fine. Never a comparison, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last spring was a busy stretch of workouts for you. However this spring goes is fine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La primavera pasada entrenaste mucho. Vaya como vaya esta primavera, está bien."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La primavera pasada entrenaste mucho. Vaya como vaya esta primavera, está bien."
+          }
+        }
+      }
+    },
+    "home.seasonal.workouts.body.summer" : {
+      "comment" : "Home 'This time last year' card: last summer was a busy stretch of workouts; however this summer goes is fine. Never a comparison, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last summer was a busy stretch of workouts for you. However this summer goes is fine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El verano pasado entrenaste mucho. Vaya como vaya este verano, está bien."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El verano pasado entrenaste mucho. Vaya como vaya este verano, está bien."
+          }
+        }
+      }
+    },
+    "home.seasonal.workouts.body.winter" : {
+      "comment" : "Home 'This time last year' card: last winter was a busy stretch of workouts; however this winter goes is fine. Never a comparison, never a count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last winter was a busy stretch of workouts for you. However this winter goes is fine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El invierno pasado entrenaste mucho. Vaya como vaya este invierno, está bien."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El invierno pasado entrenaste mucho. Vaya como vaya este invierno, está bien."
           }
         }
       }
@@ -86722,6 +87354,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Amigos y bloqueos"
+          }
+        }
+      }
+    },
+    "settings.search.title.gentleReminders" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle reminders"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordatorios amables"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordatorios amables"
           }
         }
       }

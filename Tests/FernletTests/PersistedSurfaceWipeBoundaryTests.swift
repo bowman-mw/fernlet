@@ -194,6 +194,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.weather.requestBudget": .cleared(token: "WeatherKitService.shared.clearRequestHistory"),
         // The companion-feelings settings (owner 2026-11-13: Delete everything "really means everything").
         "fernlet.companionFeelings.appetiteCues": .cleared(token: "CompanionEmotionPreferences.clearAll"),
+        // G8 (2026-11-15): the gentle reminders' calm finish dates and card schedule.
+        "fernlet.ambientReminders.calmFinishes": .cleared(token: "AmbientReminderMemory.clearAll"),
+        "fernlet.ambientReminders.schedule": .cleared(token: "AmbientReminderMemory.clearAll"),
         "fernlet.companionFeelings.bedtimeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "fernlet.companionFeelings.wakeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),

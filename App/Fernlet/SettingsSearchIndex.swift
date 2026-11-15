@@ -356,6 +356,15 @@ nonisolated enum SettingsSearchIndex {
             route: .goalNutrition
         ),
         SettingsSearchEntry(
+            title: "Gentle reminders",
+            display: LocalizedStringResource(
+                "settings.search.title.gentleReminders", defaultValue: "Gentle reminders",
+                comment: "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to."),
+            keywords: ["gentle reminders", "forgotten", "seasonal", "season", "last year", "home cards", "recipe", "soup"],
+            breadcrumb: .goalNutritionReminders,
+            route: .goalNutrition
+        ),
+        SettingsSearchEntry(
             title: "Water bottle size",
             display: LocalizedStringResource(
                 "settings.search.title.waterBottleSize", defaultValue: "Water bottle size",

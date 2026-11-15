@@ -7455,6 +7455,9 @@ final class FernletStore {
         // The companion-feelings settings (owner 2026-11-13: Delete everything "really means
         // everything"): the appetite-cues switch and the sleep window go back to their defaults.
         CompanionEmotionPreferences.clearAll()
+        // G8: the gentle reminders' record — breathing and grounding finish dates and which cards
+        // showed or were put off when.
+        AmbientReminderMemory.clearAll()
         // Three traces of use nobody decided should survive (the former "Open gaps"): the
         // day-summary backfill's last-run day, and the past-day journal scrub's latch and retry
         // counter. Post-wipe both jobs simply run once more over an empty store.
