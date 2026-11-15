@@ -250,3 +250,128 @@ import AIContext
         }
     }
 }
+
+// MARK: - Travel-day memories (G7 follow-on, owner decisions 2026-11-15)
+
+/// Pins the fifth Tier-2 category, `travel_days`, and the goal gap's gentle travel days: the owner's lines word
+/// for word, the city line only with a city and while the AI runs on device, workout-less travel days left out
+/// of the workout rate, no travel giving no record, and every line passing the diagnostic screen.
+extension MemoryStorageScreeningTests {
+
+    static let a1 = "Had a travel day recently; movement eased off around it, as expected on a travel day."
+    static let a3 = " Still fit in some movement on a travel day."
+
+    /// A `count`-day window from 2026-09-01 whose first `workouts` days train.
+    static func plainWindow(_ count: Int, workouts: Int = 0) -> [(String, FernletDay)] {
+        (0..<count).map { index in
+            let key = String(format: "2026-09-%02d", index + 1)
+            return (key, FernletDay(
+                date: key,
+                meals: [Meal(name: "Oats", mealType: .breakfast, macros: Macros(protein: 12, carbs: 40, fat: 6),
+                             quality: .good, confidence: "Manual", note: "", source: "Manual")],
+                workouts: index < workouts ? [Workout(name: "Upper", type: .upper, exercises: "DB row 3x10", rpe: 7,
+                                                      notes: "steady", duration: 35, intensity: .moderate)] : []
+            ))
+        }
+    }
+
+    /// The active travel record `travel` makes over `window` with no goals.
+    static func travelRecord(_ window: [(String, FernletDay)], _ travel: TierTwoTravel) -> TierTwoMemoryRecord? {
+        TierTwoMemoryEngine.updateInferences(existing: [], from: window, goals: [], travel: travel)
+            .first { $0.category == "travel_days" && $0.active }
+    }
+
+    /// Travel days by key, no cities, cities allowed.
+    static func days(_ keys: [String], namesCities: Bool = true) -> TierTwoTravel {
+        TierTwoTravel(days: Dictionary(uniqueKeysWithValues: keys.map { ($0, TierTwoTravelDay()) }), namesCities: namesCities)
+    }
+
+    @Test func oneTravelDayReadsA1() throws {
+        let record = try #require(Self.travelRecord(Self.plainWindow(10), Self.days(["2026-09-04"])))
+        #expect(record.text == Self.a1)
+        #expect(record.confidence == "medium", "a low-confidence record never reaches the prompt")
+    }
+
+    @Test func aWorkoutOnATravelDayAppendsA3() throws {
+        let record = try #require(Self.travelRecord(Self.plainWindow(10, workouts: 3), Self.days(["2026-09-02"])))
+        #expect(record.text == Self.a1 + Self.a3)
+    }
+
+    @Test func twoOrMoreReadA2WithTheWindowsRealLength() throws {
+        let short = try #require(Self.travelRecord(Self.plainWindow(10), Self.days(["2026-09-03", "2026-09-08"])))
+        #expect(short.text == "Travelled on 2 of the last 10 days; training was lighter around those days, which is normal for travel.")
+        let full = try #require(Self.travelRecord(Self.plainWindow(20, workouts: 9),
+                                                 Self.days(["2026-09-08", "2026-09-12", "2026-09-19"])))
+        #expect(full.text == "Travelled on 3 of the last 14 days; training was lighter around those days, which is normal for travel." + Self.a3)
+    }
+
+    @Test func aTripsCityJoinsOnlyWithACityAndOnDevice() throws {
+        let trip = ["2026-09-05": TierTwoTravelDay(fromCity: "Portland", toCity: "Denver")]
+        let named = try #require(Self.travelRecord(Self.plainWindow(10), TierTwoTravel(days: trip, namesCities: true)))
+        #expect(named.text == Self.a1 + " Flew to Denver on Saturday.")
+        let offDevice = try #require(Self.travelRecord(Self.plainWindow(10), TierTwoTravel(days: trip, namesCities: false)))
+        #expect(offDevice.text == Self.a1, "a city reached memory while the AI was not on device")
+        let unknown = try #require(Self.travelRecord(Self.plainWindow(10), Self.days(["2026-09-05"])))
+        #expect(unknown.text == Self.a1)
+        for record in [named, offDevice, unknown] {
+            #expect(!record.text.contains("DEN") && !record.text.contains(":"), "no airport code or time: \(record.text)")
+        }
+    }
+
+    @Test func outAndBackReadsAndBack() throws {
+        let trip = [
+            "2026-09-03": TierTwoTravelDay(fromCity: "Portland", toCity: "Denver"),
+            "2026-09-06": TierTwoTravelDay(fromCity: "Denver", toCity: "Portland")
+        ]
+        let record = try #require(Self.travelRecord(Self.plainWindow(10), TierTwoTravel(days: trip, namesCities: true)))
+        #expect(record.text == "Travelled on 2 of the last 10 days; training was lighter around those days, which is normal for travel."
+                + " Flew to Denver and back this fortnight.")
+    }
+
+    @Test func noTravelGivesNoRecordAndRemovesAnOldOne() throws {
+        #expect(Self.travelRecord(Self.plainWindow(10), .none) == nil)
+        #expect(Self.travelRecord(Self.plainWindow(10), Self.days(["2026-08-01"])) == nil, "outside the window")
+        let with = TierTwoMemoryEngine.updateInferences(existing: [], from: Self.plainWindow(10), goals: [],
+                                                        travel: Self.days(["2026-09-04"]))
+        #expect(with.contains { $0.category == "travel_days" })
+        let without = TierTwoMemoryEngine.updateInferences(existing: with, from: Self.plainWindow(10), goals: [], travel: .none)
+        #expect(!without.contains { $0.category == "travel_days" }, "a decoy or the switch off left a travel note behind")
+    }
+
+    /// Owner 2026-11-15: a travel day with no workout leaves both sides of the rate; one with a workout counts.
+    @Test func theGoalGapLeavesWorkoutlessTravelDaysOut() throws {
+        let strength = [FitnessGoal(type: .strength, goal: "Get stronger", timeframe: "8 weeks", metric: "lifts")]
+        let window = Self.plainWindow(14, workouts: 5)
+        func gap(_ travel: TierTwoTravel) throws -> TierTwoMemoryRecord {
+            try #require(TierTwoMemoryEngine.updateInferences(existing: [], from: window, goals: strength, travel: travel)
+                .first { $0.category == "goal_behavior_gap" && $0.active })
+        }
+        let plain = try gap(.none)
+        #expect(plain.evidence == "5/14 days with workouts")
+        #expect(plain.state == "partial")
+        let travelled = try gap(Self.days(["2026-09-10", "2026-09-11", "2026-09-12"]))
+        #expect(travelled.evidence == "5/11 days with workouts (3 travel days left out)")
+        #expect(travelled.state == "aligned", "the verdict reads 11 days")
+        let trained = try gap(Self.days(["2026-09-02"]))
+        #expect(trained.evidence == "5/14 days with workouts", "a travel day with a workout still counts")
+    }
+
+    @Test func everyTravelLinePassesTheScreen() throws {
+        let cities = ["Denver", "Boston", "Mexico City", "Honolulu", "London", "Cancún"]
+        var texts: [String] = []
+        for city in cities {
+            let one = ["2026-09-05": TierTwoTravelDay(fromCity: "Portland", toCity: city)]
+            let back = ["2026-09-03": TierTwoTravelDay(fromCity: "Portland", toCity: city),
+                        "2026-09-06": TierTwoTravelDay(fromCity: city, toCity: "Portland")]
+            for days in [one, back] {
+                for workouts in [0, 6] {
+                    let record = try #require(Self.travelRecord(Self.plainWindow(10, workouts: workouts),
+                                                                TierTwoTravel(days: days, namesCities: true)))
+                    texts.append(record.text + " " + record.evidence)
+                    #expect(record.text.contains(city), "the screen dropped the city line for \(city)")
+                }
+            }
+        }
+        for text in texts { #expect(!DiagnosticLanguage.contains(text), "\(text)") }
+    }
+}

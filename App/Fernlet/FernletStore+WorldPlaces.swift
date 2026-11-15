@@ -72,6 +72,8 @@ extension FernletStore {
         Task { await catchUpWorldBikeRides() }
         worldFog.load()
         worldLocation.startForeground()
+        // Tier-2's travel snapshot, now that the passport is loaded (launch and each return to the front).
+        publishTierTwoTravel()
     }
 
     /// The app went to the background: the map's own updates stop (a walk and background mapping keep

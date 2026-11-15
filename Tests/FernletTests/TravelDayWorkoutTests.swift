@@ -1,8 +1,11 @@
 import Foundation
 import Testing
+import AIContext
+import CloudKitSync
 import FernletDomainModel
 import FernletFoundation
 import FernletScoring
+import LocalPersistence
 @testable import Fernlet
 
 /// Pins travel-day workouts (World-Airports-Spec §13), with made-up flights only (a Portland traveller on Cedar
@@ -276,5 +279,73 @@ struct TravelDayWorkoutTests {
         #expect(Set(stretches.map(\.name)).count == 5, "the hidden stretch was swapped for another: \(names)")
         #expect(stretches.allSatisfy { rows[$0.name]?.modality == .mobility })
         #expect(Set(names).count == names.count, "nothing is done twice")
+    }
+}
+
+// MARK: - Tier-2 travel memories (G7 follow-on, 2026-11-15)
+
+/// The store's side of Tier-2's travel days: the guard rail on cities (read from the memory tier, which is pinned on
+/// device), no travel in a decoy or with "Airports and flights" off, and a save through the app's repository writing
+/// the travel note from the published snapshot.
+extension TravelDayWorkoutTests {
+
+    /// A snapshot of one Denver trip on Saturday 2026-11-14.
+    static let denverTrip = TierTwoTravel(days: ["2026-11-14": TierTwoTravelDay(fromCity: "Portland", toCity: "Denver")],
+                                          namesCities: true)
+
+    /// Defaults with "Airports and flights" set as `on`.
+    func airportsDefaults(on: Bool) throws -> UserDefaults {
+        let defaults = try #require(UserDefaults(suiteName: "TravelDayWorkoutTests.\(UUID().uuidString)"))
+        WorldMapPreferences.setKeepsAirportsAndFlights(on, in: defaults)
+        return defaults
+    }
+
+    /// Cities may enter memory only while the AI that reads it runs on this iPhone: today the `light` tier, pinned.
+    @Test func citiesNeedTheMemoryTierOnDevice() {
+        #expect(FernletStore.tierTwoMemoryAIRunsOnDevice)
+        #expect(!AICapabilityTier.light.allowsOffDeviceEscalation)
+        #expect(AICapabilityTier.light.escalationLadder.allSatisfy { !$0.leavesDevice })
+    }
+
+    @Test func airportsOffMeansNoTravelForTierTwo() throws {
+        let store = makeTestStore()
+        store.tierTwoTravel.publish(Self.denverTrip)
+        let off = try airportsDefaults(on: false)
+        #expect(store.tierTwoTravelForRefresh(defaults: off) == .none, "the refresh read travel with the switch off")
+        store.publishTierTwoTravel(defaults: off)
+        #expect(store.tierTwoTravel.snapshot == .none)
+        let on = try airportsDefaults(on: true)
+        store.tierTwoTravel.publish(Self.denverTrip)
+        #expect(store.tierTwoTravelForRefresh(defaults: on) == Self.denverTrip)
+    }
+
+    @Test func aDecoyMeansNoTravelForTierTwo() throws {
+        let store = makeTestStore()
+        let on = try airportsDefaults(on: true)
+        store.tierTwoTravel.publish(Self.denverTrip)
+        store.duressSessionActive = true
+        #expect(store.tierTwoTravelForRefresh(defaults: on) == .none)
+        store.publishTierTwoTravel(defaults: on)
+        #expect(store.tierTwoTravel.snapshot == .none)
+    }
+
+    /// A save through the app's repository reads the published snapshot; a decoy's next save removes the note.
+    @Test func aSaveWritesTheTravelNoteFromTheSnapshot() throws {
+        let built = makeTestStoreWithRepositories(date: try #require(FernletDate.date(fromDayKey: "2026-11-15")))
+        guard built.store.keepsWorldAirportsAndFlights() else { return }  // this machine's own switch is off
+        built.store.tierTwoTravel.publish(Self.denverTrip)
+        func save(_ key: String) -> Bool {
+            let day = FernletDay(date: key, meals: [Meal(name: "Oats", mealType: .breakfast,
+                                                         macros: Macros(protein: 12, carbs: 40, fat: 6), quality: .good,
+                                                         confidence: "Manual", note: "", source: "Manual")])
+            return built.repository.updateDay(day, for: key, todayKey: "2026-11-15")
+        }
+        for key in ["2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"] { #expect(save(key)) }
+        let note = try #require(built.repository.loadTierTwoMemories().first { $0.category == "travel_days" && $0.active })
+        #expect(note.text == "Had a travel day recently; movement eased off around it, as expected on a travel day."
+                + " Flew to Denver on Saturday.")
+        built.store.duressSessionActive = true
+        #expect(save("2026-11-15"))
+        #expect(!built.repository.loadTierTwoMemories().contains { $0.category == "travel_days" })
     }
 }

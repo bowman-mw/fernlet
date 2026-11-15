@@ -223,7 +223,10 @@ struct PrivacyPolicyParityTests {
         "(apart from a road trip's road, below)",
         // Hotel check-in (2026-11-15, owner's request): the drive-end Apple Maps lookup and what it sends.
         "When a drive ends, Fernlet asks Apple Maps which places are nearby",
-        "only that location is sent, with nothing about you attached"
+        "only that location is sent, with nothing about you attached",
+        // Travel-day memories (2026-11-15): the one travel fact that may reach the AI, a city, on the iPhone only.
+        "Sprout's memory can note which city you travelled to",
+        "only the city, never the airport, times or where you were"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

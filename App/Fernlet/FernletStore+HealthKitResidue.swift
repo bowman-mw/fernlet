@@ -37,13 +37,19 @@ extension FernletStore {
     /// `CoreDataFernletRepository.tierTwoRefresher`). A local-JSON repository has no hook and keeps its
     /// own refresh. Reads the residue at refresh time, so the HealthKit opt-out (which empties the
     /// cache) takes effect at the next save.
+    ///
+    /// The same refresh reads this iPhone's travel days (G7 follow-on, 2026-11-15) from
+    /// ``tierTwoTravel``, the snapshot ``publishTierTwoTravel(now:)`` last published, never the map's
+    /// vault itself. The gate is re-checked here at refresh time, so a decoy or "Airports and
+    /// flights" turned off reads no travel at the very next save even before a new snapshot is
+    /// published; a store that has gone away reads none.
     func attachTierTwoHealthKitResidue() {
         guard let coreData = diary.repository as? CoreDataFernletRepository else { return }
         let sidecar = coreData.tierTwoMemoryStore
-        coreData.tierTwoRefresher = { [residueStore = deviceHealthResidueStore] window, goals in
+        coreData.tierTwoRefresher = { [weak self, residueStore = deviceHealthResidueStore] window, goals in
             let restored = TierTwoMemoryStore.deviceWindow(restoringHealthKitTo: window,
                                                            from: residueStore.allResidues())
-            sidecar.refresh(from: restored, goals: goals)
+            sidecar.refresh(from: restored, goals: goals, travel: self?.tierTwoTravelForRefresh() ?? .none)
         }
     }
 

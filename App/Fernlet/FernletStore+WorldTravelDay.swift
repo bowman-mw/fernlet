@@ -1,7 +1,9 @@
+import AIContext
 import FernletDomainModel
 import FernletFoundation
 import FernletScoring
 import Foundation
+import LocalPersistence
 import WorldMapStore
 
 /// Travel-day workouts on the store (World-Airports-Spec §13): the composition root's side of the wall.
@@ -17,8 +19,11 @@ import WorldMapStore
 ///   keys are kept: never a flight, an airport, a time or a place. The planner's own history (light days,
 ///   short nights) lives on the synced day records; travel stays off them, because a travel day is a passport
 ///   fact and passport facts never sync outside the passport's sealed backup (§11).
-/// - **Never** in a decoy (nothing read, nothing kept) or with "Airports and flights" off. Nothing travel-related
-///   reaches `AIProviders`.
+/// - **Never** in a decoy (nothing read, nothing kept) or with "Airports and flights" off.
+/// - **Tier-2 memory** (``publishTierTwoTravel(now:)``, owner 2026-11-15): the travel days of the last fortnight
+///   reach Tier-2 as day keys, and a travel day's city name (city only, no airport codes, times or coordinates) may
+///   enter Tier-2 memory, only while the AI runs on device (``tierTwoMemoryAIRunsOnDevice``). Nothing else
+///   travel-related reaches `AIProviders`.
 /// - **The plan** (``commitTodaysTravelDayPlan()``, ``liftInsteadOnTravelDay()``): the Travel-day reset as
 ///   today's plan, and "Lift instead, lighter", the planner's light plan in its place (§13.2).
 extension FernletStore {
@@ -49,6 +54,7 @@ extension FernletStore {
     /// Writes today's flights' travel days into the remembered list (the Move page calls this as it opens), so a
     /// day stays forgiven after the ticket ends or the flight leaves the passport.
     func rememberWorkoutTravelDays(now: Date = Date()) {
+        defer { publishTierTwoTravel(now: now) }
         guard mayKeepWorkoutTravelDays() else { return }
         let remembered = rememberedTravelDays()
         let kept = Self.prunedTravelDays(remembered.union(travelDaysFromFlights(now: now)), now: now)
@@ -60,9 +66,68 @@ extension FernletStore {
         }
     }
 
+    // MARK: Tier-2 memory
+
+    /// How many days back Tier-2's travel snapshot reaches: the engine's 14-day window and a little room.
+    nonisolated static let tierTwoTravelLookbackDays = 16
+
+    /// Whether the AI that reads Tier-2 memory runs on this iPhone: the guard rail on city names (orchestrator's
+    /// call, 2026-11-15, flagged for the owner). Memory reaches a prompt only through `MemoryAgent` into the
+    /// `light` tier, and that tier's ladder is on-device only and pinned by `FernletModelRouter`, which fails closed
+    /// on a destination that leaves the device. Read from the tier itself, so a ladder change turns cities off.
+    ///
+    /// TODO(P2-B): Phase 2's Private Cloud Compute and BYOK destinations must honour this. If memory ever reaches
+    /// a `standard` or `deep` task, or the `light` ladder gains an off-device rung, this must read the destination
+    /// the memory actually goes to, and a record that names a city must not reach it (re-derive without the city).
+    nonisolated static var tierTwoMemoryAIRunsOnDevice: Bool {
+        let tier = AICapabilityTier.light
+        return !tier.allowsOffDeviceEscalation && tier.escalationLadder.allSatisfy { !$0.leavesDevice }
+    }
+
+    /// Publishes this iPhone's travel days into ``tierTwoTravel`` for the Tier-2 refresher: the travel days of the
+    /// last ``tierTwoTravelLookbackDays`` (remembered and from today's flights), each with its flight's English
+    /// cities where the passport knows them. Publishes none in a decoy or with "Airports and flights" off. Called
+    /// when the Move page remembers travel days and when the map loads (launch and each return to the foreground).
+    func publishTierTwoTravel(now: Date = Date(), defaults: UserDefaults = .standard) {
+        guard mayKeepWorkoutTravelDays(defaults: defaults) else {
+            tierTwoTravel.publish(.none)
+            return
+        }
+        let oldest = FernletDate.dayKey(for: now.addingTimeInterval(-Double(Self.tierTwoTravelLookbackDays) * 86_400))
+        let today = FernletDate.dayKey(for: now)
+        let cities = tierTwoTravelCities(now: now)
+        var days: [String: TierTwoTravelDay] = [:]
+        for key in workoutTravelDayKeys where key >= oldest && key <= today {
+            days[key] = cities[key] ?? TierTwoTravelDay()
+        }
+        tierTwoTravel.publish(TierTwoTravel(days: days, namesCities: Self.tierTwoMemoryAIRunsOnDevice))
+    }
+
+    /// What the Tier-2 refresher reads: the published snapshot, or none once the gate is shut (a decoy started or
+    /// "Airports and flights" went off since the last publish).
+    func tierTwoTravelForRefresh(defaults: UserDefaults = .standard) -> TierTwoTravel {
+        mayKeepWorkoutTravelDays(defaults: defaults) ? tierTwoTravel.snapshot : .none
+    }
+
+    /// The English cities of the passport's flown flights in Tier-2's lookback, by the flight's own date (its
+    /// departure's date at the departure airport). An airport the bundled list doesn't name gives no city.
+    private func tierTwoTravelCities(now: Date) -> [String: TierTwoTravelDay] {
+        guard let pack = worldLocation.flights.airportsShelf.pack() else { return [:] }
+        let from = now.addingTimeInterval(-Double(Self.tierTwoTravelLookbackDays + 1) * 86_400)
+        let flown = worldFog.atlas.book.flights.filter { $0.departure >= from && $0.departure <= now }
+        var cities: [String: TierTwoTravelDay] = [:]
+        // Bounded: at most `TierTwoTravel.maxDays` flights, the newest.
+        for flight in flown.suffix(TierTwoTravel.maxDays) {
+            let key = WorldTravelDayRule.dayKey(flight.departure, in: pack.timeZone(iata: flight.from) ?? .current)
+            cities[key] = TierTwoTravelDay(fromCity: pack.airport(code: flight.from)?.city(spanish: false),
+                                           toCity: pack.airport(code: flight.to)?.city(spanish: false))
+        }
+        return cities
+    }
+
     /// Whether travel days may be read and kept now: never in a decoy, never with "Airports and flights" off.
-    func mayKeepWorkoutTravelDays() -> Bool {
-        !duressSessionActive && keepsWorldAirportsAndFlights()
+    func mayKeepWorkoutTravelDays(defaults: UserDefaults = .standard) -> Bool {
+        !duressSessionActive && keepsWorldAirportsAndFlights(defaults: defaults)
     }
 
     /// The remembered list, or empty when there is none or it can't be read now.

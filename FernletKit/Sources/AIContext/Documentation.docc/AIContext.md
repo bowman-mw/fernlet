@@ -29,6 +29,15 @@ an ``AIDeterministicReason`` the caller must honor with its non-AI path. After (
 destinations, *before*) the call, the site records an ``AIAuditEntry`` in ``AIAuditLog``.
 ``MemoryAgent`` guards the one road from Tier-2 behavioral memories into prompts.
 
+**Travel cities in memory (2026-11-15; the guard rail is the orchestrator's call, flagged for the
+owner).** A travel day's city name (city only, no airport codes, times or coordinates) may enter
+Tier-2 memory, only while the AI runs on device. The app reads that from the `light` tier itself
+(`FernletStore.tierTwoMemoryAIRunsOnDevice`: no off-device escalation and an on-device-only ladder),
+because Tier-2 text reaches a prompt only through ``MemoryAgent`` into `light` work, which
+``FernletModelRouter`` pins on-device and fails closed. With the rule false, the travel note is
+written without its city. `TODO(P2-B)`: Phase 2's Private Cloud Compute and BYOK destinations must
+honour this rule — memory that may leave the device must not carry a city.
+
 Three hard privacy invariants are enforced in code, not convention. First, the `light` tier
 (journal- and memory-adjacent work) can never resolve to a destination whose `leavesDevice` is true
 — ``FernletModelRouter`` asserts this at resolution time and fails closed in release builds. That

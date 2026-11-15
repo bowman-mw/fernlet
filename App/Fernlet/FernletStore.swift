@@ -785,6 +785,13 @@ final class FernletStore {
     /// initializer (tests, previews) defaults to a fresh in-memory store, and the launch path
     /// (`FernletStore.load`) passes `FileDeviceDaySummaryStore.production`.
     @ObservationIgnored let deviceDaySummaryStore: any DeviceDaySummaryStoring
+    /// The travel days Tier-2 reads (G7 follow-on, 2026-11-15): the newest snapshot of this
+    /// iPhone's travel days by day key, each with its flight's English cities, published from the
+    /// map's vault and the passport by ``publishTierTwoTravel(now:)`` and read by the Tier-2 refresher
+    /// after each save (`FernletStore+HealthKitResidue.swift`). In memory only, never persisted: the
+    /// travel days themselves stay in the map's vault. Empty in a decoy, with "Airports and flights"
+    /// off, and after "Delete everything".
+    @ObservationIgnored let tierTwoTravel = TierTwoTravelHolder()
     /// The World map's sealed, device-only location history (World build; `WorldMapVault`). The test
     /// initializer defaults to an ephemeral vault (a temporary folder, in-memory keys); the launch path
     /// uses the production one. Reached for the wipe through ``worldFog`` (`resetAll`).
@@ -7340,6 +7347,8 @@ final class FernletStore {
         // lines, the workout-space pins, Where you've been's log and device side, and the solo photos'
         // places, one folder) and both of its device keys, plus its device-only settings. World build only.
         if !worldFog.clearAll() { incompleteStores.append("your map history") }
+        // Tier-2's in-memory travel snapshot (cities by day key) goes with the vault it was read from.
+        tierTwoTravel.publish(.none)
         forgetWorldPlacesCarsAndBackgroundMapping()
         WorldMapPreferences.clearAll()
         // Advanced period tracking's device-only switch (World build, `b3-period-settings`): how the
