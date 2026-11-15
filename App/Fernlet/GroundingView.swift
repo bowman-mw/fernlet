@@ -15,8 +15,9 @@ import FernletUI
 ///
 /// Pushed from ``FirstAidView``. No timers and no pressure — tapping anywhere is the only pace,
 /// and each sense fills the screen with its own calm color wash from the static `steps` table.
-/// Entirely self-contained view state (step index + completion flag); nothing is recorded or
-/// persisted.
+/// Entirely self-contained view state (step index + completion flag). The one thing kept is the
+/// date of a finished exercise, on this iPhone only (`AmbientReminderMemory`, G8); nothing typed or
+/// felt is recorded.
 struct GroundingView: View {
     /// One sense's step in the 5-4-3-2-1 sequence: its count, icon, prompt/hint copy, and the
     /// per-sense color trio (wash tint, deep ink, mid-tone).
@@ -259,6 +260,9 @@ struct GroundingView: View {
                 isComplete = true
             }
         }
+        // G8: a finished walk through the senses leaves its date on this iPhone (nothing else), for
+        // Home's "It's still here".
+        if isComplete { AmbientReminderMemory.recordCalmFinish(.grounding) }
     }
 
     /// What moving on from `stepIndex` feels like (report B4): `pace` into the next sense, `done` on

@@ -1111,6 +1111,11 @@ struct SettingsSheet: View {
             if dailyCheckInAuthDenied {
                 FernletNotice("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.", tone: .warn)
             }
+            // G8: one switch for every gentle reminder card on Home (forgotten good things, seasonal rhythm).
+            FernletFramedSection {
+                hubToggle("Gentle reminders", detail: Text("Now and then Home brings back a good thing from before — a recipe, a calm tool, a favourite meal — or what this time of year was like for you last year. Never more than two a day."), isOn: settingsBinding(\.gentleRemindersEnabled))
+                    .accessibilityIdentifier("settings.toggle.gentleReminders")
+            }
         }
         .task { await loadDailyCheckInState() }
         .onChange(of: dailyCheckInTime) { _, newValue in

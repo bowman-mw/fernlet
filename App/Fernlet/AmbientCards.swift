@@ -13,8 +13,14 @@ import FernletUI
 
 /// Gentle, low-cost "ambient" home surfaces (spec §12): an at-most-once-a-day gentle offer
 /// (breathing / worry box / short walk), a looking-back journal card, a macro-gap meal nudge,
-/// forgotten-favorite meal chips, a forgotten-good workout nudge, and a dismissible
+/// forgotten-favorite meal chips, a forgotten-good workout nudge, the gentle reminders (a forgotten
+/// recipe or calm tool, last year's seasonal rhythm — `AmbientReminders.swift`), and a dismissible
 /// preventive-care micronutrient bubble.
+///
+/// The gentle reminders, the meal chips and the workout nudge share one switch (Settings › Your day ›
+/// Reminders › Gentle reminders) and the caps of `AmbientReminderSchedule`: each kind at most once a
+/// month, at most two on one day, and "Not now" puts a kind away for a month. They read only unsealed
+/// stores (CAP-2): meals, recipes, workouts, water and this iPhone's breathing finish dates.
 ///
 /// Each card renders only when it has something worth surfacing, so the section quietly
 /// disappears on a sparse day rather than nagging. Rendered by `HomeView`; the history reads
@@ -37,6 +43,8 @@ struct AmbientCardsView: View {
     @State private var lookBack: LookBack?
     @State private var forgottenFavorites: [String] = []
     @State private var forgottenWorkout: String?
+    /// Today's gentle reminders after the caps (meal chips and the workout nudge among them).
+    @State private var reminders: [AmbientReminder] = []
     @State private var weatherPrompt: String?
     @State private var walkComfort: WeatherComfort?
 
@@ -60,6 +68,7 @@ struct AmbientCardsView: View {
             macroGapCard
             forgottenFavoritesCard
             forgottenWorkoutCard
+            gentleReminderCards
             weatherCard
             periodPredictionBubble
             micronutrientBubble
@@ -73,8 +82,12 @@ struct AmbientCardsView: View {
             // History reads (decryption, full-day scan) are done once, off the per-render path.
             guard !didLoad else { return }
             didLoad = true
-            forgottenFavorites = computeForgottenFavorites()
-            forgottenWorkout = computeForgottenWorkout()
+            let days = store.loadDays()
+            let favorites = computeForgottenFavorites()
+            let workout = computeForgottenWorkout(days: days)
+            forgottenFavorites = favorites
+            forgottenWorkout = workout
+            reminders = chooseReminders(days: days, hasForgottenMeals: !favorites.isEmpty, hasForgottenWorkout: workout != nil)
             if store.settings.weatherPromptsEnabled {
                 // Both reads share the service's ≤90-min conditions cache (one fetch, two prompts).
                 weatherPrompt = await WeatherKitService.shared.moodRecoveryPrompt()
@@ -304,12 +317,13 @@ struct AmbientCardsView: View {
 
     @ViewBuilder
     private var forgottenFavoritesCard: some View {
-        if !forgottenFavorites.isEmpty {
+        if !forgottenFavorites.isEmpty, isShowing(.forgottenMeal) {
             FernletCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Haven't had these in a while")
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
                     FlowLayout(spacing: 8) {
                         ForEach(forgottenFavorites, id: \.self) { name in
                             Button {
@@ -327,6 +341,7 @@ struct AmbientCardsView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    notNowButton(.forgottenMeal)
                 }
             }
         }
@@ -348,30 +363,34 @@ struct AmbientCardsView: View {
 
     @ViewBuilder
     private var forgottenWorkoutCard: some View {
-        if let name = forgottenWorkout {
-            Button { activeSheet = .workout } label: {
-                FernletCard {
-                    HStack(spacing: 12) {
-                        ambientIcon("figure.run", tint: .moss)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Remember this one?")
-                                .font(.fernlet(.header))
-                                .foregroundStyle(Color.bark)
-                            Text("You did \u{201C}\(name)\u{201D} before — it might feel good again.")
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
+        if let name = forgottenWorkout, isShowing(.forgottenWorkout) {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button { activeSheet = .workout } label: {
+                        HStack(spacing: 12) {
+                            ambientIcon("figure.run", tint: .moss)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Remember this one?")
+                                    .font(.fernlet(.header))
+                                    .foregroundStyle(Color.bark)
+                                    .fernletWrappingText()
+                                Text("You did \u{201C}\(name)\u{201D} before — it might feel good again.")
+                                    .font(.fernlet(.body))
+                                    .foregroundStyle(Color.slate)
+                                    .fernletWrappingText()
+                            }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
                     }
+                    .buttonStyle(.plain)
+                    notNowButton(.forgottenWorkout)
                 }
             }
-            .buttonStyle(.plain)
         }
     }
 
-    private func computeForgottenWorkout() -> String? {
-        let days = store.loadDays()
+    /// The workout done at least twice in the last year and not in the last two weeks, by its drawn name.
+    private func computeForgottenWorkout(days: [String: FernletDay]) -> String? {
         guard let cutoff = Calendar.current.date(byAdding: .day, value: -14, to: Date()) else { return nil }
         let cutoffKey = FernletDate.dayKey(for: cutoff)
         // R3: bound the scan (and therefore `counts`) to one year of history rather than the whole
@@ -400,6 +419,135 @@ struct AmbientCardsView: View {
             .first
             .map { shown[$0.key] ?? $0.key }
     }
+
+    // MARK: - Gentle reminders (forgotten good things, seasonal rhythm)
+
+    /// Whether today's caps let `kind` show.
+    private func isShowing(_ kind: AmbientReminderKind) -> Bool {
+        reminders.contains { $0.kind == kind }
+    }
+
+    /// The new reminders' cards (the meal chips and the workout draw their own above).
+    @ViewBuilder
+    private var gentleReminderCards: some View {
+        ForEach(reminders.filter { AmbientReminderCopy.body(for: $0) != nil }, id: \.kind) { reminder in
+            gentleReminderCard(reminder)
+        }
+    }
+
+    /// One reminder: its title and sentence, its open button when it has one, and "Not now".
+    private func gentleReminderCard(_ reminder: AmbientReminder) -> some View {
+        FernletCard {
+            HStack(alignment: .top, spacing: 12) {
+                ambientIcon(Self.reminderIcon(reminder.kind), tint: reminder.kind.isSeasonal ? .goldenrod : .moss)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AmbientReminderCopy.title(for: reminder) ?? "")
+                        .font(.fernlet(.header))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                    Text(AmbientReminderCopy.body(for: reminder) ?? "")
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                    FlowLayout(spacing: 8) {
+                        if let action = AmbientReminderCopy.action(for: reminder) {
+                            Button { openReminder(reminder) } label: {
+                                Text(action)
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.bark)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.moss.opacity(0.16), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home.reminder.\(reminder.kind.rawValue).open")
+                        }
+                        notNowButton(reminder.kind)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .accessibilityIdentifier("home.reminder.\(reminder.kind.rawValue)")
+    }
+
+    /// The decorative icon for a reminder kind.
+    private static func reminderIcon(_ kind: AmbientReminderKind) -> String {
+        switch kind {
+        case .forgottenRecipe, .seasonalSoup: "book"
+        case .forgottenCalm: "wind"
+        case .seasonalWalks: "figure.walk"
+        case .seasonalWorkouts, .forgottenWorkout: "figure.run"
+        case .seasonalWater: "drop"
+        case .forgottenMeal: "fork.knife"
+        }
+    }
+
+    /// "Not now": puts `kind` away for a month and takes its card off Home.
+    private func notNowButton(_ kind: AmbientReminderKind) -> some View {
+        Button { putAway(kind) } label: {
+            Text(AmbientReminderCopy.notNow)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.reminder.\(kind.rawValue).notNow")
+    }
+
+    /// Hides `kind` for a month (the schedule's "Not now") and drops its card from today's list.
+    private func putAway(_ kind: AmbientReminderKind) {
+        var schedule = AmbientReminderMemory.schedule()
+        schedule.hide(kind, now: Date())
+        AmbientReminderMemory.save(schedule)
+        reminders.removeAll { $0.kind == kind }
+    }
+
+    /// The open button: the recipe, the calm tool on the pattern the card named, or the recipe book to
+    /// find a soup. Opening also puts the card away for the month — it did its job.
+    private func openReminder(_ reminder: AmbientReminder) {
+        switch reminder.subject {
+        case .recipe(let id, _):
+            if let recipe = store.recipes.first(where: { $0.id == id }) {
+                activeSheet = .editRecipe(recipe)
+            } else if let saved = store.savedRecipes.first(where: { $0.id == id }) {
+                activeSheet = .editSavedRecipe(saved)
+            } else {
+                activeSheet = .recipeBook
+            }
+        case .calm(let tool):
+            if let presetID = tool.breathingPresetID {
+                // The breathing screen opens on the pattern the card named (its own stored choice).
+                UserDefaults.standard.set(presetID, forKey: "fernlet.breathing.presetID")
+                activeSheet = .firstAid(.breathing)
+            } else {
+                activeSheet = .firstAid(.grounding)
+            }
+        case .season, .none:
+            activeSheet = .recipeBook
+        }
+        putAway(reminder.kind)
+    }
+
+    /// Today's reminders after the caps, from unsealed history only (CAP-2); none while the Gentle
+    /// reminders switch is off. Records what showed, so the monthly and daily caps hold.
+    private func chooseReminders(days: [String: FernletDay], hasForgottenMeals: Bool,
+                                 hasForgottenWorkout: Bool) -> [AmbientReminder] {
+        guard store.settings.gentleRemindersEnabled else { return [] }
+        let now = Date()
+        let history = AmbientHistory.gather(days: days, recipes: store.recipes + store.savedRecipes, now: now)
+        let found = AmbientReminderFinder.candidates(
+            history: history, calmFinishes: AmbientReminderMemory.calmFinishes(),
+            hasForgottenMeals: hasForgottenMeals, hasForgottenWorkout: hasForgottenWorkout,
+            now: now, southern: AmbientSeason.isSouthern(region: Locale.current.region?.identifier))
+        var schedule = AmbientReminderMemory.schedule()
+        let chosen = schedule.choose(from: found.map(\.kind), dayKey: store.todayKey, now: now)
+        AmbientReminderMemory.save(schedule)
+        return found.filter { chosen.contains($0.kind) }
+    }
+
 
     // MARK: - Weather-aware recovery
 

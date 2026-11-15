@@ -647,6 +647,10 @@ struct BreathingExerciseView: View {
             isFinished = true
         }
         onSessionComplete(start, Date())
+        // G8: the finish's date (and which pattern) on this iPhone only, for Home's "It's still here".
+        if let tool = AmbientCalmTool(breathingPresetID: preset.id) {
+            AmbientReminderMemory.recordCalmFinish(tool)
+        }
     }
 
     /// Ends the session early: no completion callback (no Health write, no achievement) —
