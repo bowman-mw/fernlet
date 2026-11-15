@@ -5,7 +5,7 @@ import WorldMapStore
 // Sprout's passport book's DEBUG screenshot hook (round 7, lane explore-ui, piece `book`):
 // `FERNLET_UI_TEST_PASSPORT_BOOK=<scene>` opens the book over Home once the launch settles, on an in-memory demo
 // passport (the mockup's sample traveller, Portland since August), never written anywhere. Scenes: `turn` (page 3
-// with the contents open), `sprout` and `sproutHome` (page 1; the place from `FERNLET_UI_TEST_PASSPORT_PLACE`), `world`, `stamps`, `stamps2`, `new` (the Sea of Japan landing on page 5), `index`,
+// with the contents open), `sprout` and `sproutHome` (page 1; the place from `FERNLET_UI_TEST_PASSPORT_PLACE`), `world`, `stamps`, `stamps2`, `new` (the Sea of Japan landing on page 4), `index`,
 // `continent` (North America A to Z), `fresh`, `full` (every stamp found), `decoy`, `flights` (the made-up flights'
 // Flights page, `UITestSupport+AirportFlights`), `flightsImport` (the import summary over it), `flightsWorld` (Your
 // world with their arcs), `flightsMany` (178 made-up flights' Flights page), `flightsManyYear` (their 2024 log), `flightsFew` (a short history's stubs), and the airports' `airportStamps`, `airportArt`, `airportIndex`, `airportNew` and
@@ -89,14 +89,14 @@ enum PassportBookDemoScenes {
         }
     }
 
-    /// The scene's page in the sample book (6 pages).
+    /// The scene's page in the sample book (5 pages: two stamp pages of ten).
     private static func page(of scene: String) -> Int {
         switch scene {
         case "sprout", "sproutHome": 1
         case "world": 2
-        case "stamps2": 4
-        case "index", "continent": 6
-        default: 3
+        case "stamps2": PassportBookModel.firstStampPage + 1
+        case "index", "continent": PassportBookModel(entries: sample).indexPage
+        default: PassportBookModel.firstStampPage
         }
     }
 

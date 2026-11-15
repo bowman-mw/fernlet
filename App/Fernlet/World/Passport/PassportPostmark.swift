@@ -44,6 +44,9 @@ struct PassportPostmark: View {
     let shape: PassportPostmarkShape
     /// The drawing's scale (1.25 in a continent's spread, 1.6 for its header, …).
     let scale: CGFloat
+    /// The turn in degrees in place of the stamp's own seeded tilt (a stamp page's hand placement turns the whole
+    /// stamp itself, so it passes 0), or nil for the seeded tilt.
+    var tilt: Double?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -59,7 +62,7 @@ struct PassportPostmark: View {
             }
         }
         .frame(width: size.width * scale, height: size.height * scale)
-        .rotationEffect(.degrees(Double(stamp.map { PassportStampSeed.tilt($0.key) } ?? 0)))
+        .rotationEffect(.degrees(tilt ?? Double(stamp.map { PassportStampSeed.tilt($0.key) } ?? 0)))
     }
 }
 

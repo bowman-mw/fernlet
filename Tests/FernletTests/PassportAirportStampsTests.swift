@@ -140,7 +140,7 @@ struct PassportAirportStampsTests {
     /// The Airports row lists each found airport A to Z with every page its trips are on (the home airport a page
     /// per trip); the Flights row counts every flight, gives the Flights page and the layovers.
     @Test func theIndexListsAirportsAndFlights() throws {
-        let fillers = (0 ..< 6).map { PassportStampEntry(kind: .sea, token: "Q\($0)", date: Self.day(9, 1 + $0)) }
+        let fillers = (0 ..< PassportStampEntry.perPage).map { PassportStampEntry(kind: .sea, token: "Q\($0)", date: Self.day(9, 1 + $0)) }
         let entries = fillers + [
             PassportStampEntry(kind: .airport, token: "PDX", date: Self.day(8, 14)),
             PassportStampEntry(kind: .airport, token: "PDX", date: Self.day(9, 28), trip: 2),

@@ -15,7 +15,7 @@ nonisolated enum PassportBookPage: Hashable, Sendable {
 }
 
 /// The book's pages, worked out from the stamps it holds (World-Passport-Spec §2, §6): page 1 Sprout, page 2 Your
-/// world, then the stamp pages, six stamps each in visit order (at least one: a fresh passport's page 3 says "No
+/// world, then the stamp pages, ten stamps each in visit order (at least one: a fresh passport's page 3 says "No
 /// stamps yet"), then the one Flights page when the book shows it (World-Airports-Spec §8: between the last stamp
 /// page and the index; none in a decoy), then the one Road trips page when the book shows it (World-RoadTrip-Spec
 /// PR 4: next to Flights; none in a decoy, the demo, or before a trip is over), then the index. A fresh passport has
@@ -27,7 +27,7 @@ nonisolated enum PassportBookPage: Hashable, Sendable {
 nonisolated struct PassportBookModel: Equatable, Sendable {
     /// The stamps in visit order.
     let ordered: [PassportStampEntry]
-    /// The stamp pages, six a page; empty for a fresh passport.
+    /// The stamp pages, ten a page; empty for a fresh passport.
     let stampPages: [[PassportStampEntry]]
     /// Each stamp's page number, by its identity (kind, token, trip).
     private let pageOfStamp: [PassportStampKey: Int]
