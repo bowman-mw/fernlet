@@ -90,12 +90,18 @@ public struct TierTwoMemoryStore: Sendable {
     ///
     /// Best-effort by design (see the type's failure policy): a skipped or failed write is audited and
     /// retried by the next save, and nothing here can fail the save that called it.
-    public func refresh(from days: [(String, FernletDay)], goals: [FitnessGoal]) {
+    ///
+    /// `travel` is the app's travel snapshot (``TierTwoTravel``), read by the Core Data path's
+    /// refresher from the app's ``TierTwoTravelHolder``. The repositories' own refreshes pass none: the
+    /// local-JSON repository is the legacy migration source only, and the map's vault the travel days
+    /// live in is the app's, which a repository never reaches.
+    public func refresh(from days: [(String, FernletDay)], goals: [FitnessGoal], travel: TierTwoTravel = .none) {
         guard case .records(let existing) = read() else {
             FernletAuditLog.log("tierTwo.refresh.skippedUnreadable")
             return
         }
-        let updated = TierTwoMemoryEngine.updateInferences(existing: existing, from: days, goals: goals)
+        let updated = TierTwoMemoryEngine.updateInferences(existing: existing, from: days, goals: goals,
+                                                           travel: travel)
         guard updated != existing else { return }
         if !write(updated) {
             FernletAuditLog.log("tierTwo.refresh.writeFailed", context: ["count": String(updated.count)])

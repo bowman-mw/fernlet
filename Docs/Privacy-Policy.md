@@ -110,6 +110,10 @@
      stretch they were there for, and the map's "never shared with friends" names that one exception.
      It is new data shared only after each person's own Join, which is the fresh, affirmative consent
      §13 asks for; nothing goes to the developer or a server.
+     And 2026-11-15 (travel-day memories, the owner's gist, drafted for their review): §6's "Airports and
+     flights" adds that Sprout's memory can note which city you travelled to, so the AI on your iPhone
+     can mention it — the city only, never the airport, times or where you were, and only while the AI
+     runs on the iPhone. It stays on the device like every sensitive memory (§2).
      Everything stays on the device; nothing new is sent to the developer and no promise is weakened
      under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
@@ -117,7 +121,7 @@
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** November 10, 2026
+**Effective date:** November 15, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -481,6 +485,7 @@ you look at your places.
 If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports and gate times; it doesn't keep the file and never contacts Flighty.
 If you turn on Flights from Calendar (iOS asks for full access to your calendar), Fernlet reads your calendar's events on this iPhone to find flights, keeping only each flight's date, airports and times, plus a scrambled tag so it won't add an event twice, and dropping booking codes, links and notes as it reads; it never opens a link or changes your calendar.
 It looks from two days back to 60 days ahead each time you open Fernlet, and once further back when you turn it on; the flights it finds draw your routes and fill the passport's Flights page, but never stamp an airport or uncover the map.
+Sprout's memory can note which city you travelled to, so the AI on your iPhone can mention it; only the city, never the airport, times or where you were.
 
 ## 7. Artificial intelligence
 

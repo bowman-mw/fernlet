@@ -2699,7 +2699,7 @@ struct WorkoutSuggestionSheet: View {
 
     /// The Travel-day reset (World-Airports-Spec §13.2, screen 32): its card, the reason line and "Lift instead,
     /// lighter". No context line, AI adjust or rework: the footer is unchanged, and nothing travel-related goes
-    /// to the AI.
+    /// to the AI from here (Tier-2 memory's travel note is the one road, `FernletStore+WorldTravelDay.swift`).
     private func travelPlanContent(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(dayPlan.sessions) { session in

@@ -182,6 +182,8 @@ struct PrivacyWipeCoverageTests {
         // The World map's sealed location history and both its keys (World build, 2026-10-23), and its
         // device-only settings (the bike-ride switch and its last motion check among them since round 7).
         "worldFog.clearAll",
+        // Tier-2's in-memory travel snapshot (2026-11-15): cities by day key, read from the vault above.
+        "tierTwoTravel.publish(.none)",
         "WorldMapPreferences.clearAll",
         // Advanced period tracking's device-only switch (World build, 2026-10-24).
         "CyclePreferences.clearAll",

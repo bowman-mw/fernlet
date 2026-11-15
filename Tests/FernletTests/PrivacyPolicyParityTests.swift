@@ -217,7 +217,10 @@ struct PrivacyPolicyParityTests {
         // exception to "never shared with friends".
         "the road you drove together and the photos you took on the trip",
         "Each person gets only the stretch they were there for",
-        "(apart from a road trip's road, below)"
+        "(apart from a road trip's road, below)",
+        // Travel-day memories (2026-11-15): the one travel fact that may reach the AI, a city, on the iPhone only.
+        "Sprout's memory can note which city you travelled to",
+        "only the city, never the airport, times or where you were"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

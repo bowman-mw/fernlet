@@ -11,8 +11,8 @@ import FernletDomainModel
 // MARK: - Tier Two Memory Engine
 
 /// Deterministic inference engine that derives Tier-2 behavioral memories — goal-behavior gaps,
-/// consistency profile, journal-avoidance patterns, and workout-mood correlation — from the
-/// rolling day window.
+/// consistency profile, journal-avoidance patterns, workout-mood correlation, and travel days — from
+/// the rolling day window.
 ///
 /// Runs from ``TierTwoMemoryStore/refresh(from:goals:)`` after every successful repository save,
 /// so inferences track the data with no AI involvement (Tier-2 memories are behavioral
@@ -25,18 +25,30 @@ import FernletDomainModel
 /// leaves its predecessor active, every branch's text is written to pass it (pinned by
 /// `MemoryStorageScreeningTests`). The texts reach the companion's prompt as "user pattern:" lines,
 /// so they describe what the days show and never judge the user. ``updateInferences(existing:from:goals:)``
-/// always ends with ``prune(_:)`` (5 per category / 20 total). Results persist as
+/// always ends with ``prune(_:)`` (5 per category / 25 total).
+///
+/// **Travel days** (G7 follow-on, owner decisions 2026-11-15) arrive as plain values
+/// (``TierTwoTravel``, built by the app from the map's vault and the passport), never from the map's
+/// store itself. They do two things: the `travel_days` record says a travel day happened (and names
+/// the city only while ``TierTwoTravel/namesCities`` holds — the AI that reads memory runs on this
+/// iPhone), and the goal gap's workout rate treats a travel day with no workout like a rest day,
+/// leaving it out of both sides of the rate. Results persist as
 /// `TierTwoMemoryRecord`s in the device-local ``TierTwoMemoryStore`` sidecar — never in the
 /// synced ``LocalFernletDatabase`` blob (owner decision 2026-09-23) — and reach the AI layer only
 /// through `MemoryAgent`'s filtered projection. Internal to `LocalPersistence`; a stateless
 /// namespace enum, nonisolated.
 enum TierTwoMemoryEngine {
 
-    /// Each category stores at most 5 records; total is capped at 20.
-    /// With 4 categories × 5 = 20, the per-category cap IS the global cap.
+    /// Each category stores at most 5 records; total is capped at 25.
+    /// With 5 categories × 5 = 25 (travel days joined the four on 2026-11-15), the per-category cap
+    /// IS the global cap; the global one stays as the backstop against a category added without it.
     private static let maxPerCategory = 5
     /// The global record ceiling enforced by ``prune(_:)`` after the per-category trim.
-    private static let maxTotal = 20
+    private static let maxTotal = 25
+    /// The trailing days the engine reads.
+    static let windowDays = 14
+    /// The travel-day category's frozen token.
+    static let travelCategory = "travel_days"
 
     /// Compares the new 14-day window against existing records and appends a record per category
     /// only when that category's behavioral state has actually changed.
@@ -46,22 +58,26 @@ enum TierTwoMemoryEngine {
     ///   - days: `(dateKey, day)` pairs, oldest-first; only the trailing 14 are considered, and
     ///     fewer than 3 days short-circuits to a prune of the existing records.
     ///   - goals: The user's fitness goals; the first drives the goal-behavior-gap category.
+    ///   - travel: The travel days (``TierTwoTravel/none`` when there are none, in a decoy, or with
+    ///     "Airports and flights" off).
     /// - Returns: The pruned, updated record list to persist back into the device-local store.
     static func updateInferences(
         existing: [TierTwoMemoryRecord],
         from days: [(String, FernletDay)],
-        goals: [FitnessGoal]
+        goals: [FitnessGoal],
+        travel: TierTwoTravel = .none
     ) -> [TierTwoMemoryRecord] {
-        let window = Array(days.suffix(14))
+        let window = Array(days.suffix(windowDays))
         guard window.count >= 3 else { return prune(existing) }
 
         var updated = existing
 
         let candidates = [
-            goalBehaviorGap(window: window, goals: goals),
+            goalBehaviorGap(window: window, goals: goals, travel: travel),
             consistencyProfile(window: window),
             journalAvoidancePattern(window: window),
-            workoutMoodCorrelation(window: window)
+            workoutMoodCorrelation(window: window),
+            travelDays(window: window, travel: travel)
         ].compactMap { $0 }
 
         for new in candidates {
@@ -82,6 +98,12 @@ enum TierTwoMemoryEngine {
                 }
             }
             updated.append(new)
+        }
+        // A travel note lasts only while a travel day is in the window and travel may be read (not in a
+        // decoy, nor with "Airports and flights" off): without a candidate, every travel record goes,
+        // superseded ones and their cities too, rather than lingering as history.
+        if !candidates.contains(where: { $0.category == travelCategory }) {
+            updated.removeAll { $0.category == travelCategory }
         }
 
         return prune(updated)
@@ -116,38 +138,62 @@ enum TierTwoMemoryEngine {
         let text: String
     }
 
+    /// The workout side of the goal gap's rates (owner 2026-11-15): a travel day with no workout is
+    /// treated gently, like a rest day, and leaves both the numerator and the denominator. A travel
+    /// day with a workout still counts on both sides.
+    private struct WorkoutCount {
+        /// Days with a workout.
+        let days: Int
+        /// The days the rate is read over: the window less the workout-less travel days.
+        let of: Int
+        /// The workout-less travel days left out.
+        let travelLeftOut: Int
+
+        /// `days / of`; the caller guarantees `of > 0`.
+        var rate: Double { Double(days) / Double(of) }
+
+        /// The rate's evidence, e.g. "4/11 workout days (3 travel days left out)".
+        func evidence(_ noun: String) -> String {
+            let base = "\(days)/\(of) \(noun)"
+            guard travelLeftOut > 0 else { return base }
+            return base + " (\(travelLeftOut) travel day\(travelLeftOut == 1 ? "" : "s") left out)"
+        }
+    }
+
     /// Infers whether logged behavior (workout/meal/journal/sleep rates) matches the primary
     /// stated goal, producing an aligned/partial/misaligned-style state per goal type. Returns
     /// nil when the user has no goals, or when the window is too short for the rates to mean
-    /// anything (the caller's `>= 3` bound, restated locally so it travels with the function).
+    /// anything (the caller's `>= 3` bound, restated locally so it travels with the function; a
+    /// workout-reading family also needs 3 days once the workout-less travel days are left out).
     private static func goalBehaviorGap(
         window: [(String, FernletDay)],
-        goals: [FitnessGoal]
+        goals: [FitnessGoal],
+        travel: TierTwoTravel
     ) -> TierTwoMemoryRecord? {
         guard let primary = goals.first else { return nil }
         let n = window.count
         guard n >= 3 else { return nil }
         let workoutDays = window.filter { !$0.1.workouts.isEmpty }.count
+        let leftOut = window.filter { $0.1.workouts.isEmpty && travel.days[$0.0] != nil }.count
+        let workouts = WorkoutCount(days: workoutDays, of: n - leftOut, travelLeftOut: leftOut)
+        guard primary.type == .mentalHealth || workouts.of >= 3 else { return nil }
         let mealDays = window.filter { !$0.1.meals.isEmpty }.count
         let journalDays = window.filter { !$0.1.journals.isEmpty }.count
-        let workoutRate = Double(workoutDays) / Double(n)
         let mealRate = Double(mealDays) / Double(n)
         let journalRate = Double(journalDays) / Double(n)
 
         let verdict: GapVerdict
         switch primary.type {
         case .strength, .sportsPrep, .bodybuilding:
-            verdict = strengthVerdict(workoutDays: workoutDays, n: n, workoutRate: workoutRate)
+            verdict = strengthVerdict(workouts: workouts)
         case .weightManagement:
-            verdict = weightManagementVerdict(mealDays: mealDays, workoutDays: workoutDays, n: n,
-                                              mealRate: mealRate, workoutRate: workoutRate)
+            verdict = weightManagementVerdict(mealDays: mealDays, n: n, mealRate: mealRate, workouts: workouts)
         case .mentalHealth:
             verdict = mentalHealthVerdict(journalDays: journalDays, n: n, journalRate: journalRate)
         case .recovery:
-            verdict = recoveryVerdict(window: window, workoutDays: workoutDays, n: n, workoutRate: workoutRate)
+            verdict = recoveryVerdict(window: window, n: n, workouts: workouts)
         case .wellness, .exploring:
-            verdict = wellnessVerdict(mealDays: mealDays, workoutDays: workoutDays, n: n,
-                                      mealRate: mealRate, workoutRate: workoutRate)
+            verdict = wellnessVerdict(mealDays: mealDays, n: n, mealRate: mealRate, workouts: workouts)
         }
 
         return TierTwoMemoryRecord(
@@ -161,8 +207,9 @@ enum TierTwoMemoryEngine {
     }
 
     /// Strength / sports-prep: adherence read purely from the workout rate.
-    private static func strengthVerdict(workoutDays: Int, n: Int, workoutRate: Double) -> GapVerdict {
-        let evidence = "\(workoutDays)/\(n) days with workouts"
+    private static func strengthVerdict(workouts: WorkoutCount) -> GapVerdict {
+        let evidence = workouts.evidence("days with workouts")
+        let workoutRate = workouts.rate
         if workoutRate < 0.2 {
             return GapVerdict(state: "misaligned", confidence: "high", evidence: evidence,
                               text: "Has stated strength goals; workouts have been rare in the data window, a quieter stretch for training.")
@@ -177,9 +224,10 @@ enum TierTwoMemoryEngine {
 
     /// Weight management: meal logging first, then whether exercise accompanies it.
     private static func weightManagementVerdict(
-        mealDays: Int, workoutDays: Int, n: Int, mealRate: Double, workoutRate: Double
+        mealDays: Int, n: Int, mealRate: Double, workouts: WorkoutCount
     ) -> GapVerdict {
-        let evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
+        let evidence = "\(mealDays)/\(n) meal days, " + workouts.evidence("workout days")
+        let workoutRate = workouts.rate
         if mealRate < 0.3 {
             return GapVerdict(state: "misaligned", confidence: "high", evidence: evidence,
                               text: "States weight management goals; meals have been logged on only a few days in the data window.")
@@ -205,10 +253,11 @@ enum TierTwoMemoryEngine {
 
     /// Recovery: sleep logging weighed against training volume.
     private static func recoveryVerdict(
-        window: [(String, FernletDay)], workoutDays: Int, n: Int, workoutRate: Double
+        window: [(String, FernletDay)], n: Int, workouts: WorkoutCount
     ) -> GapVerdict {
         let sleepDays = window.filter { $0.1.sleep != nil }.count
-        let evidence = "\(sleepDays)/\(n) sleep logged, \(workoutDays)/\(n) workout days"
+        let evidence = "\(sleepDays)/\(n) sleep logged, " + workouts.evidence("workout days")
+        let workoutRate = workouts.rate
         let sleepRate = Double(sleepDays) / Double(n)
         if sleepRate < 0.3 && workoutRate > 0.5 {
             return GapVerdict(state: "misaligned", confidence: "medium", evidence: evidence,
@@ -224,9 +273,10 @@ enum TierTwoMemoryEngine {
 
     /// Wellness / exploring: engagement across any domain at all.
     private static func wellnessVerdict(
-        mealDays: Int, workoutDays: Int, n: Int, mealRate: Double, workoutRate: Double
+        mealDays: Int, n: Int, mealRate: Double, workouts: WorkoutCount
     ) -> GapVerdict {
-        let evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
+        let evidence = "\(mealDays)/\(n) meal days, " + workouts.evidence("workout days")
+        let workoutRate = workouts.rate
         if mealRate < 0.2 && workoutRate < 0.2 {
             return GapVerdict(state: "passive_wellness", confidence: "high", evidence: evidence,
                               text: "General wellness goal stated but almost no tracking across any domain; app engagement is minimal.")
@@ -367,5 +417,94 @@ enum TierTwoMemoryEngine {
             confidence: confidence,
             dataWindowDays: window.count
         )
+    }
+
+    // MARK: Travel Days
+
+    /// The English weekday names, Sunday first (Gregorian `weekday` 1...7). Tier-2 text is English
+    /// like the rest of the engine's, whatever the interface language.
+    private static let weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    /// The longest city name a line carries (a bound on text that came from the airport list).
+    private static let maxCityLength = 60
+
+    /// Notes that travel days fell inside the window (owner decisions 2026-11-15, lines verbatim):
+    /// one day reads A1, two or more read A2 with the count and the window's real length, and a
+    /// workout logged on a travel day appends A3. The city line (B) joins only while
+    /// ``TierTwoTravel/namesCities`` holds and a city is known, and only when the whole text still
+    /// passes the diagnostic screen; otherwise the record is written without it. Nil with no travel
+    /// day in the window.
+    ///
+    /// The window's days run from its oldest row's key to its newest; a travel day inside that span
+    /// counts even when it has no row of its own (nothing was logged that day). The state carries
+    /// the count, the A3 flag and the city line, so a change to any of them supersedes the record;
+    /// with no travel day left, ``updateInferences(existing:from:goals:travel:)`` removes the
+    /// category's records.
+    private static func travelDays(window: [(String, FernletDay)], travel: TierTwoTravel) -> TierTwoMemoryRecord? {
+        guard let oldest = window.first?.0, let newest = window.last?.0, !travel.days.isEmpty else { return nil }
+        let keys = travel.days.keys.filter { $0 >= oldest && $0 <= newest }.sorted()
+        guard !keys.isEmpty else { return nil }
+        let windowLength = window.count
+        let count = min(keys.count, windowLength)
+        let trainedKeys = Set(window.filter { !$0.1.workouts.isEmpty }.map(\.0))
+        let movedOnTravelDay = keys.contains { trainedKeys.contains($0) }
+
+        var text = count == 1
+            ? "Had a travel day recently; movement eased off around it, as expected on a travel day."
+            : "Travelled on \(count) of the last \(windowLength) days; training was lighter around those days, which is normal for travel."
+        if movedOnTravelDay { text += " Still fit in some movement on a travel day." }
+        var state = (count == 1 ? "one_day" : "days_\(count)") + (movedOnTravelDay ? "_moved" : "")
+        if travel.namesCities, let line = cityLine(keys: keys, days: travel.days),
+           !DiagnosticLanguage.contains(text + " " + line) {
+            text += " " + line
+            state += "|" + line
+        }
+        return TierTwoMemoryRecord(
+            category: travelCategory,
+            text: text,
+            state: state,
+            evidence: "\(count)/\(windowLength) travel days, \(keys.filter { trainedKeys.contains($0) }.count) with workouts",
+            confidence: "medium",
+            dataWindowDays: windowLength
+        )
+    }
+
+    /// The city line (B): "Flew to Denver and back this fortnight." when a flight to a city is
+    /// followed inside the window by one leaving it, else "Flew to Denver on Saturday." for the newest
+    /// flight with a known city. Nil when no travel day knows a city (or its key is malformed). `keys` is sorted, oldest first,
+    /// and bounded by ``TierTwoTravel/maxDays``.
+    static func cityLine(keys: [String], days: [String: TierTwoTravelDay]) -> String? {
+        let named = keys.compactMap { key in days[key]?.toCity.flatMap(cleanCity).map { (key, $0) } }
+        guard let newest = named.last else { return nil }
+        // Bounded: at most `TierTwoTravel.maxDays` keys on either side.
+        for (key, city) in named.reversed() {
+            let back = keys.contains { later in
+                later > key && days[later]?.fromCity.flatMap(cleanCity) == city
+            }
+            if back { return "Flew to \(city) and back this fortnight." }
+        }
+        guard let weekday = weekdayName(dayKey: newest.0) else { return nil }
+        return "Flew to \(newest.1) on \(weekday)."
+    }
+
+    /// A city name trimmed and bounded, or nil when empty.
+    private static func cleanCity(_ raw: String) -> String? {
+        let city = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !city.isEmpty else { return nil }
+        return String(city.prefix(maxCityLength))
+    }
+
+    /// The English weekday of a `yyyy-MM-dd` day key, read in UTC from the key's own date (the key is
+    /// already the person's local date), or nil for a malformed key.
+    static func weekdayName(dayKey: String) -> String? {
+        let parts = dayKey.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        guard let utc = TimeZone(identifier: "UTC") else { return nil }
+        calendar.timeZone = utc
+        let components = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        guard components.isValidDate(in: calendar), let date = calendar.date(from: components) else { return nil }
+        let weekday = calendar.component(.weekday, from: date)
+        guard (1...7).contains(weekday) else { return nil }
+        return weekdayNames[weekday - 1]
     }
 }
