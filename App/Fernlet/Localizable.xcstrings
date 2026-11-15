@@ -70243,19 +70243,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Each home and your hotel uncovers the map for 1 km around it and stays encrypted on this iPhone only. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back."
+            "value" : "Each home uncovers the map for 1 km around it and your hotel for 500 m; each stays encrypted on this iPhone only. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cada casa y tu hotel descubren el mapa 1 km a su alrededor y quedan cifrados solo en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
+            "state" : "needs_review",
+            "value" : "Cada casa descubre el mapa 1 km a su alrededor y tu hotel, 500 m; quedan cifrados solo en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cada casa y tu hotel descubren el mapa 1 km a su alrededor y quedan cifrados solo en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
+            "state" : "needs_review",
+            "value" : "Cada casa descubre el mapa 1 km a su alrededor y tu hotel, 500 m; quedan cifrados solo en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
           }
         }
       }
@@ -93804,19 +93804,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Your hotel stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it until you check out or get home."
+            "value" : "Your hotel stays encrypted on this iPhone only. Fernlet uncovers the map for 500 m around it until you check out or get home."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu hotel queda cifrado solo en este iPhone. Fernlet descubre el mapa 1 km a su alrededor hasta que dejes el hotel o vuelvas a casa."
+            "state" : "needs_review",
+            "value" : "Tu hotel queda cifrado solo en este iPhone. Fernlet descubre el mapa 500 m a su alrededor hasta que dejes el hotel o vuelvas a casa."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu hotel queda cifrado solo en este iPhone. Fernlet descubre el mapa 1 km a su alrededor hasta que dejes el hotel o vuelvas a casa."
+            "state" : "needs_review",
+            "value" : "Tu hotel queda cifrado solo en este iPhone. Fernlet descubre el mapa 500 m a su alrededor hasta que dejes el hotel o vuelvas a casa."
           }
         }
       }
@@ -97367,6 +97367,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Solo tuyas · 10 al día · aparecen esta noche"
+          }
+        }
+      }
+    },
+    "worldQuickStart.checkIn" : {
+      "comment" : "World Home quick start after a drive ended at a hotel: checks in there; the hotel's name as Apple Maps gives it, e.g. 'Check in at The Ace Hotel' (Spanish: Registrarse en …)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Check in at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrarse en %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hacer check-in en %@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.checkIn.detail" : {
+      "comment" : "World Home quick start after a drive ended at a hotel: under 'Check in at …'; the hotel is kept on this iPhone only and uncovers the map around it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Encrypted on this iPhone only · uncovers the map around it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cifrado solo en este iPhone · descubre el mapa a su alrededor"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cifrado solo en este iPhone · descubre el mapa a su alrededor"
           }
         }
       }

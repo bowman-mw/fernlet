@@ -165,6 +165,9 @@ final class WorldLocationSource: NSObject {
     let flights = WorldFlightKeeper()
     /// The connected car (owner 2026-11-09, car signals): CarPlay or a car the car book knows, read with every reading.
     let cars = WorldCarKeeper()
+    /// The hotel check-in offer (owner 2026-11-15): told when a drive starts and ends, and fed every reading after
+    /// ``onFix``, so the offer goes once the person leaves.
+    let hotelOffers = WorldHotelOfferKeeper()
 
     /// How long a hint (Driving Focus on, the Start a drive action) primes a drive's start.
     nonisolated static let hintLife: TimeInterval = 30 * 60
@@ -259,6 +262,7 @@ final class WorldLocationSource: NSObject {
             self?.riding.driving = driving
             if driving { self?.startTrace(.drive) } else { self?.endTrace(.drive) }
             self?.applyPace()
+            self?.hotelDrivingChanged(driving)
         }
         rides.onCyclingChanged = { [weak self] cycling in
             self?.riding.cycling = cycling
@@ -267,6 +271,19 @@ final class WorldLocationSource: NSObject {
         }
         rides.carLinked = cars.isLinked
         cars.onLinkChanged = { [weak self] linked in self?.carLinkChanged(linked) }
+    }
+
+    /// A drive started or ended, for the hotel check-in offer: a start drops any offer; an end on foot or parked
+    /// (never one a flight or a bike ride ended) looks round the latest reading.
+    private func hotelDrivingChanged(_ driving: Bool) {
+        guard !driving else {
+            hotelOffers.driveStarted()
+            return
+        }
+        switch rides.lastDriveEnd {
+        case .onFoot, .parked: hotelOffers.driveEnded(at: latest?.point)
+        case .cycling, .flight, nil: hotelOffers.clear()
+        }
     }
 
     /// A car connected or went (CarPlay, or a car the car book knows): car detection hears it, and a car connecting
@@ -714,6 +731,7 @@ final class WorldLocationSource: NSObject {
         stamped.atLandedAirport = flights.layoverAirport != nil
         latest = stamped
         onFix?(stamped)
+        hotelOffers.noteReading(stamped.point)
         cars.noteReading(stamped, mode: rides.mode)
         guard lowPower, trace == nil else { return }
         armFence(at: stamped)

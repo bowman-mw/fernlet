@@ -104,11 +104,11 @@ extension FernletStore {
     }
 
     /// The cells drawn uncovered around the homes, the hotel and the kept places (round 6): 1 km round a
-    /// home or the hotel, about 300 m round a place to eat or train. Drawn only, never written into the fog.
+    /// home, 500 m round the hotel, about 300 m round a place to eat or train. Drawn only, never written into the fog.
     func worldUncoveredCells(markers: [WorldMapMarker]) -> Set<HexCell> {
         guard !duressSessionActive else { return [] }
         var cells = Set<HexCell>()
-        for base in worldHomes.bases { cells.formUnion(MercatorHexGrid.disc(around: base.point, radius: HomeBook.uncoverRadius)) }
+        for base in worldHomes.bases { cells.formUnion(MercatorHexGrid.disc(around: base.point, radius: base.uncoverRadius)) }
         for marker in markers { cells.formUnion(MercatorHexGrid.disc(around: marker.point, radius: WorldMapMarker.uncoverRadius)) }
         return cells
     }

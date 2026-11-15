@@ -125,7 +125,7 @@ struct WorldWidgetMapCanvas: View {
         let radius = Double(min(size.width, size.height)) * 0.44 * WorldWidgetMap.metresPerPoint
         let opening = Set(MercatorHexGrid.disc(around: viewport.center, radius: radius))
         var uncovered = Set<HexCell>()
-        for home in content.homes { uncovered.formUnion(MercatorHexGrid.disc(around: home.point, radius: HomeBook.uncoverRadius)) }
+        for home in content.homes { uncovered.formUnion(MercatorHexGrid.disc(around: home.point, radius: home.uncoverRadius)) }
         for place in content.places { uncovered.formUnion(MercatorHexGrid.disc(around: place.point, radius: WorldMapMarker.uncoverRadius)) }
         return NatureFogClearing(lifted: opening, uncovered: uncovered)
     }

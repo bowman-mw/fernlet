@@ -281,3 +281,131 @@ struct WorldPlacesRound6Tests {
         #expect(WorldPlacesCopy.outAndAbout(9 * 3_600 + 40 * 60, style: .abbreviated).hasPrefix("Out and about 9"))
     }
 }
+
+// MARK: Hotel check-in (owner, 2026-11-15)
+
+/// Apple Maps' answer as a test sets it, with what each lookup asked for.
+@MainActor
+private final class FakeNearbyFinder: WorldNearbyFinding {
+    /// What the next lookup returns (nil: no answer).
+    var answer: [WorldNearbyPlace]? = []
+    /// Each lookup's point, radius and kinds, in order.
+    private(set) var asked: [(point: GeoPoint, radius: Double, categories: [WorldNearbyCategory])] = []
+
+    func places(around point: GeoPoint, radius: Double, categories: [WorldNearbyCategory]) async -> [WorldNearbyPlace]? {
+        asked.append((point, radius, categories))
+        return answer
+    }
+}
+
+extension WorldPlacesRound6Tests {
+    /// The hotel's circle is half a home's across (500 m against 1 km), wherever bases uncover the map.
+    @Test func theHotelUncoversHalfAHomesCircle() {
+        #expect(HomeBook.hotelUncoverRadius == HomeBook.uncoverRadius / 2 && HomeBook.hotelUncoverRadius == 500)
+        #expect(HomePlace(kind: .home, label: "Home", point: Self.home).uncoverRadius == 1_000)
+        let hotel = HomePlace(kind: .hotel, label: "Ace", point: Self.home)
+        #expect(hotel.uncoverRadius == 500)
+        let disc = MercatorHexGrid.disc(around: Self.home, radius: hotel.uncoverRadius)
+        let far = disc.map { MercatorHexGrid.centreGeo(of: $0).distance(to: Self.home) }.max() ?? 0
+        #expect(far > 450 && far <= 500)
+        #expect(disc.count < MercatorHexGrid.disc(around: Self.home, radius: HomeBook.uncoverRadius).count / 3)
+    }
+
+    /// A drive's end looks once for hotels within 150 m, sending only the point and the hotel kind; the nearest one
+    /// near enough is offered, a farther one is not, and the gate saying no asks nothing at all.
+    @Test func aDriveEndAsksOnceForAHotelNearby() async {
+        let keeper = WorldHotelOfferKeeper()
+        let finder = FakeNearbyFinder()
+        keeper.finder = finder
+        let end = Self.cafe
+        finder.answer = [WorldNearbyPlace(category: .hotel, name: "Far Inn", point: end.offset(east: 400, north: 0)),
+                         WorldNearbyPlace(category: .hotel, name: "The Ace", point: end.offset(east: 60, north: 0)),
+                         WorldNearbyPlace(category: .hotel, name: "Next Door", point: end.offset(east: 120, north: 0))]
+        keeper.driveEnded(at: end)
+        await keeper.lookup?.value
+        #expect(finder.asked.isEmpty && keeper.offer == nil, "the gate starts closed")
+
+        keeper.mayLook = { _ in true }
+        keeper.driveEnded(at: end)
+        await keeper.lookup?.value
+        #expect(finder.asked.count == 1 && finder.asked.first?.radius == HomeBook.sameHotelRadius)
+        #expect(finder.asked.first?.categories == [.hotel] && finder.asked.first?.point == end)
+        #expect(keeper.offer == WorldHotelOffer(name: "The Ace", point: end.offset(east: 60, north: 0)))
+
+        finder.answer = [WorldNearbyPlace(category: .hotel, name: "Far Inn", point: end.offset(east: 400, north: 0))]
+        keeper.driveEnded(at: end)
+        await keeper.lookup?.value
+        #expect(keeper.offer == nil, "nothing within 150 m")
+        finder.answer = nil
+        keeper.driveEnded(at: end)
+        await keeper.lookup?.value
+        #expect(keeper.offer == nil && finder.asked.count == 3, "no answer, no offer")
+    }
+
+    /// The offer stays while the person is at the hotel or where they parked, and goes once a reading is more than
+    /// 120 m from both, or a new drive starts.
+    @Test func theOfferGoesOnceThePersonLeaves() async {
+        let keeper = WorldHotelOfferKeeper()
+        let finder = FakeNearbyFinder()
+        keeper.finder = finder
+        keeper.mayLook = { _ in true }
+        let end = Self.cafe
+        let ace = end.offset(east: 100, north: 0)
+        finder.answer = [WorldNearbyPlace(category: .hotel, name: "The Ace", point: ace)]
+        keeper.driveEnded(at: end)
+        await keeper.lookup?.value
+        keeper.noteReading(end.offset(east: 0, north: 50))
+        keeper.noteReading(ace.offset(east: 80, north: 0))
+        #expect(keeper.offer?.name == "The Ace", "still at the car park or the hotel")
+        keeper.noteReading(end.offset(east: -300, north: 0))
+        #expect(keeper.offer == nil)
+
+        keeper.driveEnded(at: end)
+        await keeper.lookup?.value
+        #expect(keeper.offer != nil)
+        keeper.driveStarted()
+        #expect(keeper.offer == nil, "a new drive drops it")
+    }
+
+    /// The location source tells the keeper: a drive ended parked looks round the latest reading.
+    @Test func theLocationSourceLooksWhenADriveEnds() async {
+        let source = WorldLocationSource()
+        let finder = FakeNearbyFinder()
+        source.hotelOffers.finder = finder
+        source.hotelOffers.mayLook = { _ in true }
+        let start = Self.now
+        source.hintDrive(true, now: start)
+        for step in 0...2 {
+            source.deliver(WorldFix(point: Self.cafe.offset(east: Double(step) * 60, north: 0), accuracy: 8,
+                                    at: start.addingTimeInterval(Double(step) * 5), isPrecise: true, speed: 12))
+        }
+        #expect(source.rides.isDriving)
+        let parked = Self.cafe.offset(east: 120, north: 0)
+        finder.answer = [WorldNearbyPlace(category: .hotel, name: "The Ace", point: parked.offset(east: 30, north: 0))]
+        source.hintDrive(false, now: start.addingTimeInterval(60))
+        #expect(!source.rides.isDriving)
+        await source.hotelOffers.lookup?.value
+        #expect(finder.asked.first?.point == parked && source.hotelOffers.offer?.name == "The Ace")
+    }
+
+    /// The blue button: after a drive ends at a hotel, "Check in at The Ace" leads, then the walk; a home or the
+    /// current hotel wins, and the word beside the button names the hotel.
+    @Test func theBlueButtonOffersTheCheckIn() throws {
+        var context = WorldQuickStartContext()
+        context.canWalk = true
+        context.hotelOffer = "The Ace"
+        let card = try #require(WorldQuickStart.card(for: context))
+        #expect(card.heading == .hotel("The Ace") && card.options == [.checkIn(hotel: "The Ace"), .walkTogether])
+        #expect(card.checkInHotel == "The Ace")
+        #expect(WorldQuickStartCopy.title(.checkIn(hotel: "The Ace")) == "Check in at The Ace")
+        #expect(WorldQuickStartCopy.detail(.checkIn(hotel: "The Ace")) == "Encrypted on this iPhone only · uncovers the map around it")
+        #expect(WorldQuickStartLabel.buttonName(for: .walk, trip: WorldQuickStartCopy.checkIn(at: "The Ace"))
+                == "Quick start, Check in at The Ace")
+        var atHome = context
+        atHome.base = WorldQuickStartContext.Base(name: "Home", isHotel: false)
+        #expect(WorldQuickStart.card(for: atHome)?.checkInHotel == nil)
+        var decoy = context
+        decoy.isDecoy = true
+        #expect(WorldQuickStart.card(for: decoy)?.checkInHotel == nil)
+    }
+}

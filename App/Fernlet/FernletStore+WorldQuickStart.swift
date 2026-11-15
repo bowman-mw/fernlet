@@ -42,6 +42,8 @@ extension FernletStore {
         // At a home or the hotel (`ref-home-blue`): the base is cheap, for the icon too; the home's space
         // reads the pins, so only the card does.
         context.base = worldQuickStartBase(at: worldLocation.latest)
+        // A drive just ended at a hotel (owner 2026-11-15): "Check in at the Ace" (`FernletStore+WorldHotelOffer`).
+        context.hotelOffer = context.base == nil ? worldHotelOffer?.name : nil
         if includingPlans, context.base?.isHotel == false {
             context.homeSpace = worldHomeSpace(at: worldLocation.latest, standingAt: context.space?.id)
         }

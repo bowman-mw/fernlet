@@ -154,6 +154,8 @@ nonisolated enum WorldQuickStartCopy {
         case .roomWorkout:
             return String(localized: "worldQuickStart.roomWorkout", defaultValue: "Suggest a room workout",
                           comment: "World Home quick start at a hotel: Move's workout suggestion with no equipment, for the hotel room")
+        case .checkIn(let hotel):
+            return checkIn(at: hotel)
         }
     }
 
@@ -217,6 +219,19 @@ nonisolated enum WorldQuickStartCopy {
                                    comment: "World Home quick start at a hotel on a resting day: under 'Suggest a room workout'")
                 : String(localized: "worldQuickStart.roomWorkout.detail", defaultValue: "No equipment · nothing to set up",
                          comment: "World Home quick start at a hotel: under 'Suggest a room workout'; the workout needs no equipment and no workout space")
+        case .checkIn: return checkInDetail
         }
+    }
+
+    /// The line under "Check in at the Ace".
+    static var checkInDetail: String {
+        String(localized: "worldQuickStart.checkIn.detail", defaultValue: "Encrypted on this iPhone only · uncovers the map around it",
+               comment: "World Home quick start after a drive ended at a hotel: under 'Check in at …'; the hotel is kept on this iPhone only and uncovers the map around it")
+    }
+
+    /// "Check in at the Ace": the blue button's check-in row, and the word that slides out beside the button.
+    static func checkIn(at hotel: String) -> String {
+        String(localized: "worldQuickStart.checkIn", defaultValue: "Check in at \(hotel)",
+               comment: "World Home quick start after a drive ended at a hotel: checks in there; the hotel's name as Apple Maps gives it, e.g. 'Check in at The Ace Hotel' (Spanish: Registrarse en …)")
     }
 }
