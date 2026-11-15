@@ -22,6 +22,9 @@ struct WebImportEstimateNote: View {
     var uncountedLines: Int?
     /// Lines the estimate weighed by a USDA typical size; nil or 0 shows nothing.
     var estimatedLines: Int?
+    /// A recipe's own lines saved with no nutrition (``RecipeNutritionGaps``, owner decision
+    /// 2026-11-15: a pasted line nothing matched); nil or 0 shows nothing.
+    var linesWithoutNutrition: Int? = nil
 
     var body: some View {
         if let uncountedLines, uncountedLines > 0 {
@@ -37,6 +40,13 @@ struct WebImportEstimateNote: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("recipe.webImport.typicalSizeIngredients")
+        }
+        if let linesWithoutNutrition, linesWithoutNutrition > 0 {
+            Text("Totals are low: no nutrition yet for ^[\(linesWithoutNutrition) ingredient](inflect: true).")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("recipe.linesWithoutNutrition")
         }
     }
 }

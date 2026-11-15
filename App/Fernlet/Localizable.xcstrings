@@ -34938,6 +34938,7 @@
       }
     },
     "Paste a recipe link or Fernlet recipe data." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -34949,6 +34950,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pega el enlace de una receta o datos de receta de Fernlet."
+          }
+        }
+      }
+    },
+    "Paste a recipe link, a recipe's text, or Fernlet recipe data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega el enlace de una receta, el texto de una receta o datos de receta de Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega el enlace de una receta, el texto de una receta o datos de receta de Fernlet."
           }
         }
       }
@@ -50728,6 +50745,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Total de hoy"
+          }
+        }
+      }
+    },
+    "Totals are low: no nutrition yet for ^[%lld ingredient](inflect: true)." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los totales se quedan cortos: aún no hay valores nutricionales para ^[%lld ingrediente](inflect: true)."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los totales se quedan cortos: todavía no hay valores nutricionales para ^[%lld ingrediente](inflect: true)."
           }
         }
       }
