@@ -22,6 +22,9 @@ extension FoodItem {
     }
 }
 
+/// Counts a recipe's lines that carry no nutrition yet, so its totals can say they are low: stored
+/// lines whose food is a zero-macro custom or shared-in ingredient, and editor rows that would save
+/// that way. Pure counting over what is already stored; nothing new is persisted or sent.
 public nonisolated enum RecipeNutritionGaps {
     /// Lines of `recipe` whose food is a custom ingredient with no nutrition. `foodItems` is the
     /// recipe's own foods (`FoodCatalog.items(forRecipe:)`).

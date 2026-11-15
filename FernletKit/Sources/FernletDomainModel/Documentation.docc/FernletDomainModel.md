@@ -397,6 +397,7 @@ spelling suggestion ("chobanni" → "chobani", "chickfila" → "chick fil a"), n
 - ``FoodSearchHistory``
 - ``FoodBrandLexicon``
 - ``CustomIngredientUpsert``
+- ``RecipeNutritionGaps``
 
 ### Food plausibility and completeness
 
