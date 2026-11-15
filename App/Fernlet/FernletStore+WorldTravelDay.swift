@@ -105,6 +105,11 @@ extension FernletStore {
             TravelDayFlight(departure: flight.departure, arrival: flight.arrival,
                             originZone: zone(flight.from), destinationZone: zone(flight.to))
         }
+        // DEBUG `FERNLET_UI_TEST_TRIP=today`: the scene's made-up flight to Honolulu makes today a travel day, so the
+        // Move card and sheet can be shot (a release build's hook is nil).
+        if let staged = UITestSupport.tripSceneToday(now: now) {
+            flights.append(TravelDayFlight(departure: staged.departure, arrival: nil, originZone: local, destinationZone: local))
+        }
         let keeper = worldLocation.flights
         if keeper.isFlying {
             flights.append(TravelDayFlight(departure: keeper.flightDeparted ?? now, arrival: nil,

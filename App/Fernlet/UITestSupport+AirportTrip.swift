@@ -12,7 +12,8 @@ extension UITestSupport {
     /// `ticket` opens Fernlet's ticket with "Lon" typed and its suggestions (screen 17); `calendarOffer` opens it empty,
     /// as the person would, with "Fill this in from Calendar?" while that switch is off; `pass` opens Sprout's
     /// boarding pass for PDX (screen 6); `today` stands in a calendar flight to Honolulu leaving in three hours, so
-    /// the blue button's "Trip to Honolulu" stays out and Sprout says its line (screen 29). Display only: no trip
+    /// the blue button's "Trip to Honolulu" stays out and Sprout says its line (screen 29), and today is a travel day
+    /// for the Move page's travel card and sheet (World-Airports-Spec §13). Display only: no trip
     /// starts, and nothing is written. Consumed by `WorldTripHomeDriver`, `WorldFlightKeeper` and the store.
     static var tripScene: String? {
         ProcessInfo.processInfo.environment["FERNLET_UI_TEST_TRIP"]
