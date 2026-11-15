@@ -1715,6 +1715,23 @@
         }
       }
     },
+    "The new tiles your drive uncovers, or Sprout when you're not driving." : {
+      "comment" : "The small drive widget's description in the widget gallery",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las casillas nuevas que descubre tu trayecto, o Sprout cuando no conduces."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las casillas nuevas que descubre tu trayecto, o Sprout cuando no manejas."
+          }
+        }
+      }
+    },
     "To Step or Not to Step" : {
       "comment" : "Silly stats stamp name, earned when steps reach one Hamlet; a play on Hamlet's famous line",
       "localizations" : {
@@ -1990,6 +2007,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu compañero, con la ropa que le pusiste, y cómo va su día."
+          }
+        }
+      }
+    },
+    "Your drive" : {
+      "comment" : "The small drive widget's name in the widget gallery (it also shows in CarPlay)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu trayecto"
           }
         }
       }
@@ -2738,6 +2772,198 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "widget.drive.last" : {
+      "comment" : "The drive widget, under the count for a drive that ended in the last three hours",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last drive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "último trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "último trayecto"
+          }
+        }
+      }
+    },
+    "widget.drive.plus" : {
+      "comment" : "The drive widget's big number: new map tiles the drive uncovered, with a plus sign",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+%lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+%lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+%lld"
+          }
+        }
+      }
+    },
+    "widget.drive.spoken" : {
+      "comment" : "The drive widget's VoiceOver label: the count, then this drive or last drive",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "widget.drive.spoken.one" : {
+      "comment" : "The drive widget's VoiceOver count: one new map tile",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 new tile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 casilla nueva"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 casilla nueva"
+          }
+        }
+      }
+    },
+    "widget.drive.spoken.other" : {
+      "comment" : "The drive widget's VoiceOver count: new map tiles (never one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld new tiles"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld casillas nuevas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld casillas nuevas"
+          }
+        }
+      }
+    },
+    "widget.drive.this" : {
+      "comment" : "The drive widget, under the count while the drive is under way",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "this drive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "este trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "este trayecto"
+          }
+        }
+      }
+    },
+    "widget.drive.tiles.one" : {
+      "comment" : "The drive widget, under its +1: one new map tile",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "new tile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "casilla nueva"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "casilla nueva"
+          }
+        }
+      }
+    },
+    "widget.drive.tiles.other" : {
+      "comment" : "The drive widget, under its big number: new map tiles (never one)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "new tiles"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "casillas nuevas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "casillas nuevas"
           }
         }
       }
