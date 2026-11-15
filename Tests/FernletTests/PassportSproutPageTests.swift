@@ -91,9 +91,10 @@ struct PassportSproutPageTests {
     @Test func aDecoyShowsAFreshPassport() {
         let decoy = Self.model(place: .home(name: "Home"), decoy: true)
         #expect(decoy.appearance == .standard)
-        #expect(decoy.slots.map(\.value) == [CompanionBodyStyle.circle.label, CompanionAccessory.sprout.label,
-                                             CompanionClothing.none.label, CompanionSideItem.none.label])
-        #expect(decoy.slots.map(\.isEmpty) == [false, false, true, true])
+        #expect(decoy.slots.map(\.value) == [CompanionBodyStyle.circle.label, CompanionHairStyle.none.label, CompanionEyes.round.label,
+                                             CompanionPattern.plain.label, CompanionAccessory.sprout.label, CompanionClothing.none.label,
+                                             CompanionSideItem.none.label, CompanionBackground.none.label])
+        #expect(decoy.slots.map(\.isEmpty) == [false, true, false, true, false, true, true, true])
         #expect(decoy.listed == 0 && decoy.coins == 0 && decoy.counts == .zero)
         #expect(decoy.friendShopMinutes == nil && decoy.place == .unknown)
         #expect(decoy.machineLines[1].hasPrefix("FRN<C000<K00<O00<S00<"))
@@ -134,8 +135,9 @@ struct PassportSproutPageTests {
     @Test func slotSummariesNameWhatIsWorn() {
         let dressed = Self.model().slots
         #expect(dressed.map(\.slot) == CustomizeSlot.allCases)
-        #expect(dressed.map(\.value) == [CompanionBodyStyle.pear.label, CompanionAccessory.flower.label,
-                                         CompanionClothing.scarf.label, CompanionSideItem.mug.label])
+        #expect(dressed.map(\.value) == [CompanionBodyStyle.pear.label, CompanionHairStyle.none.label, CompanionEyes.round.label,
+                                         CompanionPattern.plain.label, CompanionAccessory.flower.label, CompanionClothing.scarf.label,
+                                         CompanionSideItem.mug.label, CompanionBackground.none.label])
         let hat = CustomizationItem(name: "My hat", slot: .hat, texture: ItemGridTexture(cols: 1, rows: 1, palette: ["#000000"], pixels: [0]),
                                     designer: ItemDesigner(id: UUID()))
         let bare = CompanionAppearance(accessory: .none)

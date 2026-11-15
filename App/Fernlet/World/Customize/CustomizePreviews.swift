@@ -36,7 +36,8 @@ struct CustomizePreviewCard: View {
             FernletCard {
                 HStack(alignment: .bottom, spacing: 34) {
                     VStack(spacing: 6) {
-                        WorldCompanionCanvas(grid: grid, scale: Self.closeScale, footprint: .frame)
+                        closeUp(grid, scene: WorldCompanionSceneKind(store.settings.companionAppearance.background),
+                                light: WorldSceneLight(now.pose))
                         caption(Text("Close up"))
                     }
                     VStack(spacing: 6) {
@@ -51,6 +52,25 @@ struct CustomizePreviewCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenName ?? Text(verbatim: ""))
         .accessibilityHidden(spokenName == nil)
+    }
+
+    /// The companion up close, standing in the person's background scene when they picked one (G8): the
+    /// scene at the same five points a pixel, the frame standing on its ground.
+    @ViewBuilder
+    private func closeUp(_ grid: WorldCompanionGrid, scene: WorldCompanionSceneKind, light: WorldSceneLight) -> some View {
+        let canvas = WorldCompanionCanvas(grid: grid, scale: Self.closeScale, footprint: .frame)
+        if scene == .none {
+            canvas
+        } else {
+            let size = CGSize(width: CGFloat(WorldCompanionScene.width) * Self.closeScale,
+                              height: CGFloat(WorldCompanionScene.height) * Self.closeScale)
+            canvas
+                .padding(.bottom, CGFloat(WorldCompanionScene.height - WorldCompanionScene.frameOrigin.y - WorldCompanionGrid.frameHeight) * Self.closeScale)
+                .frame(width: size.width, height: size.height, alignment: .bottom)
+                .background(WorldCompanionSceneBackdrop(kind: scene, light: light))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(WorldPalette.ink, lineWidth: 2))
+        }
     }
 
     /// The pixel companion in the map's framed grey box, at the map's three points a pixel.

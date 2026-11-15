@@ -35,6 +35,13 @@ extension WidgetSnapshot.CompanionLook {
                   sideItemRaw: appearance.sideItem == .none ? nil : appearance.sideItem.rawValue,
                   sideItemColorHex: Self.hex(custom: appearance.sideItemCustomColorHex, slot: appearance.sideItemColor),
                   items: Self.itemArt(items))
+        // G8: each key stays nil on today's look, so such a look encodes exactly as before.
+        hairRaw = appearance.hairStyle == .none ? nil : appearance.hairStyle.rawValue
+        hairColorHex = appearance.hairStyle == .none ? nil : Self.normalizedHex(appearance.hairColorHex)
+        eyesRaw = appearance.eyeStyle == .round ? nil : appearance.eyeStyle.rawValue
+        eyeColorHex = appearance.eyeStyle.isLarge ? Self.normalizedHex(appearance.eyeColorHex) : nil
+        patternRaw = appearance.pattern == .plain ? nil : appearance.pattern.rawValue
+        backgroundRaw = appearance.background == .none ? nil : appearance.background.rawValue
     }
 
     /// The sleep cap as the map draws it: the clothing slot's colour, or the cap's night blue when the

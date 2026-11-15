@@ -27,6 +27,11 @@ extension WorldCompanionLook {
                   side: WorldCompanionSide(appearance.sideItem),
                   sideColor: named(appearance.sideItemCustomColorHex, appearance.sideItemColor) ?? Self.bark,
                   items: WorldItemBox.art(for: items))
+        hair = WorldCompanionHair(appearance.hairStyle)
+        hairColor = Self.value(appearance.hairColorHex) ?? Self.hairBrown
+        eyes = WorldCompanionEyes(appearance.eyeStyle)
+        eyeColor = Self.value(appearance.eyeColorHex) ?? WorldCompanionPainter.ink
+        pattern = WorldCompanionPattern(appearance.pattern)
     }
 
     /// The topper's colour for a resolved accessory colour: nil when it is the fern every slot starts
@@ -209,5 +214,64 @@ nonisolated enum WorldItemBox {
         let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         guard digits.count == 6 else { return nil }
         return UInt32(digits, radix: 16)
+    }
+}
+
+extension WorldCompanionHair {
+    /// The pixel hair for a hair style.
+    init(_ style: CompanionHairStyle) {
+        switch style {
+        case .none: self = .none
+        case .tuft: self = .tuft
+        case .fringe: self = .fringe
+        case .spiky: self = .spiky
+        case .bun: self = .bun
+        case .curly: self = .curly
+        case .long: self = .long
+        case .swoop: self = .swoop
+        }
+    }
+}
+
+extension WorldCompanionEyes {
+    /// The pixel eyes for an eye style.
+    init(_ style: CompanionEyes) {
+        switch style {
+        case .round: self = .round
+        case .dot: self = .dot
+        case .big: self = .big
+        case .button: self = .button
+        case .lashes: self = .lashes
+        case .wide: self = .wide
+        }
+    }
+}
+
+extension WorldCompanionPattern {
+    /// The pixel pattern for a body pattern.
+    init(_ pattern: CompanionPattern) {
+        switch pattern {
+        case .plain: self = .plain
+        case .freckles: self = .freckles
+        case .belly: self = .belly
+        case .stripes: self = .stripes
+        case .moss: self = .moss
+        }
+    }
+}
+
+extension WorldCompanionSceneKind {
+    /// The pixel scene for a background.
+    init(_ background: CompanionBackground) {
+        switch background {
+        case .none: self = .none
+        case .meadow: self = .meadow
+        case .forest: self = .forest
+        case .beach: self = .beach
+        case .night: self = .night
+        case .snow: self = .snow
+        case .room: self = .room
+        case .rain: self = .rain
+        }
     }
 }

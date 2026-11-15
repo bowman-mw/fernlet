@@ -64,11 +64,27 @@ enum WidgetFeelingFace {
                     || grid.color(x: x, y: y) == body.dark else { continue }
             grid.put(x, y, bare, as: .body)
         }
+        if look.eyes != .round { eraseStyledEyes(&grid, body: body, sick: sick, state: state, pose: pose) }
         let layout = WidgetCompanionFaceLayout(body: body, face: face)
         for cell in cells(for: emotion, layout: layout, mouth: layout.mouth - (sick ? 1 : 0)) {
             guard let bare = body.pixelColor(cell.x, cell.y, sick: sick),
                   grid.color(x: cell.x, y: cell.y) == bare else { continue }
             grid.put(cell.x, cell.y, cell.hex, as: cell.piece)
+        }
+    }
+
+    /// Clears eyes in a G8 style (any but round) back to bare body before a feeling draws its own: every
+    /// eye cell, and a tired day's lid on the eye rows, which the round face's cells don't reach.
+    private static func eraseStyledEyes(_ grid: inout WidgetCompanionGrid, body: WidgetCompanionBody, sick: Bool,
+                                        state: WidgetCompanionMood, pose: WidgetCompanionPose) {
+        let eye = WidgetCompanionFaceLayout(body: body, face: .state(state, pose: pose)).eye
+        for y in (eye - 1)...(eye + 1) {
+            for x in 4...15 {
+                let isEye = grid.piece(frameX: x + WidgetCompanionGrid.frameX, y: y + WidgetCompanionGrid.frameY) == .eye
+                let isLid = grid.color(x: x, y: y) == body.dark && !body.isOutline(x, y)
+                guard isEye || isLid, let bare = body.pixelColor(x, y, sick: sick) else { continue }
+                grid.put(x, y, bare, as: .body)
+            }
         }
     }
 

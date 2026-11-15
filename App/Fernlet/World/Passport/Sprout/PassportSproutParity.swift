@@ -24,7 +24,7 @@ nonisolated enum PassportSproutParity {
 
     /// Customize (`b2-customize` and its slot pages).
     static let customize: [Row] = [
-        Row(item: "Body, Accessory, Clothing, Side item", actions: CustomizeSlot.allCases.map { .slot($0) }),
+        Row(item: "Body, Hair, Eyes, Pattern, Accessory, Clothing, Side item, Background", actions: CustomizeSlot.allCases.map { .slot($0) }),
         Row(item: "Wardrobe", actions: [.wardrobe]),
         Row(item: "Creation Studio", actions: [.creationStudio]),
         Row(item: "App colors", actions: [.appColors]),
