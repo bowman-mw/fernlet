@@ -210,6 +210,7 @@ public enum PastedRecipeReader {
     /// ingredient; every other line after the first ingredient (or under a steps heading) is a step,
     /// and prose before it is the notes. Nil when no ingredient line is found.
     nonisolated public static func readLineByLine(_ text: String, languages: InputLanguages = .current) -> PastedRecipeDraft? {
+        /// Which part of the pasted recipe the reader is in: before any heading, under ingredients, or under steps.
         enum Section { case none, ingredients, steps }
         var section = Section.none
         var name = ""

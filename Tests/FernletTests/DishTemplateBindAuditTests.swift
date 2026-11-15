@@ -283,7 +283,7 @@ struct DishTemplateBindAuditTests {
         DishTemplateBindPin("bibimbap", "spinach cooked", "Spinach, cooked, boiled, drained, with salt", 867, .defensible),
         DishTemplateBindPin("pho", "rice noodle cooked", "Rice noodles, cooked", 120, .defensible),
         DishTemplateBindPin("pho", "raw beef round raw", "Beef, round, top round, boneless, choice, raw", 388, .defensible),
-        DishTemplateBindPin("pho", "broth beef ready to serve", "Soup, beef broth or bouillon canned, ready-to-serve", 297, .defensible),
+        DishTemplateBindPin("pho", "broth beef ready to serve", "Soup, beef broth or bouillon canned, ready-to-serve", 298, .defensible),
         DishTemplateBindPin("ramen", "egg noodles cooked", "Noodles, egg, enriched, cooked", 179, .defensible),
         DishTemplateBindPin("ramen", "cooked pork belly cooked", "Fully Cooked Pork Belly", 240, .defensible),
         DishTemplateBindPin("ramen", "egg whole cooked hard boiled", "Egg, whole, cooked, hard-boiled", 2050, .defensible),
