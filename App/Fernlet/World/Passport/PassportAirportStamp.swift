@@ -44,7 +44,7 @@ nonisolated enum PassportAirportStamp {
     /// The key the wear is seeded from: the token itself (the mockup's `PP.seedOf(a.code)`).
     static func wearKey(_ token: String) -> String { token }
 
-    /// Whether the airport has its own approved picture (Denver, LAX, Changi, JFK) in place of the jet.
+    /// Whether the airport has its own approved picture (``famous``) in place of the jet.
     static func hasOwnArt(_ token: String) -> Bool {
         famous[token.uppercased()] != nil
     }
@@ -107,8 +107,9 @@ nonisolated enum PassportAirportStamp {
     static let jetSide = ["k..............", "kk.............", "kkk............", "kkkkkkkkkkkkkk.",
                           ".kkkkkkkkkkkkkk", "......kkk......", ".....kkk......."]
 
-    /// The four approved famous airports' pictures, by IATA code: Denver's tent roof, the LAX Theme Building,
-    /// Singapore Changi's Jewel, JFK's TWA Flight Center.
+    /// The famous airports' approved pictures, by IATA code: the first four (Denver's tent roof, the LAX Theme
+    /// Building, Singapore Changi's Jewel, JFK's TWA Flight Center), then the owner's 2026-11-15 approvals on the stamp
+    /// art review page (all twelve candidates and Atlanta's Plane Train).
     static let famous: [String: [String]] = [
         "DEN": ["..k...k...k...k..", ".kkk.kkk.kkk.kkk.", "kk.kkk.kkk.kkk.kk", "k...............k",
                 "k.k.k.k.k.k.k.k.k", "k.k.k.k.k.k.k.k.k", "kkkkkkkkkkkkkkkkk"],
@@ -119,7 +120,33 @@ nonisolated enum PassportAirportStamp {
                 "k......k......k", "k.k....k....k.k", "k......k......k", "k...k..k..k...k", ".k....kkk....k.",
                 "..kkkkkkkkkkk.."],
         "JFK": ["k...............k", "kk.............kk", ".kkk.........kkk.", "..kkkkk...kkkkk..",
-                "...kkkkkkkkkkk...", "....kk.kkk.kk....", "....k..k.k..k....", "kkkkkkkkkkkkkkkkk"]
+                "...kkkkkkkkkkk...", "....kk.kkk.kk....", "....k..k.k..k....", "kkkkkkkkkkkkkkkkk"],
+        // Portland's carpet.
+        "PDX": ["k.k.k.k.k.k.k.k.k", "kkkkkkkkkkkkkkkkk", "k.......k.......k", "k.k...k...k...k.k", "k..k.k..k..k.k..k", "k...k...k...k...k", "k..k.k..k..k.k..k", "k.k...k...k...k.k", "k.......k.......k", "kkkkkkkkkkkkkkkkk", "k.k.k.k.k.k.k.k.k"],
+        // Dubai's Burj Khalifa over the concourse.
+        "DXB": ["........k........", "........k........", ".......kkk.......", ".......kkk.......", "......kk.kk......", "......kk.kk......", ".....kkk.kkk.....", "..kkkkkkkkkkkkk..", ".k.............k.", "k..k..k...k..k..k", "kkkkkkkkkkkkkkkkk"],
+        // Hong Kong's wave roof.
+        "HKG": [".kkk.kkk.kkk.kkk.", "k...k...k...k...k", "k...k...k...k...k", "kkkkkkkkkkkkkkkkk", "k.k.k.k.k.k.k.k.k", "k.k.k.k.k.k.k.k.k", "kkkkkkkkkkkkkkkkk"],
+        // Beijing Daxing's starfish.
+        "PKX": ["......kkk......", ".....k...k.....", "kkk..k...k..kkk", "k..kk.....kk..k", ".k...........k.", "..k...kkk...k..", "..k...k.k...k..", ".k...........k.", "k..kk.....kk..k", "kkk..k...k..kkk", "......kkk......"],
+        // Madrid T4's wavy roof.
+        "MAD": ["kk.....kkk.....kk", "..kkkkk...kkkkk..", ".................", "..k.....k.....k..", ".k.k...k.k...k.k.", "..k.....k.....k..", "..k.....k.....k..", "..k.....k.....k..", "kkkkkkkkkkkkkkkkk"],
+        // Dulles's swooping roof.
+        "IAD": ["k...............k", ".kk...........kk.", ".k.kk.......kk.k.", ".k...kkkkkkk...k.", ".k.k.k.k.k.k.k.k.", ".k.k.k.k.k.k.k.k.", "k...............k", "kkkkkkkkkkkkkkkkk"],
+        // Paris CDG T1's camembert.
+        "CDG": ["....kkkkkkk....", "..kk.......kk..", ".k.k.......k.k.", ".k..k.....k..k.", "k....k...k....k", "k.....k.k.....k", "k....k...k....k", ".k..k.....k..k.", ".k.k.......k.k.", "..kk.......kk..", "....kkkkkkk...."],
+        // Hamad's Lamp Bear.
+        "DOH": ["..kkkkkkk........", ".k.......k.......", ".k......kkk......", ".k.....kkkkk.....", ".k....kkkkkkk....", ".k.....kk.kk.....", ".k.....k.k.k.....", ".k....kkkkkkk....", ".k...kk.kkk.kk...", "kkk...kk...kk....", "kkk..kkkk.kkkk..."],
+        // Sydney's Opera House sails.
+        "SYD": [".....k...........", "....kk......k....", "...k.k.....kk....", "..k..k....k.k....", ".k...k..kk..k..k.", "k....k.k....k.kk.", "k....kk.....kkk.k", "kkkkkkkkkkkkkkkkk", ".k.k.k.k.k.k.k.k.", "kkkkkkkkkkkkkkkkk"],
+        // Istanbul's tulip tower.
+        "IST": ["......k.k......", ".....kk.kk.....", "....k.kkk.k....", "....k..k..k....", ".....kkkkk.....", "......kkk......", ".......k.......", "......kkk......", "......k.k......", "......k.k......", "kkkkkkkkkkkkkkk"],
+        // Incheon's hanok eaves.
+        "ICN": ["k...............k", ".kk...........kk.", "..kkkkkkkkkkkkk..", "...k.........k...", "..kkkkkkkkkkkkk..", "...k..k...k..k...", "...k..k...k..k...", "...k..k...k..k...", "kkkkkkkkkkkkkkkkk"],
+        // Haneda's torii.
+        "HND": ["kk.............kk", ".kkkkkkkkkkkkkkk.", "...k.........k...", "kkkkkkkkkkkkkkkkk", "...k.........k...", "...k.........k...", "...k.........k...", "...k.........k...", "..kkk.......kkk.."],
+        // Atlanta's Plane Train.
+        "ATL": ["..kkkkkkkkkkkkk..", ".k.............k.", "k..kk.kk.kk.kk..k", "k..kk.kk.kk.kk..k", "k...............k", "kkkkkkkkkkkkkkkkk", ".kkk.........kkk.", ".................", "kkkkkkkkkkkkkkkkk", ".k...k...k...k..."]
     ]
 }
 
