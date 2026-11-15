@@ -76,8 +76,15 @@ If the child recipe is gone, the line is still a valid food line (§6).
   recipe that uses it, nearest first (bounded, §4). Parent totals change on the next read with no
   other work, since they read the food.
 - **Meals are frozen**, as today: a meal logged yesterday keeps yesterday's numbers.
-- A child with a gap (an unmatched zero-nutrition line) passes "Totals are low" up to every parent
-  that uses it ("Dragonfruit sauce has a line with no nutrition").
+- Gaps (PR from branch claude/paste-sim-fixes, b0d85a02): `RecipeNutritionGaps.linesWithoutNutrition`
+  counts a recipe's own lines whose food is a `.manual` "custom ingredient"/"recipe ingredient" with no
+  macros, and `WebImportEstimateNote.linesWithoutNutrition` shows "Totals are low: no nutrition yet for
+  N ingredient(s)." A line bound to a recipe food (`source .recipe`) is never counted, so binding an
+  unmatched line to a new recipe clears its count with no change there; `rowsWithoutNutrition` already
+  skips a row with a `selectedFoodItemId`.
+- A child with its own gaps passes them up: the parent's count adds each child's
+  `linesWithoutNutrition` through the same bounded work list as §4 (depth ≤ 3), and the note names the
+  child ("Dragonfruit sauce has 1 ingredient with no nutrition yet").
 
 ## 4. Cycles and depth (Power of 10)
 
@@ -188,12 +195,14 @@ Micronutrients do not travel on any share today, nested or not.
 
 On a pasted row nothing matched ("Pick a food for “1 cup dragonfruit sauce”."):
 
-1. A **Make a recipe for it** button sits under the note.
+1. A **Make a recipe for it** button hangs off that note, which now sits above the unmatched row
+   (`RecipeIngredientRows`, `PastedRecipeSeed.RowNote.isUnmatched`, b0d85a02). Rows the reader marks
+   "Check" (including a match whose name adds a variety word, `nameAddsOnlyPreparation`) get no button.
 2. It opens a new recipe editor over the pasted one (the pasted draft stays unsaved underneath).
    Name = the line without its amount ("Dragonfruit sauce"), Servings 1, **Makes = the line's amount**
    ("1 cup"), no ingredients yet.
 3. **Save** saves the new recipe and binds the row to it with the line's amount, so "1 cup" = the
-   whole batch. The row's note clears; if it was the only gap, "Totals are low" clears too.
+   whole batch. The row's note clears, and the row no longer counts in "Totals are low" (§3).
 4. **Cancel** returns to the pasted recipe with the row unchanged.
 5. If a saved recipe already matches the line's name, the reader binds to it like a food and shows
    "Check this match", so the button is not needed.
