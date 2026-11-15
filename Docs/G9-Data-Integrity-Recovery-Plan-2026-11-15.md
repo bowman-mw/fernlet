@@ -104,7 +104,12 @@ tombstones) instead of being deleted.
 would be a write to a record it does not own). Tombstones are kept for good: each is an id and a
 date inside the day payload, bounded by the entries ever made, so there is no pruning code and no
 window after which a long-offline phone could bring an entry back. Delete Everything clears them
-with the rows. If the owner picks a window instead (S4 = A or B), a device prunes only its own
+with the rows. **Size:** a tombstone is the deleted entry's UUID and a date, about 70 bytes of
+JSON, keyed by that UUID inside the day row of the device that deleted it. It holds nothing of
+the entry itself (no name, no food, no text). One per entry ever deleted; deleting 3 entries a
+day for 10 years is about 11,000 tombstones, under 1 MB in total spread over 3,650 day rows
+(about 200 bytes a day). CloudKit's 1 MB record limit would take roughly 14,000 deletions in one
+day on one device. If the owner picks a window instead (S4 = A or B), a device prunes only its own
 row's tombstones older than the window, and a phone offline longer than that is the documented
 residual. Row count is days × phones, which is small.
 
@@ -115,7 +120,10 @@ row. It changes to "a day with at least one live entry".
 `SavedRecipeRecord` payloads gain `deletedAt`. Deleting writes `deletedAt` instead of deleting the
 row; custom-item readers already go through `CustomItemService.deduplicatedByID()` and now also
 drop soft-deleted ones (newest of `createdAt`/`deletedAt` wins), and `SavedRecipeService` gets
-the same filter. The tombstone follows S4 (kept for good under C). S3 = B does designs only and
+the same filter. **A soft-deleted row keeps only its id and `deletedAt`: the design or recipe
+content is erased from the payload at delete time,** so "deleted" still means the content is gone
+from the phone and iCloud (about 100 bytes left per deleted item). The same holds for
+`MemoryRecord` tombstones under M1 = A. The tombstone follows S4 (kept for good under C). S3 = B does designs only and
 leaves recipes as a follow-up.
 
 **Row format number (S5 = C).** Every synced row payload this PR writes carries
@@ -352,8 +360,10 @@ editor gets "Keep private". That moves it out of the synced blob into a new seal
 the journal). Private memories never sync, are excluded from the photo wall and Home, and are
 listed on the Core memory page only after the lock is open ("3 private memories — unlock to
 see"). Wipe-all and forget reach them (inside the sealed module, after unlock). Private memories
-are not in the sealed backup in this PR, so they are lost with the phone; the option text on the
-review page says so. The spec's
+**are included in the encrypted backup in this PR** (owner, 2026-11-15): they are exported and
+restored as their own sealed section following the journal's v2 pattern, under the journal backup
+switch (no new switch), so they survive a lost phone and reach another device through restore and
+through the recovery code. They still never sync as plain rows. The spec's
 AI-extracted, never-browsable Sensitive tier stays deferred (RemainingWork §8).
 
 **Core memories leave the blob (M1 = A)** — today a forget on phone A can be undone when phone B
@@ -376,14 +386,17 @@ The new file gets a wipe-boundary row and a `DataExportBuilder` entry.
 - Device-local: `tierTwoLearnFrom` date (wipe-boundary row).
 - M1 = A: new Core Data entity `MemoryRecord` (`idString`, `payloadData`, `updatedAt`); CloudKit
   production schema deploy (owner).
-- M6 = A: new sealed table in `PrivateStoreCore`'s model + purpose registry entry; the sealed
-  backup v2 envelope does **not** include private memories in this PR (a follow-up if wanted).
+- M6 = A: new sealed table in `PrivateStoreCore`'s model + purpose registry entry; private
+  memories join the sealed backup v2 export and restore in this PR (extend
+  `SealedBackupCoordinator`, the v2 engine and their golden tests; an older build restoring a
+  newer set must skip the section it does not know, not fail the restore).
 
 ### Tests (targeted suites)
 
 New `MemoryControlsTests` (userEdited survives summarizer + cap, wipe-all, switch off stops both
 writers, Tier-2 learn-from date), `MemoryForgetQueryTests` (sentence → query, keyword fallback,
-preview never deletes on its own), `PrivateMemoryRepositoryTests`, `MemoryRowMigrationTests`;
+preview never deletes on its own), `PrivateMemoryRepositoryTests`, `PrivateMemoryBackupTests` (export, restore, unknown-section
+skip), `MemoryRowMigrationTests`;
 extend `JournalMemoryCaptureTests`, `TierTwoDeviceLocalTests`, `DeleteAllDataTests`,
 `AIContextPayloadTests`, `S3BoundaryTests`, `PersistedSurfaceWipeBoundaryTests`,
 `LocalizationBoundaryTests`, `SettingsAppearanceUITests`.
@@ -392,6 +405,7 @@ extend `JournalMemoryCaptureTests`, `TierTwoDeviceLocalTests`, `DeleteAllDataTes
 
 Forget by sentence with AI on and off; switch off then write a journal entry (no new memory);
 Forget patterns then save a day (no patterns come back); Keep private then lock (row hidden);
+a private memory restores from the encrypted backup on a second device;
 forget on A stays forgotten on B; VoiceOver on the preview checklist.
 
 ---
@@ -411,7 +425,6 @@ All builds and tests run under `lockf -k ~/Library/Caches/heavy-job.lock`, targe
 
 - Split the aggregate `FernletDatabaseRecord` blob (settings etc.) into rows or per-field merge.
 - Saved recipes: soft delete like custom items (only if S3 = B; S3 = A does it in G9-1).
-- Sealed backup v2 for private memories.
 - The spec's AI-extracted Sensitive tier and its Memory Agent use.
 
 ## Owner calls
@@ -434,7 +447,7 @@ All builds and tests run under `lockf -k ~/Library/Caches/heavy-job.lock`, targe
 | M3 | Tier-2 wipe | A: wipe and learn only from days after today |
 | M4 | Natural-language forget | A: on-device AI reads only the sentence; checklist preview; keyword fallback (B: no-AI filters) |
 | M5 | Natural-language edit | A: not built; inline Edit stays |
-| M6 | Sensitive category | A: "Keep private" moves a memory into the sealed store (not in the backup yet) |
+| M6 | Sensitive category | A: "Keep private" moves a memory into the sealed store, included in the encrypted backup |
 
 R2 (construction) was an owner call until the 2026-11-15 review; it is now settled as design:
 a recovery key pair, escrow keys sealed to it with HPKE. Already answered on the page: R3–R6, all A.
