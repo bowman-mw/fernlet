@@ -148,7 +148,8 @@ enum WorldAtlasMapDemo {
     ]
 
     /// Atlanta and Pensacola found, with their airports, and a flight from Atlanta to each airport: the owner's
-    /// 2026-11-02 view of the map. Bounded: fixed lists.
+    /// 2026-11-02 view of the map. The last two (Jacksonville, Boston) are still to come, so they draw as planned
+    /// and stay out of the plate's count. Bounded: fixed lists.
     static func flightContent(atlas: WorldAtlas?, airports: WorldAirports?, shore: WorldShoreMask? = nil) -> WorldViewContent {
         let places = [GeoPoint(33.749, -84.388), GeoPoint(30.4213, -87.2169)]
         let cities = places.compactMap { atlas?.city(at: $0) }
@@ -157,15 +158,18 @@ enum WorldAtlasMapDemo {
             let unit = WebMercator.unit(airport.point)
             return WorldFlightAirportMark(code: airport.code, name: airport.code, mercator: CGPoint(x: unit.x, y: unit.y))
         }
+        let planned: Set<String> = ["JAX", "BOS"]
         let arcs = flightAirports.dropFirst().map { airport -> WorldFlightArc in
             WorldFlightArc(route: WorldFlightRoute("ATL", airport.code), from: "ATL", to: airport.code, fromName: "ATL",
                            toName: airport.code, flights: 1, allImported: false, kilometres: 0,
-                           path: WorldFlightArcs.mercatorPath(from: flightAirports[0].point, to: airport.point))
+                           path: WorldFlightArcs.mercatorPath(from: flightAirports[0].point, to: airport.point),
+                           isPlanned: planned.contains(airport.code))
         }
         let found = zip(flightAirports, marks).filter { $0.0.found }.map(\.1)
         let rings = zip(flightAirports, marks).filter { !$0.0.found }.map(\.1)
         let grounds = found.compactMap { airports?.airport(code: $0.code) }
-        let flights = WorldFlightMap(arcs: arcs, rings: rings, found: found, airportCount: found.count, flightCount: arcs.count,
+        let flights = WorldFlightMap(arcs: arcs, rings: rings, found: found, airportCount: found.count,
+                                     flightCount: arcs.filter { !$0.isPlanned }.count,
                                      grounds: grounds)
         return WorldViewContent(atlas: atlas, pins: cities.map { WorldViewCityPin(city: $0, name: WorldViewNames.city($0)) },
                                 cityCount: cities.count, countryCount: 1, liftedCells: cells, start: places.first, flights: flights,
