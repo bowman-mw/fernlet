@@ -169,6 +169,8 @@ extension SettingsSearchSynonyms {
                                       "después"],
         "Nearby recipe shares": ["compartir recetas en persona", "compartir recetas", "recetas", "recetas cerca",
                                  "amigos"],
+        "Show my name to everyone": ["mostrar mi nombre a todos", "nombre", "mi nombre", "mostrar nombre", "todos",
+                                     "desconocidos", "privacidad"],
         "Clothing shops with friends": ["tiendas de ropa con amigos", "ropa", "tienda", "tiendas", "diseños",
                                         "compartir ropa", "clóset", "amigos"],
         // Period-sensitive

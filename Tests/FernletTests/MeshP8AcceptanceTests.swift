@@ -209,11 +209,11 @@ enum MeshP8Acceptance {
         MeshContinuationOutcome(next: next, completion: completion, audit: audit)
     }
 
-    /// **The 23 cells of item 7's 6 × 10 product that present a card, by identity.**
+    /// **The 25 cells of item 7's 6 × 11 product that present a card, by identity.**
     ///
     /// Spelled as literal `"<state>+<audit token>"` keys — `"nothing"` for the tenth column, no
     /// token at all — rather than counted: a table that made one silent cell present and one
-    /// present cell silent keeps 23/37 and stays green against a count. The two spent claims
+    /// present cell silent keeps 25/41 and stays green against a count. The two spent claims
     /// present under every token they can carry (a state the token cannot contradict), and the
     /// terminal presents only the three endings a session that is over still owes the person.
     ///
@@ -228,6 +228,7 @@ enum MeshP8Acceptance {
             "refused+mesh.continuation.cancelled",
             "refused+mesh.continuation.completed",
             "refused+mesh.continuation.meshChanged",
+            "refused+mesh.continuation.rearmed",
             "refused+mesh.continuation.absorbed",
             "refused+nothing",
             "expired+mesh.continuation.registered",
@@ -238,6 +239,7 @@ enum MeshP8Acceptance {
             "expired+mesh.continuation.cancelled",
             "expired+mesh.continuation.completed",
             "expired+mesh.continuation.meshChanged",
+            "expired+mesh.continuation.rearmed",
             "expired+mesh.continuation.absorbed",
             "expired+nothing",
             "completed+mesh.continuation.refused",
@@ -680,26 +682,26 @@ struct MeshP8RaiseAndDisagreementAcceptanceTests {
 
 // MARK: - (d) The presentation table
 
-/// **Item 7: what a refusal, an expiry and a system end present.** The whole 6 × 10 product through
+/// **Item 7: what a refusal, an expiry and a system end present.** The whole 6 × 11 product through
 /// the shipped `card(state:lastAudit:)`, the projection rule that keeps an ending across the session
 /// end, and the slot decision's six rows.
 @MainActor
 @Suite(.serialized)
 struct MeshP8PresentationAcceptanceTests {
 
-    /// Every claim state against every token and against no token at all: the same 23 cells present
+    /// Every claim state against every token and against no token at all: the same 25 cells present
     /// a card — pinned by IDENTITY against ``MeshP8Acceptance/presentingCells()``, not by the count
-    /// a swapped pair would keep — 37 are silent, the three that present after the session ended
+    /// a swapped pair would keep — 41 are silent, the three that present after the session ended
     /// carry the past-tense fold, and every presented card has a kind whose accessibility identifier
     /// is its frozen token.
     @Test func theSixByTenProductDecidesAndEveryPresentedCellCarriesItsEnding() {
         let audits: [MeshContinuationAudit?] = MeshContinuationAudit.allCases.map { $0 } + [nil]
-        #expect(MeshContinuationAudit.allCases.count == 9 && audits.count == 10,
-                "nine tokens plus `nothing yet` — the table's second input, whole")
+        #expect(MeshContinuationAudit.allCases.count == 10 && audits.count == 11,
+                "ten tokens (the re-arm's, 2026-11-15, among them) plus `nothing yet` — the table's second input, whole")
         var present: [MeshContinuationCard] = []
         var presentKeys: Set<String> = []
         var silent = 0
-        // R2: bounded by the 6 × 10 product.
+        // R2: bounded by the 6 × 11 product.
         for state in MeshContinuationState.allCases {
             for audit in audits {
                 guard let card = MeshContinuationCardPresentation.card(state: state, lastAudit: audit) else {
@@ -714,10 +716,10 @@ struct MeshP8PresentationAcceptanceTests {
                         "the identifier is the kind's frozen token, which the UI suite matches on")
             }
         }
-        #expect(present.count == 23 && silent == 37, "23 present, 37 silent, over the 60-cell product")
+        #expect(present.count == 25 && silent == 41, "25 present, 41 silent, over the 66-cell product")
         let pinned = MeshP8Acceptance.presentingCells()
         #expect(presentKeys == pinned, """
-            a DIFFERENT 23 cells present than the ones this battery pins by identity — a count of 23 \
+            a DIFFERENT 25 cells present than the ones this battery pins by identity — a count of 25 \
             says nothing about which, and swapping one silent cell for one present cell keeps it:
             present but not pinned \(presentKeys.subtracting(pinned).sorted())
             pinned but silent \(pinned.subtracting(presentKeys).sorted())

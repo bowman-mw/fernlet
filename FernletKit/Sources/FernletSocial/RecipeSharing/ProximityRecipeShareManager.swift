@@ -156,7 +156,79 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         pairSession.onEvent = { [weak self] event in
             self?.recordDiagnostic(Self.diagnostic(for: event))
         }
+        pairSession.resolveFriendName = { [weak self] tags in
+            self?.friendName(matching: tags)
+        }
     }
+
+    // MARK: - Who sees your name (SEC-L29)
+
+    /// Whether the recipe radio shows this device's name to everyone nearby: the pair session's
+    /// account of the last ``applyNameDisclosure(toEveryone:friends:identity:at:)``. `false` by default.
+    public var advertisesNameToEveryone: Bool { pairSession.advertisesNameToEveryone }
+
+    /// The friend-tag tokens this epoch's kept friends may advertise, each to that friend's name, across
+    /// the epoch beside this one on either side (a friend's record lags by a rotation, and clocks skew).
+    @ObservationIgnored private var friendNamesByTag: [String: String] = [:]
+
+    /// The epoch the friend tags were last derived at.
+    @ObservationIgnored private(set) var nameDisclosureEpoch: UInt64?
+
+    /// Sets who sees this device's name on the recipe radio (SEC-L29, decided 2026-11-13 as option c),
+    /// and derives this epoch's friend tags.
+    ///
+    /// The radio never advertises the name unless `toEveryone` is set (Settings › Nearby friends,
+    /// off by default). It advertises instead one rotating tag per kept friend (at most
+    /// ``maxAdvertisedFriendTags``, most recently seen first), derived with
+    /// `IdentityService.recipeFriendTag(for:epoch:)`, so a kept friend's phone names this row from
+    /// its own records and a stranger's sees no name at all.
+    ///
+    /// - Parameters:
+    ///   - toEveryone: The person's "Show my name to everyone nearby" switch.
+    ///   - friends: The trust vault's records; only kept, unblocked friends with key material count.
+    ///   - identity: The identity the tags are derived under.
+    ///   - now: The instant whose presence epoch the tags are for.
+    public func applyNameDisclosure(
+        toEveryone: Bool,
+        friends: [ProximityTrustedPeerRecord],
+        identity: IdentityService,
+        at now: Date
+    ) {
+        let epoch = IdentityService.presenceEpoch(at: now)
+        // Presence's own eligibility rule, so the two radios agree on who a friend is.
+        let eligible = PresenceManager.eligibleFriends(in: friends)
+        var own: Set<String> = []
+        var names: [String: String] = [:]
+        for friend in eligible.prefix(Self.maxAdvertisedFriendTags) {
+            if let tag = try? identity.recipeFriendTag(for: friend.keyAgreementPublicKey, epoch: epoch) {
+                own.insert(tag.base64EncodedString())
+            }
+        }
+        for friend in eligible.prefix(Self.maxMatchedFriends) {
+            for candidate in [epoch &- 1, epoch, epoch &+ 1] {
+                if let tag = try? identity.recipeFriendTag(for: friend.keyAgreementPublicKey, epoch: candidate) {
+                    names[tag.base64EncodedString()] = friend.displayName
+                }
+            }
+        }
+        friendNamesByTag = names
+        nameDisclosureEpoch = epoch
+        pairSession.setNameDisclosure(toEveryone: toEveryone, friendTags: own)
+    }
+
+    /// The kept friend's name one of `tags` names, or nil. Ties (two friends matched by one record,
+    /// which only a collision could do) resolve to the alphabetically first name, so the answer is a
+    /// function of the record alone.
+    func friendName(matching tags: Set<String>) -> String? {
+        tags.sorted().compactMap { friendNamesByTag[$0] }.sorted().first
+    }
+
+    /// Friend tags the recipe record carries: ProximityKit's own cap on the pair record's tags.
+    nonisolated static let maxAdvertisedFriendTags = 24
+
+    /// Friends this device matches a browsed record against (Power of 10 rule 2: the derivation is
+    /// three HMACs a friend, so the roster this reads is bounded too).
+    nonisolated static let maxMatchedFriends = 256
 
     /// Delete-all seam (Docs/PrivacyWipeCoverage.md): the pair session's, which drops the last
     /// share's outcome and the live share's context, then clears its in-memory identity key cache;
@@ -165,16 +237,77 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         try pairSession.wipeIdentityForDeleteAll()
     }
 
-    /// Brings the recipe radio up (the pair session's `start()`).
+    /// Brings the recipe radio up (the pair session's `start()`), with this epoch's name disclosure
+    /// applied first, so the first record on the air is already the right one, and the epoch rotation
+    /// armed.
     public func start() {
+        refreshNameDisclosure()
         pairSession.start()
+        startNameDisclosureRotation()
     }
 
     /// Stands the recipe radio down (the pair session's `stop()`): a share still in flight is
     /// published as `interrupted` or `sendIncomplete`.
     public func stop() {
+        nameDisclosureRotationTask?.cancel()
+        nameDisclosureRotationTask = nil
         pairSession.stop()
     }
+
+    /// What ``refreshNameDisclosure(at:)`` reads: the person's switch, the trust vault and the identity
+    /// the tags are derived under. Set once by the host, capturing it weakly; nil leaves the record as
+    /// the pair session's default (no name, no tags).
+    public struct NameDisclosureInputs {
+        /// "Show my name to everyone nearby".
+        public let toEveryone: Bool
+        /// The trust vault's records.
+        public let friends: [ProximityTrustedPeerRecord]
+        /// The identity the tags are derived under.
+        public let identity: IdentityService
+
+        /// The inputs.
+        public init(toEveryone: Bool, friends: [ProximityTrustedPeerRecord], identity: IdentityService) {
+            self.toEveryone = toEveryone
+            self.friends = friends
+            self.identity = identity
+        }
+    }
+
+    /// The host's source of ``NameDisclosureInputs``.
+    @ObservationIgnored public var nameDisclosureInputs: (() -> NameDisclosureInputs?)?
+
+    /// The rotation loop's handle: one sleep to the next presence-epoch boundary, then a refresh.
+    @ObservationIgnored private var nameDisclosureRotationTask: Task<Void, Never>?
+
+    /// Re-reads ``nameDisclosureInputs`` and applies them: the host calls it when the switch or the
+    /// roster changes, and the radio's own start and epoch rotation call it.
+    public func refreshNameDisclosure(at now: Date = Date()) {
+        guard let inputs = nameDisclosureInputs?() else { return }
+        applyNameDisclosure(
+            toEveryone: inputs.toEveryone, friends: inputs.friends, identity: inputs.identity, at: now)
+    }
+
+    /// Arms the epoch rotation: each pass sleeps to the next 900 s boundary (at most
+    /// ``maxRotationStepSeconds``, so a coalesced timer is late by one step, not a whole epoch) and
+    /// re-derives the tags, which re-registers the radio under a fresh posture.
+    private func startNameDisclosureRotation() {
+        nameDisclosureRotationTask?.cancel()
+        nameDisclosureRotationTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                let now = Date().timeIntervalSince1970
+                let into = now.truncatingRemainder(dividingBy: IdentityService.presenceEpochSeconds)
+                let step = min(Self.maxRotationStepSeconds, max(1, IdentityService.presenceEpochSeconds - into + 0.5))
+                do { try await Task.sleep(for: .seconds(step)) } catch { return }
+                guard let self else { return }
+                if self.nameDisclosureEpoch != IdentityService.presenceEpoch(at: Date()) {
+                    self.refreshNameDisclosure()
+                }
+            }
+        }
+    }
+
+    /// The longest one rotation sleep runs: presence's own 30 s step.
+    nonisolated static let maxRotationStepSeconds: TimeInterval = 30
 
     /// Restarts the search (the pair session's `refreshDiscovery()`); refused visibly while paired.
     public func refreshDiscovery() {

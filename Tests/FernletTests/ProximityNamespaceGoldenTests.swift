@@ -298,6 +298,8 @@ struct ProximityNamespaceGoldenTests {
                                today: .text(fernletDerivation.meshSessionContextV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshRoutedStoreV1", frozen: "fernlet.mesh.routed-store.v1",
                                today: .text(fernletDerivation.meshRoutedStoreV1.rawValue)),
+            NamespaceGoldenRow(.label, derivation + "meshDialProofV1", frozen: "fernlet.mesh.dial-proof.v1",
+                               today: .text(fernletDerivation.meshDialProofV1.rawValue)),
             NamespaceGoldenRow(.label, aead + "proximityTransportV2", frozen: "fernlet.proximity.transport.aead.v2",
                                today: .text(fernletAEAD.proximityTransportV2.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshGroupKeyWrapV2", frozen: "fernlet.mesh.groupkey.wrap.aead.v2",
@@ -1186,6 +1188,7 @@ struct ProximityNamespaceGoldenTests {
             (derivation + "meshRoutedContentKeyWrapV1", KeyDerivation.meshRoutedContentKeyWrapV1),
             (derivation + "meshSessionContextV1", KeyDerivation.meshSessionContextV1),
             (derivation + "meshRoutedStoreV1", KeyDerivation.meshRoutedStoreV1),
+            (derivation + "meshDialProofV1", KeyDerivation.meshDialProofV1),
             (aead + "proximityTransportV2", AEAD.proximityTransportV2),
             (aead + "meshGroupKeyWrapV2", AEAD.meshGroupKeyWrapV2),
             (aead + "meshEncryptedMetadataV2", AEAD.meshEncryptedMetadataV2),
@@ -3993,7 +3996,8 @@ private enum ForeignAppNamespace {
             meshTLSExporterV1: "acme.mesh.tls-exporter.v1",
             meshRoutedContentKeyWrapV1: "acme.mesh.routed.content-key.v1",
             meshSessionContextV1: "acme.mesh.session-context.v1",
-            meshRoutedStoreV1: "acme.mesh.routed-store.v1"
+            meshRoutedStoreV1: "acme.mesh.routed-store.v1",
+            meshDialProofV1: "acme.mesh.dial-proof.v1"
         )
     }
 

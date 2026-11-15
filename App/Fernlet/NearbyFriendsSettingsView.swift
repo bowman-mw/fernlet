@@ -97,6 +97,15 @@ struct NearbyFriendsSettingsView: View {
                     set: { store.setAllowNearbyRecipeShares($0) }
                 )
             )
+            // SEC-L29 (owner 2026-11-13, option c): the recipe radio shows no name unless this is on.
+            consentRow(
+                "Show my name to everyone",
+                footnote: "When it's off, only your friends see your name before you share a recipe in person.",
+                isOn: Binding(
+                    get: { store.settings.advertiseNameToEveryoneNearby },
+                    set: { store.setAdvertiseNameToEveryoneNearby($0) }
+                )
+            )
             consentRow(
                 "Clothing shops",
                 footnote: "Friends can browse what you've designed.",

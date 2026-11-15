@@ -103,7 +103,8 @@ enum MeshContinuationProduct {
         case .sessionEnded:
             return row.state == .idle ? .idle : .completed
         case .appForegrounded:
-            return row.state == .running ? .requested : row.state
+            // A running task's glance and an expired claim's re-arm (owner, 2026-11-13) both ask again.
+            return row.state == .running || row.state == .expired ? .requested : row.state
         }
     }
 
@@ -160,7 +161,12 @@ enum MeshContinuationProduct {
         case .taskExpired: return pendingOrRunning(row.state) ? .expired : .absorbed
         case .taskCancelled: return pendingOrRunning(row.state) ? .cancelled : .absorbed
         case .sessionEnded: return endedIsAMove(row.state) ? .completed : .absorbed
-        case .appForegrounded: return row.state == .running ? .completed : .absorbed
+        case .appForegrounded:
+            switch row.state {
+            case .running: return .completed
+            case .expired: return .rearmed
+            case .idle, .requested, .refused, .completed: return .absorbed
+            }
         }
     }
 
@@ -248,7 +254,7 @@ enum MeshContinuationProduct {
         #expect(MeshContinuationEvent.allCases.count == 8,
                 "§14's six plus taskStarted and taskRefused, without which running and refused are unreachable")
         #expect(MeshContinuationCompletion.allCases.count == 2, "succeeded and failed")
-        #expect(MeshContinuationAudit.allCases.count == 9, "the eight named moves plus absorbed")
+        #expect(MeshContinuationAudit.allCases.count == 10, "the nine named moves plus absorbed")
         #expect(ProximityContinuationState.allCases.count == 4,
                 "not requested, running, refused, expired — a fifth fed case is a widening of the run policy too")
     }
@@ -395,8 +401,10 @@ enum MeshContinuationProduct {
         #expect(returned.feed == .notRequested, "and the run policy is told no task is running any more")
         let read = MeshContinuationCoordinator.transition(from: .refused, on: .appForegrounded)
         #expect(read.next == .refused, "a refused claim survives the foreground — the card is READ there")
-        let readExpired = MeshContinuationCoordinator.transition(from: .expired, on: .appForegrounded)
-        #expect(readExpired.next == .expired, "and so does an expired one")
+        let rearmed = MeshContinuationCoordinator.transition(from: .expired, on: .appForegrounded)
+        #expect(rearmed.next == .requested && rearmed.audit == .rearmed,
+                "an expired claim re-arms on the next return (owner, 2026-11-13), so one expiry does not leave the session foreground-only")
+        #expect(rearmed.completion == nil, "and completes nothing, because no task is in hand")
     }
 
     /// The fed value is a function of the state alone, and the three quiescent states feed exactly

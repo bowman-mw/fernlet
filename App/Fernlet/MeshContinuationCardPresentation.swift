@@ -195,7 +195,7 @@ nonisolated enum MeshContinuationCardPresentation {
             return previous
         case .completed where outcome.next == .completed:
             return previous
-        case .registered, .submitted, .started, .refused, .expired, .cancelled, .completed,
+        case .registered, .submitted, .started, .refused, .expired, .cancelled, .completed, .rearmed,
              .meshChanged:
             return outcome.audit
         }
@@ -272,7 +272,7 @@ nonisolated enum MeshContinuationCardPresentation {
         case .refused: return .refused
         case .expired: return .expired
         case .cancelled: return .endedBySystem
-        case .registered, .submitted, .started, .completed, .meshChanged, .absorbed, nil: return nil
+        case .registered, .submitted, .started, .completed, .meshChanged, .rearmed, .absorbed, nil: return nil
         }
     }
 

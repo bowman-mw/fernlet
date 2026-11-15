@@ -14,7 +14,7 @@
 //    with its door.
 // 2. **The radios.** The mesh, presence and recipe-share radios each refuse to start under an unsound
 //    namespace before they mint, listen or advertise, with `mesh.quic.namespaceUnsound`,
-//    `presence.quic.namespaceUnsound` and `recipe.quic.namespaceUnsound`.
+//    `presence.quic.namespaceUnsound` and `pair.quic.namespaceUnsound`.
 // 3. **The audit line.** It carries the door, the violation count and the first violation's case name,
 //    never a field path or a value; every violation case has a name, and the name is the case's own.
 // 4. **One namespace per manager.** The mesh, presence and recipe-share managers each construct over an
@@ -138,14 +138,14 @@ struct ProximityNamespaceGateTests {
 
     /// The recipe-share radio keeps its namespace's verdict and refuses to start under an unsound one:
     /// its start, reached here with no listener or browser, throws every violation and writes
-    /// `recipe.quic.namespaceUnsound` at `start`, and nothing else, before it mints a posture.
+    /// `pair.quic.namespaceUnsound` at `start`, and nothing else, before it mints a posture.
     @Test func theRecipeShareRadioRefusesToStartUnderAnUnsoundNamespace() {
         let unsound = GateFixtureApp.unsound()
         let radio = NetworkPairSession(namespace: unsound, profile: .recipeShare(in: unsound))
         defer { radio.stop() }
         #expect(radio.namespaceSoundness == .unsound(GateFixtureApp.unsoundViolations),
                 "the recipe-share radio keeps \(radio.namespaceSoundness), not its namespace's verdict")
-        Self.expectRefusal("recipe.quic.namespaceUnsound", at: "start") { try radio.runWithoutRadiosForTesting() }
+        Self.expectRefusal("pair.quic.namespaceUnsound", at: "start") { try radio.runWithoutRadiosForTesting() }
         #expect(!radio.isRunning, "the refused recipe-share radio reads as running")
         #expect(radio.advertisedSessionID.isEmpty, "the refused recipe-share radio minted a posture")
     }
@@ -978,7 +978,8 @@ private enum GateFixtureApp {
             meshTLSExporterV1: "gate.mesh.tls-exporter.v1",
             meshRoutedContentKeyWrapV1: "gate.mesh.routed.content-key.v1",
             meshSessionContextV1: "gate.mesh.session-context.v1",
-            meshRoutedStoreV1: "gate.mesh.routed-store.v1"
+            meshRoutedStoreV1: "gate.mesh.routed-store.v1",
+            meshDialProofV1: "gate.mesh.dial-proof.v1"
         )
     }
 

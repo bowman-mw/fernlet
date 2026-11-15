@@ -271,7 +271,7 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | ProximityKit's `Sources/ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
 | **Network.framework / QUIC** — **the friend mesh's transport**, since the cutover of 2026-09-21 (the factory it flipped left the tree with the MultipeerConnectivity radio on 2026-09-22; there is one radio now and nothing selects it); migrated per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | ProximityKit's `Sources/ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
 | **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | ProximityKit's `Sources/ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
-| **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift` | `_fernlet-recipe2._udp` |
+| **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held. Since ProximityKit 0.2.0 (SEC-L29, owner 2026-11-13) its TXT record carries **no display name** unless the person turns on Settings › Nearby friends › "Show my name to everyone" (off by default): kept friends are named from their own records by rotating pairwise tags (`recipeFriendTag`, never equal to presence's), and a stranger sees no name | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift` | `_fernlet-recipe2._udp` |
 | **Network.framework / QUIC** — **tap to connect** (World Friends, 2026-10-31): Home's tap rendezvous, ProximityKit's `ProximityTapRendezvous` on the recipe radio's pair row under its own TXT mode `tap`; listens only while Home is the front page of a foreground app with "Connect by tapping phones" on, never in the background, a decoy session, Low Power Mode or a hangout (`ProximityRunPolicy`'s `tapRendezvous` row) | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift`, driven by `Sources/ProximityKit/TapRendezvous/` | `_fernlet-recipe2._udp` (the pair row; no new type) |
 | **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
 
@@ -429,15 +429,18 @@ If the PR touches the allowlist, the reviewer's job is the `reason` string, not 
 
 A privacy claim that overstates itself is worse than none. Specifically:
 
-- **A hangout search still shows a dialer this phone's long-term signing key.** While the friend mesh
-  searches (the Album's Friends nearby page, or a tap's hand-off on Home), the side that dials sends its
-  channel hello, which carries its long-term signing key, to the advertisement it dialed, before it
-  knows who is behind it. The responder no longer answers a dialer it refuses, and the doors admit only
-  kept friends and tap matches, so nothing above the hello reaches anyone else; but a phone that
-  advertises the mesh's service type while the search is up can learn that key. The mesh's `sid` also
-  lasts the launch. Hiding the dialer's identity needs a friends-only pre-shared secret on the mesh hello
-  (as presence's tags are), which is not built. Meeting someone new does not use the mesh until both
-  people said yes.
+- **A hangout search no longer shows anyone this phone's long-term key (ProximityKit 0.2.0, owner
+  2026-11-15), but it still shows that a Fernlet is searching.** Before either side of a mesh tunnel
+  sends the hello that carries its long-term signing key, the dialer sends 24 short tags bound to that
+  one TLS connection, one for each kept friend or tap match it would accept (padded with random ones),
+  and the answering phone replies only if one of them is a pair key it shares; otherwise it closes the
+  tunnel having sent nothing, and the dialer sends its hello only after checking that reply. A phone
+  that advertises the mesh's service type therefore learns no key and nothing it can replay or link.
+  The mesh `sid` and the radio's Bonjour name and TLS identity now rotate at every search start and
+  every 15 minutes rather than lasting the launch. What remains: a nearby phone can see that a Fernlet
+  is advertising or dialing the mesh while a search is up (the service type is public), and, inside one
+  15-minute window, that it is the same one. Phones on ProximityKit 0.1.x and 0.2.0 do not meet on the
+  mesh. Design: `Docs/Mesh-Dialer-Privacy-Design.md`.
 
 - **This cannot stop a malicious fork.** Anyone can clone the repo, delete
   `NoTrackingBoundaryTests.swift`, and ship a build that phones home. The wall protects **this

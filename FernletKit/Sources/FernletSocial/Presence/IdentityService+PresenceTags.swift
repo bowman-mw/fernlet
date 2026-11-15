@@ -65,4 +65,17 @@ extension IdentityService {
         let mac = HMAC<SHA256>.authenticationCode(for: message, using: secret)
         return Data(Data(mac).prefix(Self.presenceTagByteCount))
     }
+
+    /// The rotating friend tag the RECIPE radio advertises in place of a name (SEC-L29, 2026-11-15):
+    /// `HMAC-SHA256("fernlet.recipe.friend.epoch.v1" ‖ epoch_be64, pairSecret)` truncated to
+    /// `presenceTagByteCount`, over the same pair secret as ``presenceTag(for:epoch:)`` but its own
+    /// label, so a scanner cannot join a recipe advertisement to a presence one by a shared token.
+    /// Mutual, per pair and per epoch for the same reasons the presence tag is.
+    public func recipeFriendTag(for friendKeyAgreementPublicKey: Data, epoch: UInt64) throws -> Data {
+        let secret = try presencePairSecret(with: friendKeyAgreementPublicKey)
+        var message = FernletCryptoPurpose.HMAC.recipeFriendEpochTagV1.data
+        message.append(contentsOf: TagCounterBytes.bigEndian(epoch))
+        let mac = HMAC<SHA256>.authenticationCode(for: message, using: secret)
+        return Data(Data(mac).prefix(Self.presenceTagByteCount))
+    }
 }
