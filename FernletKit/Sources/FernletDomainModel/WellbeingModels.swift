@@ -927,14 +927,25 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
 /// category is a frozen token (a `FeelingTag` raw value for journal memories), so an emotion-only
 /// memory's sentence is built at display time, never stored. `text` also holds whatever the user
 /// types in the memory editor.
+///
+/// `userEdited` (G9-3) is set by any save in the memory editor: the journal summarizer never fills
+/// an edited memory, and the 300-memory cap (``capped(_:to:)``) drops memories nobody edited first.
+/// It is written only when true, so a memory nobody edited encodes exactly as it did before G9-3,
+/// and a missing key reads as false.
 public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
     public var id = UUID()
     public var category: String
     public var text: String
     public var sourceDate = Date()
+    /// Whether the person has edited this memory in the memory editor.
+    public var userEdited = false
 
-    public init(id: UUID = UUID(), category: String, text: String, sourceDate: Date = Date()) {
+    /// The most Core memories kept; ``capped(_:to:)`` trims to it.
+    public static let maxStored = 300
+
+    public init(id: UUID = UUID(), category: String, text: String, sourceDate: Date = Date(), userEdited: Bool = false) {
         self.id = id; self.category = category; self.text = text; self.sourceDate = sourceDate
+        self.userEdited = userEdited
     }
 
     public init(from decoder: Decoder) throws {
@@ -943,6 +954,38 @@ public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
         category = try c.decode(String.self, forKey: .category)
         text = try c.decode(String.self, forKey: .text)
         sourceDate = try c.decodeIfPresent(Date.self, forKey: .sourceDate) ?? Date()
+        userEdited = try c.decodeIfPresent(Bool.self, forKey: .userEdited) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(category, forKey: .category)
+        try c.encode(text, forKey: .text)
+        try c.encode(sourceDate, forKey: .sourceDate)
+        // Only when true: an unedited memory keeps its pre-G9-3 bytes.
+        if userEdited { try c.encode(userEdited, forKey: .userEdited) }
+    }
+
+    /// The wire keys (frozen: they are the payload of a synced memory row and the local file).
+    private enum CodingKeys: String, CodingKey {
+        case id, category, text, sourceDate, userEdited
+    }
+
+    /// `memories` (oldest first) trimmed to `limit`: the oldest memories nobody edited go first, and
+    /// edited ones only once no unedited memory is left to drop. Order is kept.
+    public static func capped(_ memories: [MemoryNote], to limit: Int = maxStored) -> [MemoryNote] {
+        guard limit >= 0, memories.count > limit else { return memories }
+        var excess = memories.count - limit
+        var dropped: Set<Int> = []
+        // Two passes, each bounded by the array: unedited first, then edited.
+        for pass in [false, true] {
+            for (index, memory) in memories.enumerated() where excess > 0 && memory.userEdited == pass {
+                dropped.insert(index)
+                excess -= 1
+            }
+        }
+        return memories.enumerated().filter { !dropped.contains($0.offset) }.map(\.element)
     }
 }
 
