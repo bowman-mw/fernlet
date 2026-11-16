@@ -501,7 +501,9 @@ any food, always in servings (``RecipeFood/line(using:servings:id:)``), so nutri
 the wire and every older build read it unchanged, and no ``RecipeIngredient`` field is added.
 ``RecipeNestingGraph`` answers which recipes use which, without recursion: refusals for loops and for
 chains past ``RecipeNestingLimits/maxDepth`` (``RecipeNestingRefusal``), the order to refresh recipe foods
-after an edit, and the making order of sub-recipe steps.
+after an edit, and the making order of sub-recipe steps. The editor offers recipes through
+``RecipeIngredientChoices``; a line can be typed in servings, batches or the recipe's own "Makes" amount
+(``RecipeAmountUnit``, ``RecipeYield``), and is saved in servings either way.
 
 - ``RecipeDefinition``
 - ``RecipeIngredient``
@@ -509,6 +511,9 @@ after an edit, and the making order of sub-recipe steps.
 - ``RecipeNestingGraph``
 - ``RecipeNestingLimits``
 - ``RecipeNestingRefusal``
+- ``RecipeIngredientChoices``
+- ``RecipeYield``
+- ``RecipeAmountUnit``
 - ``RecipeStep``
 - ``RecipeStepSanitizer``
 - ``RecipeComponent``

@@ -1774,6 +1774,18 @@ public final class DiaryStore {
         batchSnapshotPersistence { foodItems = updated }
     }
 
+    /// Writes only a recipe's "Makes" amount (``RecipeDefinition/makes``), validated, and persists: the
+    /// editor saves it beside the rest of the recipe. A no-op when the recipe id is no longer in the book
+    /// or the amount is unchanged.
+    public func setRecipeMakes(_ makes: RecipeYield?, forRecipeID recipeID: UUID) {
+        guard let index = recipes.firstIndex(where: { $0.id == recipeID }),
+              recipes[index].makes != makes?.validated else { return }
+        batchSnapshotPersistence {
+            recipes[index].makes = makes?.validated
+            recipes[index].updatedAt = Date()
+        }
+    }
+
     /// The recipes in the book that use `id` as an ingredient, in book order: the "Used in" line on
     /// save and the delete confirmation.
     public func recipesUsing(_ id: UUID) -> [RecipeDefinition] {

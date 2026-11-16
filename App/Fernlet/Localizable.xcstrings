@@ -1005,6 +1005,23 @@
         }
       }
     },
+    "%@ · makes %@" : {
+      "comment" : "Under a saved recipe offered as an ingredient: its servings, then how much the whole recipe makes, e.g. '4 servings · makes 2 cups'",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · rinde %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · rinde %2$@"
+          }
+        }
+      }
+    },
     "%@ · step %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -4551,6 +4568,23 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld servings" : {
+      "comment" : "How many servings a saved recipe makes, under its name when it is offered as an ingredient of another recipe",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld raciones"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld porciones"
           }
         }
       }
@@ -8816,6 +8850,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Siempre. Bajo consumo, salvo al manejar o ir en bici."
+          }
+        }
+      }
+    },
+    "Amount" : {
+      "comment" : "Accessibility label of the amount field of the recipe editor's Makes field",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cantidad"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cantidad"
           }
         }
       }
@@ -22380,6 +22431,23 @@
         }
       }
     },
+    "From your recipes" : {
+      "comment" : "Button in the recipe editor that lists the person's saved recipes to add one as an ingredient; also that list's title",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De tus recetas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De tus recetas"
+          }
+        }
+      }
+    },
     "From, To" : {
       "comment" : "Airports: fields read from a Flighty file",
       "localizations" : {
@@ -24366,6 +24434,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Cuántas porciones?"
+          }
+        }
+      }
+    },
+    "How much the whole recipe makes, so other recipes can use it by the cup or gram." : {
+      "comment" : "Help under the recipe editor's Makes field",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuánto rinde la receta entera, para que otras recetas puedan usarla por tazas o gramos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuánto rinde la receta entera, para que otras recetas puedan usarla por tazas o gramos."
           }
         }
       }
@@ -28632,6 +28717,23 @@
         }
       }
     },
+    "Makes (optional)" : {
+      "comment" : "Field title under Servings in the recipe editor: how much the whole recipe makes, e.g. 2 cups",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rinde (opcional)"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rinde (opcional)"
+          }
+        }
+      }
+    },
     "Makes ^[%lld serving](inflect: true): P %lldg · C %lldg · F %lldg" : {
       "localizations" : {
         "en" : {
@@ -28672,6 +28774,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rinde ^[%1$lld porción](inflect: true): P %2$lld g · C %3$lld g · G %4$lld g · %5$lld kcal"
+          }
+        }
+      }
+    },
+    "Makes unit" : {
+      "comment" : "Accessibility label of the unit menu of the recipe editor's Makes field",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidad del rendimiento"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidad del rendimiento"
           }
         }
       }
@@ -31709,6 +31828,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sin prisa para empezar."
+          }
+        }
+      }
+    },
+    "No saved recipe can go in this one yet. A recipe can't use itself, a recipe that uses it, or a chain more than three recipes deep." : {
+      "comment" : "Shown in the From your recipes list when no saved recipe can be added to the recipe being edited",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía ninguna receta guardada puede ir en esta. Una receta no puede usarse a sí misma, ni una receta que la usa, ni una cadena de más de tres recetas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía ninguna receta guardada puede ir en esta. Una receta no puede usarse a sí misma, ni una receta que la usa, ni una cadena de más de tres recetas."
           }
         }
       }
@@ -42388,6 +42524,23 @@
         }
       }
     },
+    "Search your recipes" : {
+      "comment" : "Search field placeholder in the list of saved recipes to add as an ingredient",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busca en tus recetas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busca en tus recetas"
+          }
+        }
+      }
+    },
     "Seas" : {
       "comment" : "Sprout's passport index: the seas row",
       "localizations" : {
@@ -47846,6 +47999,23 @@
         }
       }
     },
+    "That's %@ servings of %@." : {
+      "comment" : "Under the amount of a recipe line that uses another saved recipe, typed in batches or cups: what it is in servings of that recipe",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son %1$@ raciones de %2$@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son %1$@ porciones de %2$@."
+          }
+        }
+      }
+    },
     "That's %@, and you never once saw the view." : {
       "comment" : "Silly stat: height climbed compared with a landmark",
       "localizations" : {
@@ -52417,6 +52587,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usar “%@”"
+          }
+        }
+      }
+    },
+    "Used in %@ and %lld more. They'll use the new version." : {
+      "comment" : "Note in the recipe editor on a recipe that other saved recipes use as an ingredient: the first one's name and how many more",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se usa en %1$@ y %2$lld más. Usarán la nueva versión."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se usa en %1$@ y %2$lld más. Usarán la nueva versión."
+          }
+        }
+      }
+    },
+    "Used in %@. It will use the new version." : {
+      "comment" : "Note in the recipe editor on a recipe that another saved recipe uses as an ingredient; the name is that recipe's",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se usa en %@. Usará la nueva versión."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se usa en %@. Usará la nueva versión."
           }
         }
       }
@@ -57470,6 +57674,7 @@
       }
     },
     "Your recipes" : {
+      "comment" : "Heading over the person's own saved recipes offered as an ingredient while typing in a recipe's ingredient search",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -59700,6 +59905,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet no pudo guardar ese alimento. Ponle un nombre e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "batches" : {
+      "comment" : "Unit choice for a line that uses another saved recipe: whole batches of that recipe",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tandas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tandas"
           }
         }
       }
@@ -85595,6 +85817,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mares, cada uno con su sello"
+          }
+        }
+      }
+    },
+    "servings" : {
+      "comment" : "Unit choice for a line that uses another saved recipe: servings of that recipe",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "raciones"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "porciones"
           }
         }
       }
