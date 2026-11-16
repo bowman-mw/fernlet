@@ -1476,6 +1476,28 @@ private final class SystemCloudKitAccountProvider: CloudKitAccountStatusProvidin
     }
 }
 
+/// Turns the per-record results of a `CKModifyRecordsOperation` into the one error its caller sees.
+///
+/// CloudKit's result-based modify API reports a record it refused only through the per-record
+/// block; the operation's own result is `.success` whenever the request as a whole ran. A save that
+/// read only the operation result therefore treated "every record rejected" as saved. This is the
+/// pure half the live database uses, so the rule is testable without CloudKit.
+enum CloudKitPerRecordFailures {
+    /// The first refusal among `errors` that the caller must see, or nil when every record landed.
+    ///
+    /// - Parameters:
+    ///   - errors: The per-record failures, in arrival order.
+    ///   - toleratingMissingRecords: True for deletes, where a record that is already gone
+    ///     (`CKError.unknownItem`) is the outcome asked for, not a failure.
+    /// - Returns: The error to throw, as CloudKit gave it (callers match `CKError` codes).
+    nonisolated static func firstRefusal(in errors: [any Error], toleratingMissingRecords: Bool) -> (any Error)? {
+        errors.first { error in
+            guard toleratingMissingRecords, let ckError = error as? CKError else { return true }
+            return ckError.code != .unknownItem
+        }
+    }
+}
+
 /// Production ``CloudKitRecordDatabase`` backed by a real `CKDatabase`.
 ///
 /// Wraps the callback-based CloudKit operations in checked continuations: queries follow
@@ -1549,10 +1571,20 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 let operation = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: batch)
                 operation.savePolicy = .changedKeys
+                // Per-record refusals arrive ONLY here: the operation's own result reports success
+                // when every record was individually rejected (see `CloudKitPerRecordFailures`).
+                var failures: [any Error] = []
+                operation.perRecordDeleteBlock = { _, result in
+                    if case .failure(let error) = result { failures.append(error) }
+                }
                 operation.modifyRecordsResultBlock = { result in
                     switch result {
                     case .success:
-                        continuation.resume()
+                        if let refused = CloudKitPerRecordFailures.firstRefusal(in: failures, toleratingMissingRecords: true) {
+                            continuation.resume(throwing: refused)
+                        } else {
+                            continuation.resume()
+                        }
                     case .failure(let error):
                         continuation.resume(throwing: error)
                     }
@@ -1567,10 +1599,22 @@ private final class SystemCloudKitRecordDatabase: CloudKitRecordDatabase {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
             operation.savePolicy = .allKeys
+            // Per-record refusals arrive ONLY here: the operation's own result reports success when
+            // every record was individually rejected, e.g. a record type the Production schema does
+            // not have yet. Unread, that made a refused save look saved (G9-2 field report,
+            // 2026-11-16: a recovery code was shown whose records never reached iCloud).
+            var failures: [any Error] = []
+            operation.perRecordSaveBlock = { _, result in
+                if case .failure(let error) = result { failures.append(error) }
+            }
             operation.modifyRecordsResultBlock = { result in
                 switch result {
                 case .success:
-                    continuation.resume()
+                    if let refused = CloudKitPerRecordFailures.firstRefusal(in: failures, toleratingMissingRecords: false) {
+                        continuation.resume(throwing: refused)
+                    } else {
+                        continuation.resume()
+                    }
                 case .failure(let error):
                     continuation.resume(throwing: error)
                 }
