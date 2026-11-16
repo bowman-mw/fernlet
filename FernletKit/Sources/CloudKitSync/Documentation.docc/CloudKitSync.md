@@ -18,7 +18,8 @@ sealed per-corpus manifest) — this module moves the bytes and never holds a ke
 
 The stack has three tiers. At the bottom, ``PersistenceController`` owns the
 `NSPersistentCloudKitContainer`, built from a **programmatic, cloud-safe-only model** (aggregate
-blob, saved recipes, custom items, coin and milestone ledgers, day rows — never a sealed entity).
+blob, saved recipes, custom items, coin and milestone ledgers, day rows, Core memories — never a
+sealed entity).
 CloudKit mirroring is opt-in twice: the stored preference must enable it *and* an iCloud account
 must be present, and the `shared` singleton forces sync off at cold launch until the app reloads
 with real preferences. Persistent history is always on (remote-change notifications need it), but
@@ -26,7 +27,7 @@ only a mirroring delegate ever consumes it — so a store loaded *without* Cloud
 history older than `PersistenceController.localOnlyHistoryRetention` (7 days) on every successful
 load, best-effort on a background context; a mirrored store is never pruned by the app. On top of it, ``CoreDataFernletRepository`` implements the app's
 `FernletRepository` contract by splitting state between a single aggregate blob record (settings,
-memories, recipes, derived tables) and the per-row `DayRecord` store — one CloudKit record per day,
+recipes, derived tables) and the per-row `DayRecord` store — one CloudKit record per day,
 which is what removed the old 370-day cap and lets different-day edits from different devices merge
 per record. One diary structure is deliberately in NEITHER: the Tier-2 behavioral memories (owner
 decision 2026-09-23, "Tier 2 sensitive notes shouldn't be backed up to iCloud at all") live in
@@ -72,6 +73,19 @@ that came back, and upserts skip tombstoned ids. Tombstones are kept for good (n
 `deleteAll()` removes them with everything else. A tombstone from a later build (higher `format`)
 is still honoured as a delete and never rewritten. Pre-G9 builds drop tombstone rows on read (their
 payload does not decode as an item; for recipes the `idString` is not a UUID and `name` is nil).
+``MemoryRecordRepository`` (G9-3, owner call M1 = A) gives Core memories (`MemoryNote`) the same
+soft delete, one `MemoryRecord` row per memory (`idString`, `payloadData`, `updatedAt`; the engine
+is told to sort and stamp by `updatedAt`). ``CoreDataFernletRepository`` writes the blob's `memories`
+EMPTY: a save upserts only the memories whose bytes changed and soft-deletes only the ids it KNOWS
+(served on a load or written this process) that the snapshot no longer holds, so a stale snapshot
+never deletes a memory another phone added after this phone's last load. Whenever a loaded blob still
+holds memories (the first launch after the update, or an older build writing its list back), they are
+copied into rows with `adoptMissing` (never over an existing row, never over a tombstone) and the blob
+is emptied only after the rows saved. `LocalFernletRepository` keeps memories in its file. The
+`MemoryRecord` entity needs the owner's CloudKit production schema deploy before a shipping build
+syncs it. The Tier-2 refresh reads the synced settings' "Let Fernlet remember" switch and learn-from
+date (`TierTwoLearning`, passed to ``CoreDataFernletRepository/tierTwoRefresher``), and
+`purgeTierTwoMemories()` deletes the device-local sidecar alone ("Forget patterns").
 Because CloudKit mirrors by record identity rather than by logical id, two devices can produce
 duplicate rows for one logical key. Days avoid the problem by construction since G9-1
 (Docs/G9-Data-Integrity-Recovery-Plan-2026-11-15.md, Part 1): each device writes ONLY its own
@@ -156,6 +170,7 @@ invalidation up to the store layer.
 - ``CustomItemRepository``
 - ``SavedRecipeRepository``
 - ``LegacySavedRecipeJSONRepository``
+- ``MemoryRecordRepository``
 
 ### Cloud data detection and deletion
 
