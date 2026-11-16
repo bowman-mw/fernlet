@@ -263,8 +263,10 @@ struct PrivacyDataSettingsView: View {
             // both overlays' own `.isModal` trait. Left in deliberately — belt-and-braces on the
             // one screen guarding a destructive, in-progress wipe — and it costs nothing: the
             // mid-wipe Back-button escape hatch lives on the nav bar, outside this ScrollView, so
-            // hiding the scroll content doesn't hide the way out.
-            .accessibilityHidden(isUpdatingStorage || deleteFlow.isDeleting)
+            // hiding the scroll content doesn't hide the way out. The `isEnabled:` form: a runtime
+            // `false` on `.accessibilityHidden(_:)` leaves an empty, undescribed accessibility node
+            // beside the scroll view (the UI audit's "Element has no description").
+            .accessibilityHidden(true, isEnabled: isUpdatingStorage || deleteFlow.isDeleting)
 
             if isUpdatingStorage {
                 storageSpinner
