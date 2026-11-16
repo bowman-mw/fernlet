@@ -5829,6 +5829,31 @@ final class FernletStore {
         diary.recipesUsing(recipe.id)
     }
 
+    /// Every recipe the editor may look up by id: the book and the saved recipes.
+    var allRecipesForNesting: [RecipeDefinition] { recipes + savedRecipeService.savedRecipes }
+
+    /// The saved recipes the recipe editor may offer as an ingredient of `editing` (nil for a recipe not
+    /// saved yet): every recipe except `editing` itself and those that would loop or nest past three
+    /// levels (owner picks P03a, P10a).
+    func recipeIngredientChoices(editing: UUID?) -> [RecipeDefinition] {
+        let all = allRecipesForNesting
+        let graph = RecipeNestingGraph(recipes: all)
+        return RecipeIngredientChoices.usable(from: all.filter { $0.id != editing }, editing: editing, graph: graph)
+    }
+
+    /// Makes `recipe`'s recipe food now, so an editor row picked as that recipe resolves its numbers
+    /// before the save; returns it, or nil when the recipe's own lines do not resolve. A recipe food the
+    /// person then leaves unused is removed by the next `syncRecipeFoods()`.
+    func prepareRecipeFood(for recipe: RecipeDefinition) -> FoodItem? {
+        diary.ensureRecipeFoods(for: [recipe.id], alsoConsidering: savedRecipeService.savedRecipes)
+        return foodCatalog.items(ids: [recipe.id]).first
+    }
+
+    /// Saves a book recipe's "Makes" amount (owner pick P02a): see `DiaryStore.setRecipeMakes`.
+    func setRecipeMakes(_ makes: RecipeYield?, forRecipeID recipeID: UUID) {
+        diary.setRecipeMakes(makes, forRecipeID: recipeID)
+    }
+
     /// What a saved recipe's rows teach this device, remembered by every recipe save above: the
     /// person's own "grams in one" its rows were counted in (F4b, `RecipePortionGramsMemory`), and the
     /// foods they picked lower in the list for words they typed (F9b, ``RecipeSearchPick``), kept as
