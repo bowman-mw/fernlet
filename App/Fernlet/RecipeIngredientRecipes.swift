@@ -286,3 +286,21 @@ enum RecipeDeleteUsersText {
         return "\(first) and \(others) more use this recipe. They keep it as a fixed ingredient with today's nutrition, and this recipe's steps are copied into them. Meals you already logged stay in your diary. Fernlet can't undo this."
     }
 }
+
+/// The recipe book's one-time note after this build turned recipe parts into recipes of their own
+/// (owner pick P07a), with its Dismiss.
+struct RecipePartsMigratedNote: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FernletNotice("Your recipe parts are now their own recipes. A dressing you made as a part is a recipe of its own, and the recipe that used it lists it as an ingredient, with its steps first.") {
+                WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
+            }
+            Button("Got it", action: onDismiss)
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .accessibilityIdentifier("recipeBook.partsMigratedDismiss")
+        }
+        .accessibilityIdentifier("recipeBook.partsMigratedNote")
+    }
+}

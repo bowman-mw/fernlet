@@ -503,7 +503,8 @@ the wire and every older build read it unchanged, and no ``RecipeIngredient`` fi
 chains past ``RecipeNestingLimits/maxDepth`` (``RecipeNestingRefusal``), the order to refresh recipe foods
 after an edit, and the making order of sub-recipe steps. The editor offers recipes through
 ``RecipeIngredientChoices``; a line can be typed in servings, batches or the recipe's own "Makes" amount
-(``RecipeAmountUnit``, ``RecipeYield``), and is saved in servings either way.
+(``RecipeAmountUnit``, ``RecipeYield``), and is saved in servings either way. Multipart recipes are
+converted once into separate recipes with derived ids (``RecipePartsMigration``), keeping their numbers.
 
 - ``RecipeDefinition``
 - ``RecipeIngredient``
@@ -514,6 +515,7 @@ after an edit, and the making order of sub-recipe steps. The editor offers recip
 - ``RecipeIngredientChoices``
 - ``RecipeYield``
 - ``RecipeAmountUnit``
+- ``RecipePartsMigration``
 - ``RecipeStep``
 - ``RecipeStepSanitizer``
 - ``RecipeComponent``

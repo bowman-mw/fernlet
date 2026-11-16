@@ -58531,6 +58531,23 @@
         }
       }
     },
+    "Your recipe parts are now their own recipes. A dressing you made as a part is a recipe of its own, and the recipe that used it lists it as an ingredient, with its steps first." : {
+      "comment" : "One-time note at the top of the recipe book after an update turned the parts of multipart recipes into separate saved recipes",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las partes de tus recetas ahora son recetas propias. Un aliño que hiciste como parte es ahora una receta, y la receta que lo usaba lo tiene como ingrediente, con sus pasos primero."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las partes de tus recetas ahora son recetas propias. Un aderezo que hiciste como parte es ahora una receta, y la receta que lo usaba lo tiene como ingrediente, con sus pasos primero."
+          }
+        }
+      }
+    },
     "Your recipes" : {
       "comment" : "Heading over the person's own saved recipes offered as an ingredient while typing in a recipe's ingredient search",
       "localizations" : {
