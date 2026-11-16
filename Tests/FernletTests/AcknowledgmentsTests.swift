@@ -138,6 +138,29 @@ struct AcknowledgmentsTests {
         #expect(AcknowledgmentNotices.readableBlocks(of: twoHolders + "\n\nNext.") == [.paragraph(twoHolders), .paragraph("Next.")])
     }
 
+    // MARK: - Map data
+
+    /// The World map's land and water pack is OpenStreetMap data under the ODbL (`Docs/World-Shore-Pack.md`):
+    /// the screen credits "© OpenStreetMap contributors" and names the licence, the map's own credit links
+    /// OpenStreetMap's copyright page, and NOTICE, the pack's licence file and the website carry the same
+    /// credit, so no one of them can drop it on its own.
+    @Test func theMapDataSectionCreditsOpenStreetMapUnderTheODbL() throws {
+        let screen = try RepoRoot.source("App/Fernlet/AcknowledgmentsView.swift")
+        let map = try #require(screen.range(of: "private var mapDataSection"))
+        let section = screen[map.lowerBound...].prefix(1_500)
+        #expect(section.contains("© OpenStreetMap contributors, under the Open Database License (ODbL)"),
+                "the Map data section lost OpenStreetMap's credit or the licence's name")
+        #expect(section.contains("WorldOpenStreetMapCredit()"), "the Map data section lost the © OpenStreetMap link")
+        #expect(WorldOpenStreetMapCredit.copyrightURL?.absoluteString == "https://www.openstreetmap.org/copyright")
+        // R2: bounded by the four documents.
+        for path in ["NOTICE", "App/Fernlet/World/Atlas/WorldShore.LICENSE.txt", "Site/technical/index.html",
+                     "Docs/World-Shore-Pack.md"] {
+            let folded = try RepoRoot.source(path).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            #expect(folded.contains("© OpenStreetMap contributors"), "\(path) lacks OpenStreetMap's credit")
+            #expect(folded.contains("ODbL") || folded.contains("Open Database License"), "\(path) does not name the ODbL")
+        }
+    }
+
     // MARK: - Settings
 
     /// Settings → Privacy & data links the screen right under Privacy Policy, the route builds it, and
