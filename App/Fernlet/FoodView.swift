@@ -2833,6 +2833,7 @@ private struct LockedMacroSummary: View {
     private var macroSourceTitle: LocalizedStringKey {
         switch foodItem.source {
         case .manual: "Saved macros"
+        case .recipe: "Recipe macros"
         case .openFoodFacts: "Open Food Facts macros"
         case .usda: "USDA macros"
         case .canadianNutrientFile: "Health Canada macros"

@@ -62,13 +62,17 @@ If the child recipe is gone, the line is still a valid food line (§6).
 
 ## 2. Amounts: servings, a batch, or grams / cups
 
-- **Servings of the child** is always available: "1 serving of Dragonfruit sauce". The default.
-- **Batch**: "½ batch" (stored as servings: ½ × child servings). Shown as a unit choice.
-- **Grams or a volume** only when the child has a **Makes** amount: a new optional
-  `RecipeDefinition.yield` (`quantity` + `unit`, e.g. "2 cups" or "480 g"). The recipe food gets a
-  portion for it, so "1 cup" or "120 g" converts through the existing `RecipeServingConversion`.
-  The editor asks "How much does it make? (optional)" under Servings. A volume yield never converts to
-  grams (we don't know the sauce's density) and vice versa, unless the person gives both.
+- **Lines are always stored in servings of the child** ("1.5 servings of Dragonfruit sauce"). The recipe
+  food declares the whole batch as its serving, counted in servings (`servingSize` = the child's
+  servings, unit "serving"), so N servings is exactly N ÷ servings of the batch on every build, and
+  "all N servings" totals exactly what the child's own rows did. (Build refinement 2026-11-15: an
+  earlier draft stored grams/cups lines; storing servings keeps old builds exact and keeps a later
+  change to the "Makes" amount from moving another recipe's numbers.)
+- **Batch**: "½ batch" is entered as a unit choice and saved as servings (½ × child servings).
+- **Grams or a volume** are entry and display only, when the child has a **Makes** amount (a new
+  optional `RecipeDefinition` field, e.g. "2 cups" or "480 g"): "1 cup" of a sauce that makes 2 cups
+  in 4 servings saves as 2 servings and reads "1 cup (2 servings)". The editor asks "How much does it
+  make? (optional)" under Servings.
 
 ## 3. Nutrition rollup: live in recipes, frozen in meals
 
