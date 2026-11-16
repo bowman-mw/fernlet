@@ -429,7 +429,10 @@ public struct CaptureProtectedModifier: ViewModifier {
             content
                 .blur(radius: isPulsing ? 24 : 0)
                 .saturation(isPulsing ? 0.4 : 1)
-                .accessibilityHidden(covered)
+                // `isEnabled:` form, not `.accessibilityHidden(covered)`: a runtime `false` on the
+                // plain form leaves an empty, undescribed accessibility node beside UIKit-backed
+                // content (see `FernletLockGateModifier`).
+                .accessibilityHidden(true, isEnabled: covered)
                 .background(CaptureScreenProbe { window in
                     hostWindow = window
                     let screen = window?.windowScene?.screen
