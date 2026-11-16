@@ -1884,9 +1884,12 @@ struct RecipeSheet: View {
     @ViewBuilder private var deleteRecipeButton: some View {
         if let editingRecipe {
             Button(role: .destructive) {
+                let users = store.recipesUsing(editingRecipe)
                 pendingDestructiveAction = DestructiveConfirmation(
                     title: "Delete \u{201C}\(editingRecipe.name)\u{201D}?",
-                    message: "The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this.",
+                    message: users.isEmpty
+                        ? LocalizedStringKey("The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this.")
+                        : RecipeDeleteUsersText.message(users: users),
                     confirmLabel: "Delete",
                     auditEvent: "recipe.deleteConfirmed",
                     perform: {
@@ -6341,13 +6344,16 @@ struct RecipeDetailView: View {
     /// The Steps card (2026-08-21, FOOD-22): the recipe's authored steps, readable WITHOUT starting
     /// cooking mode, each number on a small wooden square (`b3-recipe-notes`).
     @ViewBuilder private var stepsCard: some View {
-        if let steps = recipe.steps, !steps.isEmpty {
+        // Sub-recipes' steps first, read live from them (recipes as building blocks, design §5).
+        let sections = store.stepSections(for: recipe)
+        let steps = sections.flatMap(\.steps)
+        if !steps.isEmpty {
             FernletCard {
                 VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Steps")
-                    if recipe.isMultipart {
-                        // Part by part, in making order, numbered from 1 within each part.
-                        RecipePartsStepList(parts: recipe.resolvedComponents) { RecipeStepRow(number: $0, step: $1) }
+                    if sections.count >= RecipeComponentLimits.minComponents {
+                        // Section by section, in making order, numbered from 1 within each.
+                        RecipePartsStepList(parts: sections) { RecipeStepRow(number: $0, step: $1) }
                     } else {
                         ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                             RecipeStepRow(number: index + 1, step: step)

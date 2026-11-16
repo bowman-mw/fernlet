@@ -234,3 +234,46 @@ extension RecipeNutritionGaps {
         }
     }
 }
+
+extension RecipeDefinition {
+    /// The recipe's steps in making order as titled sections (design §5): first each sub-recipe it
+    /// uses, deepest first (``RecipeNestingGraph/makingOrder(below:)``), read live from that recipe,
+    /// then this recipe's own steps (its own parts, for a multipart recipe). A section with no steps is
+    /// left out. With no sub-recipe steps this is exactly ``resolvedComponents``; otherwise this
+    /// recipe's own unnamed section takes the recipe's name, so every section has one.
+    ///
+    /// `servingsLabel` names how much of a sub-recipe a section makes, for a sub-recipe this recipe's
+    /// lines use directly ("Dragonfruit sauce · 2 of 4 servings"); nil leaves names plain.
+    public func stepSections(
+        graph: RecipeNestingGraph, recipesByID: [UUID: RecipeDefinition],
+        servingsLabel: ((_ name: String, _ used: Double, _ of: Int) -> String)? = nil
+    ) -> [ResolvedRecipeComponent] {
+        let subSections: [ResolvedRecipeComponent] = graph.makingOrder(below: id).compactMap { childID in
+            guard let child = recipesByID[childID], let steps = child.steps, !steps.isEmpty else { return nil }
+            let used = ingredients.filter { $0.foodItemId == childID }.reduce(0) { $0 + $1.quantity }
+            let name = used > 0 ? (servingsLabel?(child.name, used, max(child.servings, 1)) ?? child.name) : child.name
+            return ResolvedRecipeComponent(id: child.id, name: name, ingredients: [], steps: steps)
+        }
+        let own = resolvedComponents.filter { !$0.steps.isEmpty }
+        guard !subSections.isEmpty else { return resolvedComponents }
+        return subSections + own.map { part in
+            var named = part
+            if named.name == nil { named.name = self.name }
+            return named
+        }
+    }
+
+    /// Every step in making order with its section's name, sub-recipes first (``stepSections(graph:recipesByID:servingsLabel:)``):
+    /// what cooking mode walks. A recipe with one section returns its steps with no section name, so a
+    /// plain recipe walks exactly as before.
+    public func cookingSteps(
+        graph: RecipeNestingGraph, recipesByID: [UUID: RecipeDefinition],
+        servingsLabel: ((_ name: String, _ used: Double, _ of: Int) -> String)? = nil
+    ) -> [RecipeCookingStep] {
+        let sections = stepSections(graph: graph, recipesByID: recipesByID, servingsLabel: servingsLabel)
+        let named = sections.count >= RecipeComponentLimits.minComponents
+        return sections.flatMap { section in
+            section.steps.map { RecipeCookingStep(step: $0, partName: named ? section.name : nil) }
+        }
+    }
+}

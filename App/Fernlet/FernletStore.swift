@@ -5625,7 +5625,7 @@ final class FernletStore {
     func startCookingRun(_ recipe: RecipeDefinition, startDayKey: String? = nil) -> CookingRunState? {
         // Making order, part by part (the dressing's steps, then the salad's), each step carrying its
         // part's name for the walker and the Live Activity. A one-part recipe walks exactly as before.
-        let domainSteps = recipe.cookingSteps
+        let domainSteps = cookingSteps(for: recipe)
         guard !domainSteps.isEmpty else { return nil }
         let steps = domainSteps.map {
             CookingRunState.Step(text: $0.step.text, durationSeconds: $0.step.durationSeconds, partName: $0.partName)
@@ -5640,6 +5640,40 @@ final class FernletStore {
         mirrorCookingRunState(state)
         CookingLiveActivityController.start(state)
         return state
+    }
+
+    /// `recipe`'s steps in making order, the sub-recipes it uses first, each section named (recipes as
+    /// building blocks, design §5): what cooking mode walks and the recipe page lists.
+    func cookingSteps(for recipe: RecipeDefinition) -> [RecipeCookingStep] {
+        let all = allRecipesForNesting
+        return recipe.cookingSteps(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all),
+                                   servingsLabel: Self.subRecipeServingsLabel)
+    }
+
+    /// `recipe`'s step sections for the recipe page: see `cookingSteps(for:)`.
+    func stepSections(for recipe: RecipeDefinition) -> [ResolvedRecipeComponent] {
+        let all = allRecipesForNesting
+        return recipe.stepSections(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all),
+                                   servingsLabel: Self.subRecipeServingsLabel)
+    }
+
+    private func recipesByIDForNesting(_ all: [RecipeDefinition]) -> [UUID: RecipeDefinition] {
+        Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// "Dragonfruit sauce · 2 of 4 servings": how much of a sub-recipe its section makes.
+    private static func subRecipeServingsLabel(name: String, used: Double, of servings: Int) -> String {
+        let amount = RecipeQuantityDisplay.display(used)
+        return String(localized: "\(name) · \(amount) of \(servings) servings",
+                      comment: "Title of a sub-recipe's steps inside the recipe that uses it, and in cooking mode: its name, then how many of its servings this recipe uses, e.g. 'Dragonfruit sauce · 2 of 4 servings'")
+    }
+
+    /// Skips the rest of the current part from the in-app walker: "Already made? Skip" on a sub-recipe
+    /// made before the recipe that uses it.
+    func cookingSkipPart() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.skipPart()
+        applyCookingTransition(state)
     }
 
     /// Advance to the next step (or finish) from the in-app walker — mirrors the Live Activity "Next"
@@ -6199,7 +6233,13 @@ final class FernletStore {
     /// The recipe's own lines saved with no nutrition, which leave its totals low (owner decision
     /// 2026-11-15; ``RecipeNutritionGaps``).
     func linesWithoutNutrition(in recipe: RecipeDefinition) -> Int {
-        RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
+        // A sub-recipe's own empty lines count too (recipes as building blocks, design §3).
+        let all = allRecipesForNesting
+        let nested = RecipeNutritionGaps.subRecipeGaps(
+            in: recipe, graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all),
+            foodItems: foodItems
+        ).reduce(0) { $0 + $1.lines }
+        return nested + RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
