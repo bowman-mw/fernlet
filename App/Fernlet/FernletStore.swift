@@ -4643,10 +4643,13 @@ final class FernletStore {
     /// `requestJournalMemorySummary` may later upgrade it with an on-device summary. AI off,
     /// unavailable, over budget, failed, filtered, or the app dying first: the emotion-only memory
     /// is the whole memory.
+    ///
+    /// G9-3: with "Let Fernlet remember" off nothing is captured, not even the emotion. The 300 cap
+    /// drops memories nobody edited first (`MemoryNote.capped`).
     private func rememberJournalEntry(_ entry: JournalEntry) {
-        guard let memory = MemoryNote.emotionOnly(for: entry) else { return }
+        guard settings.memoryExtractionEnabled, let memory = MemoryNote.emotionOnly(for: entry) else { return }
         memories.append(memory)
-        memories = Array(memories.suffix(300))
+        memories = MemoryNote.capped(memories)
         requestJournalMemorySummary(memoryID: memory.id, entryText: entry.text)
     }
 
@@ -4685,10 +4688,11 @@ final class FernletStore {
     /// one a delete-all wiped, cannot come back, and words the user typed in the editor are never
     /// overwritten.
     private func applyJournalMemorySummary(_ candidate: String?, memoryID: UUID, entryText: String) {
-        guard settings.aiStatus != .off, let candidate,
+        // G9-3: never with "Let Fernlet remember" off, and never over a memory the person edited.
+        guard settings.aiStatus != .off, settings.memoryExtractionEnabled, let candidate,
               let summary = JournalMemorySummaryPolicy.accepted(candidate, entryText: entryText),
               let index = memories.firstIndex(where: { $0.id == memoryID }),
-              memories[index].text.isEmpty
+              memories[index].text.isEmpty, !memories[index].userEdited
         else { return }
         memories[index].text = summary
         scheduleSnapshotSave()
@@ -6410,6 +6414,25 @@ final class FernletStore {
         diary.updateMemory(memory, category: category, text: text)
     }
 
+    /// G9-3 memory controls — thin forwards to `DiaryStore`, each audit-logged there by count only.
+    @discardableResult
+    func forgetMemories(ids: Set<UUID>) -> Int {
+        diary.forgetMemories(ids: ids)
+    }
+
+    @discardableResult
+    func deleteAllMemories() -> Int {
+        diary.deleteAllMemories()
+    }
+
+    func forgetPatterns() {
+        diary.forgetPatterns()
+    }
+
+    func setMemoryExtraction(enabled: Bool, deleteExisting: Bool) {
+        diary.setMemoryExtraction(enabled: enabled, deleteExisting: deleteExisting)
+    }
+
     /// Queues a meal-analysis retry; its note is a companion line, resolved for the user's term of
     /// address (the effective body profile's Sex).
     func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
@@ -8068,7 +8091,9 @@ final class FernletStore {
     }
 
     private func apply(_ snapshot: FernletSnapshot) {
+        let learnFromBefore = settings.tierTwoLearnFrom
         diary.applyDiarySlice(snapshot)
+        purgeTierTwoIfLearnFromMoved(from: learnFromBefore)
         // A remote (CloudKit) blob may have been re-encoded by a pre-gate peer that dropped the visibility
         // keys — reconcile immediately, before any read or the derived-signals rebuild below, so a mixed-
         // version sync can't re-open a hidden period/intimacy surface.
@@ -8091,6 +8116,16 @@ final class FernletStore {
         // Credit any newly active synced day (and reconcile milestones over the synced-in history).
         // Idempotent — re-running never double-grants.
         reconcileCoinLedger()
+    }
+
+    /// G9-3: a remote change brought a newer Tier-2 learn-from date ("Forget patterns" on another
+    /// device). This device purges its own pattern store and schedules a save, whose refresh rebuilds
+    /// it from that date only. The apply merge already kept the newer of the two dates.
+    private func purgeTierTwoIfLearnFromMoved(from before: String?) {
+        guard let after = settings.tierTwoLearnFrom, after != before else { return }
+        let purged = repository.purgeTierTwoMemories()
+        FernletAuditLog.log("memory.forgetPatterns.remote", context: ["purged": purged ? "true" : "false"])
+        scheduleSnapshotSave()
     }
 
     private func currentSnapshot() -> SanitizedSnapshot {
