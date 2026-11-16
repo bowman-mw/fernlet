@@ -3852,6 +3852,11 @@ final class FernletStore {
     /// Nil (unwired: tests, previews) means no key, which fails closed.
     @ObservationIgnored var hubContentKeyProvider: (() -> SymmetricKey?)?
 
+    /// The sealed funnel for private memories (G9-3, "Keep private"): the Core memories a person moved
+    /// into the Private tab's sealed store. Made on first use over the shared sealed store; tests point
+    /// it at an in-memory one. Reached only through `FernletStore+PrivateMemories.swift`.
+    @ObservationIgnored lazy var privateMemoryVault = PrivateMemoryVault()
+
     /// The persisted "ambient restores wait for the device owner" bit — see ``SealedBackupRestoreHold``.
     /// Internal-settable ONLY so tests can point it at an isolated defaults suite.
     @ObservationIgnored var sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: .standard)
@@ -6414,15 +6419,22 @@ final class FernletStore {
         diary.updateMemory(memory, category: category, text: text)
     }
 
-    /// G9-3 memory controls — thin forwards to `DiaryStore`, each audit-logged there by count only.
+    /// G9-3 memory controls — forwards to `DiaryStore`, each audit-logged there by count only. Forget
+    /// and Delete all also reach the private memories, but only while Private is open (and never in a
+    /// decoy): see `FernletStore+PrivateMemories.swift`.
+    ///
+    /// - Returns: How many memories were forgotten, Core and private together.
     @discardableResult
     func forgetMemories(ids: Set<UUID>) -> Int {
-        diary.forgetMemories(ids: ids)
+        diary.forgetMemories(ids: ids) + forgetPrivateMemories(ids: ids)
     }
 
+    /// Deletes every Core memory and, while Private is open, every private memory.
+    ///
+    /// - Returns: How many memories were deleted, Core and private together.
     @discardableResult
     func deleteAllMemories() -> Int {
-        diary.deleteAllMemories()
+        diary.deleteAllMemories() + deleteAllPrivateMemories()
     }
 
     func forgetPatterns() {
@@ -7391,6 +7403,10 @@ final class FernletStore {
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
         // because the delete dialog promises "Worry Box notes" by name.
         if worryBoxResetHook?() != true { incompleteStores.append("your Worry Box notes") }
+        // Private memories (G9-3, "Keep private"): sealed rows, keyless and ungated, so a locked phone
+        // and a no-lock phone lose them too. The store rebuild below also takes them; this leg is the
+        // one that reports a failure by name.
+        if !deleteAllPrivateMemoriesForWipe() { incompleteStores.append("your private memories") }
         // Received-heart records (friend names, fingerprints, glow, rate-limit keys) outlive the
         // trust-vault wipe otherwise; clear the device-local sidecar too.
         heartLedger.clearAll()

@@ -798,6 +798,9 @@ struct SettingsSheet: View {
                 }
             }
 
+            // G9-3: the private memories — counted while Private is closed, listed once it is open.
+            CoreMemoryPrivateSection(store: store, pendingDestructiveAction: $pendingDestructiveAction)
+
             CoreMemoryResetSection(store: store, pendingDestructiveAction: $pendingDestructiveAction)
         }
         .sheet(item: $editingMemory) { memory in
@@ -1839,6 +1842,10 @@ private struct MemoryEditorSheet: View {
             // The source date as a key-value row under a dotted rule (`.kv`, `b3-memory-editor`).
             FernletKeyValueRow("Source date", value: Text(memory.sourceDate.formatted(.dateTime.month(.wide).day().year())))
 
+            // G9-3 "Keep private": an unsaved edit is saved first, then the sealed copy is written,
+            // and only then does the Core copy go.
+            MemoryKeepPrivateSection(store: store) { keepPrivate() }
+
             deleteSection
                 .frame(maxWidth: .infinity)
         }
@@ -1894,6 +1901,17 @@ private struct MemoryEditorSheet: View {
         // the sheet, under Cancel (`b1-frame-sheet`).
         .fernletDraftGuard(isDirty: category != memory.category || text != memory.text,
                            title: Text("Core memory")) { dismiss() }
+    }
+
+    /// Saves an unsaved edit, then moves the memory into Private and closes the sheet. False (the sheet
+    /// stays, the memory with it) when the sealed write did not land.
+    private func keepPrivate() -> Bool {
+        if category != memory.category || text != memory.text {
+            store.updateMemory(memory, category: category, text: text)
+        }
+        guard store.keepMemoryPrivate(memory) else { return false }
+        dismiss()
+        return true
     }
 
     /// The categories already in use, plus "other" as the escape hatch, lower-cased for storage and

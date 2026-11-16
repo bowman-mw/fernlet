@@ -409,12 +409,13 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | Function Or Type | What It Does |
 | --- | --- |
 | `PrivatePersistenceController.shared` / `preview` | Provide the local-only sealed-data persistent container. |
-| `init(inMemory:storeURL:model:)` | Builds and loads `FernletPrivate` with complete file protection, history tracking, migration, no CloudKit, and merge configuration. The production model (V2) carries the V1 → V2 staged migration on the store description, so a rebuild or reload re-adds under it too; `model:` is the migration tests' seam (a supplied model gets no stage). |
-| `makeManagedObjectModel()` | Builds the CURRENT model, V2 = the frozen V1 entities + `CycleRecord` (period-data design 2026-09-30, §5.2), tagged `FernletPrivate.v2`. |
+| `init(inMemory:storeURL:model:)` | Builds and loads `FernletPrivate` with complete file protection, history tracking, migration, no CloudKit, and merge configuration. The production model (V4) carries the V1 → V2 → V3 → V4 staged migration on the store description, so a rebuild or reload re-adds under it too; `model:` is the migration tests' seam (a supplied model gets no stage). |
+| `makeManagedObjectModel()` | Builds the CURRENT model, V4 = the frozen V3 entities + `PrivateMemory` (G9-3, 2026-11-15), tagged `FernletPrivate.v4`. V2 (`makeManagedObjectModelV2()`) = V1 + `CycleRecord` (period-data design 2026-09-30, §5.2) and V3 (`makeManagedObjectModelV3()`) = V2 + `BodyTally` (round 7) are FROZEN, each checksum pinned by `PrivateStoreModelMigrationTests`. |
+| `makePrivateMemoryEntity()` | `PrivateMemory` (V4): EXACTLY `id` (indexed — the memory's own random id), `schemaVersion` and one `payloadCiphertext` blob holding the whole `MemoryNote`; shaped like `BodyTally`. |
 | `makeManagedObjectModelV1()` | The four-entity model every shipped build wrote (`MenstrualNarrative`, `JournalNarrative`, `IntimacyLog`, `WorryNarrative`), FROZEN; its `versionChecksum` is pinned by `PrivateStoreModelMigrationTests` (proven equal to the pre-split model). Never edit it — a new column or entity is a new version. |
-| `makeStagedMigrationManager(to:)` | One `NSCustomMigrationStage` from V1 to the given V2 over IN-MEMORY `NSManagedObjectModelReference`s (programmatic models have no `.momd`); no handlers, so a lightweight additive stage. Freezes the source model with a store-less coordinator first (reading an editable model's checksum logs a Core Data error). |
+| `makeStagedMigrationManager(to:)` | Three `NSCustomMigrationStage`s, V1 → V2, V2 → V3 and V3 → the given V4, over IN-MEMORY `NSManagedObjectModelReference`s (programmatic models have no `.momd`); no handlers, so each is a lightweight additive stage. Freezes the source models with store-less coordinators first (reading an editable model's checksum logs a Core Data error). |
 | `makeCycleRecordEntity()` | `CycleRecord`: EXACTLY `id` (indexed), `schemaVersion` (Int16, plaintext format tag) and one `payloadCiphertext` blob (not externalized). No date, day key, timestamp or HealthKit id column; no uniqueness constraint (the property-object-trump merge policy would make a conflict a silent overwrite — uniqueness is the repository's upsert). |
-| `sealedEntityNames` / `sealedRowCount()` | The one list of sealed entities (five, with `CycleRecord`) that `purgeEncryptedEntities()` deletes and `sealedRowCount()` counts keylessly — so the app-lock reset purges cycle records and a passcode setup's prior-data check counts them. |
+| `sealedEntityNames` / `sealedRowCount()` | The one list of sealed entities (seven: the four V1 ones, `CycleRecord`, `BodyTally` and `PrivateMemory`) that `purgeEncryptedEntities()` deletes and `sealedRowCount()` counts keylessly — so the app-lock reset purges cycle records and a passcode setup's prior-data check counts them. |
 | `makeMenstrualNarrativeEntity()` | Defines encrypted menstrual narrative columns and a date-key index. |
 | `makeJournalNarrativeEntity()` | Defines local-only journal metadata plus sealed text/emotion columns and a day-key index. |
 | `makeIntimacyLogEntity()` | Defines local-only intimacy metadata plus sealed note columns and a day-key index. |
@@ -422,6 +423,24 @@ See the repository section above. `CoreDataFernletRepository` owns the single-re
 | `CoreDataModelBuilding.makeAttribute(_:type:defaultValue:allowsExternalBinaryDataStorage:)` | The same shared attribute factory the synced model builder uses (FernletFoundation); it replaced this file's private copy, so the two builders cannot drift. |
 | `purgeEncryptedEntities()` | Destructive lock-reset wipe; deliberately batches all sealed entities under a single save rather than using `PrivateRowPlumbing.deleteRows(...)`, so the wipe stays atomic across entities. |
 | `PrivatePersistentHistoryPruner.prune(context:before:)` | Deletes private-store persistent history before a date. |
+
+### `PrivateMemoryRepository.swift` (PrivateMemoryStore) / `PrivateMemoryVault.swift` / `FernletStore+PrivateMemories.swift` — private memories (G9-3)
+
+"Keep private" (owner call M6 = A) moves a Core memory out of the synced `MemoryRecord` rows into the sealed store. The Core memory page counts them while Private is closed and lists them only while it is open; they never reach `memories`, so never Home, the photo wall or any AI prompt; they ride the journal's Sealed backup head.
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `PrivateMemoryStoring` | The seam the app's funnel holds (a test double can fail the sealed write). |
+| `PrivateMemoryRepository.save(_:key:)` | Seals one `MemoryNote` under `fernlet.private-memory.v1` with the Private tab's content key as its id's one row (re-sealed in place when the id exists). Throws `FernletLockError.locked` without a key; at most `maxStoredRows` (1,000) rows. |
+| `PrivateMemoryRepository.memories(key:)` | Every row that opens, oldest first, as a `PrivateMemoryPage` (opened, dead, undecided — a newer build's row is never dead). |
+| `PrivateMemoryRepository.rowCount()` / `delete(ids:)` / `deleteAll()` | KEYLESS: the "N private memories — unlock to see" count, a forget by id, and the wipe (rethrown history prune). |
+| `PrivateMemoryRepository.mergeRestored(_:key:)` | The Sealed backup restore's merge: absent ids inserted, rows that open kept, dead rows replaced, never a delete, idempotent; an undecided row refuses the whole merge. |
+| `PrivateMemoryVault` | The app's `@MainActor` funnel: decoy-gated reads and writes, a change token for observation, a cache re-validated by row count, and the backup export/merge. |
+| `FernletStore.keepMemoryPrivate(_:)` | Seals the stored memory FIRST; only after that write lands does it delete the Core copy (whose next save soft-deletes its row, so the tombstone syncs). A failed sealed write leaves the Core copy. Marks the journal backup owed. |
+| `FernletStore.privateMemoryCount` / `privateMemories` / `isPrivateMemoryOpen` | Keyless count (0 in a decoy); the list only while Private is open and not in a decoy. |
+| `FernletStore.forgetMemories(ids:)` / `deleteAllMemories()` | Also reach the private memories (`forgetPrivateMemories(ids:)`, `deleteAllPrivateMemories()`) — only while Private is open. |
+| `FernletStore.deleteAllPrivateMemoriesForWipe()` | Keyless, ungated: `resetAll`'s leg, reported as "your private memories" when it fails. |
+| `SealedBackupPrivateMemories` / `JournalBackupAdapter.headPrivateMemories(hubKey:)` / `restorePrivateMemories(_:hubKey:)` | The journal head's `"privateMemories"` section (`{"v":1,"memories":[…]}`) under the journal's switch; a newer `v` decodes as a skipped section, and an older build ignores the key, so neither fails a restore. Tests: `PrivateMemoryRepositoryTests`, `PrivateMemoryKeepTests`, `PrivateMemoryBackupTests`. |
 
 ### `CycleRecord.swift` / `CycleRecordRepository.swift` / `CycleRecordStore.swift` (PrivateHealthStore)
 

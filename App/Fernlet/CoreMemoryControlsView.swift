@@ -61,7 +61,9 @@ struct CoreMemoryRememberSection: View {
 
 /// Forget by filters (owner call M4 = B): the page's "forget …" words, an optional date range and the
 /// feeling chips fill a checklist of matching memories, all ticked; unticking keeps one. Only the
-/// "Forget these" tap deletes, and only the ticked ones, followed by a one-line confirmation.
+/// "Forget these" tap deletes, and only the ticked ones, followed by a one-line confirmation. While
+/// Private is open the private memories are matched too (marked "Private" in the list); while it is
+/// closed, and in a decoy, they are not.
 struct MemoryForgetPanel: View {
     @Bindable var store: FernletStore
     /// The words typed after "forget" in the page's search field ("" for none).
@@ -85,8 +87,12 @@ struct MemoryForgetPanel: View {
         MemoryForgetFilter(words: words, from: limitsDates ? from : nil, to: limitsDates ? to : nil, feelings: feelings)
     }
 
+    /// Every memory the filters can reach: Core, plus the private ones while Private is open.
+    private var pool: [MemoryNote] { store.memories + store.privateMemories }
+
     var body: some View {
-        let matches = filter.matches(in: store.memories)
+        let privateIDs = Set(store.privateMemories.map(\.id))
+        let matches = filter.matches(in: pool)
         let ticked = matches.filter { !unticked.contains($0.id) }
         VStack(alignment: .leading, spacing: 12) {
             FernletFramedSection("Forget by filters") {
@@ -105,7 +111,7 @@ struct MemoryForgetPanel: View {
                     .fernletWrappingText()
                     .accessibilityIdentifier("settings.memory.forget.done")
             }
-            preview(matches: matches, ticked: ticked)
+            preview(matches: matches, ticked: ticked, privateIDs: privateIDs)
             Button("Done") { onClose() }
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
@@ -125,7 +131,7 @@ struct MemoryForgetPanel: View {
 
     /// One chip per feeling the memories carry; tapping toggles it.
     @ViewBuilder private var feelingChips: some View {
-        let choices = MemoryForgetFilter.feelings(presentIn: store.memories)
+        let choices = MemoryForgetFilter.feelings(presentIn: pool)
         if !choices.isEmpty {
             FlowLayout(spacing: 8) {
                 ForEach(choices) { feeling in
@@ -143,7 +149,7 @@ struct MemoryForgetPanel: View {
     }
 
     /// The checklist preview and its "Forget these" button, or why there is nothing to show.
-    @ViewBuilder private func preview(matches: [MemoryNote], ticked: [MemoryNote]) -> some View {
+    @ViewBuilder private func preview(matches: [MemoryNote], ticked: [MemoryNote], privateIDs: Set<UUID>) -> some View {
         if filter.isEmpty {
             FernletCard { EmptyState(text: "Type \"forget\" and a word in the search, or pick dates or feelings, to find memories to forget.") }
         } else if matches.isEmpty {
@@ -151,7 +157,7 @@ struct MemoryForgetPanel: View {
         } else {
             FernletFramedSection("Ticked memories are forgotten") {
                 ForEach(matches) { memory in
-                    checklistRow(memory, isTicked: !unticked.contains(memory.id))
+                    checklistRow(memory, isTicked: !unticked.contains(memory.id), isPrivate: privateIDs.contains(memory.id))
                 }
             }
             Button(role: .destructive) {
@@ -165,9 +171,9 @@ struct MemoryForgetPanel: View {
         }
     }
 
-    /// One memory in the checklist: a tick, its sentence and its date. VoiceOver reads the sentence and
-    /// date, then whether it will be forgotten.
-    private func checklistRow(_ memory: MemoryNote, isTicked: Bool) -> some View {
+    /// One memory in the checklist: a tick, its sentence and its date (and "Private" for a private one).
+    /// VoiceOver reads the sentence and date, then whether it will be forgotten.
+    private func checklistRow(_ memory: MemoryNote, isTicked: Bool, isPrivate: Bool) -> some View {
         Button {
             if isTicked { unticked.insert(memory.id) } else { unticked.remove(memory.id) }
         } label: {
@@ -176,7 +182,7 @@ struct MemoryForgetPanel: View {
                     .foregroundStyle(isTicked ? Color.terracottaInk : Color.slate)
                     .accessibilityHidden(true)
                 FernletRowLabel(title: Text(verbatim: memory.displayText),
-                                detail: Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year())))
+                                detail: Self.detail(for: memory, isPrivate: isPrivate))
             }
             .padding(.vertical, 8)
             .contentShape(Rectangle())
@@ -186,6 +192,12 @@ struct MemoryForgetPanel: View {
         .accessibilityHint(Text("Double-tap to keep or forget this memory."))
         .accessibilityAddTraits(isTicked ? .isSelected : [])
         .accessibilityIdentifier("settings.memory.forget.row")
+    }
+
+    /// A checklist row's date line; a private memory says so after its date.
+    private static func detail(for memory: MemoryNote, isPrivate: Bool) -> Text {
+        let date = memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year())
+        return isPrivate ? Text("\(date) · Private") : Text(date)
     }
 
     private func forget(_ ticked: [MemoryNote]) {
@@ -216,7 +228,7 @@ struct CoreMemoryResetSection: View {
                 FernletRowLabel("Delete all memories", destructive: true)
             }
             .buttonStyle(FernletRowButtonStyle(showsChevron: false))
-            .disabled(store.memories.isEmpty)
+            .disabled(store.memories.isEmpty && store.privateMemories.isEmpty)
             .accessibilityIdentifier("settings.memory.deleteAll")
         }
     }
@@ -232,11 +244,17 @@ struct CoreMemoryResetSection: View {
         }
     }
 
+    /// Delete all memories' question. While Private is open it names the private ones too, which go
+    /// with the rest; while it is closed they are kept and not counted.
     private func confirmDeleteAll() {
         let count = store.memories.count
+        let privateCount = store.privateMemories.count
+        let message: LocalizedStringKey = privateCount > 0
+            ? "Deletes all ^[\(count) memory](inflect: true) on this phone and in iCloud, and your ^[\(privateCount) private memory](inflect: true). This can't be undone."
+            : "Deletes all ^[\(count) memory](inflect: true) on this phone and in iCloud. This can't be undone."
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Delete all memories?",
-            message: "Deletes all ^[\(count) memory](inflect: true) on this phone and in iCloud. This can't be undone.",
+            message: message,
             confirmLabel: "Delete all",
             auditEvent: "settings.memory.deleteAllConfirmed"
         ) {

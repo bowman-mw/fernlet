@@ -146,6 +146,16 @@ protocol SealedBackupContext: AnyObject {
     /// decoy and when they were not saved: the restore then stays unresolved and a later pass merges
     /// again.
     func restoreSealedBackupBodyTallies(_ tallies: [BodyDayTally]) throws
+    /// Every private memory (G9-3, "Keep private") the journal's backup carries on its head
+    /// (``JournalBackupAdapter``), oldest first, read under the live hub key; empty when there is none.
+    /// Throws — never an empty list in its place — in a decoy and while they can't be read (an
+    /// undecided row, a store that would not answer), so the export fails rather than write a head
+    /// without them.
+    func sealedBackupPrivateMemories(hubKey: SymmetricKey) throws -> [MemoryNote]
+    /// Merges the private memories the journal's restore carried into this iPhone's (absent ones added,
+    /// this iPhone's kept, never a delete) under the live hub key. Throws in a decoy and when they were
+    /// not saved: the restore then stays unresolved and a later pass merges again.
+    func restoreSealedBackupPrivateMemories(_ memories: [MemoryNote], hubKey: SymmetricKey) throws
     /// Records whether a sealed backup of `payloadType` still owes an upload — the dirty flag every
     /// sealed-store change sets (``markSealedBackupDirty(_:)``), set too when the backup is turned on
     /// or the escrow key adopted, and cleared only by a verified commit (design 2026-09-30, §4.4).
@@ -437,8 +447,9 @@ final class SealedBackupCoordinator {
     /// The journal adapter over the repository `repository` answers (design 2026-09-30, §7): its seam
     /// is `!duress`, its snapshot the ids the host's days reference, its device key read without
     /// minting from ``journalDeviceKeyService``, its skeletons rebuilt by the host, and the body tallies
-    /// (round 7 piece B2) on its head read and merged by the host. Fail closed when the coordinator is
-    /// gone (the seam shut, the referenced ids unknown, no skeleton written, no tally read or merged).
+    /// (round 7 piece B2) and private memories (G9-3) on its head read and merged by the host. Fail
+    /// closed when the coordinator is gone (the seam shut, the referenced ids unknown, no skeleton
+    /// written, no tally or memory read or merged).
     private func makeJournalAdapter(_ repository: @escaping @MainActor () -> JournalNarrativeRepository) -> JournalBackupAdapter {
         let service = journalDeviceKeyService
         return JournalBackupAdapter(
@@ -455,6 +466,16 @@ final class SealedBackupCoordinator {
                 merge: { [weak self] tallies in
                     guard let self else { throw JournalBackupSeamClosedError() }
                     try self.host.restoreSealedBackupBodyTallies(tallies)
+                }
+            ),
+            privateMemories: SealedBackupPrivateMemoryBridge(
+                export: { [weak self] hubKey in
+                    guard let self else { throw JournalBackupSeamClosedError() }
+                    return try self.host.sealedBackupPrivateMemories(hubKey: hubKey)
+                },
+                merge: { [weak self] memories, hubKey in
+                    guard let self else { throw JournalBackupSeamClosedError() }
+                    try self.host.restoreSealedBackupPrivateMemories(memories, hubKey: hubKey)
                 }
             )
         )
