@@ -1347,8 +1347,8 @@ struct ProximityNamespaceGoldenTests {
         for domain in CryptographicDomainSeparationTests.allDomains where names[domain.purpose.data] == nil {
             names[domain.purpose.data] = "FernletCryptoPurpose.\(domain.name)"
         }
-        #expect(names.count == 99, "the registry holds \(names.count) distinct labels")
-        // R2: bounded by the 41 label rows.
+        #expect(names.count == 101, "the registry holds \(names.count) distinct labels")
+        // R2: bounded by the 42 label rows.
         for row in ProximityNamespace.fernlet.labelRows where names[row.purpose.data] == nil {
             names[row.purpose.data] = ".fernlet \(row.field)"
         }
