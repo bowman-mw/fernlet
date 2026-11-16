@@ -415,11 +415,13 @@ public final class CloudKitDataService {
             // the NSPersistentCloudKitContainer `CD_`-mirrored type and the bare spelling) so the warning
             // fires. Runs only on the rare detection path (onboarding / settings), never a hot path.
             //
-            // A raw `DayRecord` COUNT is a valid "existing data" signal because the write side no longer
-            // creates a row for a content-free day (CoreDataFernletRepository.writeDayRow guards on
-            // `hasLoggedContent` and deletes a row whose day becomes empty). So a device that merely launched
-            // the app no longer stamps an empty day row that would make every other device read "existing
-            // cloud data" — every `DayRecord` here reflects a day the user actually logged something on.
+            // A raw `DayRecord` COUNT is a valid "existing data" signal because the write side never creates a
+            // row for a day with nothing to record (`DayRecordRepository.upsert` writes no row for a day with no
+            // elements and no tombstones). So a device that merely launched the app stamps no day row that
+            // would make every other device read "existing cloud data" — every `DayRecord` here is a day the
+            // user logged something on. Since G9-1 a day the user later EMPTIED keeps a row of tombstones
+            // (so another device cannot bring its entries back); it still counts, which is right: this
+            // account has used Fernlet with sync, and the rows are there.
             for type in ["CD_CustomItemRecord", "CustomItemRecord"] {
                 summary.customItemCount += try await countRecords(type: type, in: zoneIDs)
             }

@@ -336,6 +336,20 @@ The journal-sealing rows above (`activateSealedJournals(contentKey:)` through `m
 | `retry()` | Resets loader state and attempts startup loading again. |
 | `loadStore()` | Calls `FernletStore.load`, forwards status messages, and transitions to ready or failed phase. |
 
+## Cross-device sync (G9, 2026-11-15)
+
+How the synced stores avoid losing or reviving entries between devices. Plan and owner calls:
+`Docs/G9-Data-Integrity-Recovery-Plan-2026-11-15.md`. The engine is `NSPersistentCloudKitContainer`
+(no hand-written CloudKit sync); every record is one JSON payload, so two devices writing the SAME
+record is last-writer-wins. The rules below make that never happen for days, and make deletions stick.
+
+| Store | Rule |
+| --- | --- |
+| `DayRecord` (`DayRecordRepository`, `DayRowMerge.swift`) | One row per day per DEVICE (`deviceKey`, a random per-install id in the store's `localDefaults` key `fernlet.sync.dayRowDeviceKey`). The payload is a `DayRowPayload`: the day encoded flat (old builds still decode it as a `FernletDay`) plus `syncFormat` and `syncStamps` (one `DayElementStamp` per element key from `DayElementKeys`). Reads merge a day's rows element by element, newest stamp wins, removed elements absent, an all-removed day absent; reads never write or delete. Writes (`upsert`) touch only this device's row: unchanged elements keep their stamps, changed ones get a fresh stamp later than any known for that key, and keys the written copy was handed (`FernletDay.loadedSyncKeys`, in memory only) or that this device's row held, and that the copy no longer holds, become tombstones. An emptied day keeps a row of tombstones; a day with nothing to record writes nothing. Tombstones are kept for good. Pre-G9 rows and newer-format rows are read as legacy rows and never rewritten. `deleteAll()` also forgets the device key. Tests: `DayRowMergeTests`, `DayRecordRepositoryTests`. |
+| `CustomItemRecord`, `SavedRecipeRecord` | Soft delete (G9-1, owner call S3 = A): see those repositories. |
+| `FernletDatabaseRecord` (the aggregate blob) | Still whole-blob last-writer-wins; splitting it is a follow-up outside G9. |
+| `WorkoutTombstoneStore` | Unrelated to CloudKit: a device-local 200-id ring that stops a just-deleted workout's Health sample being re-imported. |
+
 ## Persistence Controllers
 
 ### `Persistence.swift`
