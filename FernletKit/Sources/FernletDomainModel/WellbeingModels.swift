@@ -932,7 +932,7 @@ public nonisolated struct PersonalCareTask: Identifiable, Codable, Equatable {
 /// an edited memory, and the 300-memory cap (``capped(_:to:)``) drops memories nobody edited first.
 /// It is written only when true, so a memory nobody edited encodes exactly as it did before G9-3,
 /// and a missing key reads as false.
-public nonisolated struct MemoryNote: Identifiable, Codable, Equatable {
+public nonisolated struct MemoryNote: Identifiable, Codable, Equatable, Sendable {
     public var id = UUID()
     public var category: String
     public var text: String
