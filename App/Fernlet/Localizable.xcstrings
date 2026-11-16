@@ -44710,6 +44710,22 @@
         }
       }
     },
+    "Show my name to everyone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar mi nombre a todos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar mi nombre a todos"
+          }
+        }
+      }
+    },
     "Show the words again" : {
       "localizations" : {
         "es" : {
@@ -54743,6 +54759,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cuando ha pasado un rato desde que comiste o tomaste agua, tu compañero puede verse con un poco de hambre o de sed, solo mientras estás ^[despierto](inflect: true) y nunca cuando no te sientes bien. Si lo desactivas, nunca lo hará."
+          }
+        }
+      }
+    },
+    "When it's off, only your friends see your name before you share a recipe in person." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si está desactivado, solo tus amigos ven tu nombre antes de que compartas una receta en persona."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si está desactivado, solo tus amigos ven tu nombre antes de que compartas una receta en persona."
           }
         }
       }
@@ -90120,6 +90152,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mostrar calorías"
+          }
+        }
+      }
+    },
+    "settings.search.title.showMyNameToEveryone" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show my name to everyone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar mi nombre a todos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar mi nombre a todos"
           }
         }
       }

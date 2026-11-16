@@ -124,7 +124,12 @@ its public API at that tag. **2026-10-17:** Fernlet pins `0.1.1`, a fix release 
 public API and added two (`ProximityPairSession.inspector`, `init(host:profile:inspector:)`). **2026-10-31:** Fernlet
 pins `0.1.2`, which added the tap rendezvous (`ProximityTapRendezvous` and its types),
 `MeshNetworkManager.admissibleStrangerSigningKeys` and the mesh responder's withheld hello, and removed or changed no
-public API, so "that tag" is `0.1.2`.
+public API. **2026-11-15:** Fernlet pins `0.2.0` (roadmap G5, mesh privacy): the pair radio advertises no name
+unless `ProximityPairSession.setNameDisclosure(toEveryone:friendTags:)` says so and names friends by
+`resolveFriendName`; the mesh dial proof runs before the hello (`MeshNetworkManager.dialProofPeerKeyAgreementKeys`,
+`IdentityService.meshDialProofKey(with:)`, the namespace's `KeyDerivation.meshDialProofV1`, introduction
+protocol version 2, so 0.1.x and 0.2.0 phones do not meet on the mesh); the mesh `sid` rotates with the posture;
+and the `recipe.quic.*` tokens are `pair.quic.*`. So "that tag" is `0.2.0`.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend

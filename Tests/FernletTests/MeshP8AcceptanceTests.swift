@@ -185,7 +185,8 @@ enum MeshP8Acceptance {
     }
 
     /// The app came back: it spends a delivered task `true` and re-arms the claim at `requested` —
-    /// the token names the ending, the next state is the instruction — and is absorbed everywhere
+    /// the token names the ending, the next state is the instruction — re-arms a claim the system
+    /// ended in the background at `requested` too (G5, the claim re-arm), and is absorbed everywhere
     /// else, because the card is READ in the foreground.
     private nonisolated static func onAppForegrounded(
         _ state: MeshContinuationState
@@ -195,7 +196,7 @@ enum MeshP8Acceptance {
         case .requested: return cell(.requested, .absorbed)
         case .running: return cell(.requested, .completed, .succeeded)
         case .refused: return cell(.refused, .absorbed)
-        case .expired: return cell(.expired, .absorbed)
+        case .expired: return cell(.requested, .rearmed)
         case .completed: return cell(.completed, .absorbed)
         }
     }
