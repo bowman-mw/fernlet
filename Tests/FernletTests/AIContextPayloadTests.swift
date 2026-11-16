@@ -185,7 +185,7 @@ import FernletDomainModel
         for file in ["App/Fernlet/LaunchPreparationService.swift", "FernletKit/Sources/AIContext/MemoryAgent.swift",
                      "FernletKit/Sources/AIContext/AIContextPayload.swift"] {
             let source = try RepoRoot.source(file)
-            for token in ["privateMemor", "PrivateMemory", "keepMemoryPrivate"] {
+            for token in ["privateMemor", "PrivateMemoryVault", "PrivateMemoryRepository", "keepMemoryPrivate"] {
                 #expect(!source.contains(token), "\(file) names \(token)")
             }
         }

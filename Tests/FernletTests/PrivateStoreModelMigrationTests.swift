@@ -38,7 +38,7 @@ struct PrivateStoreModelMigrationTests {
     static let versionThreeChecksum = "igdTnCDbKKZx+uLl2g2KKueZfDMSsUJ7D6vDQ3IahI8="
     /// V4's checksum — the current model (V3 plus `PrivateMemory`). Pinned so a later edit to any entity
     /// builder is a deliberate new version, never a silent change under stores in the field.
-    static let versionFourChecksum = "PENDING"
+    static let versionFourChecksum = "ofD2KW1+E4nthZjZnE4KTGqyirG8hnFyZfyoVDs6JeY="
 
     /// A scratch directory for an on-disk store, UUID-named per the shared-disk-root discipline.
     private static func makeScratchDirectory() throws -> URL {

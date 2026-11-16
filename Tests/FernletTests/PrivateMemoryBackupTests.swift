@@ -40,10 +40,10 @@ struct PrivateMemoryBackupTests {
 
     /// An old iPhone (resolved, journal backup on) that writes one entry, keeps `memories` private, then
     /// turns the journal backup on.
-    static func writeOldBackup(_ cloud: FakeSealedBackupCloud, memories: [MemoryNote] = [PrivateMemoryBackupTests.sister, PrivateMemoryBackupTests.walk]) async throws {
+    static func writeOldBackup(_ cloud: FakeSealedBackupCloud, memories: [MemoryNote]? = nil) async throws {
         let old = JournalBackupDevice(cloud: cloud, writer: "old", resolved: true)
         try old.write(JournalBackupDevice.entry("a quiet day", day: 1))
-        for memory in memories {
+        for memory in memories ?? [Self.sister, Self.walk] {
             try old.host.privateMemories.keep(memory, key: old.key, isDecoy: false)
         }
         #expect(await old.coordinator.setSealedBackupEnabled(true, payloadType: .journalNarratives))
