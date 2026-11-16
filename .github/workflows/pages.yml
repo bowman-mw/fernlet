@@ -83,12 +83,14 @@ jobs:
           done
 
       # The no-tracking wall applies to the website too: nothing may load from another origin.
-      # The TestFlight join link is a link out that loads nothing, so that exact address is allowed.
+      # Two links out that load nothing are allowed by their exact address: the TestFlight join link,
+      # and the Open Government Licence – Canada on the technical page, which the Canadian Nutrient
+      # File's licence asks the credit to link to.
       - name: No third-party assets in the site
         run: |
           set -euo pipefail
           if grep -rnE '(src|href)="https?://' Site --include='*.html' \
-               | grep -vE 'href="https://(github\.com/bowman-mw/fernlet|fernlet\.com|testflight\.apple\.com/join/JPSRJKU6")'; then
+               | grep -vE 'href="https://(github\.com/bowman-mw/fernlet|fernlet\.com|testflight\.apple\.com/join/JPSRJKU6"|open\.canada\.ca/en/open-government-licence-canada")'; then
             echo "::error::a page references an off-origin asset — the site must be self-contained"
             exit 1
           fi
