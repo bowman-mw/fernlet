@@ -261,16 +261,20 @@ nonisolated struct AmbientReminderSchedule: Codable, Equatable, Sendable {
     /// their monthly rest is over. Returns the kinds to draw, in `candidates` order.
     mutating func choose(from candidates: [AmbientReminderKind], dayKey: String, now: Date) -> [AmbientReminderKind] {
         assert(!dayKey.isEmpty, "a schedule needs the day it is choosing for")
-        if self.dayKey != dayKey {
-            self.dayKey = dayKey
-            shownToday = []
-        }
+        roll(to: dayKey)
         for kind in candidates where shownToday.count < Self.dailyLimit && !shownToday.contains(kind.rawValue) {
             guard !isHidden(kind, now: now), isRested(kind, now: now) else { continue }
             shownToday.append(kind.rawValue)
             lastShown[kind.rawValue] = now
         }
         return candidates.filter { shownToday.contains($0.rawValue) && !isHidden($0, now: now) }
+    }
+
+    /// Starts a new day's count when `dayKey` is not the day `shownToday` is about.
+    mutating func roll(to dayKey: String) {
+        guard self.dayKey != dayKey else { return }
+        self.dayKey = dayKey
+        shownToday = []
     }
 
     /// "Not now": hides `kind` for a month from `now`.

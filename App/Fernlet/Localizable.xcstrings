@@ -70059,6 +70059,270 @@
         }
       }
     },
+    "home.friendNudge.a.body" : {
+      "comment" : "Home friend card under 'Send {Name} a heart?'. Never mentions how the friend feels.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little warmth goes a long way."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un poco de cariño llega muy lejos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un poquito de cariño llega muy lejos."
+          }
+        }
+      }
+    },
+    "home.friendNudge.a.title" : {
+      "comment" : "Home friend card title: invites sending a heart to a friend. The placeholder is the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Send %@ a heart?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Le envías un corazón a %@?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Le envías un corazón a %@?"
+          }
+        }
+      }
+    },
+    "home.friendNudge.b.body" : {
+      "comment" : "Home friend card under 'Thinking of {Name}'. The placeholder is the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A heart could brighten %@'s day."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un corazón podría alegrarle el día a %@."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un corazón podría alegrarle el día a %@."
+          }
+        }
+      }
+    },
+    "home.friendNudge.b.title" : {
+      "comment" : "Home friend card title. The placeholder is the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thinking of %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensando en %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensando en %@"
+          }
+        }
+      }
+    },
+    "home.friendNudge.c.body" : {
+      "comment" : "Home friend card under '{Companion} has an idea'. %1$@ is the companion's name, %2$@ the friend's first name. Never mentions how the friend feels; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ thinks %2$@ would love a heart today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ cree que a %2$@ le encantaría recibir un corazón hoy."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ piensa que a %2$@ le encantaría recibir un corazón hoy."
+          }
+        }
+      }
+    },
+    "home.friendNudge.c.title" : {
+      "comment" : "Home friend card title. The placeholder is the person's companion's name (default 'Sprout').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has an idea"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tiene una idea"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tiene una idea"
+          }
+        }
+      }
+    },
+    "home.friendNudge.d.body" : {
+      "comment" : "Home friend card for a friend met in person this week. The placeholder is the friend's first name; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You and %@ met this week. Want to send a little warmth?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ y tú os visteis esta semana. ¿Quieres enviarle un poco de cariño?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tú y %@ se vieron esta semana. ¿Quieres enviarle un poquito de cariño?"
+          }
+        }
+      }
+    },
+    "home.friendNudge.d.title" : {
+      "comment" : "Home friend card title for a friend met in person this week. The placeholder is the friend's first name; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A heart for %@?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Un corazón para %@?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Un corazón para %@?"
+          }
+        }
+      }
+    },
+    "home.friendNudge.send" : {
+      "comment" : "Home friend card button: sends the friend a heart, delivered while apart.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Send a heart"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar un corazón"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar un corazón"
+          }
+        }
+      }
+    },
+    "home.friendNudge.sent.body" : {
+      "comment" : "Home friend card after sending a heart. The placeholder is the friend's first name; keep the friend's gender neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ will feel it next time they open Fernlet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ lo sentirá la próxima vez que abra Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ lo sentirá la próxima vez que abra Fernlet."
+          }
+        }
+      }
+    },
+    "home.friendNudge.sent.title" : {
+      "comment" : "Home friend card after tapping Send a heart: the heart was saved for delivery.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart on its way"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu corazón va en camino"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu corazón va en camino"
+          }
+        }
+      }
+    },
     "home.gentleOffer.breathing" : {
       "comment" : "Home gentle-offer card on a heavier day, inviting a breathing exercise. An offer, never an instruction: no 'you should'.",
       "extractionState" : "extracted_with_value",
