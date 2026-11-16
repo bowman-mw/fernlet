@@ -6303,12 +6303,24 @@ final class FernletStore {
         return nested + RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
+    /// `recipe` as the hash-covered shares (Files, Shortcuts, Messages) send it: its sub-recipes' steps
+    /// as labelled leading parts, so every reader sees them; those wires cannot carry the sub-recipes
+    /// themselves, which arrive as fixed ingredients (recipes as building blocks, design §9).
+    func sharingDefinition(for recipe: RecipeDefinition) -> RecipeDefinition {
+        let all = allRecipesForNesting
+        return recipe.flattenedForSharing(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all))
+    }
+
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
         MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func proximityRecipeSharePayload(for recipe: RecipeDefinition) -> ProximityRecipeSharePayload {
-        var payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
+        // The recipes it uses travel with it (recipes as building blocks, pick P09a).
+        let all = allRecipesForNesting
+        let used = RecipeNestingGraph(recipes: all).descendants(of: recipe.id)
+        let foods = foodCatalog.items(forRecipes: [recipe] + all.filter { used.contains($0.id) })
+        var payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: foods, recipes: all)
         #if canImport(UIKit)
         // Attach the recipe's picture (the user's own pick or the web-derived default) as a
         // downscaled, size-capped JPEG so the receiving device gets it over the mesh and never
@@ -6515,49 +6527,113 @@ final class FernletStore {
         }
 
         let now = Date()
-        return batchSnapshotPersistence {
-            let recipeIngredients = payload.ingredients.map { ingredient in
-                let trimmedIngredientName = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                let unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RecipeUnit.serving.rawValue : ingredient.unit
-                let quantity = min(max(ingredient.quantity, 0.01), RecipeImportLimits.maxQuantity)
-                let foodItem = FoodItem(
-                    name: trimmedIngredientName.isEmpty ? "Imported ingredient" : trimmedIngredientName,
-                    brandSource: "Imported recipe",
-                    servingSize: quantity,
-                    servingUnit: unit,
-                    macros: Macros(protein: max(ingredient.protein, 0),
-                                   carbs: max(ingredient.carbs, 0),
-                                   fat: max(ingredient.fat, 0)),
-                    micronutrients: Micronutrients(),
-                    category: "recipe ingredient",
-                    source: .manual,
-                    lastVerified: now,
-                    tags: ["recipe", "imported"],
-                    // The sender's fractional grams (paste text, mesh `.local`), already checked at
-                    // decode to round to exactly the whole-gram fields above. Absent from older senders.
-                    preciseMacros: ingredient.preciseMacros
-                )
-                foodItems.append(foodItem)
-                return RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)
+        let imported = batchSnapshotPersistence {
+            // Sub-recipes first, deepest first (recipes as building blocks, pick P09a): each becomes a
+            // recipe of its own, or reuses the same recipe already here, so the lines naming it bind.
+            var subRecipeIDs: [UUID] = []
+            for sub in payload.subRecipes ?? [] {
+                if let existing = matchingRecipe(for: sub) {
+                    subRecipeIDs.append(existing.id)
+                    continue
+                }
+                let recipe = importedRecipe(from: sub, id: UUID(), subRecipeIDs: subRecipeIDs, now: now)
+                recipes.insert(recipe, at: 0)
+                subRecipeIDs.append(recipe.id)
             }
-            // F5 steps (sanitized, nil when a peer sent none) and, for a multipart share, its parts
-            // rebuilt from the partition with the flattening labels removed — one rule for every path.
-            let layout = RecipeComponentImport.layout(for: payload, ingredientIDs: recipeIngredients.map(\.id))
-
-            let recipe = RecipeDefinition(
-                id: importedRecipeID ?? UUID(),
-                name: trimmedName,
-                servings: payload.servings,
-                ingredients: recipeIngredients,
-                notes: payload.notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                source: "imported",
-                createdAt: now,
-                updatedAt: now,
-                steps: layout.steps,
-                components: layout.components
-            )
+            let recipe = importedRecipe(from: payload, id: importedRecipeID ?? UUID(), subRecipeIDs: subRecipeIDs, now: now)
             recipes.insert(recipe, at: 0)
             return recipe
+        }
+        // The recipe foods its sub-recipe lines need. A multipart share stays in parts until the next
+        // launch or sync converts it (`migrateRecipePartsAndSync`), like a recipe saved in parts.
+        syncRecipeFoods()
+        return imported
+    }
+
+    /// One shared recipe as this device stores it: each ingredient minted as an imported food, except a
+    /// line naming a sub-recipe (``SharedRecipeIngredient/subRecipeIndex``), which uses that recipe by
+    /// the serving. The sub-recipes' labelled step parts are dropped: their steps now come from the
+    /// sub-recipes themselves.
+    private func importedRecipe(
+        from payload: SharedRecipePayload, id: UUID, subRecipeIDs: [UUID], now: Date
+    ) -> RecipeDefinition {
+        let recipeIngredients = payload.ingredients.map { ingredient in
+            let quantity = min(max(ingredient.quantity, 0.01), RecipeImportLimits.maxQuantity)
+            if let index = ingredient.subRecipeIndex, subRecipeIDs.indices.contains(index) {
+                return RecipeIngredient(foodItemId: subRecipeIDs[index], quantity: quantity, unit: RecipeUnit.serving.rawValue)
+            }
+            let trimmedIngredientName = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RecipeUnit.serving.rawValue : ingredient.unit
+            let foodItem = FoodItem(
+                name: trimmedIngredientName.isEmpty ? "Imported ingredient" : trimmedIngredientName,
+                brandSource: "Imported recipe",
+                servingSize: quantity,
+                servingUnit: unit,
+                macros: Macros(protein: max(ingredient.protein, 0),
+                               carbs: max(ingredient.carbs, 0),
+                               fat: max(ingredient.fat, 0)),
+                micronutrients: Micronutrients(),
+                category: "recipe ingredient",
+                source: .manual,
+                lastVerified: now,
+                tags: ["recipe", "imported"],
+                // The sender's fractional grams (paste text, mesh `.local`), already checked at
+                // decode to round to exactly the whole-gram fields above. Absent from older senders.
+                preciseMacros: ingredient.preciseMacros
+            )
+            foodItems.append(foodItem)
+            return RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)
+        }
+        // F5 steps (sanitized, nil when a peer sent none) and, for a multipart share, its parts
+        // rebuilt from the partition with the flattening labels removed — one rule for every path.
+        var layout = RecipeComponentImport.layout(for: payload, ingredientIDs: recipeIngredients.map(\.id))
+        if let subs = payload.subRecipes, !subs.isEmpty {
+            layout = Self.droppingSubRecipeParts(
+                layout, named: Set(subs.map { RecipeComponentNaming.normalized($0.name, position: 0) }))
+        }
+        return RecipeDefinition(
+            id: id,
+            name: payload.name.trimmingCharacters(in: .whitespacesAndNewlines),
+            servings: payload.servings,
+            ingredients: recipeIngredients,
+            notes: payload.notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            source: "imported",
+            createdAt: now,
+            updatedAt: now,
+            steps: layout.steps,
+            components: layout.components
+        )
+    }
+
+    /// `layout` without the leading steps-only parts a sender wrote for its sub-recipes (named after
+    /// them), which a receiver that imports the sub-recipes reads from those recipes instead.
+    static func droppingSubRecipeParts(_ layout: RecipeComponentImport.Layout, named names: Set<String>) -> RecipeComponentImport.Layout {
+        guard let components = layout.components else { return layout }
+        let dropped = components.filter { $0.ingredientIDs.isEmpty && names.contains($0.name) }
+        guard !dropped.isEmpty else { return layout }
+        let droppedSteps = Set(dropped.flatMap(\.stepIDs))
+        let kept = components.filter { part in !dropped.contains { $0.id == part.id } }
+        let steps = (layout.steps ?? []).filter { !droppedSteps.contains($0.id) }
+        var result = layout
+        result.steps = steps.isEmpty ? nil : steps
+        result.components = kept.count >= RecipeComponentLimits.minComponents ? kept : nil
+        return result
+    }
+
+    /// A recipe already here that is the same as a shared sub-recipe: the same name, servings and
+    /// ingredient lines (names, amounts and units). Reused instead of making a second copy (P09a).
+    private func matchingRecipe(for payload: SharedRecipePayload) -> RecipeDefinition? {
+        let name = FoodItemSearch.normalized(payload.name)
+        let wanted = payload.ingredients.map { "\(FoodItemSearch.normalized($0.name))|\($0.quantity)|\($0.unit)" }
+        return recipes.first { recipe in
+            guard FoodItemSearch.normalized(recipe.name) == name, recipe.servings == payload.servings,
+                  recipe.ingredients.count == wanted.count else { return false }
+            let foods = foodCatalog.items(forRecipe: recipe)
+            let lines = recipe.ingredients.map { line in
+                let foodName = foods.first { $0.id == line.foodItemId }?.name ?? ""
+                return "\(FoodItemSearch.normalized(foodName))|\(line.quantity)|\(line.unit)"
+            }
+            return lines == wanted
         }
     }
 

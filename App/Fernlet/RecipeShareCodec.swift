@@ -74,7 +74,13 @@ struct RecipeShareCodec {
     /// `webImport`) are sent as the `.saved` kind — preserving free-text ingredients + precomputed
     /// nutrition + source URL, and keeping wire compatibility with peers running older builds.
     /// User-built recipes are sent as the `.local` kind, resolved against `foodItems`.
-    static func proximityPayload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> ProximityRecipeSharePayload {
+    ///
+    /// `recipes` (recipes as building blocks): every recipe this one may use. When it uses any, they
+    /// travel with it as `subRecipes` (``ExchangeRecipePayloadBuilder/nestedPayload(for:foodItems:recipes:)``),
+    /// and `foodItems` must hold their foods too. Empty sends the recipe alone, as before.
+    static func proximityPayload(
+        for recipe: RecipeDefinition, foodItems: [FoodItem], recipes: [RecipeDefinition] = []
+    ) -> ProximityRecipeSharePayload {
         if let webImport = recipe.webImport {
             return ProximityRecipeSharePayload(
                 recipe: ProximitySharedRecipe(
@@ -98,7 +104,8 @@ struct RecipeShareCodec {
         return ProximityRecipeSharePayload(
             recipe: ProximitySharedRecipe(
                 kind: .local,
-                local: payload(for: recipe, foodItems: foodItems),
+                local: recipes.isEmpty ? payload(for: recipe, foodItems: foodItems)
+                    : ExchangeRecipePayloadBuilder.nestedPayload(for: recipe, foodItems: foodItems, recipes: recipes),
                 saved: nil
             )
         )

@@ -46,7 +46,8 @@ extension FernletStore {
 
     /// What "Send in Messages" can offer for `recipe` — see ``RecipeMessagesCardOffer``.
     func recipeMessagesCardOffer(for recipe: RecipeDefinition, includesNotes: Bool) -> RecipeMessagesCardOffer {
-        Self.messagesCardOffer(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe), includesNotes: includesNotes)
+        Self.messagesCardOffer(for: sharingDefinition(for: recipe), foodItems: foodCatalog.items(forRecipe: recipe),
+                               includesNotes: includesNotes)
     }
 
     /// The pure half of ``recipeMessagesCardOffer(for:includesNotes:)``.
