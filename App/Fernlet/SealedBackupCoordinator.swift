@@ -342,6 +342,11 @@ final class SealedBackupCoordinator {
     /// The engine's background-task assertion. Injectable ONLY so tests need no UIKit app state.
     private let backgroundTasks: (any SealedBackupBackgroundTaskAsserting)?
 
+    /// Where the recovery code's sealed escrow keys live (G9-2). Production leaves it nil and uses
+    /// ``CloudKitDataService``; a test that injects an identity but no recovery store gets no top-up
+    /// at all, so no coordinator test reaches iCloud through it.
+    private let recoveryEscrowCloud: (any RecoveryEscrowStoring)?
+
     /// The Sealed backup v2 engine every period, intimacy, journal and passport pass runs on (design
     /// 2026-09-30, §4.2). Built on first use over the four adapters; one per coordinator, so one per
     /// `FernletStore`.
@@ -358,7 +363,8 @@ final class SealedBackupCoordinator {
         journalDeviceKeyService: String? = nil,
         writerTagProvider: (() -> String?)? = nil,
         clock: (() -> Date)? = nil,
-        backgroundTasks: (any SealedBackupBackgroundTaskAsserting)? = nil
+        backgroundTasks: (any SealedBackupBackgroundTaskAsserting)? = nil,
+        recoveryEscrowCloud: (any RecoveryEscrowStoring)? = nil
     ) {
         self.host = host
         self.identityFactory = identityFactory
@@ -370,6 +376,7 @@ final class SealedBackupCoordinator {
         self.writerTagProvider = writerTagProvider
         self.clock = clock
         self.backgroundTasks = backgroundTasks
+        self.recoveryEscrowCloud = recoveryEscrowCloud
         if let intimacyLogStore { attachIntimacyLogStore(intimacyLogStore) }
     }
 
@@ -683,6 +690,7 @@ final class SealedBackupCoordinator {
         await retireSensitiveNotesBackupIfNeeded(backupMayExist: prefs.sealedBackupSensitiveNotesEnabled)
         guard prefs.iCloudSyncEnabled else { return }
         reconcileEscrowKey()
+        await sealNewEscrowKeysForRecoveryCode()
         if host.sealedBackupRestoreAwaitsOwner {
             FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "launch"])
         }
@@ -710,6 +718,30 @@ final class SealedBackupCoordinator {
             host.recordSealedBackupEscrowConflict(true)
         case .noEscrow, .usingSynced, .promotedLocal:
             host.recordSealedBackupEscrowConflict(false)
+        }
+    }
+
+    /// Seals any escrow key this phone minted or adopted since the recovery code was made to the
+    /// stored recovery public key (G9-2, plan Part 2 step 4), right after the reconcile settled which
+    /// keys this phone holds, and finishes a "Make a new code" whose revoke did not land. No code is
+    /// needed and nothing happens when none was made. Skipped in a duress session, and best-effort:
+    /// a failure is audit-logged and the next launch tries again.
+    func sealNewEscrowKeysForRecoveryCode() async {
+        guard !host.duressSessionActive else { return }
+        let cloud: any RecoveryEscrowStoring
+        switch (recoveryEscrowCloud, identityFactory) {
+        case (let injected?, _): cloud = injected
+        case (nil, nil): cloud = CloudKitDataService()
+        case (nil, _?): return
+        }
+        let service = RecoveryCodeService(
+            cloud: cloud, identityFactory: { [identityFactory] in identityFactory?() ?? .fernletApp() },
+            duressActive: { [host] in host.duressSessionActive }
+        )
+        do {
+            try await service.sealNewEscrowKeys()
+        } catch {
+            FernletAuditLog.log("sealedBackup.recoveryTopUpFailed", context: ["error": String(describing: type(of: error))])
         }
     }
 

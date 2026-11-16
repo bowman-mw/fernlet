@@ -14,7 +14,8 @@ construction. That omission is a hard build error, not a convention — the buil
 opaquely: sealed Core Data entity names appear as string literals (for deletion sweeps), and sealed
 backups travel as ciphertext-only ``SealedBackupRecord`` envelopes whose crypto lives app-side, and
 the user's own photos as ciphertext-only ``SealedPhotoRecord`` envelopes (one per photo id, plus a
-sealed per-corpus manifest) — this module moves the bytes and never holds a key that opens them.
+sealed per-corpus manifest), and the recovery code's sealed escrow keys as ciphertext-only
+``RecoveryEscrowRecord``s — this module moves the bytes and never holds a key that opens them.
 
 The stack has three tiers. At the bottom, ``PersistenceController`` owns the
 `NSPersistentCloudKitContainer`, built from a **programmatic, cloud-safe-only model** (aggregate
@@ -192,6 +193,18 @@ which is what lets the computed `minimumEntryHashVersion` stand as the per-corpu
 - ``SealedPhotoSlot``
 - ``SealedPhotoManifest``
 - ``SealedPhotoRecord``
+
+### Recovery code escrow (G9-2)
+
+One record per (recovery key, escrow key), named
+`recovery-escrow.<sha256hex(recoveryPublicKey)>.<hex(escrowPublicKeyHash)>`: an escrow private key
+sealed with HPKE to the recovery code's public key, plus that public key and the date the code was
+made. Opaque here like the sealed backups: the code, the HPKE and every key live in FernletCrypto and
+the app, which this module never imports. "Make a new code" deletes the old code's records by name
+prefix (``CloudKitDataService/deleteRecoveryEscrowRecords(keeping:)``), and both delete-everything
+sweeps include the type.
+
+- ``RecoveryEscrowRecord``
 
 ### Heart drops (public database)
 

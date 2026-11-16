@@ -891,3 +891,23 @@ struct KeyCustodyBoundaryTests {
         #expect(source.contains(".biometryCurrentSet"))
     }
 }
+
+// MARK: - G9-2: a recovered escrow key is born device-only
+
+extension KeyCustodyBoundaryTests {
+    /// The recovery code adds no synchronizable row: the escrow keys it recovers are written
+    /// `AfterFirstUnlockThisDeviceOnly`, never synchronizable, and only a later launch's reconcile
+    /// (the existing escrow promotion, the one sanctioned synchronizable write) publishes one.
+    @MainActor @Test func recoveredEscrowKeysAreAfterFirstUnlockThisDeviceOnly() throws {
+        let service = "com.fernlet.identity.custody.recovery.\(UUID().uuidString)"
+        let identity = IdentityService.fernletApp(keychainService: service)
+        defer { KeychainItem.deleteAll(service: service) }
+        try identity.ensureProvisioned()
+        let key = Curve25519.KeyAgreement.PrivateKey()
+        #expect(identity.storeRecoveredEscrowKeys([key]) == 1)
+        let account = IdentityService.escrowKeychainAccount(forPublicKey: key.publicKey.rawRepresentation)
+        let attrs = rowAttributes(account: account, service: service)
+        #expect(attrs?.accessible == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+        #expect(attrs?.synchronizable == false, "a recovered escrow key must not sync until the reconcile promotes it")
+    }
+}

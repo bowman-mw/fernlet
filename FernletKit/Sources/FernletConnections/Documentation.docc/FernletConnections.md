@@ -30,7 +30,7 @@ Every literal is today's, byte for byte, and pinned: `ProximityNamespaceGoldenTe
 `ProximityNamespace.fernlet.soundness == .sound`, holds the 40 labels FernletCrypto's registry also
 declares (38 protocol labels and both feature salts) to the same spelling and the signature twins to
 the same signing acceptance, runs the "no label is a byte prefix of another" check over
-FernletCrypto's 81 registry labels and these 41 together, and checks that the bytes each hash and
+FernletCrypto's 83 registry labels and these 41 together, and checks that the bytes each hash and
 transcript consumer writes today begin with the field's prefix.
 
 That `.sound` verdict is load-bearing at run time: ProximityKit refuses an unsound namespace on its

@@ -301,6 +301,17 @@ public nonisolated enum FernletCryptoPurpose {
     public nonisolated enum KeyDerivation {
         public static let sealedBackupLegacyV1 = CryptographicPurpose("com.fernlet.sealed-backup")
         public static let sealedBackupV2 = CryptographicPurpose("com.fernlet.sealed-backup.v2")
+        /// **Written since G9-2 (2026-11-15, plan Part 2).** The HKDF-SHA256 `info` that turns a
+        /// recovery code's 128 bits of entropy (empty salt) into the 32-byte X25519 recovery
+        /// private key (``RecoveryCode/recoveryPrivateKey()``). Phones keep only its public half.
+        public static let recoveryCodeX25519V1 = CryptographicPurpose("fernlet.recovery-code.x25519.v1")
+        /// **Written since G9-2.** The HPKE `info` (RFC 9180 key schedule context) every
+        /// sealed-backup escrow private key is sealed under to the recovery public key
+        /// (``RecoveryEscrowSeal``: DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, ChaCha20-Poly1305),
+        /// with the escrow public key's SHA-256 as the authenticated data. A key derivation
+        /// context, so it sits in this family; `-escrow.hpke` keeps it apart from
+        /// ``recoveryCodeX25519V1`` and from the lock's `fernlet.lock.recovery.contentkey.v1`.
+        public static let recoveryEscrowHPKEV1 = CryptographicPurpose("fernlet.recovery-escrow.hpke.v1")
         public static let proximityTransportV1 = CryptographicPurpose("fernlet.proximity.v1")
         public static let heartDropPairV1 = CryptographicPurpose("fernlet.heartdrop.v1")
         public static let presencePairV1 = CryptographicPurpose("fernlet.presence.tag.v1")

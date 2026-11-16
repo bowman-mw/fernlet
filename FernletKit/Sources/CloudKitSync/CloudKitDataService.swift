@@ -289,6 +289,8 @@ public final class CloudKitDataService {
         // sweeps sealed photo records too — they are the user's own media, not a survivor like the
         // friend wall.
         "SealedPhotoRecord",
+        // The recovery code's sealed escrow keys (G9-2): opaque HPKE ciphertext, no local row.
+        "RecoveryEscrowRecord",
         "CD_SavedRecipeRecord",
         "SavedRecipeRecord",
         "CD_CustomItemRecord",
@@ -327,7 +329,13 @@ public final class CloudKitDataService {
         "CoinLedgerRecord",
         "MilestoneLedgerRecord",
         "DayRecord",
-        "MenstrualNarrative"
+        "MenstrualNarrative",
+        // Not a legacy type, but the same shape of problem (G9-2): the recovery code's sealed
+        // escrow keys are written directly, have no local row to propagate a delete from, and
+        // must go on every "delete everything" whatever the switches say, which is exactly what
+        // this unconditional sweep does. No enable flag owns them, unlike the two sealed-backup
+        // namespaces left out above.
+        "RecoveryEscrowRecord"
     ]
 
     private let accountProvider: CloudKitAccountStatusProviding
@@ -1118,6 +1126,96 @@ public final class CloudKitDataService {
             formatVersion: formatVersion,
             keySalt: keySalt
         )
+    }
+
+    // MARK: - Recovery escrow (G9-2)
+
+    /// Uploads sealed escrow keys, one `RecoveryEscrowRecord` each, under their deterministic names
+    /// (``RecoveryEscrowRecord/recordName``). Overwrites a record of the same name (all-keys save).
+    ///
+    /// - Parameter records: The records to save; nothing happens for none.
+    /// - Throws: ``CloudKitDataServiceError/notSignedIn`` without an account, or CloudKit's error.
+    public func saveRecoveryEscrowRecords(_ records: [RecoveryEscrowRecord]) async throws {
+        guard !records.isEmpty else { return }
+        try await ensureSignedIn()
+        let zoneID = zoneIDOverride ?? Self.appZoneID
+        let cloudRecords = records.map { record in
+            let cloudRecord = CKRecord(
+                recordType: "RecoveryEscrowRecord",
+                recordID: CKRecord.ID(recordName: record.recordName, zoneID: zoneID)
+            )
+            cloudRecord["recoveryPublicKey"] = record.recoveryPublicKey as CKRecordValue
+            cloudRecord["escrowPublicKeyHash"] = record.escrowPublicKeyHash as CKRecordValue
+            cloudRecord["encapsulatedKey"] = record.encapsulatedKey as CKRecordValue
+            cloudRecord["ciphertext"] = record.ciphertext as CKRecordValue
+            cloudRecord["codeMadeAt"] = record.codeMadeAt as CKRecordValue
+            cloudRecord["formatVersion"] = Int64(record.formatVersion) as CKRecordValue
+            return cloudRecord
+        }
+        try await database.saveRecords(cloudRecords)
+        FernletAuditLog.log("cloudkit.recoveryEscrow.saved", context: ["recordCount": String(records.count)])
+    }
+
+    /// Every recovery-escrow record in the private database, across zones. A record that does not
+    /// decode, or whose name does not match its own fields, is skipped and audit-logged, never
+    /// guessed at.
+    ///
+    /// - Returns: The decodable records, in no particular order; empty when there are none.
+    /// - Throws: ``CloudKitDataServiceError/notSignedIn`` without an account, or CloudKit's error.
+    public func recoveryEscrowRecords() async throws -> [RecoveryEscrowRecord] {
+        try await ensureSignedIn()
+        let ids = try await recordIDsForExistingType("RecoveryEscrowRecord", in: try await appZoneIDs())
+        guard !ids.isEmpty else { return [] }
+        let records = try await database.records(for: ids)
+        var decoded: [RecoveryEscrowRecord] = []
+        for record in records {  // R2: bounded by the fetched records.
+            guard let escrow = Self.decodeRecoveryEscrow(record) else {
+                FernletAuditLog.log("cloudkit.recoveryEscrow.malformedSkipped")
+                continue
+            }
+            decoded.append(escrow)
+        }
+        return decoded
+    }
+
+    /// Deletes every recovery-escrow record NOT sealed to `keeping` (by name prefix), or all of them
+    /// when `keeping` is nil: "Make a new code" passes the new key, revoking the old code; a wipe
+    /// passes nil.
+    ///
+    /// - Parameter keeping: The recovery public key whose records stay, or nil for none.
+    /// - Returns: How many records were deleted.
+    /// - Throws: ``CloudKitDataServiceError/notSignedIn`` without an account, or CloudKit's error.
+    @discardableResult
+    public func deleteRecoveryEscrowRecords(keeping: Data?) async throws -> Int {
+        try await ensureSignedIn()
+        let all = try await recordIDsForExistingType("RecoveryEscrowRecord", in: try await appZoneIDs())
+        let keptPrefix = keeping.map { RecoveryEscrowRecord.recordNamePrefix(recoveryPublicKey: $0) }
+        let doomed = all.filter { id in
+            guard let keptPrefix else { return true }
+            return !id.recordName.hasPrefix(keptPrefix)
+        }
+        guard !doomed.isEmpty else { return 0 }
+        try await database.deleteRecords(with: doomed)
+        FernletAuditLog.log("cloudkit.recoveryEscrow.deleted", context: ["recordCount": String(doomed.count)])
+        return doomed.count
+    }
+
+    /// Decodes a `RecoveryEscrowRecord` CKRecord, or nil for anything missing, mis-sized, of another
+    /// format, or named for other fields than it carries.
+    private static func decodeRecoveryEscrow(_ record: CKRecord) -> RecoveryEscrowRecord? {
+        guard let recoveryPublicKey = record["recoveryPublicKey"] as? Data, recoveryPublicKey.count == 32,
+              let escrowPublicKeyHash = record["escrowPublicKeyHash"] as? Data, escrowPublicKeyHash.count == 32,
+              let encapsulatedKey = record["encapsulatedKey"] as? Data, encapsulatedKey.count == 32,
+              let ciphertext = record["ciphertext"] as? Data, !ciphertext.isEmpty,
+              let codeMadeAt = record["codeMadeAt"] as? Date,
+              let formatVersion = record["formatVersion"] as? Int64,
+              formatVersion == Int64(RecoveryEscrowRecord.currentFormatVersion) else { return nil }
+        let escrow = RecoveryEscrowRecord(
+            recoveryPublicKey: recoveryPublicKey, escrowPublicKeyHash: escrowPublicKeyHash,
+            encapsulatedKey: encapsulatedKey, ciphertext: ciphertext,
+            codeMadeAt: codeMadeAt, formatVersion: Int(formatVersion)
+        )
+        return escrow.recordName == record.recordID.recordName ? escrow : nil
     }
 
     /// Gate on every operation: throws ``CloudKitDataServiceError/notSignedIn`` unless the

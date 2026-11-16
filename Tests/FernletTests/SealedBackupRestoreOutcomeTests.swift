@@ -100,3 +100,21 @@ struct SealedBackupRestoreOutcomeTests {
         #expect(store.sealedBackupRestoreStatus[.sensitiveNotes] == .nothingToRestore)
     }
 }
+
+// MARK: - G9-2: which outcomes the banner offers a recovery code for
+
+extension SealedBackupRestoreOutcomeTests {
+    /// "Use a recovery code" is offered exactly where a code can help: the escrow key is not on this
+    /// iPhone (`deferredKeyNotSynced`) or no key here opens the backup (`notRecognized`). A locked
+    /// app, an unreachable iCloud, a rollback or a newer format are not key problems.
+    @Test func theBannerOffersARecoveryCodeOnlyForMissingKeyOutcomes() {
+        #expect(RecoveryCodePresenter.offersRecovery(for: .deferredKeyNotSynced))
+        #expect(RecoveryCodePresenter.offersRecovery(for: .notRecognized))
+        for outcome: SealedBackupRestoreOutcome in [
+            .restored(1), .nothingToRestore, .skippedStoreNotEmpty, .deferredLocked,
+            .deferredTransient, .rolledBack, .needsNewerFernlet
+        ] {
+            #expect(RecoveryCodePresenter.offersRecovery(for: outcome) == false, "\(outcome)")
+        }
+    }
+}
