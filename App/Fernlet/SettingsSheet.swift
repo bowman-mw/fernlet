@@ -84,6 +84,8 @@ struct SettingsSheet: View {
     @State private var pendingDestructiveAction: DestructiveConfirmation?
     @State private var editingMemory: MemoryNote?
     @State private var memorySearch = ""
+    /// G9-3: the forget-by-filters panel stays open with no "forget …" words typed.
+    @State private var forgetPanelOpen = false
     @State private var newCareTaskName = ""
     @State private var newCareTaskGroup = "Anytime"
     @State private var healthKit = HealthKitAuthorizationViewModel()
@@ -754,12 +756,25 @@ struct SettingsSheet: View {
                 .fernletWrappingText()
                 .padding(.horizontal, 4)
 
+            CoreMemoryRememberSection(store: store, pendingDestructiveAction: $pendingDestructiveAction)
+
             // The framed search field (`b2-settings-memory`), the same one Settings' first page has.
             SettingsSearchField(title: "Search or type \"forget [keyword]\"", text: $memorySearch,
                                 identifier: "settings.memorySearch")
 
-            if let keyword = forgetKeyword {
-                forgetShellView(keyword: keyword)
+            // G9-3: "forget …" words, dates and feelings fill a checklist; nothing goes until
+            // "Forget these" is tapped.
+            if forgetKeyword != nil || forgetPanelOpen {
+                MemoryForgetPanel(store: store, words: forgetKeyword ?? "", isOpen: $forgetPanelOpen) {
+                    memorySearch = ""
+                    forgetPanelOpen = false
+                }
+            } else if !store.memories.isEmpty {
+                Button { forgetPanelOpen = true } label: {
+                    FernletRowLabel("Forget by date or feeling")
+                }
+                .buttonStyle(FernletRowButtonStyle())
+                .accessibilityIdentifier("settings.memory.forgetFilters")
             }
 
             let displayed = filteredMemories
@@ -782,6 +797,8 @@ struct SettingsSheet: View {
                     }
                 }
             }
+
+            CoreMemoryResetSection(store: store, pendingDestructiveAction: $pendingDestructiveAction)
         }
         .sheet(item: $editingMemory) { memory in
             // Full height, never .medium: the character counter, the source date and Delete all sat
@@ -810,42 +827,6 @@ struct SettingsSheet: View {
     private static func memory(_ memory: MemoryNote, matches needle: String) -> Bool {
         memory.displayText.localizedCaseInsensitiveContains(needle) ||
             memory.category.localizedCaseInsensitiveContains(needle)
-    }
-
-    @ViewBuilder private func forgetShellView(keyword: String) -> some View {
-        let matches = store.memories.filter { Self.memory($0, matches: keyword) }
-        if matches.isEmpty {
-            FernletCard { EmptyState(text: "No memories match \"\(keyword)\".") }
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                // Grammar agreement, not an English "y"/"ies" spliced in by count: the old splice
-                // reached no catalog and welded the sentence to English's two-form plural.
-                Text("Forget ^[\(matches.count) memory](inflect: true) matching \"\(keyword)\"?")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                HStack(spacing: 16) {
-                    Button(role: .destructive) {
-                        matches.forEach { store.deleteMemory($0) }
-                        memorySearch = ""
-                    } label: {
-                        Label("Delete \(matches.count)", systemImage: "trash")
-                    }
-                    .buttonStyle(DestructiveCardButtonStyle())
-                    Button("Cancel") { memorySearch = "" }
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.slate)
-                }
-                .frame(minHeight: 44)
-            }
-            .padding(14)
-            .background(framedLook?.warn ?? Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-            .overlay {
-                // The framed warning (`.notice3.warn`): the look's warn fill in a 2-pt ink frame.
-                if let framedLook {
-                    RoundedRectangle(cornerRadius: 12).strokeBorder(framedLook.ink, lineWidth: FernletFramedLook.frameWidth)
-                }
-            }
-        }
     }
 
     private var signalsTab: some View {
@@ -1456,7 +1437,7 @@ struct SettingsSheet: View {
             if debugTierTwoMemories == nil {
                 FernletCard { EmptyState(text: "Loading tier 2 memories…") }
             } else if let tier2 = debugTierTwoMemories, tier2.isEmpty {
-                FernletCard { EmptyState(text: "No tier 2 memories yet. They are extracted from journals when Foundation Models are available.") }
+                FernletCard { EmptyState(text: "No tier 2 memories yet. They are worked out from your days (goal gaps, routines, workouts and mood) once a few days are logged.") }
             } else if let tier2 = debugTierTwoMemories {
                 ForEach(tier2) { record in
                     tierTwoMemoryRow(record)
