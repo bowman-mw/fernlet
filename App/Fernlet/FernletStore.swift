@@ -5856,6 +5856,30 @@ final class FernletStore {
         diary.syncRecipeFoods(alsoConsidering: savedRecipeService.savedRecipes)
     }
 
+    /// Turns multipart recipes into separate recipes (pick P07a), then brings recipe foods up to date:
+    /// run at launch and after every sync, when an update first meets this device's multipart recipes
+    /// or another device's arrive. Not on a save, so a recipe saved in parts is converted at the next
+    /// launch or sync, never under the editor that saved it.
+    func migrateRecipePartsAndSync() {
+        if diary.migrateRecipeParts() > 0 {
+            webImageAttemptDefaults.set(true, forKey: Self.recipePartsMigratedNoteKey)
+        }
+        syncRecipeFoods()
+    }
+
+    /// Device-local: the recipe book still owes "Your recipe parts are now their own recipes."
+    private static let recipePartsMigratedNoteKey = "recipeBook.partsMigratedNotePending"
+
+    /// Whether the recipe book shows the one-time note about converted parts (pick P07a).
+    var showsRecipePartsMigratedNote: Bool {
+        webImageAttemptDefaults.bool(forKey: Self.recipePartsMigratedNoteKey)
+    }
+
+    /// Dismisses that note for good on this device.
+    func dismissRecipePartsMigratedNote() {
+        webImageAttemptDefaults.removeObject(forKey: Self.recipePartsMigratedNoteKey)
+    }
+
     /// Makes sure the rows a save is about to resolve that were picked as recipes find their recipe
     /// foods, so a picked recipe never becomes a custom ingredient of the same name.
     private func ensureRecipeFoods(for rows: [ManualRecipeIngredientInput]) {
@@ -8190,8 +8214,9 @@ final class FernletStore {
         milestoneLedgerService.reloadFromStore()
         customItemService.reloadFromStore()
         savedRecipeService.reloadFromStore()
-        // Recipe foods follow whatever recipes the sync brought in (recipes as building blocks).
-        syncRecipeFoods()
+        // Recipe foods follow whatever recipes the sync brought in (recipes as building blocks), and a
+        // multipart recipe from an older device becomes separate recipes.
+        migrateRecipePartsAndSync()
         // Credit any newly active synced day (and reconcile milestones over the synced-in history).
         // Idempotent — re-running never double-grants.
         reconcileCoinLedger()
@@ -8245,7 +8270,11 @@ final class FernletStore {
     /// The bundled food catalog is now a read-only SQLite store opened lazily by `FoodCatalog`, so
     /// there is no heavyweight seed to await at launch. Kept as no-ops for the existing launch/UI
     /// call sites (the 24 MB JSON parse + 13k-struct hydration they used to drive is gone).
-    func loadBundledFoodItemsForLaunch() async { await diary.loadBundledFoodItemsForLaunch() }
+    func loadBundledFoodItemsForLaunch() async {
+        await diary.loadBundledFoodItemsForLaunch()
+        // Launch is when an update first meets this device's multipart recipes and stale recipe foods.
+        migrateRecipePartsAndSync()
+    }
 
     func ensureBundledFoodItemsSeeded() { diary.ensureBundledFoodItemsSeeded() }
 }

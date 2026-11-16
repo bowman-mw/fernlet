@@ -1766,6 +1766,17 @@ public final class DiaryStore {
         batchSnapshotPersistence { foodItems = updated }
     }
 
+    /// Converts every multipart recipe in the book into separate recipes (owner pick P07a, see
+    /// ``RecipePartsMigration``) and persists; returns how many were converted. Idempotent and a no-op
+    /// when no recipe has parts, so the app runs it at launch and after every sync: a multipart
+    /// recipe an older paired device makes, or a multipart share, is converted when it arrives.
+    @discardableResult public func migrateRecipeParts() -> Int {
+        let result = RecipePartsMigration.migrated(recipes)
+        guard result.converted > 0 else { return 0 }
+        batchSnapshotPersistence { recipes = result.recipes }
+        return result.converted
+    }
+
     /// Makes the recipe foods editor rows picked as recipes (`ids`) bind to, before a save resolves
     /// them, so a picked recipe never becomes a custom ingredient of the same name.
     public func ensureRecipeFoods(for ids: [UUID], alsoConsidering otherRecipes: [RecipeDefinition]) {

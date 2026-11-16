@@ -1674,8 +1674,9 @@ struct RecipeSheet: View {
                     buildingBlockFields
 
                     if !partsDraft.isMultipart {
+                        // Parts are now recipes of their own (pick P07a): a recipe uses another one as
+                        // an ingredient ("From your recipes") instead of being split.
                         stepsSection
-                        splitIntoPartsButton
                     }
 
                     deleteRecipeButton
@@ -1787,33 +1788,6 @@ struct RecipeSheet: View {
                 onRemovePart: requestRemovePart
             )
         }
-    }
-
-    /// Offers to split a one-part recipe into parts: its rows become the first part and an empty second
-    /// part follows, ready to be named ("a dressing you make first, then the salad").
-    private var splitIntoPartsButton: some View {
-        Button {
-            guard partsDraft.split(ingredients: ingredients, steps: steps) != nil else { return }
-            ingredients = []
-            steps = []
-            expandedId = nil
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Split into parts")
-                    .font(FernletFramedFont.rowTitleBold)
-                    .foregroundStyle(WorldPalette.mossInk)
-                Text("For a recipe made in stages, like a dressing you make first and a salad you put together after.")
-                    .font(FernletFramedFont.note)
-                    .foregroundStyle(WorldPalette.dim)
-                    .fernletWrappingText()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .modifier(RecipeEditorCardFrame())
-        }
-        .buttonStyle(.plain)
-        .disabled(ingredients.count >= RecipeLimits.maxIngredients)
-        .accessibilityIdentifier("recipeEditor.splitIntoParts")
     }
 
     /// Removes a part, asking first when it holds anything the user typed. When one part is left, the
@@ -6884,9 +6858,16 @@ struct RecipeBookSheet: View {
     /// toast speaks for it, Undo included, so ``finishCreation(named:)`` shows the "added" line but
     /// leaves the announcement to the toast: two sentences posted together cut each other off.
     @State private var createdRecipeWasLogged = false
+    /// The one-time "Your recipe parts are now their own recipes" note (recipes as building blocks,
+    /// pick P07a), read once when the book opens.
+    @State private var partsNotePending = false
 
     @ViewBuilder
     var body: some View {
+        bookBody.onAppear { partsNotePending = store.showsRecipePartsMigratedNote }
+    }
+
+    @ViewBuilder private var bookBody: some View {
         if isEmbeddedInNavigationStack {
             bookContent
         } else {
@@ -6925,6 +6906,12 @@ struct RecipeBookSheet: View {
                     .foregroundStyle(WorldPalette.mossInk)
                     .fernletWrappingText()
                     .accessibilityIdentifier("recipeBook.createdNotice")
+            }
+            if partsNotePending {
+                RecipePartsMigratedNote {
+                    store.dismissRecipePartsMigratedNote()
+                    partsNotePending = false
+                }
             }
             createAndPlannerButtons
             searchField
