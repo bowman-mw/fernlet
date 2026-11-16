@@ -44,6 +44,11 @@ import WorldMapStore
 /// the terminals and concourses walked through clear under the grounds' see-through fog and the ones passed under or
 /// by do not.
 ///
+/// **Faster than a car, off a drive, is no walk** (owner 2026-11-15): walking a moving ferry's deck or a train's aisle
+/// ends the drive (Motion says walking) while the readings still go by at the boat's speed. A reading faster than
+/// `WorldRideWatch.carSpeed` by CoreLocation's own speed lifts the drive's see-through lane instead of the walked
+/// circle (``ridesOffADrive(_:)``), so the crossing shows as driven and only walking on land clears it.
+///
 /// **The passport and the odd hidden tiles** (round 7). ``atlas`` reads only the readings this keeper accepts,
 /// only while the phone is unlocked and never in a decoy, and goes with every wipe through ``clearAll()``.
 /// A lift also lifts any single cell it left fogged with all six neighbours open (`FogGapCloser`), in a
@@ -209,7 +214,7 @@ final class WorldFogKeeper {
             // The plane train, a people mover, a car on the airport's roads: nothing lifts, and no lane joins across.
             laneFrom = nil
             added = 0
-        } else if thinLine {
+        } else if thinLine || Self.ridesOffADrive(fix) {
             added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point), driving: true)
             if accepted { laneFrom = fix.point }
         } else {
@@ -225,6 +230,13 @@ final class WorldFogKeeper {
     /// Whether `fix` is inside an airport's grounds faster than walking: it lifts nothing (only walking clears there).
     static func ridesThroughAirport(_ fix: WorldFix) -> Bool {
         fix.atAirport && (fix.speed ?? 0) > WorldRideWatch.walkingSpeed
+    }
+
+    /// Whether `fix`, not on a drive, went faster than a car's speed by CoreLocation's own reading (owner 2026-11-15): a
+    /// ferry's deck or a train's aisle walked while Motion says walking. It lifts the drive's see-through lane, never the
+    /// walked circle; a run or a bike ride below a car's speed keeps the circle.
+    static func ridesOffADrive(_ fix: WorldFix) -> Bool {
+        (fix.speed ?? 0) > WorldRideWatch.carSpeed
     }
 
     /// The cells a drive reading at `point` lifts: ``driveRadius`` around it and around the points every
