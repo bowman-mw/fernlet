@@ -2,23 +2,15 @@
 // CloudKitSync
 //
 // Per-row Core Data + iCloud store for day history, separate from the snapshot blob so each day syncs as
-// its own CloudKit record. Mirrors `CoinLedgerRepository` (upsert-only: `upsert` touches only the days it
-// is handed and never deletes rows it wasn't, so a stale in-memory set on one device can't wipe days that
-// synced in from another). One FernletDay per row keeps every record far under CloudKit's ~1 MB limit —
-// the reason this split removes the 370-day cap the single blob needed.
+// its own CloudKit record. One FernletDay per row keeps every record far under CloudKit's ~1 MB limit —
+// the reason this split removed the 370-day cap the single blob needed.
 //
-// Unlike the coin ledger, days MUST collapse duplicate rows here: CloudKit mirrors by record identity, not
-// the `dateKey` attribute, so two devices that first-write the same day before import settles can produce
-// two rows for one `dateKey`. The read path returns `[String: FernletDay]` (a dict can't hold two rows for
-// one key), so `loadAll`/`load` MERGE the rows for a `dateKey` by entry id (bug confirmation 2026-10-15
-// §3, the read-side stop-gap): meals, workouts, planned workouts and journals union, the newer row's copy
-// of an id winning; water takes the larger count; hygiene and tasks union. Self-heal deletion of the
-// older rows is CONSERVATIVE — it only fires below a STRICT `updatedAt` maximum, and only after the merged
-// day has been written into the newest row in the same save, so what the other device logged that day is
-// kept rather than deleted. On an equal-`updatedAt` tie nothing is deleted (see `dedupedDays`): two
-// devices' migration-backfilled rows share the blob's single global `updatedAt`, so an on-tie delete
-// would let each device delete the OTHER's row and lose both. The merge is deterministic by a stable
-// per-row tiebreak.
+// Since G9-1 (Docs/G9-Data-Integrity-Recovery-Plan-2026-11-15.md, Part 1) each DEVICE writes its own row
+// per day (the `deviceKey` attribute), with a stamp per element and a tombstone per removed element, and a
+// read merges every device's row for the day element by element (`DayRowMerge`). Two devices therefore
+// never write the same CloudKit record, so CloudKit's whole-record last-writer-wins cannot drop what the
+// other device logged, and a deletion on one device is not undone by the other. Pre-G9 rows (no device
+// key) and rows in a newer row format are read as legacy rows and never rewritten or deleted.
 
 import Foundation
 import CoreData
@@ -26,37 +18,37 @@ import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
 
-/// Per-row Core Data + iCloud store for day history: one `DayRecord` per calendar day.
+/// Per-row Core Data + iCloud store for day history: one `DayRecord` per calendar day per device.
 ///
-/// The `DayRecordRepositoring` conformer that ``CoreDataFernletRepository`` writes through.
-/// Splitting each `FernletDay` into its own row (a JSON `payloadData` blob via
-/// `RowPayloadCoders`, keyed by `dateKey`) keeps every record far under CloudKit's ~1 MB
-/// limit — the reason the old 370-day blob cap could be removed — and lets CloudKit merge
-/// different-day edits from different devices per record. Upsert-only: `upsert` touches only
-/// the days it is handed and never deletes rows it wasn't, so a stale in-memory set can't wipe
-/// days synced in from another device.
-///
-/// Unlike the ledger stores, reads MUST collapse duplicates: CloudKit mirrors by record
-/// identity, not `dateKey`, so two devices first-writing the same day before import settles can
-/// produce two rows for one key. `loadAll`/`load` return the rows for a key MERGED by entry id
-/// (`DuplicateDayRows`; bug confirmation 2026-10-15 §3) — so a meal logged on one device and a
-/// journal entry written on the other the same day both survive — and self-heal deletion of the
-/// older rows is deliberately conservative: only rows STRICTLY older than the top `updatedAt` are
-/// ever deleted, never ties (two devices' migration-backfilled rows share one stamp, and an on-tie
-/// delete would let each device wipe the other's row, losing both), and only in the same save that
-/// writes the merged day into the top rows. What this read cannot fix is ONE row both devices
-/// rewrite: each save replaces the whole day, so the later writer's day wins (the write-side merge
-/// is still owed). MainActor-isolated by the module default, working on ``PersistenceController``'s
-/// view context.
+/// The `DayRecordRepositoring` conformer that ``CoreDataFernletRepository`` writes through. Each
+/// `FernletDay` is a JSON ``DayRowPayload`` (the day plus its element stamps) in a row keyed by
+/// `dateKey` and `deviceKey`. ``upsert(_:)`` writes only THIS device's row for each day it is handed —
+/// never another device's row and never a day it wasn't handed — and an emptied day keeps a row of
+/// tombstones instead of being deleted. Every read returns the element-by-element merge of a day's rows
+/// (``DayRowMerge``): the newest stamp wins per element, so a later deletion beats an earlier entry and
+/// a later edit beats an earlier value, the same on every device. A day whose elements were all removed
+/// reads absent. Reads never write. Pre-G9 rows and newer-format rows are merged as legacy rows (every
+/// element live at the row's `updatedAt`) and never rewritten. MainActor-isolated by the module default,
+/// working on ``PersistenceController``'s view context.
 public struct DayRecordRepository: DayRecordRepositoring {
     private let controller: PersistenceController
+    /// A device key fixed by the caller (tests that play two devices over one store), or nil for this
+    /// install's own key from the store's device-local defaults.
+    private let fixedDeviceKey: String?
 
     public init() {
         self.init(controller: .shared)
     }
 
     public init(controller: PersistenceController) {
+        self.init(controller: controller, deviceKey: nil)
+    }
+
+    /// A repository over `controller` that writes as `deviceKey` (tests: two devices, one store), or as
+    /// this install's own key when nil.
+    public init(controller: PersistenceController, deviceKey: String?) {
         self.controller = controller
+        self.fixedDeviceKey = deviceKey
     }
 
     /// Loads the whole (uncapped) day history, duplicate-collapsed to one day per `dateKey`.
@@ -96,50 +88,33 @@ public struct DayRecordRepository: DayRecordRepositoring {
         return byKey.keys.sorted(by: >).prefix(limit).compactMap { byKey[$0] }
     }
 
-    /// Inserts or updates the given sanitized days by `dateKey`, never deleting rows it wasn't
-    /// handed; existing duplicate rows for a key are all updated (they collapse on the next read).
+    /// Writes this device's own row for each given sanitized day (G9-1), never touching another
+    /// device's row or a day it wasn't handed.
     ///
-    /// A day whose payload will not encode (a non-finite number reaching JSON) is SKIPPED and
-    /// audited, and the batch still reports `true` — so `SnapshotSaveCoordinator` marks the
-    /// snapshot durable and the audit record is the only trace of the dropped day. `false` is
-    /// reserved for the save itself failing; returning it for an un-encodable value would make
-    /// every subsequent save retry the same value forever.
+    /// The row holds the day as this device's copy now has it, with a stamp per element and a
+    /// tombstone per element the person removed (``DayRowMerge/ownRow(incoming:own:merged:deviceKey:now:)``),
+    /// so an emptied day keeps a row of tombstones instead of being deleted. A day with nothing to
+    /// record (no elements, no tombstones, no earlier row) writes nothing, and a row whose bytes would
+    /// not change is not rewritten. A day whose payload will not encode is SKIPPED and audited, and the
+    /// batch still reports `true` (a `false` would retry the same value forever). This device's own row
+    /// in a NEWER row format is left alone and audited (owner call S5 = C).
     ///
     /// - Returns: `false` when the Core Data save fails (the context is rolled back).
     ///   Not discardable (R7): a dropped save silently loses the day the caller just wrote.
     public func upsert(_ days: [DayRecordUpsert]) -> Bool {
         guard !days.isEmpty else { return true }
         let context = controller.container.viewContext
+        let me = deviceKey()
         do {
-            // Fetch ONLY the rows we're about to touch (predicate IN), then upsert by dateKey. We never
-            // delete rows we weren't handed, so flushing a stale set can't wipe days synced from another
-            // device. If duplicate rows already exist for a key, all of them are updated (harmless — they
-            // collapse to one on the next read).
-            let incomingKeys = days.map(\.dateKey)
             let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
-            request.predicate = NSPredicate(format: "dateKey IN %@", incomingKeys)
-            var existingByKey: [String: NSManagedObject] = [:]
+            request.predicate = NSPredicate(format: "dateKey IN %@", days.map(\.dateKey))
+            var rowsByKey: [String: [FetchedDayRow]] = [:]
             for record in try context.fetch(request) {
-                if let key = record.value(forKey: "dateKey") as? String {
-                    existingByKey[key] = record
-                }
+                guard let row = fetchedRow(record) else { continue }
+                rowsByKey[row.dateKey, default: []].append(row)
             }
-            let encoder = RowPayloadCoders.makeEncoder()
             for entry in days {
-                let payload: Data
-                do {
-                    payload = try encoder.encode(entry.day)
-                } catch {
-                    // A day whose payload will not encode (a non-finite number reaching JSON) is
-                    // skipped and audited — never a DEBUG trap on a runtime data condition.
-                    PersistenceFailureAudit.record("dayRecord.encode.failed", error: error)
-                    continue
-                }
-                let record = existingByKey[entry.dateKey]
-                    ?? NSEntityDescription.insertNewObject(forEntityName: "DayRecord", into: context)
-                record.setValue(entry.dateKey, forKey: "dateKey")
-                record.setValue(payload, forKey: "payloadData")
-                record.setValue(entry.updatedAt, forKey: "updatedAt")
+                writeOwnRow(entry, existing: rowsByKey[entry.dateKey] ?? [], deviceKey: me, in: context)
             }
             if context.hasChanges {
                 try context.save()
@@ -152,8 +127,42 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
-    /// Deletes the rows for the listed days (a no-op, returning `true`, when none exist) — used
-    /// when a day's last logged entry is removed so an emptied day doesn't linger.
+    /// Stages this device's row for one day in `context` (see ``upsert(_:)``).
+    private func writeOwnRow(_ entry: DayRecordUpsert, existing: [FetchedDayRow], deviceKey me: String,
+                             in context: NSManagedObjectContext) {
+        let own = existing.filter { $0.deviceKey == me }
+        guard !own.contains(where: { $0.isNewerFormat }) else {
+            FernletAuditLog.log("dayRecord.ownRowNewerFormat")
+            return
+        }
+        let merged = DayRowMerge.merge(date: entry.dateKey, rows: existing.compactMap(\.view))
+        let payload: Data
+        do {
+            let row = try DayRowMerge.ownRow(incoming: entry.day, own: own.first?.view, merged: merged,
+                                             deviceKey: me, now: entry.updatedAt.timeIntervalSince1970)
+            guard !row.stamps.isEmpty || !own.isEmpty else { return }
+            payload = try RowPayloadCoders.makeEncoder().encode(row)
+        } catch {
+            // A day whose payload will not encode (a non-finite number reaching JSON) is skipped
+            // and audited — never a DEBUG trap on a runtime data condition.
+            PersistenceFailureAudit.record("dayRecord.encode.failed", error: error)
+            return
+        }
+        let targets = own.isEmpty
+            ? [NSEntityDescription.insertNewObject(forEntityName: "DayRecord", into: context)]
+            : own.map(\.record)
+        // R2: bounded by this device's rows for one day (one, barring a duplicate).
+        for record in targets where record.value(forKey: "payloadData") as? Data != payload {
+            record.setValue(entry.dateKey, forKey: "dateKey")
+            record.setValue(me, forKey: "deviceKey")
+            record.setValue(payload, forKey: "payloadData")
+            record.setValue(entry.updatedAt, forKey: "updatedAt")
+        }
+    }
+
+    /// Hard-deletes every row (every device's) for the listed days (a no-op, returning `true`, when none
+    /// exist). No longer on the save path — since G9-1 an emptied day keeps a row of tombstones — and
+    /// kept for the protocol's callers that remove a day outright.
     ///
     /// - Returns: `false` when the Core Data delete/save fails. Not discardable (R7): the emptied
     ///   day is still on disk (and still syncing) when it does.
@@ -177,7 +186,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
-    /// Removes every day row — the delete-all/reset path.
+    /// Removes every day row (every device's, tombstones included) and this install's device key —
+    /// the delete-all/reset path.
     public func deleteAll() -> Bool {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
@@ -188,6 +198,8 @@ public struct DayRecordRepository: DayRecordRepositoring {
             if context.hasChanges {
                 try context.save()
             }
+            // The wipe forgets this install's device key too; the next write mints a fresh one.
+            controller.localDefaults.removeObject(forKey: "fernlet.sync.dayRowDeviceKey")
             return true
         } catch {
             PersistenceFailureAudit.record("dayRecord.deleteAll.failed", error: error)
@@ -196,36 +208,51 @@ public struct DayRecordRepository: DayRecordRepositoring {
         }
     }
 
-    /// Fetches the given request and collapses duplicate `dateKey` rows down to one per key in the returned
-    /// dict: the rows MERGED by entry id (``DuplicateDayRows/merged(newestFirst:)``), newest first, so no
-    /// row's entries are dropped by the collapse. Self-heal deletion of the older rows is CONSERVATIVE:
-    ///  - When some rows are STRICTLY older than the maximum `updatedAt`, the merged day is written into
-    ///    every top-stamped row (its stamp kept) and the strictly-older rows are deleted, in ONE save — so
-    ///    a delete that syncs never outruns the merged copy of what it deletes.
-    ///  - When every row shares the maximum `updatedAt` (a tie at the top), NONE is deleted and nothing is
-    ///    written; the read still returns their merge.
-    ///
-    /// The tie rule is load-bearing: two devices that both ran migration stamp their backfilled rows with
-    /// the SAME blob `updatedAt`. An "on-tie delete the other" rule would have each device delete the OTHER
-    /// device's row; both deletes then sync and both rows are lost with no backfill (the blob's days are
-    /// cleared post-migration). Keeping every top-stamped row on disk makes a mutual wipe impossible;
-    /// CloudKit's later merge and any subsequent real (strictly newer) edit collapse them safely.
+    /// The merged day per date key for the given request (``dedupedRead(fetching:)``).
     private func dedupedDays(fetching request: NSFetchRequest<NSManagedObject>) -> [String: FernletDay] {
         dedupedRead(fetching: request).days
     }
 
-    /// One decodable fetched row: its managed object, decoded day, `updatedAt` stamp, and tiebreak (the
-    /// object-ID URI, which makes the merge order deterministic across reads when rows tie).
-    private struct DecodedDayRow {
+    /// One fetched row: its managed object, date key, writing device, and (when it decoded) its
+    /// merge view. A row whose payload will not decode has no view.
+    private struct FetchedDayRow {
         let record: NSManagedObject
-        let day: FernletDay
-        let updatedAt: Date
-        let tiebreak: String
+        let dateKey: String
+        let deviceKey: String?
+        let view: DayRowView?
+        let isNewerFormat: Bool
     }
 
-    /// ``dedupedDays(fetching:)`` naming what it could not read: the date key of every row whose
-    /// payload would not decode, and — not accounted for — a failed fetch (empty days) or a row with no
-    /// date key, whose day is unknown.
+    /// `record` as a ``FetchedDayRow``, or nil when it has no date key.
+    private func fetchedRow(_ record: NSManagedObject) -> FetchedDayRow? {
+        guard let key = record.value(forKey: "dateKey") as? String else { return nil }
+        let device = record.value(forKey: "deviceKey") as? String
+        let updatedAt = record.value(forKey: "updatedAt") as? Date ?? .distantPast
+        let tiebreak = record.objectID.uriRepresentation().absoluteString
+        guard let data = record.value(forKey: "payloadData") as? Data else {
+            return FetchedDayRow(record: record, dateKey: key, deviceKey: device, view: nil, isNewerFormat: false)
+        }
+        let payload: DayRowPayload
+        do {
+            payload = try RowPayloadCoders.makeDecoder().decode(DayRowPayload.self, from: data)
+        } catch {
+            // Corruption, or another iPhone's newer build: the caller names the day as unreadable.
+            return FetchedDayRow(record: record, dateKey: key, deviceKey: device, view: nil, isNewerFormat: false)
+        }
+        let newer = payload.format > DayRowPayload.currentFormat
+        // A pre-G9 row, a row with no writing device, or a newer-format row is read as a legacy row:
+        // its day, every element live at its `updatedAt` — never its stamps, never rewritten.
+        let view = (payload.format == 0 || device == nil || newer)
+            ? DayRowView.legacy(day: payload.day, updatedAt: updatedAt, tiebreak: tiebreak)
+            : DayRowView.stamped(payload: payload, updatedAt: updatedAt, tiebreak: tiebreak)
+        return FetchedDayRow(record: record, dateKey: key, deviceKey: device, view: view, isNewerFormat: newer)
+    }
+
+    /// The merged day per date key (``DayRowMerge/merge(date:rows:)``) over every row the request
+    /// fetches, naming what it could not read: the date key of every row whose payload would not
+    /// decode, and — not accounted for — a failed fetch (empty days) or a row with no date key. A day
+    /// whose every element was removed reads absent. Nothing is written or deleted: each device's row
+    /// is its own, and the merge is the same on every device.
     private func dedupedRead(fetching request: NSFetchRequest<NSManagedObject>) -> DayHistoryRead {
         let context = controller.container.viewContext
         let records: [NSManagedObject]
@@ -238,87 +265,44 @@ public struct DayRecordRepository: DayRecordRepositoring {
             PersistenceFailureAudit.record("dayRecord.fetch.failed", error: error)
             return DayHistoryRead(days: [:], accountsForEveryRow: false)
         }
-        var rowsByKey: [String: [DecodedDayRow]] = [:]
+        var viewsByKey: [String: [DayRowView]] = [:]
         var unreadableKeys = Set<String>()
-        var skipped = 0
         var undated = 0
-        let decoder = RowPayloadCoders.makeDecoder()
+        var unreadable = 0
         for record in records {
-            guard let key = record.value(forKey: "dateKey") as? String else {
+            guard let row = fetchedRow(record) else {
                 // No writer leaves a row without its day, so which day this one holds is unknown.
                 undated += 1
-                skipped += 1
                 continue
             }
-            guard let payload = record.value(forKey: "payloadData") as? Data,
-                  let day = try? decoder.decode(FernletDay.self, from: payload) else {
-                // Corruption, or (iCloud sync on) another iPhone's newer build — count it and report
-                // once per fetch rather than losing a whole day of the user's history silently, and
-                // NAME the day, so a caller that must not drop it can keep what it may hold.
-                unreadableKeys.insert(key)
-                skipped += 1
+            guard let view = row.view else {
+                unreadable += 1
+                unreadableKeys.insert(row.dateKey)
                 continue
             }
-            let updatedAt = record.value(forKey: "updatedAt") as? Date ?? .distantPast
-            let tiebreak = record.objectID.uriRepresentation().absoluteString
-            rowsByKey[key, default: []].append(DecodedDayRow(record: record, day: day, updatedAt: updatedAt, tiebreak: tiebreak))
+            viewsByKey[row.dateKey, default: []].append(view)
         }
         var result: [String: FernletDay] = [:]
-        var heal = false
-        for (key, rows) in rowsByKey {
-            let merge = mergeDuplicates(rows, in: context)
+        for (key, views) in viewsByKey {
+            guard let merge = DayRowMerge.merge(date: key, rows: views), !merge.isEmpty else { continue }
             result[key] = merge.day
-            heal = heal || merge.healed
         }
-        if heal { saveDuplicateHeal(in: context) }
-        auditSkippedRows(skipped, undated: undated, fetched: records.count)
+        auditSkippedRows(unreadable + undated, undated: undated, fetched: records.count)
         return DayHistoryRead(days: result, unreadableDayKeys: unreadableKeys, accountsForEveryRow: undated == 0)
     }
 
-    /// Collapses one key's rows to their merge and, when some rows are strictly older than the top
-    /// stamp, STAGES the self-heal in the context: the merged payload into every top-stamped row, then
-    /// the strictly-older rows deleted. Nothing is staged when the rows tie at the top, or when the
-    /// merged day will not encode (every row is then kept, and the next read merges them again).
-    ///
-    /// - Returns: the merged day, and whether a heal was staged (the caller saves once for all keys).
-    private func mergeDuplicates(_ rows: [DecodedDayRow], in context: NSManagedObjectContext) -> (day: FernletDay?, healed: Bool) {
-        // Newest first; the object-ID tiebreak orders equal stamps the same way on every read (R5:
-        // an empty `rows` cannot reach here — a key is only grouped with a row — and merges to nil).
-        let ordered = rows.sorted { ($0.updatedAt, $1.tiebreak) > ($1.updatedAt, $0.tiebreak) }
-        let merged = DuplicateDayRows.merged(newestFirst: ordered.map(\.day))
-        guard let top = ordered.first?.updatedAt, let merged,
-              ordered.contains(where: { $0.updatedAt < top }) else { return (merged, false) }
-        let payload: Data
-        do {
-            payload = try RowPayloadCoders.makeEncoder().encode(merged)
-        } catch {
-            PersistenceFailureAudit.record("dayRecord.duplicateMerge.encodeFailed", error: error)
-            return (merged, false)
+    /// This install's device key: a random id minted on first use and kept in the store's
+    /// device-local defaults, never synced, never the proximity identity or a hardware id. Every
+    /// row this device writes carries it; Delete Everything (``deleteAll()``) forgets it.
+    private func deviceKey() -> String {
+        if let fixed = fixedDeviceKey { return fixed }
+        if let data = controller.localDefaults.data(forKey: "fernlet.sync.dayRowDeviceKey"),
+           let stored = String(data: data, encoding: .utf8), !stored.isEmpty {
+            return stored
         }
-        // R2: bounded by the rows fetched for this key.
-        for row in ordered {
-            if row.updatedAt == top {
-                row.record.setValue(payload, forKey: "payloadData")
-            } else {
-                context.delete(row.record)
-            }
-        }
-        return (merged, true)
-    }
-
-    /// Saves the staged duplicate heals (merged payloads + deletions) as ONE transaction, rolling the
-    /// context back on failure.
-    private func saveDuplicateHeal(in context: NSManagedObjectContext) {
-        guard context.hasChanges else { return }
-        do {
-            try context.save()
-        } catch {
-            // The rollback is the load-bearing half: without it the staged writes and deletes stay
-            // pending in the SHARED view context, and the next unrelated save (a day-row upsert)
-            // would commit them as a side effect.
-            context.rollback()
-            PersistenceFailureAudit.record("dayRecord.duplicateHeal.failed", error: error)
-        }
+        let minted = UUID().uuidString
+        controller.localDefaults.set(Data(minted.utf8), forKey: "fernlet.sync.dayRowDeviceKey")
+        return minted
     }
 
     /// Reports once per fetch the rows a read skipped — counts only, never a date key (a day key is
@@ -330,64 +314,5 @@ public struct DayRecordRepository: DayRecordRepositoring {
             "undated": "\(undated)",
             "fetched": "\(fetched)"
         ])
-    }
-}
-
-/// The read-side merge of a day's duplicate `DayRecord` rows (bug confirmation 2026-10-15 §3, the S
-/// stop-gap): two devices that each first-wrote the same day before import settled hold one row each,
-/// and the collapse used to keep the newer row WHOLE and delete the other — losing everything the other
-/// device logged that day. The merge keeps every entry either row holds instead.
-///
-/// The rule, newest row first: meals, workouts, planned workouts and journal entries union by id, the
-/// newer row's copy of an id winning (an entry carries no stamp of its own); water takes the larger
-/// bottle count; hygiene, parked hygiene tokens and completed tasks union; the planned-recipe ids and
-/// typed plan union (by recipe id); sleep and the device-local health context take the newer row's
-/// when it has one.
-///
-/// What it cannot do — the write-side merge the report sizes M–L, still owed: tell a deletion from an
-/// entry the other row never had (an entry deleted on one device while a duplicate row still holds it
-/// comes back once, at the next merge), or protect a day held in ONE row that both devices rewrite whole.
-///
-/// `nonisolated`: pure value arithmetic over `FernletDay`, callable from any executor.
-nonisolated enum DuplicateDayRows {
-    /// The merge of `newestFirst` — the rows' days ordered newest first — or nil for no rows.
-    static func merged(newestFirst days: [FernletDay]) -> FernletDay? {
-        guard var merged = days.first else { return nil }
-        // R2: bounded by the rows fetched for one date key.
-        for older in days.dropFirst() {
-            merged.meals = unionByID(merged.meals, older.meals)
-            merged.workouts = unionByID(merged.workouts, older.workouts)
-            merged.plannedWorkouts = unionByID(merged.plannedWorkouts, older.plannedWorkouts)
-            merged.journals = unionByID(merged.journals, older.journals)
-            merged.sleep = merged.sleep ?? older.sleep
-            merged.bottleCount = max(merged.bottleCount, older.bottleCount)
-            merged.hygiene.formUnion(older.hygiene)
-            merged.unknownHygieneTokens = appendingMissing(older.unknownHygieneTokens, to: merged.unknownHygieneTokens)
-            merged.completedPersonalCareTaskIDs.formUnion(older.completedPersonalCareTaskIDs)
-            merged.healthContext = merged.healthContext ?? older.healthContext
-            merged.plannedRecipeIDs = appendingMissing(older.plannedRecipeIDs, to: merged.plannedRecipeIDs)
-            merged.plannedMeals = mergedPlan(merged.plannedMeals, older.plannedMeals)
-        }
-        assert(merged.date == days[0].date, "a merge keeps the newest row's date key")
-        return merged
-    }
-
-    /// `newer` followed by every element of `older` whose id `newer` does not hold.
-    static func unionByID<Entry: Identifiable>(_ newer: [Entry], _ older: [Entry]) -> [Entry] {
-        let held = Set(newer.map(\.id))
-        return newer + older.filter { !held.contains($0.id) }
-    }
-
-    /// `base` followed by every element of `extra` it does not already hold, in `extra`'s order.
-    static func appendingMissing<Element: Hashable>(_ extra: [Element], to base: [Element]) -> [Element] {
-        let held = Set(base)
-        return base + extra.filter { !held.contains($0) }
-    }
-
-    /// The typed meal plans' union by recipe id (the newer entry winning), nil only when both are nil —
-    /// so a day neither row planned stays the pre-field shape.
-    static func mergedPlan(_ newer: [PlannedMealEntry]?, _ older: [PlannedMealEntry]?) -> [PlannedMealEntry]? {
-        guard newer != nil || older != nil else { return nil }
-        return unionByID(newer ?? [], older ?? [])
     }
 }

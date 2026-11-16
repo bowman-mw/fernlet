@@ -1033,7 +1033,7 @@ public nonisolated enum FoodItemSearch {
     /// rows — generic before branded — rather than one database always above the other.
     private static func sourcePriority(_ source: FoodItemSource) -> Int {
         switch source {
-        case .manual: 4
+        case .manual, .recipe: 4
         case .openFoodFacts: 3
         case .usda, .canadianNutrientFile: 2
         case .aiResolved: 1

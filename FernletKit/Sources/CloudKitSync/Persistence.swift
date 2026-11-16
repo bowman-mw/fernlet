@@ -859,18 +859,24 @@ nonisolated public final class PersistenceController {
         entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
         entity.properties = [
             // `dateKey` ("YYYY-MM-DD") is the day's stable logical id — the repository upserts by it so a
-            // re-save of the same day on one device is a no-op. Like CustomItem/CoinLedger, CloudKit does
-            // NOT collapse rows by this attribute (it mirrors by record identity), so two devices can
-            // produce two rows for one dateKey; `DayRecordRepository` collapses those on load by max
-            // `updatedAt` (a dict read can't hold two rows for one key) and self-heals the duplicate.
+            // re-save of the same day on one device is a no-op. CloudKit does NOT collapse rows by this
+            // attribute (it mirrors by record identity); since G9-1 each device writes its own row per day
+            // (`deviceKey` below) and `DayRecordRepository` merges a day's rows element by element on read.
             CoreDataModelBuilding.makeAttribute("dateKey", type: .stringAttributeType),
             // One FernletDay (already privacy-sanitized at the write boundary) as JSON. Plain binary, not
             // external storage (CloudKit rejects external storage at store load) — a single day is far
             // under CloudKit's per-field budget, which is exactly why per-day rows remove the 370 cap.
             CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
-            // Per-day last-writer-wins stamp: lets a same-day cross-device conflict resolve by recency and
-            // gives a future mesh-sync a max(updatedAt) union key.
-            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
+            // The row's write time. Since G9-1 it orders rows newest-first and stamps pre-G9 (legacy) rows'
+            // elements; every element of a current row carries its own stamp inside the payload.
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType),
+            // G9-1: the writing install's random device key (never the proximity identity, never a
+            // hardware id). Each device writes ONLY its own row per day, so two devices never write the
+            // same CloudKit record; `DayRecordRepository` merges a day's rows element by element. Optional
+            // and additive: pre-G9 rows have none and read as legacy rows. A lightweight inferred migration;
+            // it must go through the CloudKit production schema deploy (Docs/CloudKit-Schema-Deploy.md)
+            // before a shipping build syncs it.
+            CoreDataModelBuilding.makeAttribute("deviceKey", type: .stringAttributeType)
         ]
         return entity
     }

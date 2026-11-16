@@ -3,6 +3,7 @@ import Testing
 import FernletDomainModel
 import LocalPersistence
 import CloudKitSync
+import StoreCore
 import ProximityKit
 @testable import FernletSocial
 @testable import Fernlet
@@ -92,6 +93,23 @@ struct FriendShopTests {
         #expect(store.buyClothingItem(item, fromDesignerID: sellerID, sellerName: "Robin") == .bought)
         #expect(store.coinBalance == 0)                                             // still not charged
         #expect(store.customItems.contains { $0.id == item.id })                     // recovered for free
+    }
+
+    @Test func aReBoughtItemSurvivesTheNextReloadAfterItsDeletionSynced() {
+        // G9-1: deleting a design leaves a tombstone, and an upsert of a tombstoned id is skipped. A copy
+        // keeps the seller's item id, so the free re-grant must lift that tombstone, or the item would be
+        // back in memory now and gone at the next reload ("buy once, own forever").
+        let store = makeShopStore(seedCoins: 30)
+        let sellerID = UUID()
+        let item = sellerItem(price: 12, designer: sellerID)
+
+        #expect(store.buyClothingItem(item, fromDesignerID: sellerID, sellerName: "Robin") == .bought)
+        store.deleteCustomItem(id: item.id)
+        store.customItemService.flushPendingSave()        // the deletion lands as a tombstone
+        #expect(store.buyClothingItem(item, fromDesignerID: sellerID, sellerName: "Robin") == .bought)
+        store.customItemService.reloadFromStore()         // flushes the re-grant, then re-reads the store
+        #expect(store.customItems.contains { $0.id == item.id }, "the re-bought item vanished on reload")
+        #expect(store.coinBalance == 18)
     }
 
     // MARK: - Listing management

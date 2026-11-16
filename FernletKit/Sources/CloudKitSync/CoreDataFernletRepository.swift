@@ -333,25 +333,25 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         return true
     }
 
-    /// Persists one sanitized day to its per-row store, guarding on logged content (item G): a day with no
-    /// logged content writes NO row (so a device that merely launched the app doesn't stamp an empty
-    /// `DayRecord` that makes every other device read "existing cloud data"). A day that BECOMES empty
-    /// (its last entry deleted) deletes any existing row rather than leaving a stale non-empty one. Returns
-    /// whether the underlying write succeeded (false → the caller must not treat the save as durable). Also
-    /// patches the warm day-history memo in place so the derived rebuild reuses it without a re-fetch.
+    /// Persists one sanitized day to this device's row for it (G9-1). The row store records a tombstone
+    /// for every element the day lost, so a day that BECOMES empty keeps a row of tombstones (the other
+    /// device must not bring its entries back) — and a day with nothing to record still writes no row
+    /// (item G: a device that merely launched the app stamps no `DayRecord` that would make every other
+    /// device read "existing cloud data"). Returns whether the underlying write succeeded (false → the
+    /// caller must not treat the save as durable). Also patches the warm day-history memo in place so the
+    /// derived rebuild reuses it without a re-fetch; the memo copy keeps every key this copy held, so a
+    /// later removal of one is still seen as a deletion.
     private func writeDayRow(_ sanitized: SanitizedDay, for dateKey: String) -> Bool {
-        let day = sanitized.day
+        let ok = dayRecordRepository.upsert([DayRecordUpsert(sanitized: sanitized, updatedAt: Date())])
+        guard ok else { return false }
+        var day = sanitized.day
         if day.hasLoggedContent {
-            let ok = dayRecordRepository.upsert([DayRecordUpsert(sanitized: sanitized, updatedAt: Date())])
-            if ok { cachedAllDays?[dateKey] = day }
-            return ok
+            day.loadedSyncKeys = (day.loadedSyncKeys ?? []).union(DayElementKeys.keys(of: day))
+            cachedAllDays?[dateKey] = day
         } else {
-            // No logged content: remove any prior row so an emptied day doesn't linger. `delete` is a no-op
-            // (returns true) when no row exists — the common "empty launch" case writes nothing.
-            let ok = dayRecordRepository.delete(dateKeys: [dateKey])
-            if ok { cachedAllDays?[dateKey] = nil }
-            return ok
+            cachedAllDays?[dateKey] = nil
         }
+        return true
     }
 
     /// Human-readable storage label shown in settings.

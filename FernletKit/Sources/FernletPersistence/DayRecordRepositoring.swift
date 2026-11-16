@@ -25,7 +25,7 @@ import FernletDomainModel
 public nonisolated struct DayRecordUpsert {
     /// The day payload to persist — in production, one that has already passed the privacy strip.
     public var day: FernletDay
-    /// The per-day last-writer-wins stamp; duplicate rows collapse to the most recent.
+    /// The write time: the row's `updatedAt`, and the stamp for every element this write changed.
     public var updatedAt: Date
 
     /// Raw mint: wraps `day` without any strip. Reserved for the two sanctioned callers named in the
@@ -60,7 +60,8 @@ public nonisolated struct DayRecordUpsert {
 /// and the store's history/derived-table rebuild paths load through it. `@MainActor`.
 @MainActor
 public protocol DayRecordRepositoring {
-    /// Every stored day, keyed by `dateKey`, duplicate rows collapsed by most-recent `updatedAt`.
+    /// Every stored day, keyed by `dateKey`: each day the merge of its rows (in the Core Data store,
+    /// one per device, merged element by element — G9-1). A day whose elements were all removed is absent.
     func loadAll() -> [String: FernletDay]
     /// Every stored day like ``loadAll()``, with the date key of every row that would not decode and
     /// whether every row was accounted for — false when the fetch failed or a row has no date key (see
@@ -71,7 +72,8 @@ public protocol DayRecordRepositoring {
     /// The most recent `limit` days, newest-first — for bounded derived-table rebuilds that must not load
     /// the whole history.
     func loadRecent(limit: Int) -> [FernletDay]
-    /// Inserts or replaces (by `dateKey`) each day. Rows not listed are left untouched — never deleted.
+    /// Persists each day. Days not listed are left untouched — never deleted. In the Core Data store a
+    /// day that lost elements records tombstones for them, so an emptied day is a write, not a delete.
     func upsert(_ days: [DayRecordUpsert]) -> Bool
     /// Removes only the rows whose `dateKey`s are listed; other rows are left untouched.
     func delete(dateKeys: [String]) -> Bool

@@ -52,6 +52,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     private let source: BundledFoodSource
     private let lock = NSLock()
     private var _userItems: [FoodItem] = []
+    /// `_userItems` without recipe foods, kept beside it at every set (see ``userItems``).
+    private var _searchableUserItems: [FoodItem] = []
     /// Optional secondary bundled source — the full branded catalog delivered later via On-Demand
     /// Resource and purgeable at runtime. Guarded by the SAME `lock` as `_userItems`; every read
     /// snapshots it into a local `let` so a concurrent `detachBrandedSource()` mid-query is safe.
@@ -110,7 +112,17 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return FoodCatalog(source: LayeredBundledFoodSource(layers: [supplemented] + layers))
     }
 
+    /// The person's foods that search offers: every user food except recipe foods
+    /// (``FoodItem/isRecipeFood``), which stand in for a saved recipe used inside another and are
+    /// offered only by the recipe editor's own recipe list, never mixed into food results.
     private var userItems: [FoodItem] {
+        lock.lock(); defer { lock.unlock() }
+        return _searchableUserItems
+    }
+
+    /// Every user food, recipe foods included: what an id or barcode resolves against, so a recipe line
+    /// that points at a recipe food always finds it.
+    private var allUserItems: [FoodItem] {
         lock.lock(); defer { lock.unlock() }
         return _userItems
     }
@@ -137,7 +149,8 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
 
     /// Keeps the catalog's view of user-added foods in sync with `FernletStore.foodItems`.
     public func setUserItems(_ items: [FoodItem]) {
-        lock.lock(); _userItems = items; lock.unlock()
+        let searchable = items.filter { !$0.isRecipeFood }
+        lock.lock(); _userItems = items; _searchableUserItems = searchable; lock.unlock()
     }
 
     /// Publishes the local correction memory (research §26 fix 1.10): normalized query → the food id
@@ -784,7 +797,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// Point lookup by food-item id: user items first, then the base catalog, then the branded catalog.
     public func item(id: UUID) -> FoodItem? {
         let branded = brandedSource
-        return userItems.first(where: { $0.id == id }) ?? source.item(id: id) ?? branded?.item(id: id)
+        return allUserItems.first(where: { $0.id == id }) ?? source.item(id: id) ?? branded?.item(id: id)
     }
 
     /// Resolves a scanned product barcode: user items first (a product the user already paired via
@@ -794,7 +807,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     public func item(forBarcode raw: String) -> FoodItem? {
         guard let normalized = FoodBarcode.normalized(raw) else { return nil }
         let branded = brandedSource
-        if let user = userItems.first(where: { FoodBarcode.normalized($0.barcode) == normalized }) {
+        if let user = allUserItems.first(where: { FoodBarcode.normalized($0.barcode) == normalized }) {
             return user
         }
         return source.item(barcode: normalized) ?? branded?.item(barcode: normalized)
@@ -806,7 +819,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         guard !ids.isEmpty else { return [] }
         let branded = brandedSource
         let wanted = Set(ids)
-        let users = userItems.filter { wanted.contains($0.id) }
+        let users = allUserItems.filter { wanted.contains($0.id) }
         var resolvedIDs = Set(users.map(\.id))
         let bundled = source.items(ids: ids.filter { !resolvedIDs.contains($0) })
         resolvedIDs.formUnion(bundled.map(\.id))

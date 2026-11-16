@@ -1504,6 +1504,12 @@ struct RecipeSheet: View {
     @State private var pastedRowNotes: [UUID: PastedRecipeSeed.RowNote] = [:]
     /// The line above a pasted recipe's rows: read line by line, and/or the text was cut.
     @State private var pastedReadNote: PastedReadNote?
+    /// The recipe's optional "Makes" amount (recipes as building blocks, owner pick P02a): how much the
+    /// whole recipe makes, so another recipe can use it by the cup or gram.
+    @State private var makesQuantity: Double?
+    @State private var makesUnit = RecipeUnit.cup.rawValue
+    /// "From your recipes": the list of saved recipes this one may use (owner pick P10a).
+    @State private var showingRecipeChoices = false
 
     init(
         store: FernletStore,
@@ -1535,6 +1541,8 @@ struct RecipeSheet: View {
             _ingredients = State(initialValue: loadedIngredients)
             _steps = State(initialValue: loadedSteps)
             _partsDraft = State(initialValue: RecipePartsDraft(parts: loadedParts))
+            _makesQuantity = State(initialValue: recipe.makes?.validated?.quantity)
+            _makesUnit = State(initialValue: recipe.makes?.validated?.unit ?? RecipeUnit.cup.rawValue)
             // Editing opens on the WHOLE recipe: expanding the first ingredient's search editor pushed
             // the list, servings and steps below the fold, so the user had to tap Done before they
             // could see what they came to change. Blank rows still auto-expand (see `ingredientsSection`).
@@ -1545,7 +1553,8 @@ struct RecipeSheet: View {
                 notes: drawnNotes,
                 ingredients: loadedIngredients,
                 steps: loadedSteps,
-                parts: loadedParts
+                parts: loadedParts,
+                makes: recipe.makes?.validated
             ))
         } else if let pasted {
             // Pasted text opens as unsaved edits (the snapshot is a blank draft), so backing out asks
@@ -1581,8 +1590,22 @@ struct RecipeSheet: View {
     private var isDirty: Bool {
         originalDraft != RecipeDraftSnapshot(
             name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps,
-            parts: partsDraft.parts
+            parts: partsDraft.parts, makes: draftMakes
         )
+    }
+
+    /// Recipes as building blocks: the optional "Makes" amount, and, on a recipe others use, the
+    /// "Used in" note (owner picks P02a, P05a).
+    @ViewBuilder private var buildingBlockFields: some View {
+        RecipeMakesField(quantity: $makesQuantity, unit: $makesUnit)
+        if let editingRecipe {
+            RecipeUsedInNote(users: store.recipesUsing(editingRecipe))
+        }
+    }
+
+    /// The "Makes" amount as typed, when it is a usable one.
+    private var draftMakes: RecipeYield? {
+        makesQuantity.flatMap { RecipeYield(quantity: $0, unit: makesUnit).validated }
     }
 
     /// Every ingredient row being edited: the one list of a one-part recipe, or every part's rows.
@@ -1648,6 +1671,8 @@ struct RecipeSheet: View {
 
                     servingsField
 
+                    buildingBlockFields
+
                     if !partsDraft.isMultipart {
                         stepsSection
                         splitIntoPartsButton
@@ -1689,6 +1714,7 @@ struct RecipeSheet: View {
             }
         }
         #endif
+        .onDisappear { store.syncRecipeFoods() }   // drops a recipe food prepared for a pick left out
         .onAppear {
             guard startsWithScanner, didStartScanner == false else { return }
             didStartScanner = true
@@ -1700,7 +1726,8 @@ struct RecipeSheet: View {
         SheetField("Ingredients") {
             VStack(spacing: 8) {
                 RecipeIngredientRows(ingredients: $ingredients, expandedId: $expandedId, store: store,
-                                     onRemove: removeIngredient, pastedRowNotes: pastedRowNotes)
+                                     onRemove: removeIngredient, pastedRowNotes: pastedRowNotes,
+                                     recipeSource: .from(store, editing: editingRecipe?.id))
                 // Stacks at accessibility sizes: side by side, "Add ingredient" / "Scan barcode"
                 // squeezed to the edge and broke mid-word.
                 AdaptiveStack(spacing: 8) {
@@ -1722,6 +1749,20 @@ struct RecipeSheet: View {
                     #endif
                 }
                 .buttonStyle(ActionPillButtonStyle(.secondary))
+                Button {
+                    showingRecipeChoices = true
+                } label: {
+                    RecipeEditorActionLabel(title: "From your recipes", sprite: WorldSprites.pen)
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .disabled(ingredients.count >= RecipeLimits.maxIngredients)
+                .accessibilityIdentifier("recipeEditor.fromYourRecipes")
+            }
+        }
+        .sheet(isPresented: $showingRecipeChoices) {
+            RecipeChoicesSheet(choices: store.recipeIngredientChoices(editing: editingRecipe?.id)) { recipe in
+                guard let food = store.prepareRecipeFood(for: recipe) else { return }
+                appendIngredient(for: food)
             }
         }
     }
@@ -1893,6 +1934,7 @@ struct RecipeSheet: View {
                     store.updateRecipe(editingRecipe, name: name, servings: servings, notes: savedNotes,
                                        ingredients: ingredients, steps: steps)
                 }
+                store.setRecipeMakes(draftMakes, forRecipeID: editingRecipe.id)
                 finishAfterSave(named: name)
             }
         } else {
@@ -1903,10 +1945,11 @@ struct RecipeSheet: View {
     /// Creates the recipe from whichever form the editor is in: one list, or parts. Discardable because
     /// "Save recipe" needs only the side effect; "Log & save" logs the recipe it returns.
     @discardableResult private func addDraftRecipe() -> RecipeDefinition {
-        guard partsDraft.isMultipart else {
-            return store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
-        }
-        return store.addRecipe(name: name, servings: servings, notes: notes, parts: partsDraft.parts)
+        let recipe = partsDraft.isMultipart
+            ? store.addRecipe(name: name, servings: servings, notes: notes, parts: partsDraft.parts)
+            : store.addRecipe(name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+        store.setRecipeMakes(draftMakes, forRecipeID: recipe.id)
+        return recipe
     }
 
     /// Stacks at accessibility sizes — side by side, "Save recipe" / "Log & save" squeezed to the
@@ -1946,12 +1989,13 @@ struct RecipeSheet: View {
     /// Lands a barcode-resolved food (catalog hit or just-remembered user item) in the ingredient
     /// list, bound to the item exactly as `RecipeIngredientEditor.select` would bind a search pick.
     private func appendIngredient(for foodItem: FoodItem) {
-        let unit = foodItem.preferredRecipeUnit
+        // A saved recipe (recipes as building blocks) goes in by the serving, one to start.
+        let unit = foodItem.isRecipeFood ? RecipeUnit.serving : foodItem.preferredRecipeUnit
         let grams = foodItem.exactMacros
         let input = ManualRecipeIngredientInput(
             name: foodItem.name,
             selectedFoodItemId: foodItem.id,
-            quantity: foodItem.defaultRecipeQuantity(for: unit),
+            quantity: foodItem.isRecipeFood ? 1 : foodItem.defaultRecipeQuantity(for: unit),
             unit: unit.rawValue,
             protein: grams.protein,
             carbs: grams.carbs,
@@ -2112,6 +2156,8 @@ private struct RecipeDraftSnapshot: Equatable {
     let steps: [RecipeStep]
     /// A multipart recipe's parts (empty for a one-part recipe), so an edit inside any part counts.
     let parts: [RecipeComponentInput]
+    /// The recipe's "Makes" amount as the editor holds it (recipes as building blocks).
+    var makes: RecipeYield? = nil
 }
 
 /// The collapsed one-line summary of a recipe ingredient (name plus a quantity/macros line), shown
@@ -2460,6 +2506,13 @@ struct RecipeIngredientEditor: View {
     /// The person's own "grams in one" for a food (F4b, `RecipePortionGramsMemory`), offered in the
     /// unit menu under "Your size".
     var rememberedPortions: (UUID) -> [RecipeHouseholdMeasure] = { _ in [] }
+    /// Saved recipes this row may offer as an ingredient, above food results (recipes as building
+    /// blocks, owner pick P10a). Offers none by default.
+    var recipeSource: RecipeIngredientRecipeSource = .none
+
+    /// The unit a row bound to a saved recipe is typed in (servings, batches, its "Makes" unit); the
+    /// row is always saved in servings.
+    @State private var recipeAmountUnit: RecipeAmountUnit = .servings
 
     /// Typeahead matches, computed off the main thread and debounced (see `.task` below).
     /// The `catalog.results(for:)` call does real work (SQLite + hydrate + index + score) and the
@@ -2559,7 +2612,34 @@ struct RecipeIngredientEditor: View {
         return RecipeHouseholdCaption.caption(for: saved)
     }
 
+    /// The saved recipes whose names hold the typed words, while the row is unbound.
+    private var recipeMatches: [RecipeDefinition] {
+        guard selectedFoodItem == nil else { return [] }
+        return RecipeIngredientChoices.matches(for: ingredient.name, in: recipeSource.choices)
+    }
+
+    /// The saved recipe this row is bound to, when its food is a recipe food.
+    private var boundRecipe: RecipeDefinition? {
+        guard let selectedFoodItem, selectedFoodItem.isRecipeFood else { return nil }
+        return recipeSource.recipesByID[selectedFoodItem.id]
+    }
+
+    /// A tap on a "Your recipes" row: prepares the recipe's food, then binds it like a food pick.
+    private func pickRecipe(_ recipe: RecipeDefinition) {
+        guard let food = recipeSource.prepare(recipe) else { return }
+        FernletFeedback.system.play(.tick)
+        select(food)
+    }
+
     @ViewBuilder private var suggestionList: some View {
+        let recipes = recipeMatches
+        if !recipes.isEmpty {
+            RecipeSuggestionGroup(recipes: recipes, onPick: pickRecipe)
+        }
+        foodSuggestionList(hasRecipeMatches: !recipes.isEmpty)
+    }
+
+    @ViewBuilder private func foodSuggestionList(hasRecipeMatches: Bool) -> some View {
         let visibleMatches = typeaheadResults.visibleMatches(for: ingredient.name)
         if !visibleMatches.isEmpty && selectedFoodItem == nil {
             VStack(spacing: 4) {
@@ -2574,7 +2654,7 @@ struct RecipeIngredientEditor: View {
             }
             .accessibilityIdentifier("recipeIngredient.catalogResults")
             CustomIngredientEscapeRow(isCreating: isCreatingCustomIngredient) { isCreatingCustomIngredient = true }
-        } else if showsSettledMiss && !isCreatingCustomIngredient {
+        } else if showsSettledMiss && !isCreatingCustomIngredient && !hasRecipeMatches {
             CatalogSearchEmptyState(
                 actionTitle: "Create custom ingredient",
                 query: ingredient.name,
@@ -2610,7 +2690,15 @@ struct RecipeIngredientEditor: View {
         }
     }
 
-    private var quantityUnitRow: some View {
+    @ViewBuilder private var quantityUnitRow: some View {
+        if let boundRecipe {
+            RecipeAmountRow(ingredient: $ingredient, recipe: boundRecipe, unit: $recipeAmountUnit)
+        } else {
+            foodQuantityUnitRow
+        }
+    }
+
+    private var foodQuantityUnitRow: some View {
         HStack(spacing: 10) {
             TextField("Qty", value: $ingredient.quantity, format: .number, prompt: .fieldPrompt("Qty"))
                 .keyboardType(.decimalPad)
@@ -2742,6 +2830,12 @@ struct RecipeIngredientEditor: View {
         manualAmountUnweighed = false
         seedManualGrams(foodItem.exactMacros)
         isCreatingCustomIngredient = false
+        // A saved recipe is used by the serving (recipes as building blocks): one to start.
+        if foodItem.isRecipeFood {
+            ingredient.quantity = 1
+            ingredient.unit = RecipeUnit.serving.rawValue
+            recipeAmountUnit = .servings
+        }
     }
 
     /// The "Manual" / "Use manual nutrition" escape: unbinds the row and seeds its editable grams.
@@ -2833,6 +2927,7 @@ private struct LockedMacroSummary: View {
     private var macroSourceTitle: LocalizedStringKey {
         switch foodItem.source {
         case .manual: "Saved macros"
+        case .recipe: "Recipe macros"
         case .openFoodFacts: "Open Food Facts macros"
         case .usda: "USDA macros"
         case .canadianNutrientFile: "Health Canada macros"

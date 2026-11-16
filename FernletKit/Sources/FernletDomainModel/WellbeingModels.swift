@@ -89,6 +89,24 @@ public nonisolated struct FernletDay: Codable {
     /// the legacy list. The same per-day strip-on-write landmine documented on `plannedRecipeIDs`
     /// applies here, with the same bounded acceptance.
     public var plannedMeals: [PlannedMealEntry]?
+    /// The sync element keys this day held when the per-row day store handed it out (G9-1), or nil
+    /// for a day the store did not hand out (a fresh day, a blob day, a test fixture).
+    ///
+    /// In memory only — never encoded (it is left out of ``CodingKeys``), never synced, never shown.
+    /// The store reads it back on the next write of this day: a key it handed out that the written
+    /// day no longer holds is a deletion the person made, so the store records a tombstone for it. A
+    /// key the day never held (an entry another device added after this copy was read) is not, so a
+    /// stale copy can never delete what it never saw. Value copies carry it through every mutation
+    /// and through the storage strip unchanged.
+    public var loadedSyncKeys: Set<String>?
+
+    /// The persisted keys: every stored property except ``loadedSyncKeys``, which is in-memory
+    /// bookkeeping. Explicit so the synthesized `encode(to:)` leaves that property out.
+    enum CodingKeys: String, CodingKey {
+        case date, meals, workouts, plannedWorkouts, journals, sleep, bottleCount, hygiene
+        case unknownHygieneTokens, completedPersonalCareTaskIDs, healthContext, plannedRecipeIDs
+        case plannedMeals
+    }
 
     public init(
         date: String,

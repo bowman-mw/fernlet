@@ -70,7 +70,7 @@ struct PersistenceFailureAuditTests {
         let repo = DayRecordRepository(controller: try makeReadOnlyController(at: directory))
         var events: [AuditEvent] = []
         let survived = captureAudit(into: &events) {
-            repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01"), updatedAt: stamp)])
+            repo.upsert([DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 1), updatedAt: stamp)])
         }
         #expect(survived == false)
         #expect(events.contains("dayRecord.upsert.failed"))
@@ -519,7 +519,8 @@ extension PersistenceFailureAuditTests {
     /// Seeds one day row, so a delete has something to delete.
     fileprivate func seedDay(_ controller: PersistenceController) {
         _ = DayRecordRepository(controller: controller).upsert([
-            DayRecordUpsert(day: FernletDay(date: "2026-05-01"), updatedAt: stamp)
+            // A day with content: since G9-1 a day with nothing to record writes no row at all.
+            DayRecordUpsert(day: FernletDay(date: "2026-05-01", bottleCount: 1), updatedAt: stamp)
         ])
     }
 

@@ -79,6 +79,19 @@ public final class CustomItemService {
         buffer.enqueueUpsert(item)
     }
 
+    /// Puts back an item the person deliberately gets again (the in-person shop's free re-grant of an
+    /// item they paid for and later deleted): lifts its earlier deletion in the store first, then
+    /// upserts it like any other change.
+    ///
+    /// - Returns: `false` when the deletion could not be lifted; the item is still in the closet for
+    ///   this session, and the caller decides what to tell the person.
+    @discardableResult
+    public func regrant(_ item: CustomizationItem) -> Bool {
+        let lifted = repository.restore(ids: [item.id])
+        upsert(item)
+        return lifted
+    }
+
     /// Removes the item from the closet and enqueues its per-row delete.
     public func delete(id: UUID) {
         items.removeAll { $0.id == id }

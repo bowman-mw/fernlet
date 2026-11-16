@@ -494,8 +494,26 @@ in ``ManualRecipeIngredientInput/pickedForSearch`` until the recipe is saved, an
 remembers them, so the next recipe search for the same words puts that food first. The field is
 in-memory form state only — never on a ``RecipeIngredient``, the synced blob or the wire.
 
+A saved recipe can be an ingredient of another (2026-11-15, Docs/Recipes-As-Building-Blocks-Design-2026-11-15.md).
+Each recipe has a RECIPE FOOD (``RecipeFood``): a ``FoodItem`` whose `id` is the recipe's `id`, source
+``FoodItemSource/recipe``, holding the whole batch counted in servings. A parent's line points at it like
+any food, always in servings (``RecipeFood/line(using:servings:id:)``), so nutrition, logging, scaling,
+the wire and every older build read it unchanged, and no ``RecipeIngredient`` field is added.
+``RecipeNestingGraph`` answers which recipes use which, without recursion: refusals for loops and for
+chains past ``RecipeNestingLimits/maxDepth`` (``RecipeNestingRefusal``), the order to refresh recipe foods
+after an edit, and the making order of sub-recipe steps. The editor offers recipes through
+``RecipeIngredientChoices``; a line can be typed in servings, batches or the recipe's own "Makes" amount
+(``RecipeAmountUnit``, ``RecipeYield``), and is saved in servings either way.
+
 - ``RecipeDefinition``
 - ``RecipeIngredient``
+- ``RecipeFood``
+- ``RecipeNestingGraph``
+- ``RecipeNestingLimits``
+- ``RecipeNestingRefusal``
+- ``RecipeIngredientChoices``
+- ``RecipeYield``
+- ``RecipeAmountUnit``
 - ``RecipeStep``
 - ``RecipeStepSanitizer``
 - ``RecipeComponent``

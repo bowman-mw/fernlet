@@ -30,6 +30,8 @@ struct RecipeIngredientRows: View {
     /// AI recipe paste-and-parse (roadmap G1): the note under each pasted row to look at, shown while
     /// the row still holds what the reader put there. Empty everywhere else.
     var pastedRowNotes: [UUID: PastedRecipeSeed.RowNote] = [:]
+    /// Saved recipes the rows may offer as ingredients (recipes as building blocks); none by default.
+    var recipeSource: RecipeIngredientRecipeSource = .none
 
     var body: some View {
         ForEach($ingredients) { $ingredient in
@@ -59,7 +61,8 @@ struct RecipeIngredientRows: View {
                     onSaveCustomIngredient: { store.saveCustomIngredient($0) },
                     onCollapse: ingredient.trimmedName.isEmpty ? nil : { expandedId = nil },
                     onRemove: { onRemove(ingredient.id) },
-                    rememberedPortions: { store.rememberedPortionGrams(for: $0) }
+                    rememberedPortions: { store.rememberedPortionGrams(for: $0) },
+                    recipeSource: recipeSource
                 )
                 .padding(14)
                 .modifier(RecipeEditorCardFrame())
