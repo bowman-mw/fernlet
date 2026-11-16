@@ -1292,6 +1292,12 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
     /// Acknowledgments does. A build that predates this case reads the token as `.manual`
     /// with the token parked (see ``FoodItem``), never as USDA.
     case canadianNutrientFile
+    /// A saved recipe's own stand-in food (recipes as building blocks, owner decision 2026-11-15): the
+    /// food another recipe's line points at to use this recipe as an ingredient. Its id is the
+    /// recipe's id and its numbers are the recipe's whole batch (``RecipeFood``). Never shown among the
+    /// person's foods or in the meal composer's search. A build that predates this case reads the token
+    /// as `.manual` with the token parked, so it still totals the line as an ordinary saved food.
+    case recipe
 
     /// The data-licence attribution a surface must show wherever it names this source, or `nil`
     /// for a source that carries no attribution obligation.
@@ -1299,7 +1305,7 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
         switch self {
         case .openFoodFacts: Self.openFoodFactsAttribution
         case .canadianNutrientFile: Self.canadianNutrientFileAttribution
-        case .usda, .aiResolved, .manual: nil
+        case .usda, .aiResolved, .manual, .recipe: nil
         }
     }
 
@@ -1309,7 +1315,7 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
     public var isBundledReference: Bool {
         switch self {
         case .usda, .canadianNutrientFile: true
-        case .aiResolved, .manual, .openFoodFacts: false
+        case .aiResolved, .manual, .openFoodFacts, .recipe: false
         }
     }
 
@@ -1540,6 +1546,9 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         case .manual:
             return String(localized: "foodItem.dataSource.manual", defaultValue: "Your foods", bundle: .module,
                           comment: "Food search row tag: a food the person created themselves")
+        case .recipe:
+            return String(localized: "foodItem.dataSource.recipe", defaultValue: "Your recipes", bundle: .module,
+                          comment: "Food search row tag: one of the person's own saved recipes, offered as an ingredient of another recipe")
         case .openFoodFacts:
             return FoodItemSource.openFoodFactsAttribution
         case .canadianNutrientFile:

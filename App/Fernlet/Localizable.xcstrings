@@ -38083,6 +38083,23 @@
         }
       }
     },
+    "Recipe macros" : {
+      "comment" : "Title over the locked macros of an ingredient that is one of the person's own saved recipes",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Macros de la receta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Macros de la receta"
+          }
+        }
+      }
+    },
     "Recipe name" : {
       "localizations" : {
         "es" : {

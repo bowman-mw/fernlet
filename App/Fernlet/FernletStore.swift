@@ -3174,6 +3174,7 @@ final class FernletStore {
             }
         }
         savedRecipeService.add(recipe)
+        syncRecipeFoods()
     }
 
     /// The saved recipe already imported from `url`, matched under `RecipeSourceURLMatcher`
@@ -3306,6 +3307,7 @@ final class FernletStore {
 
     func updateSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.update(recipe)
+        syncRecipeFoods()
     }
 
     /// Merges ONLY the notes field into the CURRENT saved row — the notes sheet's Done path.
@@ -3320,6 +3322,7 @@ final class FernletStore {
 
     func deleteSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.delete(recipe)
+        syncRecipeFoods()
         // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
         recipePhotoStore.delete(id: recipe.id)
         // Prune the device-local web-image attempt bookkeeping too — a deleted recipe's id must
@@ -5771,26 +5774,59 @@ final class FernletStore {
     // so an editor the person cancels teaches nothing.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
         rememberRecipeSave(inputIngredients)
-        return diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        ensureRecipeFoods(for: inputIngredients)
+        let saved = diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        syncRecipeFoods()
+        return saved
     }
 
     // `steps` is REQUIRED (no default) — see the note on `DiaryStore.updateRecipe`: the stored steps are
     // overwritten unconditionally, so a defaulted-nil would silently erase them.
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         rememberRecipeSave(inputIngredients)
+        ensureRecipeFoods(for: inputIngredients)
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        syncRecipeFoods()
     }
 
     /// Multipart twins of the two above (a dressing made first, then the salad): see
     /// `DiaryStore.addRecipe(name:servings:notes:parts:)`.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
         rememberRecipeSave(parts.flatMap(\.ingredients))
-        return diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
+        ensureRecipeFoods(for: parts.flatMap(\.ingredients))
+        let saved = diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
+        syncRecipeFoods()
+        return saved
     }
 
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) {
         rememberRecipeSave(parts.flatMap(\.ingredients))
+        ensureRecipeFoods(for: parts.flatMap(\.ingredients))
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, parts: parts)
+        syncRecipeFoods()
+    }
+
+    // MARK: - Recipes as building blocks (Docs/Recipes-As-Building-Blocks-Design-2026-11-15.md)
+
+    /// Brings every recipe food up to date with the recipe book and the saved recipes: run after every
+    /// recipe change here and after every sync, so an edit made on another device (an older build
+    /// refreshes nothing) is caught up too. See `RecipeFoodSync.synced(foodItems:recipes:)`.
+    func syncRecipeFoods() {
+        diary.syncRecipeFoods(alsoConsidering: savedRecipeService.savedRecipes)
+    }
+
+    /// Makes sure the rows a save is about to resolve that were picked as recipes find their recipe
+    /// foods, so a picked recipe never becomes a custom ingredient of the same name.
+    private func ensureRecipeFoods(for rows: [ManualRecipeIngredientInput]) {
+        let picked = rows.compactMap(\.selectedFoodItemId)
+        guard !picked.isEmpty else { return }
+        diary.ensureRecipeFoods(for: picked, alsoConsidering: savedRecipeService.savedRecipes)
+    }
+
+    /// The recipes in the book that use `recipe` as an ingredient: the "Used in" line on save and the
+    /// delete confirmation (owner picks P05a, P06a).
+    func recipesUsing(_ recipe: RecipeDefinition) -> [RecipeDefinition] {
+        diary.recipesUsing(recipe.id)
     }
 
     /// What a saved recipe's rows teach this device, remembered by every recipe save above: the
@@ -5958,6 +5994,7 @@ final class FernletStore {
 
     func deleteRecipe(_ recipe: RecipeDefinition) {
         diary.deleteRecipe(recipe)
+        syncRecipeFoods()
         // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
         recipePhotoStore.delete(id: recipe.id)
     }
@@ -8081,6 +8118,8 @@ final class FernletStore {
         milestoneLedgerService.reloadFromStore()
         customItemService.reloadFromStore()
         savedRecipeService.reloadFromStore()
+        // Recipe foods follow whatever recipes the sync brought in (recipes as building blocks).
+        syncRecipeFoods()
         // Credit any newly active synced day (and reconcile milestones over the synced-in history).
         // Idempotent — re-running never double-grants.
         reconcileCoinLedger()
