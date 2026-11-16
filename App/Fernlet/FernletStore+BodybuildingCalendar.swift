@@ -46,7 +46,7 @@ extension FernletStore {
         bodybuildingCalendarSettings = prefs
     }
 
-    /// The Monday key of the week Fernlet suggests as a deload (``BodybuildingDeloadRule``), counted from
+    /// The Monday key of the week Fernlet suggests as a deload (`BodybuildingDeloadRule`), counted from
     /// the week holding `today` (today's key when nil); nil when it suggests nothing, when the calendar is
     /// off, or in a decoy session.
     func deloadSuggestion(today: String? = nil) -> String? {

@@ -28,7 +28,7 @@ public nonisolated enum FoodSearchContext: Sendable, Equatable {
 ///
 /// A third snapshot, added for research §26 fix 1.10, is the **local correction memory**: normalized
 /// query → the food id the user picked when they replaced a wrong match for that query
-/// (``setSearchAliases(_:)``). It is a pure ranking input on ``results(for:limit:stripsStopwords:)``,
+/// (``setSearchAliases(_:)``). It is a pure ranking input on ``results(for:limit:stripsStopwords:context:ranking:)``,
 /// holds no nutrition data of its own, and is empty on every catalog the app has not hydrated — so
 /// the measured cold path (`Tests/FernletTests/FoodSearchCorpusTests`) is untouched by it.
 ///
@@ -41,7 +41,7 @@ public nonisolated enum FoodSearchContext: Sendable, Equatable {
 /// A fifth, added for ingredient-search round F9b, is the **recipe picks**: normalized query → the
 /// food the person chose for it from below the top of a recipe ingredient list
 /// (``setRecipeSearchPicks(_:)``). It is promoted exactly like a correction, but only for a search that
-/// asks for ``FoodSearchRanking/ingredientIdentity`` (the recipe surfaces), and a correction for the
+/// asks for `FoodSearchRanking.ingredientIdentity` (the recipe surfaces), and a correction for the
 /// same query answers first; like the others it is empty on any catalog the app has not hydrated.
 ///
 /// Thread-safe: the SQLite source serializes its own access, and the user-items snapshot, the
@@ -66,10 +66,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// Ingredient-search round F9b's snapshot: normalized query → the food the person picked for it
     /// from below the top of a RECIPE ingredient list. Guarded by the SAME `lock`; empty until the app
     /// publishes its device-local memory via ``setRecipeSearchPicks(_:)``. Read only by a search that
-    /// asks for ``FoodSearchRanking/ingredientIdentity`` — the recipe surfaces.
+    /// asks for `FoodSearchRanking.ingredientIdentity` — the recipe surfaces.
     private var _recipeSearchPicks: [String: UUID] = [:]
     /// Research §26 fix 1.9's snapshot: the weighted foods this user has actually logged. Guarded by
-    /// the SAME `lock` as `_userItems`; ``FoodSearchHistory/empty`` until `DiaryStore` publishes one,
+    /// the SAME `lock` as `_userItems`; `FoodSearchHistory.empty` until `DiaryStore` publishes one,
     /// which is what keeps every catalog built in a test (or before hydration) on the cold path.
     private var _searchHistory: FoodSearchHistory = .empty
     /// The fallback visits at most three variants × 24 rows × two bundled sources, plus this many
@@ -173,7 +173,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// sheet.
     ///
     /// A NARROWER signal than ``setSearchAliases(_:)``'s corrections, and kept in its own snapshot for
-    /// that reason: a pick answers only a search that asks for ``FoodSearchRanking/ingredientIdentity``
+    /// that reason: a pick answers only a search that asks for `FoodSearchRanking.ingredientIdentity`
     /// (the recipe editor's typeahead, the swap sheet's pool and its AI rebinding), where it goes first,
     /// above the identity order, history and the curated alias — in the pool for the whole typed text,
     /// not only for a sub-phrase, and never sunk as a dish (``candidates(for:limit:ranking:)``, fix
@@ -198,7 +198,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     ///
     /// **No durable copy lives here or anywhere else.** The profile is derived from `recentMeals`,
     /// which is already in the synced snapshot; fix 1.9 adds no persisted surface of its own. See
-    /// ``FoodSearchHistory``'s header for why that divergence from §26's data note was taken.
+    /// `FoodSearchHistory`'s header for why that divergence from §26's data note was taken.
     ///
     /// **Bounded growth (Power-of-10 R3) is the WRITER's job**, as it is for `setUserItems`:
     /// `FoodSearchHistory.from(recentMeals:)` reads at most its own meal and component caps.
@@ -250,7 +250,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// rather than leading noise. Fix 1.6 applies to the query a PERSON TYPED, which is this one.
     /// A third difference exists as of research §26 fix 1.10: a query the user has already corrected
     /// once returns their own choice first, ahead of — and independently of — the FTS gate. See
-    /// ``promotingCorrection(_:for:limit:ranking:)``. `candidates(for:limit:ranking:)` inherits it by construction,
+    /// `promotingCorrection(_:for:limit:ranking:)`. `candidates(for:limit:ranking:)` inherits it by construction,
     /// per sub-phrase, because it draws its pool from this method (and on the identity surface it also
     /// looks up the whole description, F9b fix round 1); ``scoredResults(for:limit:stripsStopwords:)``
     /// deliberately does NOT (see its doc).
@@ -275,17 +275,19 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// explicit statement ("when I type this, I mean that food") made by a person who was looking at
     /// the wrong answer, while history is an inference from behaviour. An inference must not overrule
     /// a statement. `FoodSearchHistoryCatalogTests` pins it rather than leaving it to code order.
-    /// A curated alias (``CuratedSearchAlias``, ingredient-search round F7) ranks beneath both personal
+    /// A curated alias (`CuratedSearchAlias`, ingredient-search round F7) ranks beneath both personal
     /// signals and above the rest: a correction first, then this person's own and logged rows, then the
     /// alias's row, then the cold list — `CuratedSearchAliasTests` pins the order.
+    /// - Parameter query: The free text to search for.
+    /// - Parameter limit: The most foods to return.
     /// - Parameter stripsStopwords: See `FoodItemSearch.results(for:in:limit:stripsStopwords:)`.
     /// - Parameter context: `.userTyped` enables history, shows one row per catalog name
-    ///   (``TypeaheadDuplicateCollapse``, ingredient-search round F6) AND answers a curated alias
-    ///   phrase with the row it names (``CuratedSearchAlias``, F7 — "chocolate chips" is USDA's
+    ///   (`TypeaheadDuplicateCollapse`, ingredient-search round F6) AND answers a curated alias
+    ///   phrase with the row it names (`CuratedSearchAlias`, F7 — "chocolate chips" is USDA's
     ///   "Candies, semisweet chocolate"); synthesized resolver/import queries pass
     ///   `.machineGenerated` and see every row, unaliased. Required so every caller states which
     ///   surface it serves.
-    /// - Parameter ranking: ``FoodSearchRanking/ingredientIdentity`` for the recipe ingredient surfaces
+    /// - Parameter ranking: `FoodSearchRanking.ingredientIdentity` for the recipe ingredient surfaces
     ///   only (ingredient-search round F5): a row that IS the typed ingredient ranks first, and among
     ///   those this person's own and logged rows still lead — the compound level ("Milk, whole" for
     ///   "whole milk") orders only the catalog's USDA rows beneath them (F5 fix round 2). The personal
@@ -500,10 +502,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// A spelling to OFFER for a typed query ("chobanni yogurt" → "chobani yogurt"), or nil — the
     /// 2026-10-29 brand fixes' labelled suggestion. Never applied by the catalog: the search surface shows
     /// it and runs it only when the person taps it. Reads the base and branded indexes' own vocabulary
-    /// (``FoodSearchVocabulary``), built on first use and rebuilt when the branded catalog attaches or
+    /// (`FoodSearchVocabulary`), built on first use and rebuilt when the branded catalog attaches or
     /// detaches. Nil when the corrected query would itself find nothing.
     ///
-    /// The first call reads up to ``vocabularyLimit`` words per source on the calling thread; call it
+    /// The first call reads up to `vocabularyLimit` words per source on the calling thread; call it
     /// off the main actor, as the typeahead does.
     public func spellingSuggestion(for query: String) -> String? {
         let vocabulary = searchVocabulary()
@@ -540,12 +542,12 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     }
 
 
-    /// Inserts the row a ``CuratedSearchAlias`` phrase names (ingredient-search round, F7) — typed
+    /// Inserts the row a `CuratedSearchAlias` phrase names (ingredient-search round, F7) — typed
     /// search only, so the resolver's `candidates(for:limit:ranking:)` and the importer's bind never see it.
     ///
     /// The row goes directly beneath the leading run of this person's own rows (their items and the
     /// rows they have logged), so on a cold catalog it is first; a correction is prepended afterwards
-    /// by ``promotingCorrection(_:for:limit:ranking:)`` and so still wins. Nothing is filtered out: a copy of
+    /// by `promotingCorrection(_:for:limit:ranking:)` and so still wins. Nothing is filtered out: a copy of
     /// the target already in the list moves up, and the list is re-capped at `limit`. Inert when no
     /// phrase matches or the target does not resolve (an in-memory test catalog, a future rebuild).
     private func insertingCuratedAlias(
@@ -559,7 +561,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
         return Array(rows.prefix(limit))
     }
 
-    /// Like ``results(for:limit:)`` but pairs each item with its match score, for callers that gate
+    /// Like ``results(for:limit:stripsStopwords:context:ranking:)`` but pairs each item with its match score, for callers that gate
     /// on match quality (e.g. the meal-resolution review floor). Every row returned already carries
     /// every search token in its NAME.
     ///
@@ -617,7 +619,7 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// become a back door into the catalog), and an alias whose food no longer resolves — a branded
     /// row whose On-Demand Resource has been purged, or a user item since deleted.
     ///
-    /// **A recipe pick (F9b) is promoted the same way, for ``FoodSearchRanking/ingredientIdentity``
+    /// **A recipe pick (F9b) is promoted the same way, for `FoodSearchRanking.ingredientIdentity`
     /// only**, and only when the query has no correction: a correction is the explicit statement and
     /// answers first on every surface.
     private func promotingCorrection(
@@ -630,10 +632,10 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     }
 
     /// The person's own remembered answer for exactly `query`'s words: their correction (fix 1.10), or —
-    /// on a ``FoodSearchRanking/ingredientIdentity`` search only — their recipe pick (F9b), the
+    /// on a `FoodSearchRanking.ingredientIdentity` search only — their recipe pick (F9b), the
     /// correction winning. Nil when neither exists, when the query is under `minimumQueryLength`, or
     /// when the food no longer resolves (a purged branded row, a deleted user item). The one lookup
-    /// ``promotingCorrection(_:for:limit:ranking:)`` and ``candidates(for:limit:ranking:)`` share.
+    /// `promotingCorrection(_:for:limit:ranking:)` and ``candidates(for:limit:ranking:)`` share.
     private func rememberedAnswer(for query: String, ranking: FoodSearchRanking) -> FoodItem? {
         let aliases = searchAliases
         let picks = ranking == .ingredientIdentity ? recipeSearchPicks : [:]
@@ -662,9 +664,11 @@ public nonisolated final class FoodCatalog: @unchecked Sendable {
     /// Builds the candidate pool a meal description should be resolved against, mirroring the legacy
     /// `FoodSelectionCandidateBuilder.candidates(for:foodItems:)` but sourcing matches from SQLite.
     ///
+    /// - Parameter description: The meal description to build the pool for.
+    /// - Parameter limit: The most candidates in the pool.
     /// - Parameter ranking: how each sub-phrase's rows are ordered before they join the pool. The meal
     ///   resolver keeps the default; the recipe swap sheet passes
-    ///   ``FoodSearchRanking/ingredientIdentity`` (F5), so a pool built from an ingredient's name leads
+    ///   `FoodSearchRanking.ingredientIdentity` (F5), so a pool built from an ingredient's name leads
     ///   with rows that ARE that ingredient.
     ///
     /// **On the identity surface the person's remembered answer for the WHOLE description leads**

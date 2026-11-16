@@ -289,7 +289,7 @@ struct AcknowledgmentsView: View {
     }
 
     /// The attribution the Open Government Licence – Canada asks for, as the licence words it (a notice,
-    /// never translated here; food rows carry the localized ``FoodItemSource/attributionLine``).
+    /// never translated here; food rows carry the localized `FoodItemSource.attributionLine`).
     static let canadianNutrientFileNotice = "Contains information licensed under the Open Government Licence – Canada."
 
     /// The licence's own page. A constant, checked by the host wall; Safari opens it, the app sends it nothing.
