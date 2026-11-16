@@ -261,6 +261,7 @@ struct WorldSpeechBubble: View {
             .font(font)
             .dynamicTypeSize(...typeCap)
             .foregroundStyle(WorldPalette.bark)
+            .accessibilityIdentifier(WorldMapCappedText.speech)
             .multilineTextAlignment(alignment)
             .fixedSize(horizontal: false, vertical: true)
             .padding(EdgeInsets(top: 7, leading: 10, bottom: 7, trailing: 10))

@@ -24,6 +24,7 @@ struct WorldTodayTab: View {
                 .foregroundStyle(appColors.wood.tones.label)
                 .lineLimit(1)
                 .fixedSize()
+                .accessibilityIdentifier(WorldMapCappedText.todayTab)
             WorldSpriteView(sprite: WorldSprites.chevR, scale: 2, tint: appColors.wood.tones.label)
         }
         .padding(EdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10))

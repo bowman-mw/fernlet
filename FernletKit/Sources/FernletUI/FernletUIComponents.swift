@@ -1688,6 +1688,12 @@ public extension Text {
         Text(key).italic().foregroundStyle(Color.slate)
     }
 
+    /// ``fieldPrompt(_:)`` in another ink, for a prompt that carries information rather than a hint (Nutrition
+    /// targets' derived number, which is the target in effect): still italic, so it never reads as typed.
+    static func fieldPrompt(_ key: LocalizedStringKey, ink: Color) -> Text {
+        Text(key).italic().foregroundStyle(ink)
+    }
+
     /// ``fieldPrompt(_:)`` for a title that is already final: a `String` the field was given verbatim.
     static func fieldPrompt(verbatim content: String) -> Text {
         Text(verbatim: content).italic().foregroundStyle(Color.slate)

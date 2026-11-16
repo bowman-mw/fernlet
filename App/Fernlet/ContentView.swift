@@ -978,6 +978,10 @@ struct ContentView: View {
                          stampBannerShowing: shownStampBanner != nil || shownPassportBanner != nil,
                          isCameraOpen: $isWorldCameraOpen,
                          onMealsLogged: mealLogReporter)
+                // A panel over the map (Today, Log, Settings) covers it edge to edge, so the map's plate,
+                // Sprout's bubble and notices leave the accessibility tree while one is open: VoiceOver
+                // and the audit reached them through the panel (G4 recount 2026-11-14).
+                .accessibilityHidden(worldOverlay != nil)
                 .tabPage(.home)
             WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
                 FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -1097,6 +1101,8 @@ struct ContentView: View {
                     )
                 }
             }
+            // Full screen over the map: VoiceOver stays inside the panel until it closes.
+            .accessibilityAddTraits(.isModal)
             .transition(.opacity)
         }
     }

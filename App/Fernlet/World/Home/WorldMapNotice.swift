@@ -51,9 +51,11 @@ struct WorldMapNotice: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(WorldNoticeType.title)
+                .accessibilityIdentifier(WorldMapCappedText.noticeLine)
             if let detail {
                 Text(detail)
                     .font(WorldNoticeType.detail)
+                    .accessibilityIdentifier(WorldMapCappedText.noticeLine)
             }
         }
         .foregroundStyle(WorldPalette.bark)
