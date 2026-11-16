@@ -189,6 +189,26 @@ struct DeleteAllDataTests {
         #expect(repository.loadSnapshot(todayKey: todayKey).day.bottleCount == 3)
     }
 
+    /// G9-3: Core memories live in their own `MemoryRecord` rows now, so Delete Everything must take
+    /// those rows and their tombstones (a wipe is not a forget), and clear the learn-from date.
+    @Test func deleteAllDataWipesMemoryRowsTombstonesAndTheLearnFromDate() async throws {
+        let (store, repository, _) = makeTestStoreWithRepositories()
+        let doomed = MemoryNote(category: "note", text: "Forgotten before the wipe")
+        store.memories = [doomed, MemoryNote(category: "note", text: "Still here")]
+        store.flushPendingSnapshotSave()
+        store.deleteMemory(doomed)
+        store.forgetPatterns()
+        store.flushPendingSnapshotSave()
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.memories.isEmpty)
+        #expect(store.settings.tierTwoLearnFrom == nil)
+        let request = NSFetchRequest<NSManagedObject>(entityName: "MemoryRecord")
+        #expect(try repository.persistenceController.container.viewContext.fetch(request).isEmpty,
+                "memory rows or tombstones survived delete everything")
+    }
+
     @Test func purgingAnEmptyRepositorySucceeds() {
         let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-empty"))
 

@@ -151,6 +151,20 @@ import FernletDomainModel
         #expect(payload.includedFieldNames == ["signalSummaries", "journalTagLabel", "filteredMemorySummary"])
     }
 
+    /// G9-3: Core memories (`MemoryNote`) are never fed to any AI prompt. Forget by filters matches them
+    /// on the device with no model at all, so no payload grows a Core-memory field for it.
+    @Test func noPayloadCarriesCoreMemories() {
+        let payloads: [Any] = [
+            FoodSelectionPayload(mealDescription: "oats", candidates: [], fallbackMealType: nil),
+            DaySummaryPayload(mealNames: [], workoutNames: [], sleepQualityLabel: nil, sleepHours: nil, journalTagLabel: nil),
+            CompanionThoughtPayload(signalSummaries: [], journalTagLabel: nil, filteredMemorySummary: ""),
+        ]
+        for payload in payloads {
+            let fields = Set(Mirror(reflecting: payload).children.compactMap(\.label))
+            #expect(fields.isDisjoint(with: ["memories", "coreMemories", "memoryNotes", "forgetQuery"]))
+        }
+    }
+
     // MARK: - MemoryAgent destination allowlist
 
     @Test func memoryAgentBlocksFoodSelectionDestination() {

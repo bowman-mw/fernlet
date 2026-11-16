@@ -162,7 +162,10 @@ struct CoreDataStagedBlobLoadTests {
         )
         let fallback = await repository.loadSnapshotAsync(todayKey: "2026-05-16")
 
-        #expect(fallback.memories.isEmpty, "a corrupt payload must yield the empty blob-aggregate fallback")
+        #expect(fallback.recentMeals.isEmpty && fallback.goals.isEmpty,
+                "a corrupt payload must yield the empty blob-aggregate fallback")
+        // G9-3: memories left the blob for their own rows, which a corrupt blob does not take down.
+        #expect(fallback.memories.map(\.text) == seededMemories.map(\.text))
         #expect(fallback.day.bottleCount == 2, "today's day is served from its intact row, not blanked")
         #expect(repository.isInReadOnlyRecovery, "a corrupt payload must latch read-only recovery")
         #expect(repository.saveSnapshot(snapshot(bottleCount: 9)) == false, "saves stay refused while latched")

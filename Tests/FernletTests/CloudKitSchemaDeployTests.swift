@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import Testing
 import CloudKitSync
@@ -32,6 +33,16 @@ struct CloudKitSchemaDeployTests {
         #expect(!CloudKitSchemaDeploy.isRequested(arguments: ["-INITIALIZE_CLOUDKIT_SCHEMA"]))
         #expect(!CloudKitSchemaDeploy.isRequested(arguments: ["initialize_cloudkit_schema"]))
         #expect(!CloudKitSchemaDeploy.isRequested(arguments: ["INITIALIZE_CLOUDKIT_SCHEMA_NOW"]))
+    }
+
+    /// G9-3: the `MemoryRecord` entity the owner's production schema deploy must push. Its name and
+    /// attributes are the CloudKit record type and fields (`CD_MemoryRecord`), so they are frozen.
+    @MainActor
+    @Test func memoryRecordEntityIsInTheMirroredModel() throws {
+        let model = PersistenceController(inMemory: true).container.managedObjectModel
+        let entity = try #require(model.entitiesByName["MemoryRecord"])
+        #expect(Set(entity.attributesByName.keys) == ["idString", "payloadData", "updatedAt"])
+        #expect(entity.attributesByName["payloadData"]?.allowsExternalBinaryDataStorage == false)
     }
 
     @Test func launchArgumentTokenIsStable() {
