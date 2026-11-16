@@ -109,6 +109,8 @@ struct PrivacyDataSettingsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The World's framed look (`b2-settings-privacy`): framed cards and rows on the dotted page.
     @Environment(\.fernletFramedLook) private var look
+    /// The app's capture-protection state, handed explicitly to the recovery-code sheet (G9-2).
+    @Environment(CaptureProtectionState.self) private var captureProtection
 
     @State private var hasFreshVerification = false
     @State private var isVerifying = false
@@ -186,6 +188,8 @@ struct PrivacyDataSettingsView: View {
     @State private var pendingV2Restore: PendingV2Restore?
     /// Presents the typed-gate ``DeleteEverythingSheet`` for this screen's delete buttons.
     @State private var showDeleteEverything = false
+    /// The recovery code's row, sheets and one-time offer (G9-2).
+    @State private var recoveryCode: RecoveryCodePresenter
     private let cloudDataService: any PrivacyCloudDataManaging
     private let persistenceController: any PrivacyPersistenceReloading
     private let store: FernletStore?
@@ -196,6 +200,10 @@ struct PrivacyDataSettingsView: View {
         persistenceController: (any PrivacyPersistenceReloading)? = nil
     ) {
         self.store = store
+        _recoveryCode = State(initialValue: RecoveryCodePresenter.live(
+            duressActive: { [store] in store?.duressSessionActive ?? false },
+            anyBackupEnabled: { StoragePreferencesStore.currentPreferences().hasSealedBackup }
+        ))
         self.cloudDataService = cloudDataService ?? PrivacyDataServiceFactory.makeCloudDataService()
         self.persistenceController = persistenceController ?? PrivacyDataServiceFactory.makePersistenceReloader()
     }
@@ -230,6 +238,7 @@ struct PrivacyDataSettingsView: View {
                     }
                 }
             }
+            .recoveryCodeSheets(recoveryCode, captureProtection: captureProtection) { retrySealedRestore() }
             .task { await onFirstAppear() }
     }
 
@@ -848,6 +857,12 @@ struct PrivacyDataSettingsView: View {
             }
             foundBackupLines
 
+            // The recovery code (G9-2): never in a duress session, where the decoy must not reveal,
+            // make or use the owner's code.
+            if !(store?.duressSessionActive ?? false) {
+                RecoveryCodeRow(presenter: recoveryCode)
+            }
+
             // Beneath the switches themselves, not at the far bottom of the page.
             operationErrorLine(.iCloud)
         }
@@ -1190,6 +1205,7 @@ struct PrivacyDataSettingsView: View {
                 escrowConflictSection
                 attentionLines
                 if showsRetryRestore { retryRestoreButton }
+                if offersRecoveryCode { RecoveryCodeBannerButton(presenter: recoveryCode) }
                 operationErrorLine(.backupStatus)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1788,6 +1804,14 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// Whether the banner offers "Use a recovery code" (G9-2): a payload or the photo route waits for
+    /// a key this phone lacks or holds no key that opens it, and no duress session runs.
+    private var offersRecoveryCode: Bool {
+        guard let store, !store.duressSessionActive else { return false }
+        return sealedBackupAttentionItems.contains { RecoveryCodePresenter.offersRecovery(for: $0.outcome) }
+            || ownPhotoAttention.map(RecoveryCodePresenter.offersRecovery(for:)) ?? false
+    }
+
     /// Whether "Retry restore" can actually do anything about the states on screen.
     ///
     /// NOT for the payload backups' owed uploads (period, intimate logs, journal): they restore and
@@ -2304,12 +2328,20 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The one-time "make a recovery code?" offer after an encrypted backup is turned on (G9-2,
+    /// owner call R5 = A). Never in a duress session.
+    private func offerRecoveryCodeOnce() {
+        guard !(store?.duressSessionActive ?? false) else { return }
+        recoveryCode.offerOnceAfterBackupTurnedOn()
+    }
+
     /// Persists the photo-backup switch after the store's enable/disable answered `ok` — the toggle's
     /// path and Retry's re-run of a failed enable (bug confirmation 2026-10-15 §1) end here alike.
     private func finishOwnPhotoBackupApply(enabled: Bool, ok: Bool) {
         if ok {
             storagePreferencesStore.update { $0.sealedBackupOwnPhotosEnabled = enabled }
             ownPhotoBackupDisableFailed = false
+            if enabled { offerRecoveryCodeOnce() }
         } else if !enabled {
             // Same rule as the payload toggles: a failed delete keeps the preference ON so
             // the surviving records stay targetable by a retry (and by "delete everything"),
@@ -2447,6 +2479,7 @@ struct PrivacyDataSettingsView: View {
                     if ok {
                         setSealedBackupPreference(payload, true)
                         sealedBackupDisableFailures.remove(payload)
+                        offerRecoveryCodeOnce()
                     } else {
                         // A FAILED enable (escrow key not provisioned, or a reconcile failure). The
                         // preference stays off, so the toggle the user just confirmed through the

@@ -342,9 +342,16 @@ During setup you choose whether to keep your data **only on this device** or **s
   Before this data leaves your device it is encrypted
   with a key derived from a dedicated backup key (AES-256-GCM). Apple stores only unreadable
   ciphertext. Because the key lives in your iCloud Keychain, **if you permanently lose access to your
-  iCloud Keychain on all your devices, this encrypted data cannot be recovered.** You are told this
-  when you enable it. Period-data backup is a deliberate, clearly-warned opt-in because of the
-  sensitivity of that information. Because the sealed store's key is locked to this device's
+  iCloud Keychain on all your devices, this encrypted data cannot be recovered** — unless you made
+  a recovery code. You are told this when you enable it. Period-data backup is a deliberate,
+  clearly-warned opt-in because of the sensitivity of that information. **Recovery code
+  (optional):** in Settings → Privacy & Data you can make a 12-word recovery code. Fernlet shows the
+  words once and keeps no copy of them; it stores in your iCloud private database only your backup
+  keys sealed so that only those 12 words can open them (HPKE with X25519 and ChaCha20-Poly1305). If
+  iCloud Keychain is lost, typing the words reopens your encrypted backups. The code opens backups
+  only, never your Fernlet passcode, and making a new code stops the old one working. If you lose
+  both the code and iCloud Keychain, no one can open the backups, including us. Delete everything
+  removes these sealed keys with the rest of your iCloud data. Because the sealed store's key is locked to this device's
   security hardware (Section 2), this opt-in backup is the **only** way the sealed categories can be
   recovered on another or an erased device — without it, sealed data is unrecoverable off this
   device, full stop. The journal, period-data and intimate-log parts of this backup

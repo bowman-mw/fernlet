@@ -87,7 +87,7 @@ cannot be re-derived from the new name.
 
 ## 3. The domain inventory
 
-The registry holds **81** purposes across five families. The tables below were generated from it
+The registry holds **83** purposes across five families. The tables below were generated from it
 on 2026-08-27, when it held 47, and have grown by hand since; they list 69. The twelve they lack are
 the nine the drift notes after them name, plus three KeyDerivation entries no note recorded until
 2026-10-02: `meshTLSExporterV1` (`fernlet.mesh.tls-exporter.v1`, the QUIC channel binding's exporter
@@ -135,6 +135,8 @@ on the reasoning.
 |---|---|---|
 | `sealedBackupLegacyV1` | `com.fernlet.sealed-backup` | `SealedBackupEscrowKey` (the app) |
 | `sealedBackupV2` | `com.fernlet.sealed-backup.v2` | `SealedBackupEscrowKey` (the app) |
+| `recoveryCodeX25519V1` | `fernlet.recovery-code.x25519.v1` | `RecoveryCode` (FernletCrypto): HKDF-SHA256 `info` turning a recovery code's 128-bit entropy (empty salt) into the X25519 recovery private key (G9-2, 2026-11-15) |
+| `recoveryEscrowHPKEV1` | `fernlet.recovery-escrow.hpke.v1` | `RecoveryEscrowSeal` (FernletCrypto): the HPKE `info` each sealed-backup escrow key is sealed to the recovery public key under (base mode, DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, ChaCha20-Poly1305; AAD = SHA-256 of the escrow public key) (G9-2) |
 | `proximityTransportV1` | `fernlet.proximity.v1` | `IdentityService` |
 | `heartDropPairV1` | `fernlet.heartdrop.v1` | — (FernletSocial's `IdentityService+HeartDrop` derives under its twin, `FernletFeaturePurposes.heartDropPairV1`; §8) |
 | `presencePairV1` | `fernlet.presence.tag.v1` | — (FernletSocial's `IdentityService+PresenceTags` derives under its twin, `FernletFeaturePurposes.presencePairV1`; §8) |
@@ -645,9 +647,9 @@ reviewer would have to remember the policy.
 ### `CryptographicDomainSeparationTests` — a property suite
 
 Every test is a negative: it performs a cross-domain operation and requires it to fail. Coverage is
-all-pairs over the registry's 81 entries rather than sampled, because what is at risk is one entry —
+all-pairs over the registry's 83 entries rather than sampled, because what is at risk is one entry —
 the new or copy-pasted one — not the primitive. (ProximityKit's namespace labels are checked
-against these 81 by `ProximityNamespaceGoldenTests`; see §8.)
+against these 83 by `ProximityNamespaceGoldenTests`; see §8.)
 
 **What it catches:** two purposes sharing a spelling; a purpose whose bytes no longer separate a
 derived key, an HMAC tag, or a digest; an AEAD ciphertext that opens under a foreign domain with the
@@ -782,7 +784,7 @@ labels.
   constant (`MeshEpochBounds.derivationDomain`, deleted at plan step A0.2.6) in no registry, so no
   domain-separation test saw it. It is `.fernlet`'s `family.purposes.hash.meshEpochIDV1` now, and
   `ProximityNamespaceGoldenTests.noLabelOfTheRegistryAndFernletTogetherIsAPrefixOfAnother()` runs
-  this document's prefix rule over this registry's 81 entries and `.fernlet`'s 41 labels together,
+  this document's prefix rule over this registry's 83 entries and `.fernlet`'s 41 labels together,
   deduplicated by bytes (82 distinct: the two feature salts are entries here already): no label is a
   byte prefix of another but for §7's one
   sealed-backup exception. Its nearest neighbour, `fernlet.mesh.epoch-heads.v1`, diverges at `.`

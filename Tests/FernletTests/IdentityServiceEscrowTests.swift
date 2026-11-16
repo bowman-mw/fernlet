@@ -20,6 +20,8 @@ import Foundation
 import FernletFoundation
 import Testing
 import CryptoKit
+import FernletCrypto
+import Security
 @testable import Fernlet
 
 @MainActor
@@ -302,5 +304,58 @@ struct IdentityServiceEscrowTests {
         #expect(svc.reconcileBackupEscrowKey() == .noEscrow)
         #expect(svc.sealedBackupKeyCandidates().isEmpty)
         #expect(svc.localBackupEscrowPublicKey.isEmpty)
+    }
+}
+
+// MARK: - G9-2: the recovery code's two doors into the escrow
+
+extension IdentityServiceEscrowTests {
+    /// Sealing for a recovery code covers every escrow key the phone holds, once each, and skips the
+    /// ones already sealed; the private keys come back only inside HPKE.
+    @Test func recoverySealCoversEveryEscrowKeyOnceAndSkipsSealedOnes() throws {
+        let id = "com.fernlet.identity.escrow.test.\(UUID().uuidString)"
+        let svc = IdentityService.fernletApp(keychainService: id)
+        defer { KeychainItem.deleteAll(service: id) }
+        try svc.ensureProvisioned()
+        #expect(try svc.sealEscrowKeysForRecovery(to: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation,
+                                                  skipping: []).isEmpty, "no escrow key yet: nothing to seal")
+        let adoptedPub = svc.provisionBackupEscrowKeyForSealing()
+        let other = Curve25519.KeyAgreement.PrivateKey()
+        _ = KeychainItem.store(other.rawRepresentation,
+                               account: IdentityService.escrowKeychainAccount(forPublicKey: other.publicKey.rawRepresentation),
+                               service: id, accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                               synchronizable: false, replacing: .local)
+        let recovery = Curve25519.KeyAgreement.PrivateKey()
+
+        let all = try svc.sealEscrowKeysForRecovery(to: recovery.publicKey.rawRepresentation, skipping: [])
+        #expect(Set(all.map(\.escrowPublicKeyHash)) == [
+            RecoveryEscrowSeal.escrowPublicKeyHash(adoptedPub),
+            RecoveryEscrowSeal.escrowPublicKeyHash(other.publicKey.rawRepresentation)
+        ])
+        let rest = try svc.sealEscrowKeysForRecovery(to: recovery.publicKey.rawRepresentation,
+                                                     skipping: [RecoveryEscrowSeal.escrowPublicKeyHash(adoptedPub)])
+        #expect(rest.map(\.escrowPublicKeyHash) == [RecoveryEscrowSeal.escrowPublicKeyHash(other.publicKey.rawRepresentation)])
+        #expect(try RecoveryEscrowSeal.open(rest[0], with: recovery).rawRepresentation == other.rawRepresentation)
+    }
+
+    /// Recovered escrow keys land device-only at their content-addressed slots (WS-2), are adopted
+    /// when none was, and a second store of the same key writes nothing new.
+    @Test func recoveredEscrowKeysAreStoredDeviceOnlyAndAdopted() throws {
+        let id = "com.fernlet.identity.escrow.test.\(UUID().uuidString)"
+        let svc = IdentityService.fernletApp(keychainService: id)
+        defer { KeychainItem.deleteAll(service: id) }
+        try svc.ensureProvisioned()
+        #expect(!svc.holdsEscrowKeyForRecovery)
+        let recovered = Curve25519.KeyAgreement.PrivateKey()
+        let account = IdentityService.escrowKeychainAccount(forPublicKey: recovered.publicKey.rawRepresentation)
+
+        #expect(svc.storeRecoveredEscrowKeys([recovered]) == 1)
+        #expect(svc.storeRecoveredEscrowKeys([recovered]) == 1)
+
+        #expect(KeychainItem.load(account: account, service: id, synchronizable: .local) == recovered.rawRepresentation)
+        #expect(KeychainItem.load(account: account, service: id, synchronizable: .synced) == nil)
+        #expect(svc.localBackupEscrowPublicKey == recovered.publicKey.rawRepresentation)
+        #expect(svc.holdsEscrowKeyForRecovery)
+        #expect(svc.reconcileBackupEscrowKey() == .promotedLocal, "the normal WS-2 promote path takes it from here")
     }
 }

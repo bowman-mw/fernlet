@@ -46,6 +46,10 @@ nonisolated enum AcknowledgmentNotices {
     /// FernletKit pins, `1.10.0-fernlet.2`, whose LICENSE is upstream 1.10.0's.
     static let cryptoSwiftLicenseResource = "CryptoSwift-LICENSE"
 
+    /// The BIP39 English word list's notice and MIT License (`BIP39-LICENSE.txt`, G9-2): the 2,048
+    /// words recovery codes are written in (`RecoveryCodeWordList`), used unaltered.
+    static let bip39LicenseResource = "BIP39-LICENSE"
+
     /// The families in `App/Fernlet/Fonts`, in the order the screen lists them. The screen's copy
     /// says "four"; `AcknowledgmentsTests` holds this table to the OFL files the bundle carries.
     static let fontFamilies: [FontFamily] = [
@@ -150,6 +154,8 @@ private struct FontNotice: Identifiable {
 struct AcknowledgmentsView: View {
     private let cryptoSwiftLicense = AcknowledgmentNotices.bundledText(
         AcknowledgmentNotices.cryptoSwiftLicenseResource, in: .main)
+    private let bip39License = AcknowledgmentNotices.bundledText(
+        AcknowledgmentNotices.bip39LicenseResource, in: .main)
     private let fontNotices = AcknowledgmentNotices.fontFamilies.map {
         FontNotice(family: $0, license: AcknowledgmentNotices.bundledText($0.licenseResource, in: .main))
     }
@@ -162,6 +168,7 @@ struct AcknowledgmentsView: View {
                     paragraph(Text("Fernlet is built with software, fonts and data made by other people. Their licenses ask Fernlet to carry these notices, so they appear here word for word, in English, as their authors wrote them."))
                 }
                 cryptoSwiftSection
+                recoveryWordsSection
                 fontsSection
                 foodDataSection
                 mapDataSection
@@ -192,6 +199,27 @@ struct AcknowledgmentsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                 notice(license)
+            } else {
+                unreadableNotice
+            }
+        }
+    }
+
+    /// The recovery code's word list (G9-2): the BIP39 English list under the MIT License, its notice
+    /// folded under a disclosure like a font's.
+    private var recoveryWordsSection: some View {
+        FernletFramedSection(header: Text("Recovery code words")) {
+            paragraph(Text("Recovery codes are written with the BIP39 English word list by Marek Palatinus, Pavol Rusnak, Aaron Voisine and Sean Bowe, used unaltered under the MIT License. Fernlet uses only the words, not the rest of BIP39."))
+            if let license = bip39License {
+                DisclosureGroup {
+                    licenseText(license).padding(.top, 6)
+                } label: {
+                    Text("License text")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                }
+                .tint(Color.bark)
+                .accessibilityIdentifier("acknowledgments.bip39License")
             } else {
                 unreadableNotice
             }

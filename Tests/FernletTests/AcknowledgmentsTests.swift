@@ -180,3 +180,19 @@ struct AcknowledgmentsTests {
         }
     }
 }
+
+// MARK: - G9-2: the BIP39 word list
+
+extension AcknowledgmentsTests {
+    /// The recovery code's word list is MIT-licensed: the bundle carries its notice and the license,
+    /// the screen shows it, and NOTICE and the website name it.
+    @Test func theBIP39WordListIsCreditedInTheBundleNoticeAndSite() throws {
+        let bundled = try #require(AcknowledgmentNotices.bundledText(AcknowledgmentNotices.bip39LicenseResource, in: .main),
+                                   "BIP39-LICENSE.txt is not in the app bundle")
+        #expect(bundled == (try RepoRoot.source("App/Fernlet/Acknowledgments/BIP39-LICENSE.txt")))
+        #expect(bundled.contains("MIT License") && bundled.contains("Marek Palatinus, Pavol Rusnak, Aaron Voisine, Sean Bowe"))
+        #expect(try RepoRoot.source("App/Fernlet/AcknowledgmentsView.swift").contains("recoveryWordsSection"))
+        #expect(try RepoRoot.source("NOTICE").contains("BIP39 English word list"))
+        #expect(try RepoRoot.source("Site/technical/index.html").contains("BIP39 English word list"))
+    }
+}

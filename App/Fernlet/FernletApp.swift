@@ -575,6 +575,7 @@ struct FernletApp: App {
         }
         .environment(lockService)
         .environment(storagePreferencesStore)
+        .environment(captureProtection)
     }
 
     /// The post-load surface (``readyContentSurface(store:)``) plus the iCloud-account watcher, kept

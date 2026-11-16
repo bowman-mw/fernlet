@@ -5339,6 +5339,22 @@
         }
       }
     },
+    "12 words" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "12 palabras"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "12 palabras"
+          }
+        }
+      }
+    },
     "2" : {
 
     },
@@ -6074,6 +6090,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Una receta compartida como texto es para leerla y no se importa aquí. Para guardarla, pide que te la envíen con Enviar por Mensajes o que la compartan cerca de ti."
+          }
+        }
+      }
+    },
+    "A recovery code is 12 words that open your encrypted backups if this iPhone's iCloud Keychain is ever lost, for example on a new iPhone without it or after iCloud's encrypted data is reset." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un código de recuperación son 12 palabras que abren tus copias cifradas si alguna vez se pierde el Llavero de iCloud de este iPhone, por ejemplo en un iPhone nuevo sin él o después de restablecer los datos cifrados de iCloud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un código de recuperación son 12 palabras que abren tus copias cifradas si alguna vez se pierde el Llavero de iCloud de este iPhone, por ejemplo en un iPhone nuevo sin él o después de restablecer los datos cifrados de iCloud."
           }
         }
       }
@@ -11676,6 +11708,22 @@
         }
       }
     },
+    "Check" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobar"
+          }
+        }
+      }
+    },
     "Check Open Food Facts" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11705,6 +11753,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verificar mi edad con Apple"
+          }
+        }
+      }
+    },
+    "Check my code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobar mi código"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobar mi código"
           }
         }
       }
@@ -11851,6 +11915,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Revisando tu calendario de entrenamientos…"
+          }
+        }
+      }
+    },
+    "Checking…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobando…"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobando…"
           }
         }
       }
@@ -13733,6 +13813,22 @@
         }
       }
     },
+    "Couldn't check iCloud just now." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora mismo no se ha podido comprobar iCloud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora mismo no se pudo comprobar iCloud."
+          }
+        }
+      }
+    },
     "Couldn't check this iCloud account for existing Fernlet data — if you used Fernlet before, choose Sync to iCloud to restore it." : {
       "localizations" : {
         "es" : {
@@ -14022,6 +14118,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet no pudo conectarse con Open Food Facts ahora. Puedes intentarlo de nuevo o ponerle nombre tú ^[mismo](inflect: true) abajo."
+          }
+        }
+      }
+    },
+    "Couldn't reach iCloud. Check that you're signed in and online, then try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido conectar con iCloud. Comprueba que has iniciado sesión y tienes conexión, y vuelve a intentarlo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo conectar con iCloud. Comprueba que has iniciado sesión y tienes conexión, y vuelve a intentarlo."
           }
         }
       }
@@ -16462,6 +16574,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No sugerirlo"
+          }
+        }
+      }
+    },
+    "Don't take a screenshot: anyone who finds it and gets into your iCloud account could open your backups." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hagas una captura de pantalla: cualquiera que la encuentre y entre en tu cuenta de iCloud podría abrir tus copias."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hagas una captura de pantalla: cualquiera que la encuentre y entre en tu cuenta de iCloud podría abrir tus copias."
           }
         }
       }
@@ -20269,6 +20397,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet necesita la cámara para tomar fotos con tus amigos. Puedes activarla cuando quieras."
+          }
+        }
+      }
+    },
+    "Fernlet needs your passcode or Face ID before it checks a recovery code." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet necesita tu código o Face ID antes de comprobar un código de recuperación."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet necesita tu código o Face ID antes de comprobar un código de recuperación."
+          }
+        }
+      }
+    },
+    "Fernlet needs your passcode or Face ID before it shows a recovery code." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet necesita tu código o Face ID antes de mostrar un código de recuperación."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet necesita tu código o Face ID antes de mostrar un código de recuperación."
           }
         }
       }
@@ -24672,6 +24832,22 @@
         }
       }
     },
+    "I've written them down" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya las he apuntado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya las anoté"
+          }
+        }
+      }
+    },
     "Identify from photo" : {
       "localizations" : {
         "es" : {
@@ -24716,6 +24892,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Identidad"
+          }
+        }
+      }
+    },
+    "If both the code and iCloud Keychain are lost, no one can open your encrypted backups, not even Fernlet." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si se pierden el código y el Llavero de iCloud, nadie podrá abrir tus copias cifradas, ni siquiera Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si se pierden el código y el Llavero de iCloud, nadie podrá abrir tus copias cifradas, ni siquiera Fernlet."
           }
         }
       }
@@ -24780,6 +24972,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Si esta misma receta ya está en Fernlet, se conservará una sola copia."
+          }
+        }
+      }
+    },
+    "If this iPhone's iCloud Keychain is ever lost, 12 words you write down can still open your encrypted backups. You can make one later in Privacy & data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si alguna vez se pierde el Llavero de iCloud de este iPhone, 12 palabras que apuntes podrán seguir abriendo tus copias cifradas. Puedes crear uno más tarde en Privacidad y datos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si alguna vez se pierde el Llavero de iCloud de este iPhone, 12 palabras que anotes podrán seguir abriendo tus copias cifradas. Puedes crear uno más tarde en Privacidad y datos."
           }
         }
       }
@@ -28317,6 +28525,22 @@
         }
       }
     },
+    "Lost iCloud Keychain? Your recovery code can open these backups on this iPhone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Has perdido el Llavero de iCloud? Tu código de recuperación puede abrir estas copias en este iPhone."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Perdiste el Llavero de iCloud? Tu código de recuperación puede abrir estas copias en este iPhone."
+          }
+        }
+      }
+    },
     "Lower-carb options without strict tracking." : {
       "localizations" : {
         "es" : {
@@ -28453,6 +28677,22 @@
         }
       }
     },
+    "Made on %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Creado el %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Creado el %@"
+          }
+        }
+      }
+    },
     "Magnesium" : {
       "localizations" : {
         "es" : {
@@ -28534,6 +28774,54 @@
         }
       }
     },
+    "Make a new code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear un código nuevo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear un código nuevo"
+          }
+        }
+      }
+    },
+    "Make a recovery code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear un código de recuperación"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear un código de recuperación"
+          }
+        }
+      }
+    },
+    "Make a recovery code?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Crear un código de recuperación?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Crear un código de recuperación?"
+          }
+        }
+      }
+    },
     "Make next week a deload" : {
       "comment" : "Day calendar: the deload suggestion's primary button, marks next week as a deload week",
       "localizations" : {
@@ -28547,6 +28835,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hacer descarga la próxima"
+          }
+        }
+      }
+    },
+    "Make one" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear uno"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear uno"
           }
         }
       }
@@ -28672,6 +28976,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rinde ^[%1$lld porción](inflect: true): P %2$lld g · C %3$lld g · G %4$lld g · %5$lld kcal"
+          }
+        }
+      }
+    },
+    "Making a new code stops your old code from working." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Al crear un código nuevo, el anterior deja de funcionar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Al crear un código nuevo, el anterior deja de funcionar."
+          }
+        }
+      }
+    },
+    "Making…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Creando…"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Creando…"
           }
         }
       }
@@ -31697,6 +32033,22 @@
         }
       }
     },
+    "No recovery code was made for this iCloud account." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha creado ningún código de recuperación para esta cuenta de iCloud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se creó ningún código de recuperación para esta cuenta de iCloud."
+          }
+        }
+      }
+    },
     "No rush getting started." : {
       "localizations" : {
         "es" : {
@@ -32323,6 +32675,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sin definir"
+          }
+        }
+      }
+    },
+    "Not set up. Opens your encrypted backups if iCloud Keychain is lost." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin configurar. Abre tus copias cifradas si se pierde el Llavero de iCloud."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin configurar. Abre tus copias cifradas si se pierde el Llavero de iCloud."
           }
         }
       }
@@ -33411,6 +33779,22 @@
         }
       }
     },
+    "One of the words is wrong or out of order. Check each word against your copy." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una de las palabras no es correcta o no está en su sitio. Compara cada palabra con tu copia."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una de las palabras no es correcta o no está en su sitio. Compara cada palabra con tu copia."
+          }
+        }
+      }
+    },
     "One serving: %@" : {
       "localizations" : {
         "es" : {
@@ -33796,6 +34180,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abre tus tareas de cuidado."
+          }
+        }
+      }
+    },
+    "Open my backups" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir mis copias"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir mis copias"
           }
         }
       }
@@ -35231,6 +35631,7 @@
       }
     },
     "Pattern" : {
+      "comment" : "Customize: the slot for a pattern on the companion's body (freckles, stripes…): its page title and row name",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -38319,6 +38720,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recuperar este teléfono"
+          }
+        }
+      }
+    },
+    "Recovery code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Código de recuperación"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Código de recuperación"
+          }
+        }
+      }
+    },
+    "Recovery code words" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabras del código de recuperación"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabras del código de recuperación"
+          }
+        }
+      }
+    },
+    "Recovery codes are written with the BIP39 English word list by Marek Palatinus, Pavol Rusnak, Aaron Voisine and Sean Bowe, used unaltered under the MIT License. Fernlet uses only the words, not the rest of BIP39." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los códigos de recuperación se escriben con la lista de palabras en inglés de BIP39, de Marek Palatinus, Pavol Rusnak, Aaron Voisine y Sean Bowe, usada sin cambios bajo la licencia MIT. Fernlet solo usa las palabras, no el resto de BIP39."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los códigos de recuperación se escriben con la lista de palabras en inglés de BIP39, de Marek Palatinus, Pavol Rusnak, Aaron Voisine y Sean Bowe, usada sin cambios bajo la licencia MIT. Fernlet solo usa las palabras, no el resto de BIP39."
+          }
+        }
+      }
+    },
+    "Recovery codes aren't available right now." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los códigos de recuperación no están disponibles ahora mismo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los códigos de recuperación no están disponibles ahora mismo."
           }
         }
       }
@@ -44008,6 +44473,22 @@
         }
       }
     },
+    "Show the words again" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostrar las palabras otra vez"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mostrar las palabras otra vez"
+          }
+        }
+      }
+    },
     "Shower Concerts" : {
       "comment" : "Silly stat title",
       "localizations" : {
@@ -47581,6 +48062,22 @@
         }
       }
     },
+    "That code couldn't be read. Check each word against your copy." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido leer ese código. Compara cada palabra con tu copia."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido leer ese código. Compara cada palabra con tu copia."
+          }
+        }
+      }
+    },
     "That code didn't match" : {
       "localizations" : {
         "es" : {
@@ -47859,6 +48356,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eso equivale a %@, repetición a repetición."
+          }
+        }
+      }
+    },
+    "That's %lld words. A recovery code has 12." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Son %lld palabras. Un código de recuperación tiene 12."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Son %lld palabras. Un código de recuperación tiene 12."
           }
         }
       }
@@ -48201,6 +48714,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Las zonas climáticas que eligen el terreno y las plantas del mapa vienen de esta obra, con la licencia Creative Commons Atribución 4.0 Internacional (CC BY 4.0). Fernlet cambió los datos: redujo el mapa a celdas de una décima de grado y convirtió sus clases de clima en terreno."
+          }
+        }
+      }
+    },
+    "The code opens backups only. It never unlocks Fernlet's passcode. Fernlet only asks for it here, in Privacy & data, so never type it anywhere else." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El código solo abre copias. Nunca desbloquea el código de Fernlet. Fernlet solo te lo pide aquí, en Privacidad y datos, así que no lo escribas en ningún otro sitio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El código solo abre copias. Nunca desbloquea el código de Fernlet. Fernlet solo te lo pide aquí, en Privacidad y datos, así que no lo escribas en ningún otro sitio."
           }
         }
       }
@@ -49392,6 +49921,38 @@
         }
       }
     },
+    "This code doesn't open the backups in this iCloud account. It may be an old code that a newer one replaced." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este código no abre las copias de esta cuenta de iCloud. Puede que sea un código antiguo que otro más reciente sustituyó."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este código no abre las copias de esta cuenta de iCloud. Puede que sea un código antiguo que otro más reciente sustituyó."
+          }
+        }
+      }
+    },
+    "This code opens your encrypted backups." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este código abre tus copias cifradas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este código abre tus copias cifradas."
+          }
+        }
+      }
+    },
     "This copies your training data as plain text so you can paste it somewhere else. Once you paste it into another app, that app has it — Fernlet can't take it back. The copy stays on this iPhone — it isn't shared to your other Apple devices. To get it onto another device, use Prepare summary instead." : {
       "localizations" : {
         "es" : {
@@ -49709,6 +50270,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Este es el dispositivo de recuperación"
+          }
+        }
+      }
+    },
+    "This isn't your current recovery code. If you made a new code, use that one." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este no es tu código de recuperación actual. Si creaste uno nuevo, usa ese."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este no es tu código de recuperación actual. Si creaste uno nuevo, usa ese."
           }
         }
       }
@@ -50419,6 +50996,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Para contar un vuelo una vez si el archivo lo repite"
+          }
+        }
+      }
+    },
+    "To make sure your copy is right, type these words from it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para asegurarte de que tu copia es correcta, escribe estas palabras de ella."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para asegurarte de que tu copia es correcta, escribe estas palabras de ella."
           }
         }
       }
@@ -51499,6 +52092,22 @@
         }
       }
     },
+    "Turn on an encrypted backup first. A recovery code opens encrypted backups, so there's nothing for one to open yet." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activa primero una copia cifrada. Un código de recuperación abre copias cifradas, así que todavía no hay nada que abrir."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activa primero una copia cifrada. Un código de recuperación abre copias cifradas, así que todavía no hay nada que abrir."
+          }
+        }
+      }
+    },
     "Turn on camera in Settings" : {
       "localizations" : {
         "es" : {
@@ -51734,6 +52343,22 @@
         }
       }
     },
+    "Type 3 words back" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe 3 palabras"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe 3 palabras"
+          }
+        }
+      }
+    },
     "Type it instead" : {
       "localizations" : {
         "es" : {
@@ -51750,6 +52375,22 @@
         }
       }
     },
+    "Type the 12 words of your recovery code, in order. The first four letters of each word are enough." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe las 12 palabras de tu código de recuperación, en orden. Bastan las cuatro primeras letras de cada palabra."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe las 12 palabras de tu código de recuperación, en orden. Bastan las cuatro primeras letras de cada palabra."
+          }
+        }
+      }
+    },
     "Type to find a replacement food." : {
       "localizations" : {
         "es" : {
@@ -51762,6 +52403,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escribe para encontrar un alimento sustituto."
+          }
+        }
+      }
+    },
+    "Type your 12 words to check they still open your backups. Nothing is restored or changed." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe tus 12 palabras para comprobar que siguen abriendo tus copias. No se restaura ni se cambia nada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe tus 12 palabras para comprobar que siguen abriendo tus copias. No se restaura ni se cambia nada."
           }
         }
       }
@@ -52196,6 +52853,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usa Importar plan de entrenamiento para revisar un archivo de plan de Fernlet."
+          }
+        }
+      }
+    },
+    "Use a recovery code" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar un código de recuperación"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar un código de recuperación"
           }
         }
       }
@@ -54162,6 +54835,60 @@
         }
       }
     },
+    "Word %lld" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabra %lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabra %lld"
+          }
+        }
+      }
+    },
+    "Word %lld isn't one of the recovery code words. Check its spelling." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La palabra %lld no es una de las palabras del código de recuperación. Revisa cómo está escrita."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La palabra %lld no es una de las palabras del código de recuperación. Revisa cómo está escrita."
+          }
+        }
+      }
+    },
+    "Word %lld: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Word %1$lld: %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabra %lld: %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabra %lld: %@"
+          }
+        }
+      }
+    },
     "Working sets: %@. Set 1 of %lld." : {
       "comment" : "Guided workout, VoiceOver: the warm-up sets are done and the lift's working sets begin, e.g. 'Working sets: Back squat. Set 1 of 3.'",
       "localizations" : {
@@ -54699,6 +55426,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escríbelo: la caja puede guardarlo un rato para que tú no tengas que cargarlo."
+          }
+        }
+      }
+    },
+    "Write the words on paper or keep them in a password manager. Fernlet shows them once and keeps no copy." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apunta las palabras en papel o guárdalas en un gestor de contraseñas. Fernlet las muestra una vez y no guarda ninguna copia."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Anota las palabras en papel o guárdalas en un gestor de contraseñas. Fernlet las muestra una vez y no guarda ninguna copia."
+          }
+        }
+      }
+    },
+    "Write these 12 words down in order. You'll type 3 of them back next." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apunta estas 12 palabras en orden. Después escribirás 3 de ellas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Anota estas 12 palabras en orden. Después escribirás 3 de ellas."
+          }
+        }
+      }
+    },
+    "Write these down" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apunta estas palabras"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Anota estas palabras"
           }
         }
       }
@@ -55985,6 +56760,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu clóset está vacío"
+          }
+        }
+      }
+    },
+    "Your code worked. Fernlet is restoring your encrypted backups now; the rest arrives the next time you open the Private tab." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código ha funcionado. Fernlet está restaurando tus copias cifradas; el resto llegará la próxima vez que abras la pestaña Privado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código funcionó. Fernlet está restaurando tus copias cifradas; el resto llegará la próxima vez que abras la pestaña Privado."
           }
         }
       }
@@ -57464,6 +58255,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tus recetas"
+          }
+        }
+      }
+    },
+    "Your recovery code is set up. Keep the paper somewhere safe. If you lose it, make a new code here: the old one then stops working." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código de recuperación está listo. Guarda el papel en un lugar seguro. Si lo pierdes, crea un código nuevo aquí: el anterior dejará de funcionar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código de recuperación está listo. Guarda el papel en un lugar seguro. Si lo pierdes, crea un código nuevo aquí: el anterior dejará de funcionar."
           }
         }
       }
@@ -81980,6 +82787,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pasos"
+          }
+        }
+      }
+    },
+    "recoveryCode.verify.reason" : {
+      "comment" : "Shown by iOS in the Face ID or passcode prompt before Fernlet shows or checks a recovery code.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Verify to make or check your recovery code."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verifica tu identidad para crear o comprobar tu código de recuperación."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verifica tu identidad para crear o comprobar tu código de recuperación."
           }
         }
       }
