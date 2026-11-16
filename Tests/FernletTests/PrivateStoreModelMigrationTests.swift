@@ -4,9 +4,11 @@
 // Invariant I22 of the period-data design (2026-09-30, §5.2): the sealed store's model is VERSIONED.
 // V1 — the four-entity model every shipped build wrote — is frozen and pinned by its checksum, V2 is
 // V1 plus `CycleRecord` (frozen and pinned since the bodybuilding round), V3 is V2 plus `BodyTally`
-// (World bodybuilding, round 7 piece B1), and a V1 or V2 store ON DISK opens under the production
-// controller with every row intact, carried forward by the staged migration (V1 → V2 → V3) the
-// production store description carries. All of it is a LOCAL model: the store never reaches iCloud.
+// (World bodybuilding, round 7 piece B1; frozen and pinned since G9-3), V4 is V3 plus `PrivateMemory`
+// (G9-3, the Core memories a person keeps private), and a V1, V2 or V3 store ON DISK opens under the
+// production controller with every row intact, carried forward by the staged migration
+// (V1 → V2 → V3 → V4) the production store description carries. All of it is a LOCAL model: the store
+// never reaches iCloud.
 
 import CoreData
 import CryptoKit
@@ -31,9 +33,12 @@ struct PrivateStoreModelMigrationTests {
     /// until the bodybuilding round left on disk, and the source of the V2 → V3 stage. Computed by the
     /// entity builders compiled standalone (the same run reproduced V1's pin above exactly).
     static let versionTwoChecksum = "Z5DTAqPj2hAYQ13rtKzS8ZkzPlLaTXcY4lmhUuX3QeI="
-    /// V3's checksum — the current model (V2 plus `BodyTally`). Pinned so a later edit to any entity
-    /// builder is a deliberate new version, never a silent change under stores in the field.
+    /// V3's checksum (V2 plus `BodyTally`), FROZEN since G9-3: V3 is what every build from the
+    /// bodybuilding round until G9-3 left on disk, and the source of the V3 → V4 stage.
     static let versionThreeChecksum = "igdTnCDbKKZx+uLl2g2KKueZfDMSsUJ7D6vDQ3IahI8="
+    /// V4's checksum — the current model (V3 plus `PrivateMemory`). Pinned so a later edit to any entity
+    /// builder is a deliberate new version, never a silent change under stores in the field.
+    static let versionFourChecksum = "PENDING"
 
     /// A scratch directory for an on-disk store, UUID-named per the shared-disk-root discipline.
     private static func makeScratchDirectory() throws -> URL {
@@ -79,19 +84,43 @@ struct PrivateStoreModelMigrationTests {
         #expect(v2.versionChecksum != v1.versionChecksum)
     }
 
-    /// V3 is V2 plus `BodyTally` and nothing else — every V2 entity keeps its exact hash — and it is
-    /// the model the controller hosts, so every new store is created at it.
+    /// V3 is V2 plus `BodyTally` and nothing else — every V2 entity keeps its exact hash — FROZEN.
     @Test func versionThreeIsVersionTwoPlusBodyTallyAndNothingElse() {
         let v2 = PrivatePersistenceController.makeManagedObjectModelV2()
-        let v3 = PrivatePersistenceController.makeManagedObjectModel()
+        let v3 = PrivatePersistenceController.makeManagedObjectModelV3()
         #expect(Set(v3.entitiesByName.keys) == Set(v2.entitiesByName.keys).union(["BodyTally"]))
         for (name, hash) in v2.entityVersionHashesByName {
             #expect(v3.entityVersionHashesByName[name] == hash, "\(name) changed shape between V2 and V3")
         }
         #expect(v3.versionIdentifiers.contains("FernletPrivate.v3"))
         #expect(v3.versionChecksum == Self.versionThreeChecksum, "V3 moved — actual \(v3.versionChecksum)")
+    }
+
+    /// V4 is V3 plus `PrivateMemory` and nothing else — every V3 entity keeps its exact hash — and it is
+    /// the model the controller hosts, so every new store is created at it.
+    @Test func versionFourIsVersionThreePlusPrivateMemoryAndNothingElse() {
+        let v3 = PrivatePersistenceController.makeManagedObjectModelV3()
+        let v4 = PrivatePersistenceController.makeManagedObjectModel()
+        #expect(Set(v4.entitiesByName.keys) == Set(v3.entitiesByName.keys).union(["PrivateMemory"]))
+        for (name, hash) in v3.entityVersionHashesByName {
+            #expect(v4.entityVersionHashesByName[name] == hash, "\(name) changed shape between V3 and V4")
+        }
+        #expect(v4.versionIdentifiers.contains("FernletPrivate.v4"))
+        #expect(v4.versionChecksum == Self.versionFourChecksum, "V4 moved — actual \(v4.versionChecksum)")
         let hosted = PrivatePersistenceController(inMemory: true).container.managedObjectModel
-        #expect(hosted.versionChecksum == v3.versionChecksum)
+        #expect(hosted.versionChecksum == v4.versionChecksum)
+    }
+
+    /// `PrivateMemory` is shaped like `BodyTally`: exactly an indexed id, a plaintext schema version and
+    /// one inline ciphertext — no date or category column, no uniqueness constraint.
+    @Test func thePrivateMemoryEntityHoldsOnlyAnIDAVersionAndOneCiphertext() throws {
+        let entity = try #require(PrivatePersistenceController.makeManagedObjectModel().entitiesByName["PrivateMemory"])
+        #expect(Set(entity.attributesByName.keys) == ["id", "schemaVersion", "payloadCiphertext"])
+        #expect(entity.relationshipsByName.isEmpty)
+        #expect(entity.uniquenessConstraints.isEmpty)
+        #expect(entity.attributesByName["payloadCiphertext"]?.allowsExternalBinaryDataStorage == false)
+        #expect(entity.indexes.contains { $0.elements.contains { $0.property?.name == "id" } })
+        #expect(PrivatePersistenceController.sealedEntityNames.contains("PrivateMemory"), "the reset purge and the prior-data count would miss it")
     }
 
     /// `BodyTally` is shaped like `CycleRecord`: exactly an indexed id, a plaintext schema version and
@@ -108,11 +137,45 @@ struct PrivateStoreModelMigrationTests {
         #expect(PrivatePersistenceController.sealedEntityNames.contains("BodyTally"), "the reset purge and the prior-data count would miss it")
     }
 
-    /// The production migration has exactly two stages, V1 → V2 and V2 → V3, chained.
-    @Test func theStagedMigrationChainsVersionOneToTwoToThree() throws {
+    /// The production migration has exactly three stages, V1 → V2, V2 → V3 and V3 → V4, chained.
+    @Test func theStagedMigrationChainsVersionOneToTwoToThreeToFour() throws {
         let production = PrivatePersistenceController(inMemory: true)
         let manager = try #require(production.container.persistentStoreDescriptions.first?.options[NSPersistentStoreStagedMigrationManagerOptionKey] as? NSStagedMigrationManager)
-        #expect(manager.stages.count == 2)
+        #expect(manager.stages.count == 3)
+    }
+
+    /// The V3 → V4 stage: a store written under the frozen V3 — what every build since the bodybuilding
+    /// round left on disk — opens under the production controller with its body tallies (and every other
+    /// row) intact, and the new `PrivateMemory` entity usable.
+    @Test func aVersionThreeStoreOnDiskOpensUnderVersionFourKeepingEveryRow() throws {
+        let directory = try Self.makeScratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("FernletPrivate.sqlite")
+        let key = SymmetricKey(size: .bits256)
+        let tally = BodyDayTally(dayKey: "2026-11-01", bathroomVisits: 2)
+
+        let old = PrivatePersistenceController(storeURL: storeURL, model: PrivatePersistenceController.makeManagedObjectModelV3())
+        #expect(!old.didFailToLoad)
+        try BodyTallyRepository(controller: old).save(tally, key: key)
+        try WorryNarrativeRepository(controller: old).insert(WorryNarrative(text: "kept worry"), contentKey: key)
+        try Self.close(old)
+
+        let migrated = PrivatePersistenceController(storeURL: storeURL)
+        #expect(!migrated.didFailToLoad, "the production controller could not open a V3 store")
+        #expect(try migrated.sealedRowCount() == 2, "rows were lost in the V3 → V4 migration")
+        #expect(try BodyTallyRepository(controller: migrated).allTallies(key: key).tallies["2026-11-01"] == tally)
+        let memory = MemoryNote(category: "family", text: "kept private")
+        try PrivateMemoryRepository(controller: migrated).save(memory, key: key)
+        let metadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: storeURL)
+        #expect(PrivatePersistenceController.makeManagedObjectModel().isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata),
+                "the store on disk is not at V4 after the migration")
+        try Self.close(migrated)
+
+        let reopened = PrivatePersistenceController(storeURL: storeURL)
+        #expect(!reopened.didFailToLoad)
+        #expect(try reopened.sealedRowCount() == 3)
+        #expect(try PrivateMemoryRepository(controller: reopened).memories(key: key).memories == [memory])
+        try Self.close(reopened)
     }
 
     /// The production description carries the staged migration (so a rebuild or reload re-adds under
@@ -237,7 +300,8 @@ struct PrivateStoreModelMigrationTests {
             CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .light), now: Date()), contentKey: key
         )
         try BodyTallyRepository(controller: current).save(BodyDayTally(dayKey: "2026-10-29", bathroomVisits: 3), key: key)
-        #expect(try current.sealedRowCount() == 3)
+        try PrivateMemoryRepository(controller: current).save(MemoryNote(category: "note", text: "private"), key: key)
+        #expect(try current.sealedRowCount() == 4)
         try Self.close(current)
 
         let shipped = PrivatePersistenceController.makeManagedObjectModelV1()
@@ -257,6 +321,8 @@ struct PrivateStoreModelMigrationTests {
                 "the cycle records survived a downgrade — the residual risk changed")
         #expect(try BodyTallyRepository(controller: upgradedAgain).rowCount() == 0,
                 "the body tallies survived a downgrade — the residual risk changed")
+        #expect(try PrivateMemoryRepository(controller: upgradedAgain).rowCount() == 0,
+                "the private memories survived a downgrade — the residual risk changed")
         #expect(try upgradedAgain.sealedRowCount() == 1)
         try Self.close(upgradedAgain)
     }

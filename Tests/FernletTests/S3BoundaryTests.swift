@@ -78,6 +78,10 @@ struct S3BoundaryTests {
         "CyclePhase", "CycleDayEntry", "UserLoggedCycleEvent", "PeriodTrackerStore", "IntimacyLogStore", "CycleRecord",
         // The sealed body tallies (World bodybuilding, round 7): bathroom visits and free-meal tags.
         "BodyDayTally", "BodyTallyRepository", "BodyTallyStore",
+        // The Core memories a person kept private (G9-3): their sealed repository, its seam, page and
+        // the app's funnel. A private memory never reaches an AI prompt.
+        "PrivateMemoryRepository", "PrivateMemoryStoring", "PrivateMemoryPage", "PrivateMemoryVault",
+        "privateMemories", "keepMemoryPrivate",
         // Sealed media stores + the pending-narrative buffer/payload and its storage scope.
         "PrivateMediaStore", "MealPhotoStore", "ProgressPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
         "PendingNarrativeStorageScope",

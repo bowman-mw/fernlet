@@ -209,6 +209,29 @@ struct DeleteAllDataTests {
                 "memory rows or tombstones survived delete everything")
     }
 
+    /// G9-3: Delete Everything wipes the private memories ("Keep private") — with Private open or closed,
+    /// keylessly — and a wipe that could not drop them says so by name.
+    @Test func deleteAllDataWipesPrivateMemoriesAndNamesAFailure() async throws {
+        let (store, _, _) = makeTestStoreWithRepositories()
+        let controller = PrivatePersistenceController(inMemory: true)
+        store.privateMemoryVault = PrivateMemoryVault(controller: controller)
+        let key = SymmetricKey(size: .bits256)
+        store.hubContentKeyProvider = { key }
+        let secret = MemoryNote(category: "family", text: "Kept private")
+        store.memories = [secret]
+        #expect(store.keepMemoryPrivate(secret))
+        store.hubContentKeyProvider = { nil }
+
+        let outcome = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(try PrivateMemoryRepository(controller: controller).rowCount() == 0, "a private memory survived delete everything")
+        #expect(!outcome.incompleteStores.contains("your private memories"))
+
+        store.privateMemoryVault = PrivateMemoryVault(repository: UndeletablePrivateMemoryStore())
+        let failed = await store.deleteAllData(includingHealthKitSamples: false)
+        #expect(failed.incompleteStores.contains("your private memories"))
+    }
+
     @Test func purgingAnEmptyRepositorySucceeds() {
         let repository = LocalFernletRepository(fileURL: temporaryDatabaseURL("delete-all-empty"))
 
@@ -1422,6 +1445,9 @@ struct DeleteAllDataTests {
         store.worryBoxResetHook = { true }
         store.sealedStoreRebuildHook = { true }
         store.storagePreferencesResetHook = { _, _ in true }
+        // G9-3: the private memories' leg is wired by the store itself (no hook); point it at an
+        // in-memory sealed store so a clean wipe never depends on the host's shared one.
+        store.privateMemoryVault = PrivateMemoryVault(controller: PrivatePersistenceController(inMemory: true))
     }
 
     // MARK: - Crypto-erasure normalization (P1a): the sealed store FILE, not just its rows
@@ -1542,7 +1568,7 @@ struct DeleteAllDataTests {
     /// The reversibility trap, asserted end to end: every deletion path must stay reachable while
     /// the app is LOCKED, so nothing in it — row-delete or rebuild — may need the content key.
     ///
-    /// Seals one row in each of the six sealed entities under a real `FernletLockService` content
+    /// Seals one row in each of the seven sealed entities under a real `FernletLockService` content
     /// key, engages the lock (scrubbing that key), then drives the real funnel with the real
     /// repositories wired to the hooks. The rows must be gone, the store file rebuilt, and the lock
     /// must still hold no key on the way out — a wipe that had to decrypt to delete would have had
@@ -1586,7 +1612,10 @@ struct DeleteAllDataTests {
         // funnel's store rebuild takes it (and leg 11 deletes the journal device key it is sealed
         // under in production; any key stands in for it here).
         try BodyTallyRepository(controller: controller).save(BodyDayTally(dayKey: "2026-08-10", bathroomVisits: 2), key: key)
-        #expect(Self.sealedRowCount(in: controller) == 6, "precondition: the six sealed rows were not seeded")
+        // A private memory (G9-3, "Keep private"), sealed under the content key: its own keyless leg in
+        // `resetAll` drops it while locked (and the rebuild would take it too).
+        try PrivateMemoryRepository(controller: controller).save(MemoryNote(category: "family", text: "private"), key: key)
+        #expect(Self.sealedRowCount(in: controller) == 7, "precondition: the seven sealed rows were not seeded")
 
         lock.lock(reason: .manual)
         #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
@@ -1604,12 +1633,13 @@ struct DeleteAllDataTests {
         store.pendingNarrativeBufferPurgeHook = { (try? lock.purgePendingNarratives()) != nil }
         store.sealedStoreRebuildHook = { (try? controller.rebuildStore()) != nil }
         store.storagePreferencesResetHook = { _, _ in true }
+        store.privateMemoryVault = PrivateMemoryVault(controller: controller)
 
         let outcome = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(Self.sealedRowCount(in: controller) == 0, "sealed rows survived a locked wipe")
         #expect(lock.contentKey(for: .privateHub) == nil, "the wipe produced a content key — deletion must never require the ability to read")
-        for named in ["your cycle history", "your intimate logs", "your journal entries", "your Worry Box notes", "your sealed store"] {
+        for named in ["your cycle history", "your intimate logs", "your journal entries", "your Worry Box notes", "your private memories", "your sealed store"] {
             #expect(!outcome.incompleteStores.contains(named), "\(named) reported incomplete after a locked wipe")
         }
     }
@@ -1752,7 +1782,7 @@ struct DeleteAllDataTests {
     private static func sealedRowCount(in controller: PrivatePersistenceController) -> Int {
         let context = controller.container.viewContext
         return context.performAndWait {
-            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally"].reduce(0) { total, entityName in
+            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally", "PrivateMemory"].reduce(0) { total, entityName in
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 return total + ((try? context.fetch(request).count) ?? 0)
             }
@@ -1781,4 +1811,15 @@ private struct FailingPurgeRepository: FernletRepository {
     func loadAllDays() -> [String: FernletDay] { [:] }
     func loadTierTwoMemories() -> [TierTwoMemoryRecord] { [] }
     func purgeAllPersistedData() -> Bool { false }
+}
+
+/// A private store whose wipe always fails (G9-3), so the funnel's named failure can be seen.
+private final class UndeletablePrivateMemoryStore: PrivateMemoryStoring {
+    struct WipeFailed: Error {}
+    func rowCount() throws -> Int { 1 }
+    func memories(key: SymmetricKey?) throws -> PrivateMemoryPage { PrivateMemoryPage() }
+    func save(_ memory: MemoryNote, key: SymmetricKey?) throws {}
+    func mergeRestored(_ incoming: [MemoryNote], key: SymmetricKey?) throws -> Int { 0 }
+    func delete(ids: [UUID]) throws -> Int { 0 }
+    func deleteAll() throws -> Bool { throw WipeFailed() }
 }

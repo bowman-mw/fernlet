@@ -639,6 +639,12 @@ struct LocalizationBoundaryTests {
         let tail = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: nil, records: []))
         let tailObject = try #require(try JSONSerialization.jsonObject(with: tail) as? [String: Any])
         #expect(Set(tailObject.keys) == ["v", "writer", "set", "records"])
+        // G9-3: the journal head's private memories sit under their own frozen key, beside the body tallies'.
+        let memories = SealedBackupPrivateMemories(memories: [MemoryNote(category: "note", text: "x")])
+        let withMemories = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: 0, records: [], privateMemories: memories))
+        let withMemoriesObject = try #require(try JSONSerialization.jsonObject(with: withMemories) as? [String: Any])
+        #expect(Set(withMemoriesObject.keys) == ["v", "writer", "set", "total", "records", "privateMemories"])
+        #expect((withMemoriesObject["privateMemories"] as? [String: Any])?["v"] as? Int == 1)
         #expect(SealedBackupHeadStamp.v1Writer == "v1")
         #expect(SealedBackupBookkeeping.periodRestoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
         #expect(SealedBackupBookkeeping.periodAcceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
