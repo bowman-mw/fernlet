@@ -367,3 +367,25 @@ struct S3BoundaryTests {
         return nil
     }
 }
+
+// MARK: - G9-2: the recovery code's crypto stays out of the walled modules
+
+extension S3BoundaryTests {
+    /// The recovery code's word list, derivation and HPKE live in FernletCrypto, next to the escrow
+    /// key's custody in the app. `CloudKitSync` carries only the opaque `RecoveryEscrowRecord`, and
+    /// neither walled module may import FernletCrypto, so neither can name a recovery key.
+    @Test func theWalledModulesNeverImportTheRecoveryCodesCrypto() throws {
+        for module in ["FernletKit/Sources/CloudKitSync", "FernletKit/Sources/AIProviders"] {
+            let url = RepoRoot.url.appendingPathComponent(module)
+            let files = (FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+                .filter { $0.pathExtension == "swift" }
+            #expect(!files.isEmpty, "scanned zero Swift files under \(module)")
+            for file in files {
+                let source = try String(contentsOf: file, encoding: .utf8)
+                #expect(!Self.importedModules(in: source).contains("FernletCrypto"), "\(file.lastPathComponent) imports FernletCrypto")
+                #expect(!source.contains("RecoveryEscrowSeal.") && !source.contains("RecoveryCode("),
+                        "\(file.lastPathComponent) names the recovery code's crypto")
+            }
+        }
+    }
+}

@@ -225,7 +225,7 @@ struct CookingModeView: View {
             return runSteps.map { RecipeStep(text: $0.text, durationSeconds: $0.durationSeconds) }
         }
         // Making order (a multipart recipe's first part, then the next), exactly what a run will walk.
-        return recipe.cookingSteps.map(\.step)
+        return store.cookingSteps(for: recipe).map(\.step)
     }
 
     /// A multipart recipe's parts with the ingredients as mise en place shows them (scaled or not);
@@ -480,6 +480,13 @@ struct CookingModeView: View {
                         .accessibilityFocused($isStepFocused)
                         .transition(.opacity)
                         .id(stepIndex)
+
+                    if store.cookingRunState?.canSkipPart == true {
+                        // A sub-recipe made earlier (yesterday's sauce) is not cooked twice.
+                        Button("Already made? Skip") { store.cookingSkipPart() }
+                            .buttonStyle(ActionPillButtonStyle(.secondary))
+                            .accessibilityIdentifier("cookingMode.skipPart")
+                    }
 
                     if let duration = step.durationSeconds, duration > 0 {
                         stepTimer(duration: duration)

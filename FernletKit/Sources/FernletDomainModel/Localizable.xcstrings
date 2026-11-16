@@ -62880,6 +62880,30 @@
         }
       }
     },
+    "foodItem.dataSource.recipe" : {
+      "comment" : "Food search row tag: one of the person's own saved recipes, offered as an ingredient of another recipe",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your recipes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus recetas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus recetas"
+          }
+        }
+      }
+    },
     "foodItem.dataSource.restaurant" : {
       "comment" : "Food search row tag: a restaurant item with no restaurant name on record",
       "extractionState" : "extracted_with_value",

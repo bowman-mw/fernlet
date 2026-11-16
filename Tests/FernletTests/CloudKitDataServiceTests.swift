@@ -884,3 +884,60 @@ private final class AuditCapture {
         return storedEvents.contains { $0.event == event }
     }
 }
+
+// MARK: - G9-2: recovery-escrow records
+
+extension CloudKitDataServiceTests {
+    private func escrowRecord(recovery: UInt8, escrow: UInt8, madeAt: Date = Date(timeIntervalSince1970: 1_800_000_000)) -> RecoveryEscrowRecord {
+        RecoveryEscrowRecord(recoveryPublicKey: Data(repeating: recovery, count: 32), escrowPublicKeyHash: Data(repeating: escrow, count: 32),
+                             encapsulatedKey: Data(repeating: 7, count: 32), ciphertext: Data(repeating: 8, count: 48), codeMadeAt: madeAt)
+    }
+
+    /// Saved records read back field for field; "Make a new code" deletes every other code's records
+    /// by name and keeps its own; a wipe (nil) deletes them all.
+    @Test func recoveryEscrowRecordsRoundTripAndAreRevokedByName() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let service = makeService(database: database)
+        let old = [escrowRecord(recovery: 1, escrow: 1), escrowRecord(recovery: 1, escrow: 2)]
+        let new = escrowRecord(recovery: 2, escrow: 1, madeAt: Date(timeIntervalSince1970: 1_900_000_000))
+        try await service.saveRecoveryEscrowRecords(old + [new])
+
+        #expect(Set(try await service.recoveryEscrowRecords().map(\.recordName)) == Set((old + [new]).map(\.recordName)))
+        #expect(try await service.recoveryEscrowRecords().first { $0.recordName == new.recordName } == new)
+        #expect(try await service.deleteRecoveryEscrowRecords(keeping: new.recoveryPublicKey) == 2)
+        #expect(try await service.recoveryEscrowRecords() == [new])
+        #expect(try await service.deleteRecoveryEscrowRecords(keeping: nil) == 1)
+        #expect(try await service.recoveryEscrowRecords().isEmpty)
+    }
+
+    /// A record whose name does not match its fields, or that misses one, is skipped, never guessed.
+    @Test func aMalformedOrRenamedRecoveryEscrowRecordIsSkipped() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        try await service.saveRecoveryEscrowRecords([escrowRecord(recovery: 1, escrow: 1)])
+        let saved = try #require(database.recordsByType["RecoveryEscrowRecord"]?.first)
+        let renamed = CKRecord(recordType: "RecoveryEscrowRecord", recordID: CKRecord.ID(recordName: "recovery-escrow.elsewhere", zoneID: zoneID))
+        for key in saved.allKeys() { renamed[key] = saved[key] }
+        let missing = record(type: "RecoveryEscrowRecord", name: "recovery-escrow.empty", zoneID: zoneID)
+        database.recordsByType["RecoveryEscrowRecord"] = [saved, renamed, missing]
+
+        #expect(try await service.recoveryEscrowRecords().count == 1)
+    }
+
+    /// "Delete everything" reaches the recovery code's records both ways: the full sweep, and the
+    /// unconditional direct-record sweep that runs on every wipe whatever the switches say.
+    @Test func everyDeleteSweepCoversRecoveryEscrowRecords() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let service = makeService(database: database, zoneID: zoneID)
+        try await service.saveRecoveryEscrowRecords([escrowRecord(recovery: 1, escrow: 1)])
+        #expect(try await service.deleteLegacyDirectCloudKitRecords(confirmation: DeletionConfirmation(userTypedConfirmation: "DELETE")) == 1)
+        #expect((database.recordsByType["RecoveryEscrowRecord"] ?? []).isEmpty)
+
+        try await service.saveRecoveryEscrowRecords([escrowRecord(recovery: 1, escrow: 2)])
+        let result = try await service.deleteAllCloudKitData(confirmation: DeletionConfirmation(userTypedConfirmation: "DELETE"))
+        #expect(result.deletedRecordCount == 1)
+        #expect((database.recordsByType["RecoveryEscrowRecord"] ?? []).isEmpty)
+    }
+}

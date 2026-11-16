@@ -216,8 +216,13 @@ struct FernletLockGateModifier: ViewModifier {
                 // Full Keyboard Access walk straight off the passcode pad into the Private hub's
                 // headers, the worry composer and the cycle grid — and can operate them — while the
                 // lock is painted over the screen. Same pattern as the capture cover
-                // (`FernletUI/CaptureProtection.swift`, `.accessibilityHidden(covered)`).
-                .accessibilityHidden(overlayIsUp)
+                // (`FernletUI/CaptureProtection.swift`).
+                // `hidden: true, isEnabled:` rather than `.accessibilityHidden(overlayIsUp)`: the
+                // plain form with a runtime `false` still attaches an empty, label-less, trait-less
+                // accessibility node beside UIKit-backed content (the page's scroll view), which the
+                // UI audit reports as "Element has no description" on every gated screen. Disabled,
+                // the attachment adds nothing.
+                .accessibilityHidden(true, isEnabled: overlayIsUp)
                 .onAppear  { handleAppear()  }
                 .onDisappear { handleDisappear() }
 

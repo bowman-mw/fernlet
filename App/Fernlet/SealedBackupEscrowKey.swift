@@ -528,6 +528,80 @@ final class SealedBackupEscrowKey: IdentityProvisioningParticipant {
         FernletAuditLog.log("identity.escrow.adoptedSynced")
         return chosen.publicKey
     }
+
+    // MARK: - Recovery code (G9-2)
+
+    /// Every escrow key this device holds (the adopted one and every coexisting slot), each sealed
+    /// with HPKE to the recovery code's public key, skipping the keys whose public-key hash is in
+    /// `alreadySealed`. The private keys never leave this file: callers get only sealed copies.
+    ///
+    /// Sealing needs no code, only the recovery PUBLIC key, which is how a phone that later mints or
+    /// adopts an escrow key keeps recovery current (plan Part 2, step 4).
+    ///
+    /// - Parameters:
+    ///   - recoveryPublicKey: The recovery code's raw X25519 public key.
+    ///   - alreadySealed: Escrow public-key hashes that already have a sealed copy for this key.
+    ///   - keychainService: The identity's keychain service, where the escrow rows live.
+    /// - Returns: One sealed copy per escrow key not yet sealed; empty when there is none to seal.
+    /// - Throws: CryptoKit's error for a malformed recovery public key.
+    func sealEscrowKeysForRecovery(
+        to recoveryPublicKey: Data,
+        skipping alreadySealed: Set<Data>,
+        service keychainService: String
+    ) throws -> [RecoveryEscrowSealedKey] {
+        var keys: [Curve25519.KeyAgreement.PrivateKey] = []
+        if let adopted { keys.append(adopted) }
+        keys.append(contentsOf: gatherEscrowCandidates(service: keychainService).map(\.key))
+        var seen = alreadySealed
+        var sealed: [RecoveryEscrowSealedKey] = []
+        for key in keys {  // R2: bounded by the escrow rows in the keychain.
+            let hash = RecoveryEscrowSeal.escrowPublicKeyHash(key.publicKey.rawRepresentation)
+            guard seen.insert(hash).inserted else { continue }
+            sealed.append(try RecoveryEscrowSeal.seal(key, to: recoveryPublicKey))
+        }
+        return sealed
+    }
+
+    /// Whether this device holds any escrow key at all (adopted or in the keychain): a recovery
+    /// code has something to seal only then.
+    func holdsEscrowKeyForRecovery(service keychainService: String) -> Bool {
+        adopted != nil || !gatherEscrowCandidates(service: keychainService).isEmpty
+    }
+
+    /// Stores the escrow keys a recovery code opened, each at its content-addressed account as a
+    /// `ThisDeviceOnly` row that never syncs (WS-2: a later launch's reconcile publishes a lone key,
+    /// or surfaces a conflict when this phone already holds another), then adopts the canonical key
+    /// when none is adopted. A key already in the keychain is left as it is.
+    ///
+    /// - Parameters:
+    ///   - keys: The escrow private keys a recovery code opened.
+    ///   - keychainService: The identity's keychain service.
+    /// - Returns: How many of `keys` are now in the keychain (already there, or written and read back).
+    func storeRecoveredEscrowKeys(
+        _ keys: [Curve25519.KeyAgreement.PrivateKey],
+        service keychainService: String
+    ) -> Int {
+        let present = Set(gatherEscrowCandidates(service: keychainService).map(\.publicKey))
+        var stored = 0
+        for key in keys {  // R2: bounded by the opened records.
+            let pub = key.publicKey.rawRepresentation
+            if present.contains(pub) { stored += 1; continue }
+            let account = Self.escrowKeychainAccount(forPublicKey: pub)
+            let status = KeychainItem.store(key.rawRepresentation, account: account, service: keychainService,
+                                            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                                            synchronizable: false, replacing: .local)
+            guard status == errSecSuccess,
+                  KeychainItem.load(account: account, service: keychainService, synchronizable: .local)
+                    == key.rawRepresentation else {
+                FernletAuditLog.log("identity.escrow.recoveredStoreFailed", context: ["status": "\(status)"])
+                continue
+            }
+            stored += 1
+        }
+        if adopted == nil { adopted = loadExistingEscrowKey(service: keychainService) }
+        FernletAuditLog.log("identity.escrow.recoveredStored", context: ["count": "\(stored)"])
+        return stored
+    }
 }
 
 // MARK: - Fernlet's identity and its escrow
@@ -664,5 +738,32 @@ extension IdentityService {
     /// - Returns: The account its rows live at.
     nonisolated static func escrowKeychainAccount(forPublicKey publicKey: Data) -> String {
         SealedBackupEscrowKey.escrowKeychainAccount(forPublicKey: publicKey)
+    }
+
+    /// This identity's escrow keys sealed to a recovery public key
+    /// (``SealedBackupEscrowKey/sealEscrowKeysForRecovery(to:skipping:service:)``); empty when the
+    /// identity carries no escrow.
+    ///
+    /// - Parameters:
+    ///   - recoveryPublicKey: The recovery code's raw X25519 public key.
+    ///   - alreadySealed: Escrow public-key hashes that already have a sealed copy.
+    /// - Returns: One sealed copy per escrow key not yet sealed.
+    /// - Throws: CryptoKit's error for a malformed recovery public key.
+    func sealEscrowKeysForRecovery(to recoveryPublicKey: Data, skipping alreadySealed: Set<Data>) throws -> [RecoveryEscrowSealedKey] {
+        try sealedBackupEscrow?.sealEscrowKeysForRecovery(
+            to: recoveryPublicKey, skipping: alreadySealed, service: keychainService) ?? []
+    }
+
+    /// Whether this identity holds any escrow key (``SealedBackupEscrowKey/holdsEscrowKeyForRecovery(service:)``).
+    var holdsEscrowKeyForRecovery: Bool {
+        sealedBackupEscrow?.holdsEscrowKeyForRecovery(service: keychainService) ?? false
+    }
+
+    /// Stores escrow keys a recovery code opened (``SealedBackupEscrowKey/storeRecoveredEscrowKeys(_:service:)``).
+    ///
+    /// - Parameter keys: The opened escrow private keys.
+    /// - Returns: How many are now in the keychain; 0 when the identity carries no escrow.
+    func storeRecoveredEscrowKeys(_ keys: [Curve25519.KeyAgreement.PrivateKey]) -> Int {
+        sealedBackupEscrow?.storeRecoveredEscrowKeys(keys, service: keychainService) ?? 0
     }
 }

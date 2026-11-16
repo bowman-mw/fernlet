@@ -192,6 +192,26 @@ struct CookingRunState: Codable, Hashable {
         timerEndsAt = now.addingTimeInterval(TimeInterval(seconds))
     }
 
+    /// True on the first step of a part that another part follows: a sub-recipe made before the
+    /// recipe that uses it, or a multipart recipe's early part. Cooking mode offers "Already made?
+    /// Skip" there (recipes as building blocks, design §5).
+    var canSkipPart: Bool {
+        guard let part = currentPart, part.position < part.count, steps.indices.contains(stepIndex) else { return false }
+        return stepIndex == 0 || steps[stepIndex - 1].partName != steps[stepIndex].partName
+    }
+
+    /// Jumps to the first step of the next part, for a part already made. Clears the timer. A no-op
+    /// where ``canSkipPart`` is false.
+    mutating func skipPart() {
+        guard canSkipPart, let current = currentStep?.partName else { return }
+        clearTimer()
+        var index = stepIndex
+        while index < steps.count - 1 && steps[index].partName == current {
+            index += 1
+        }
+        stepIndex = index
+    }
+
     mutating func clearTimer() {
         timerStartedAt = nil
         timerEndsAt = nil

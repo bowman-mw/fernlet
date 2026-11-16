@@ -1292,6 +1292,12 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
     /// Acknowledgments does. A build that predates this case reads the token as `.manual`
     /// with the token parked (see ``FoodItem``), never as USDA.
     case canadianNutrientFile
+    /// A saved recipe's own stand-in food (recipes as building blocks, owner decision 2026-11-15): the
+    /// food another recipe's line points at to use this recipe as an ingredient. Its id is the
+    /// recipe's id and its numbers are the recipe's whole batch (``RecipeFood``). Never shown among the
+    /// person's foods or in the meal composer's search. A build that predates this case reads the token
+    /// as `.manual` with the token parked, so it still totals the line as an ordinary saved food.
+    case recipe
 
     /// The data-licence attribution a surface must show wherever it names this source, or `nil`
     /// for a source that carries no attribution obligation.
@@ -1299,7 +1305,7 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
         switch self {
         case .openFoodFacts: Self.openFoodFactsAttribution
         case .canadianNutrientFile: Self.canadianNutrientFileAttribution
-        case .usda, .aiResolved, .manual: nil
+        case .usda, .aiResolved, .manual, .recipe: nil
         }
     }
 
@@ -1309,7 +1315,7 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
     public var isBundledReference: Bool {
         switch self {
         case .usda, .canadianNutrientFile: true
-        case .aiResolved, .manual, .openFoodFacts: false
+        case .aiResolved, .manual, .openFoodFacts, .recipe: false
         }
     }
 
@@ -1540,6 +1546,9 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
         case .manual:
             return String(localized: "foodItem.dataSource.manual", defaultValue: "Your foods", bundle: .module,
                           comment: "Food search row tag: a food the person created themselves")
+        case .recipe:
+            return String(localized: "foodItem.dataSource.recipe", defaultValue: "Your recipes", bundle: .module,
+                          comment: "Food search row tag: one of the person's own saved recipes, offered as an ingredient of another recipe")
         case .openFoodFacts:
             return FoodItemSource.openFoodFactsAttribution
         case .canadianNutrientFile:
@@ -2721,6 +2730,16 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
     /// loses only its grouping. Never make correctness depend on this surviving an older peer's write.
     public var components: [RecipeComponent]?
 
+    /// How much the whole recipe makes, as the person stated it ("Makes 2 cups"), or nil (recipes as
+    /// building blocks, owner pick P02a). Entry and display only for lines that use this recipe in
+    /// another (``RecipeYield``); nutrition never reads it. Read it through ``RecipeYield/validated``.
+    ///
+    /// BLOB-STRIP LANDMINE (deliberate, accepted, the same trade as `steps`): additive, tolerant-decoded
+    /// and omitted when nil, so every recipe without it encodes byte-identically to earlier builds. An
+    /// un-updated paired device re-encodes the synced blob without it; lines that use the recipe keep
+    /// their servings and totals, and only the "Makes" field reads empty until it is entered again.
+    public var makes: RecipeYield?
+
     /// True when this recipe was imported from the web (and therefore stores free-text ingredient
     /// lines + precomputed nutrition rather than structured `ingredients`).
     public var isWebImport: Bool { webImport != nil }
@@ -2737,7 +2756,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         webImport: RecipeWebImport? = nil,
         parentRecipeID: UUID? = nil,
         steps: [RecipeStep]? = nil,
-        components: [RecipeComponent]? = nil
+        components: [RecipeComponent]? = nil,
+        makes: RecipeYield? = nil
     ) {
         self.id = id
         self.name = name
@@ -2751,6 +2771,7 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         self.parentRecipeID = parentRecipeID
         self.steps = steps
         self.components = components
+        self.makes = makes
     }
 
     public init(from decoder: Decoder) throws {
@@ -2771,6 +2792,8 @@ public nonisolated struct RecipeDefinition: Identifiable, Codable, Equatable {
         steps = try container.decodeIfPresent([RecipeStep].self, forKey: .steps)
         // Tolerant + additive (multipart, 2026-09-24). Missing key -> nil = a one-part recipe.
         components = try container.decodeIfPresent([RecipeComponent].self, forKey: .components)
+        // Tolerant + additive (recipes as building blocks). A missing or unreadable amount is no amount.
+        makes = (try? container.decodeIfPresent(RecipeYield.self, forKey: .makes))?.validated
     }
 }
 

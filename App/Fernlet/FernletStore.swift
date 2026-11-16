@@ -3181,6 +3181,7 @@ final class FernletStore {
             }
         }
         savedRecipeService.add(recipe)
+        syncRecipeFoods()
     }
 
     /// The saved recipe already imported from `url`, matched under `RecipeSourceURLMatcher`
@@ -3313,6 +3314,7 @@ final class FernletStore {
 
     func updateSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.update(recipe)
+        syncRecipeFoods()
     }
 
     /// Merges ONLY the notes field into the CURRENT saved row — the notes sheet's Done path.
@@ -3327,6 +3329,7 @@ final class FernletStore {
 
     func deleteSavedRecipe(_ recipe: RecipeDefinition) {
         savedRecipeService.delete(recipe)
+        syncRecipeFoods()
         // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
         recipePhotoStore.delete(id: recipe.id)
         // Prune the device-local web-image attempt bookkeeping too — a deleted recipe's id must
@@ -5631,7 +5634,7 @@ final class FernletStore {
     func startCookingRun(_ recipe: RecipeDefinition, startDayKey: String? = nil) -> CookingRunState? {
         // Making order, part by part (the dressing's steps, then the salad's), each step carrying its
         // part's name for the walker and the Live Activity. A one-part recipe walks exactly as before.
-        let domainSteps = recipe.cookingSteps
+        let domainSteps = cookingSteps(for: recipe)
         guard !domainSteps.isEmpty else { return nil }
         let steps = domainSteps.map {
             CookingRunState.Step(text: $0.step.text, durationSeconds: $0.step.durationSeconds, partName: $0.partName)
@@ -5646,6 +5649,40 @@ final class FernletStore {
         mirrorCookingRunState(state)
         CookingLiveActivityController.start(state)
         return state
+    }
+
+    /// `recipe`'s steps in making order, the sub-recipes it uses first, each section named (recipes as
+    /// building blocks, design §5): what cooking mode walks and the recipe page lists.
+    func cookingSteps(for recipe: RecipeDefinition) -> [RecipeCookingStep] {
+        let all = allRecipesForNesting
+        return recipe.cookingSteps(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all),
+                                   servingsLabel: Self.subRecipeServingsLabel)
+    }
+
+    /// `recipe`'s step sections for the recipe page: see `cookingSteps(for:)`.
+    func stepSections(for recipe: RecipeDefinition) -> [ResolvedRecipeComponent] {
+        let all = allRecipesForNesting
+        return recipe.stepSections(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all),
+                                   servingsLabel: Self.subRecipeServingsLabel)
+    }
+
+    private func recipesByIDForNesting(_ all: [RecipeDefinition]) -> [UUID: RecipeDefinition] {
+        Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// "Dragonfruit sauce · 2 of 4 servings": how much of a sub-recipe its section makes.
+    private static func subRecipeServingsLabel(name: String, used: Double, of servings: Int) -> String {
+        let amount = RecipeQuantityDisplay.display(used)
+        return String(localized: "\(name) · \(amount) of \(servings) servings",
+                      comment: "Title of a sub-recipe's steps inside the recipe that uses it, and in cooking mode: its name, then how many of its servings this recipe uses, e.g. 'Dragonfruit sauce · 2 of 4 servings'")
+    }
+
+    /// Skips the rest of the current part from the in-app walker: "Already made? Skip" on a sub-recipe
+    /// made before the recipe that uses it.
+    func cookingSkipPart() {
+        guard var state = cookingRunState, !state.isFinished else { return }
+        state.skipPart()
+        applyCookingTransition(state)
     }
 
     /// Advance to the next step (or finish) from the in-app walker — mirrors the Live Activity "Next"
@@ -5787,26 +5824,108 @@ final class FernletStore {
     // so an editor the person cancels teaches nothing.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]? = nil) -> RecipeDefinition {
         rememberRecipeSave(inputIngredients)
-        return diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        ensureRecipeFoods(for: inputIngredients)
+        let saved = diary.addRecipe(name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        syncRecipeFoods()
+        return saved
     }
 
     // `steps` is REQUIRED (no default) — see the note on `DiaryStore.updateRecipe`: the stored steps are
     // overwritten unconditionally, so a defaulted-nil would silently erase them.
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", ingredients inputIngredients: [ManualRecipeIngredientInput], steps: [RecipeStep]?) {
         rememberRecipeSave(inputIngredients)
+        ensureRecipeFoods(for: inputIngredients)
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, ingredients: inputIngredients, steps: steps)
+        syncRecipeFoods()
     }
 
     /// Multipart twins of the two above (a dressing made first, then the salad): see
     /// `DiaryStore.addRecipe(name:servings:notes:parts:)`.
     @discardableResult func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
         rememberRecipeSave(parts.flatMap(\.ingredients))
-        return diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
+        ensureRecipeFoods(for: parts.flatMap(\.ingredients))
+        let saved = diary.addRecipe(name: name, servings: servings, notes: notes, parts: parts)
+        syncRecipeFoods()
+        return saved
     }
 
     func updateRecipe(_ recipe: RecipeDefinition, name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) {
         rememberRecipeSave(parts.flatMap(\.ingredients))
+        ensureRecipeFoods(for: parts.flatMap(\.ingredients))
         diary.updateRecipe(recipe, name: name, servings: servings, notes: notes, parts: parts)
+        syncRecipeFoods()
+    }
+
+    // MARK: - Recipes as building blocks (Docs/Recipes-As-Building-Blocks-Design-2026-11-15.md)
+
+    /// Brings every recipe food up to date with the recipe book and the saved recipes: run after every
+    /// recipe change here and after every sync, so an edit made on another device (an older build
+    /// refreshes nothing) is caught up too. See `RecipeFoodSync.synced(foodItems:recipes:)`.
+    func syncRecipeFoods() {
+        diary.syncRecipeFoods(alsoConsidering: savedRecipeService.savedRecipes)
+    }
+
+    /// Turns multipart recipes into separate recipes (pick P07a), then brings recipe foods up to date:
+    /// run at launch and after every sync, when an update first meets this device's multipart recipes
+    /// or another device's arrive. Not on a save, so a recipe saved in parts is converted at the next
+    /// launch or sync, never under the editor that saved it.
+    func migrateRecipePartsAndSync() {
+        if diary.migrateRecipeParts() > 0 {
+            webImageAttemptDefaults.set(true, forKey: Self.recipePartsMigratedNoteKey)
+        }
+        syncRecipeFoods()
+    }
+
+    /// Device-local: the recipe book still owes "Your recipe parts are now their own recipes."
+    private static let recipePartsMigratedNoteKey = "recipeBook.partsMigratedNotePending"
+
+    /// Whether the recipe book shows the one-time note about converted parts (pick P07a).
+    var showsRecipePartsMigratedNote: Bool {
+        webImageAttemptDefaults.bool(forKey: Self.recipePartsMigratedNoteKey)
+    }
+
+    /// Dismisses that note for good on this device.
+    func dismissRecipePartsMigratedNote() {
+        webImageAttemptDefaults.removeObject(forKey: Self.recipePartsMigratedNoteKey)
+    }
+
+    /// Makes sure the rows a save is about to resolve that were picked as recipes find their recipe
+    /// foods, so a picked recipe never becomes a custom ingredient of the same name.
+    private func ensureRecipeFoods(for rows: [ManualRecipeIngredientInput]) {
+        let picked = rows.compactMap(\.selectedFoodItemId)
+        guard !picked.isEmpty else { return }
+        diary.ensureRecipeFoods(for: picked, alsoConsidering: savedRecipeService.savedRecipes)
+    }
+
+    /// The recipes in the book that use `recipe` as an ingredient: the "Used in" line on save and the
+    /// delete confirmation (owner picks P05a, P06a).
+    func recipesUsing(_ recipe: RecipeDefinition) -> [RecipeDefinition] {
+        diary.recipesUsing(recipe.id)
+    }
+
+    /// Every recipe the editor may look up by id: the book and the saved recipes.
+    var allRecipesForNesting: [RecipeDefinition] { recipes + savedRecipeService.savedRecipes }
+
+    /// The saved recipes the recipe editor may offer as an ingredient of `editing` (nil for a recipe not
+    /// saved yet): every recipe except `editing` itself and those that would loop or nest past three
+    /// levels (owner picks P03a, P10a).
+    func recipeIngredientChoices(editing: UUID?) -> [RecipeDefinition] {
+        let all = allRecipesForNesting
+        let graph = RecipeNestingGraph(recipes: all)
+        return RecipeIngredientChoices.usable(from: all.filter { $0.id != editing }, editing: editing, graph: graph)
+    }
+
+    /// Makes `recipe`'s recipe food now, so an editor row picked as that recipe resolves its numbers
+    /// before the save; returns it, or nil when the recipe's own lines do not resolve. A recipe food the
+    /// person then leaves unused is removed by the next `syncRecipeFoods()`.
+    func prepareRecipeFood(for recipe: RecipeDefinition) -> FoodItem? {
+        diary.ensureRecipeFoods(for: [recipe.id], alsoConsidering: savedRecipeService.savedRecipes)
+        return foodCatalog.items(ids: [recipe.id]).first
+    }
+
+    /// Saves a book recipe's "Makes" amount (owner pick P02a): see `DiaryStore.setRecipeMakes`.
+    func setRecipeMakes(_ makes: RecipeYield?, forRecipeID recipeID: UUID) {
+        diary.setRecipeMakes(makes, forRecipeID: recipeID)
     }
 
     /// What a saved recipe's rows teach this device, remembered by every recipe save above: the
@@ -5974,6 +6093,7 @@ final class FernletStore {
 
     func deleteRecipe(_ recipe: RecipeDefinition) {
         diary.deleteRecipe(recipe)
+        syncRecipeFoods()
         // The recipe's own photo is keyed by the recipe id, so it's cleaned up here rather than stranded.
         recipePhotoStore.delete(id: recipe.id)
     }
@@ -6146,7 +6266,13 @@ final class FernletStore {
     /// The recipe's own lines saved with no nutrition, which leave its totals low (owner decision
     /// 2026-11-15; ``RecipeNutritionGaps``).
     func linesWithoutNutrition(in recipe: RecipeDefinition) -> Int {
-        RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
+        // A sub-recipe's own empty lines count too (recipes as building blocks, design §3).
+        let all = allRecipesForNesting
+        let nested = RecipeNutritionGaps.subRecipeGaps(
+            in: recipe, graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all),
+            foodItems: foodItems
+        ).reduce(0) { $0 + $1.lines }
+        return nested + RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
@@ -8129,6 +8255,9 @@ final class FernletStore {
         milestoneLedgerService.reloadFromStore()
         customItemService.reloadFromStore()
         savedRecipeService.reloadFromStore()
+        // Recipe foods follow whatever recipes the sync brought in (recipes as building blocks), and a
+        // multipart recipe from an older device becomes separate recipes.
+        migrateRecipePartsAndSync()
         // Credit any newly active synced day (and reconcile milestones over the synced-in history).
         // Idempotent — re-running never double-grants.
         reconcileCoinLedger()
@@ -8192,7 +8321,11 @@ final class FernletStore {
     /// The bundled food catalog is now a read-only SQLite store opened lazily by `FoodCatalog`, so
     /// there is no heavyweight seed to await at launch. Kept as no-ops for the existing launch/UI
     /// call sites (the 24 MB JSON parse + 13k-struct hydration they used to drive is gone).
-    func loadBundledFoodItemsForLaunch() async { await diary.loadBundledFoodItemsForLaunch() }
+    func loadBundledFoodItemsForLaunch() async {
+        await diary.loadBundledFoodItemsForLaunch()
+        // Launch is when an update first meets this device's multipart recipes and stale recipe foods.
+        migrateRecipePartsAndSync()
+    }
 
     func ensureBundledFoodItemsSeeded() { diary.ensureBundledFoodItemsSeeded() }
 }

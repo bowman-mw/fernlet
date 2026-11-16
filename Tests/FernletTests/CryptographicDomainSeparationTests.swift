@@ -86,6 +86,8 @@ struct CryptographicDomainSeparationTests {
         // KeyDerivation
         Domain("KeyDerivation.sealedBackupLegacyV1", FernletCryptoPurpose.KeyDerivation.sealedBackupLegacyV1),
         Domain("KeyDerivation.sealedBackupV2", FernletCryptoPurpose.KeyDerivation.sealedBackupV2),
+        Domain("KeyDerivation.recoveryCodeX25519V1", FernletCryptoPurpose.KeyDerivation.recoveryCodeX25519V1),
+        Domain("KeyDerivation.recoveryEscrowHPKEV1", FernletCryptoPurpose.KeyDerivation.recoveryEscrowHPKEV1),
         Domain("KeyDerivation.proximityTransportV1", FernletCryptoPurpose.KeyDerivation.proximityTransportV1),
         Domain("KeyDerivation.heartDropPairV1", FernletCryptoPurpose.KeyDerivation.heartDropPairV1),
         Domain("KeyDerivation.presencePairV1", FernletCryptoPurpose.KeyDerivation.presencePairV1),

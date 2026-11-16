@@ -1735,9 +1735,72 @@ public final class DiaryStore {
     }
 
     /// Removes a recipe from the book by id and persists.
+    ///
+    /// A recipe other recipes use as an ingredient (recipes as building blocks, owner pick P06a): each
+    /// recipe in the book that uses it gets its steps, and those of the recipes it used, copied in front
+    /// of its own (``RecipeFoodSync/parent(_:afterDeleting:allRecipes:maxSteps:)``). Its recipe food is
+    /// frozen into a fixed food by the next ``syncRecipeFoods(alsoConsidering:)``, which the app runs
+    /// right after, so those recipes keep its last numbers.
     public func deleteRecipe(_ recipe: RecipeDefinition) {
-        recipes.removeAll { $0.id == recipe.id }
-        scheduleSnapshotSave()
+        batchSnapshotPersistence {
+            let all = recipes
+            for index in recipes.indices where recipes[index].ingredients.contains(where: { $0.foodItemId == recipe.id }) {
+                recipes[index] = RecipeFoodSync.parent(recipes[index], afterDeleting: recipe, allRecipes: all,
+                                                       maxSteps: SharedRecipeLimits.maxSteps)
+                recipes[index].updatedAt = Date()
+            }
+            recipes.removeAll { $0.id == recipe.id }
+        }
+    }
+
+    // MARK: - Recipes as building blocks
+
+    /// Brings every recipe food in ``foodItems`` up to date with the book and `otherRecipes` (the app's
+    /// saved and web recipes, which live outside this store): see ``RecipeFoodSync/synced(foodItems:recipes:)``.
+    /// Writes and persists only when something changed. The app calls it after every recipe change and
+    /// after every sync; `otherRecipes` must be every recipe outside the book, or a recipe food whose
+    /// recipe is missing from the list is frozen as if that recipe were deleted.
+    public func syncRecipeFoods(alsoConsidering otherRecipes: [RecipeDefinition]) {
+        let updated = RecipeFoodSync.synced(foodItems: foodItems, recipes: recipes + otherRecipes)
+        guard updated != foodItems else { return }
+        batchSnapshotPersistence { foodItems = updated }
+    }
+
+    /// Converts every multipart recipe in the book into separate recipes (owner pick P07a, see
+    /// ``RecipePartsMigration``) and persists; returns how many were converted. Idempotent and a no-op
+    /// when no recipe has parts, so the app runs it at launch and after every sync: a multipart
+    /// recipe an older paired device makes, or a multipart share, is converted when it arrives.
+    @discardableResult public func migrateRecipeParts() -> Int {
+        let result = RecipePartsMigration.migrated(recipes)
+        guard result.converted > 0 else { return 0 }
+        batchSnapshotPersistence { recipes = result.recipes }
+        return result.converted
+    }
+
+    /// Makes the recipe foods editor rows picked as recipes (`ids`) bind to, before a save resolves
+    /// them, so a picked recipe never becomes a custom ingredient of the same name.
+    public func ensureRecipeFoods(for ids: [UUID], alsoConsidering otherRecipes: [RecipeDefinition]) {
+        let updated = RecipeFoodSync.ensuring(ids, foodItems: foodItems, recipes: recipes + otherRecipes)
+        guard updated != foodItems else { return }
+        batchSnapshotPersistence { foodItems = updated }
+    }
+
+    /// Writes only a recipe's "Makes" amount (``RecipeDefinition/makes``), validated, and persists: the
+    /// editor saves it beside the rest of the recipe. A no-op when the recipe id is no longer in the book
+    /// or the amount is unchanged.
+    public func setRecipeMakes(_ makes: RecipeYield?, forRecipeID recipeID: UUID) {
+        guard let index = recipes.firstIndex(where: { $0.id == recipeID }),
+              recipes[index].makes != makes?.validated else { return }
+        batchSnapshotPersistence {
+            recipes[index].makes = makes?.validated
+            recipes[index].updatedAt = Date()
+        }
+    }
+
+    /// The recipes in the book that use `id` as an ingredient, in book order: the "Used in" line on
+    /// save and the delete confirmation.
+    public func recipesUsing(_ id: UUID) -> [RecipeDefinition] {
+        recipes.filter { recipe in recipe.id != id && recipe.ingredients.contains { $0.foodItemId == id } }
     }
 
     // NOTE: `macroTotals(for:)` / `micronutrientTotals(for:)` stay in the facade — MealBuilder

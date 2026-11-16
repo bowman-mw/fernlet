@@ -35,7 +35,7 @@
 // 5. **`.fernlet` against the table.** Every value it carries equals its frozen literal, every label
 //    has the role ProximityKit fixes for its field, it is sound, the 40 labels FernletCrypto's
 //    registry also declares (38 protocol labels and both feature salts) are spelled alike and the
-//    signature twins accept the same transcripts, no label of the registry's 81 and its 41 together
+//    signature twins accept the same transcripts, no label of the registry's 83 and its 41 together
 //    is a byte prefix of another (CDST's sealed-backup pair aside), and reflection finds no label
 //    field `labelRows` leaves out, the feature group's declared salts listed after the fixed ones.
 //    And the six signature labels Fernlet mints outside its namespace with ProximityKit's
@@ -1337,18 +1337,18 @@ struct ProximityNamespaceGoldenTests {
     /// routing on; this is CDST's rule run over both registries at once.
     @Test func noLabelOfTheRegistryAndFernletTogetherIsAPrefixOfAnother() {
         var names: [Data: String] = [:]
-        // R2: bounded by the 98 registry entries (81, plus the World build's four map-store domains, the
+        // R2: bounded by the 100 registry entries (83, plus the World build's four map-store domains, the
         // solo camera's three, step 5c's three place domains, round 7's passport and corner, the
-        // bodybuilding round's body tally, road trip mode's three photo domains and G9-3's private memory).
+        // bodybuilding round's body tally, road trip mode's three photo domains, and G9-2's two recovery-code domains and G9-3's private memory).
         for domain in CryptographicDomainSeparationTests.allDomains where names[domain.purpose.data] == nil {
             names[domain.purpose.data] = "FernletCryptoPurpose.\(domain.name)"
         }
-        #expect(names.count == 98, "the registry holds \(names.count) distinct labels")
+        #expect(names.count == 100, "the registry holds \(names.count) distinct labels")
         // R2: bounded by the 41 label rows.
         for row in ProximityNamespace.fernlet.labelRows where names[row.purpose.data] == nil {
             names[row.purpose.data] = ".fernlet \(row.field)"
         }
-        #expect(names.count == 99, "together \(names.count) distinct labels; the 40 twins coincide and the epoch domain is new")
+        #expect(names.count == 101, "together \(names.count) distinct labels; the 40 twins coincide and the epoch domain is new")
         let exceptions = CryptographicDomainSeparationTests.prefixExceptions
         var offenders: [String] = []
         var excused = 0

@@ -43,6 +43,21 @@ final class PrivacyDataSettingsUITests: XCTestCase {
         XCTAssertFalse(element("privacy.lock.gate", app: app).exists)
     }
 
+    /// G9-2: the Recovery code row is in the Backups card and opens its sheet, which offers to make a
+    /// code and, with no code made yet, nothing to check.
+    @MainActor
+    func testRecoveryCodeRowOpensItsSheetAndCatchesAWrongWord() throws {
+        let app = launchPrivacyApp(lockConfigured: false, freshAuth: true)
+        openPrivacyData(app)
+        let row = element("privacy.recoveryCode.row", app: app)
+        for _ in 0..<6 where !row.exists { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertTrue(element("recoveryCode.make", app: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(element("recoveryCode.check", app: app).exists, "no code yet: nothing to check")
+        app.buttons["Cancel"].firstMatch.tap()
+    }
+
     @MainActor
     func testICloudDisableShowsConfirmationWithCountsAndRequiresTypedConfirmation() throws {
         let app = launchPrivacyApp(lockConfigured: true, freshAuth: true, iCloudEnabled: true)

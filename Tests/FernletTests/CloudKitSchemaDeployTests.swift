@@ -50,3 +50,18 @@ struct CloudKitSchemaDeployTests {
         #expect(CloudKitSchemaDeploy.launchArgument == "INITIALIZE_CLOUDKIT_SCHEMA")
     }
 }
+
+// MARK: - G9-2: the recovery-escrow record type is in the deploy ledger
+
+extension CloudKitSchemaDeployTests {
+    /// `RecoveryEscrowRecord` is hand-rolled, so Production gets it only when the owner promotes it;
+    /// the ledger names the type and every field the decoder requires, so the promotion is complete.
+    @Test func theRecoveryEscrowRecordTypeIsInTheDeployLedger() throws {
+        let doc = try String(contentsOf: RepoRoot.url.appendingPathComponent("Docs/CloudKit-Schema-Deploy.md"), encoding: .utf8)
+        let row = try #require(doc.split(separator: "\n").first { $0.hasPrefix("| `RecoveryEscrowRecord`") })
+        for field in ["recoveryPublicKey", "escrowPublicKeyHash", "encapsulatedKey", "ciphertext", "codeMadeAt", "formatVersion"] {
+            #expect(row.contains("`\(field)`"), "the ledger row must name \(field)")
+        }
+        #expect(row.contains("queryable"))
+    }
+}
