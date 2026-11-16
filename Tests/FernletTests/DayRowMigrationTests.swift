@@ -64,7 +64,7 @@ struct DayRowMigrationTests {
         var blob = LocalFernletDatabase()
         for i in 0..<600 {  // > 2 full 250-day batches
             let key = String(format: "2020-%05d", i)
-            blob.days[key] = FernletDay(date: key)
+            blob.days[key] = FernletDay(date: key, bottleCount: 1)  // content: an empty day writes no row (G9-1)
         }
         seedAggregateBlob(blob, in: controller)
 
@@ -192,9 +192,11 @@ struct DayRowMigrationTests {
         #expect(repo.saveSnapshot(withContent))
         #expect(rawRowCount("DayRecord", in: controller) == 1)
 
-        // …and when that day's content is removed again, its row is deleted (not left stale).
+        // …and when that day's content is removed again, the row stays and holds the removal as a tombstone
+        // (G9-1), so another device's copy cannot bring the water back; the day reads empty.
         #expect(repo.saveSnapshot(emptySnapshot))
-        #expect(rawRowCount("DayRecord", in: controller) == 0)
+        #expect(rawRowCount("DayRecord", in: controller) == 1)
+        #expect(repo.loadAllDays()[today] == nil)
     }
 
     @Test func failedDayRowWriteMakesSaveReportFailureForRetry() {
@@ -257,7 +259,9 @@ struct DayRowMigrationTests {
 
         // It must read back empty — not the stale bottleCount:4 blob copy — and never be resurrected as a row.
         #expect(repo.loadDay(for: "2026-05-10", todayKey: "2026-05-21").hasLoggedContent == false)
-        #expect(flaky.store["2026-05-10"] == nil)
+        // The row store is handed the emptied day (since G9-1 an emptied day is a write that records its
+        // tombstones, not a delete); what it holds has no content.
+        #expect(flaky.store["2026-05-10"]?.hasLoggedContent != true)
     }
 
     @Test func migrationStripsEveryHealthKitValueFromRows() {

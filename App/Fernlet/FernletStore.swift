@@ -1909,7 +1909,14 @@ final class FernletStore {
         // else's work. If the declared id collides with ANY of this user's designer ids, treat it as unknown
         // provenance so a bought copy can never masquerade as self-made or be re-listed for sale.
         bought.designer = ItemDesigner(id: settings.ownedDesignerIDs.contains(designerID) ? UUID() : designerID)
-        saveCustomItem(bought)
+        // A copy keeps the seller's item id, so a re-buy of an item this person deleted must lift that
+        // deletion (G9-1 soft delete), or the store would skip the write and the item would vanish on the
+        // next reload. A first purchase has no deletion to lift.
+        if alreadyPaid, !customItemService.regrant(bought) {
+            FernletAuditLog.log("shop.regrant.restoreFailed")
+        } else if !alreadyPaid {
+            saveCustomItem(bought)
+        }
         return .bought
     }
 

@@ -36,6 +36,9 @@ struct HealthKitCloudBoundaryTests {
     private static let mixedDayFields: Set<String> = ["sleep", "workouts"]
     /// `FernletDay` fields that are HealthKit's through and through (dropped whole).
     private static let healthKitDayFields: Set<String> = ["healthContext"]
+    /// `FernletDay` fields that are never stored: `loadedSyncKeys` (G9-1) is in-memory sync bookkeeping
+    /// (element keys — ids and frozen tokens, no HealthKit value), left out of `FernletDay.CodingKeys`.
+    private static let inMemoryDayFields: Set<String> = ["loadedSyncKeys"]
 
     /// `HealthDailyContext` — every field READ from HealthKit (plus the device-local sleep marker);
     /// the whole context is dropped, so a new field is stripped automatically, but it must be
@@ -61,7 +64,8 @@ struct HealthKitCloudBoundaryTests {
 
     @Test func everyStoredFieldOfTheHealthBearingTypesIsClassified() {
         #expect(Self.labels(of: FernletDay(date: "2026-01-01"))
-                == Self.userAuthoredDayFields.union(Self.mixedDayFields).union(Self.healthKitDayFields))
+                == Self.userAuthoredDayFields.union(Self.mixedDayFields).union(Self.healthKitDayFields)
+                    .union(Self.inMemoryDayFields))
         #expect(Self.labels(of: HealthDailyContext()) == Self.healthContextFields)
         #expect(Self.labels(of: DailyHealthScore(dateKey: "d", score: 0, companionState: .okay, computedAt: .now))
                 == Self.strippedScoreFields.union(Self.keptScoreFields))

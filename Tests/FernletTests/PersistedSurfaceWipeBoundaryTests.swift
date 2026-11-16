@@ -330,6 +330,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         // what keeps the legacy purge from vanishing unnoticed.
         "unresolved:$0@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift":
             .cleared(token: "repository.purgeAllPersistedData"),
+        // G9-1: this install's random day-row device key (no content; never synced). The purge's
+        // `dayRecordRepository.deleteAll()` removes it after the rows, so the next write mints a new one.
+        "fernlet.sync.dayRowDeviceKey": .cleared(token: "repository.purgeAllPersistedData"),
 
         // ── Survives by design ───────────────────────────────────────────────────────────────────
         "com.fernlet.launch.priorUseRecorded": .kept(
