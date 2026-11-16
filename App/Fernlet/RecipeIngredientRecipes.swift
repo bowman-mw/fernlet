@@ -273,3 +273,16 @@ struct RecipeChoicesSheet: View {
         }
     }
 }
+
+/// The delete confirmation's body for a recipe other recipes use (owner pick P06a): who uses it, and
+/// what they keep.
+enum RecipeDeleteUsersText {
+    static func message(users: [RecipeDefinition]) -> LocalizedStringKey {
+        let first = users.first?.name ?? ""
+        let others = users.count - 1
+        if others <= 0 {
+            return "\(first) uses this recipe. It keeps it as a fixed ingredient with today's nutrition, and this recipe's steps are copied into it. Meals you already logged stay in your diary. Fernlet can't undo this."
+        }
+        return "\(first) and \(others) more use this recipe. They keep it as a fixed ingredient with today's nutrition, and this recipe's steps are copied into them. Meals you already logged stay in your diary. Fernlet can't undo this."
+    }
+}

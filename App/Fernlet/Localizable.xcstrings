@@ -197,6 +197,23 @@
         }
       }
     },
+    "%@ and %lld more use this recipe. They keep it as a fixed ingredient with today's nutrition, and this recipe's steps are copied into them. Meals you already logged stay in your diary. Fernlet can't undo this." : {
+      "comment" : "Delete confirmation body for a recipe other saved recipes use as an ingredient: the first one's name and how many more",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ y %2$lld más usan esta receta. La conservarán como un ingrediente fijo con la información nutricional de hoy, y los pasos de esta receta se copiarán en ellas. Las comidas que ya has registrado siguen en tu diario. Fernlet no puede deshacer esto."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ y %2$lld más usan esta receta. La conservarán como un ingrediente fijo con la información nutricional de hoy, y los pasos de esta receta se copiarán en ellas. Las comidas que ya registraste siguen en tu diario. Fernlet no puede deshacer esto."
+          }
+        }
+      }
+    },
     "%@ are already saved, so they aren't offered again." : {
       "localizations" : {
         "es" : {
@@ -655,6 +672,23 @@
         }
       }
     },
+    "%@ uses this recipe. It keeps it as a fixed ingredient with today's nutrition, and this recipe's steps are copied into it. Meals you already logged stay in your diary. Fernlet can't undo this." : {
+      "comment" : "Delete confirmation body for a recipe another saved recipe uses as an ingredient; the name is that recipe's",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa esta receta. La conservará como un ingrediente fijo con la información nutricional de hoy, y los pasos de esta receta se copiarán en ella. Las comidas que ya has registrado siguen en tu diario. Fernlet no puede deshacer esto."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ usa esta receta. La conservará como un ingrediente fijo con la información nutricional de hoy, y los pasos de esta receta se copiarán en ella. Las comidas que ya registraste siguen en tu diario. Fernlet no puede deshacer esto."
+          }
+        }
+      }
+    },
     "%@ wants to join %@" : {
       "localizations" : {
         "en" : {
@@ -759,6 +793,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · referencia: %2$@ %3$@"
+          }
+        }
+      }
+    },
+    "%@ · %@ of %lld servings" : {
+      "comment" : "Title of a sub-recipe's steps inside the recipe that uses it, and in cooking mode: its name, then how many of its servings this recipe uses, e.g. 'Dragonfruit sauce · 2 of 4 servings'",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ de %3$lld raciones"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ de %3$lld porciones"
           }
         }
       }
@@ -8714,6 +8765,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ya está en tu recetario"
+          }
+        }
+      }
+    },
+    "Already made? Skip" : {
+      "comment" : "Button in cooking mode on the first step of a sub-recipe or early part: skips its steps when it was made earlier",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Ya está hecho? Saltar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Ya está hecho? Saltar"
           }
         }
       }
