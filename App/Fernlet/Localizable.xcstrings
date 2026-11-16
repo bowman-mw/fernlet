@@ -21,6 +21,22 @@
         }
       }
     },
+    "\"%@\"\n\nFernlet forgets it for good, here and in your journal's Sealed backup." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "«%@»\n\nFernlet lo olvida para siempre, aquí y en la copia de seguridad sellada de tu diario."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "\"%@\"\n\nFernlet lo olvida para siempre, aquí y en la copia de seguridad sellada de tu diario."
+          }
+        }
+      }
+    },
     "\"%@\"\n\nFernlet forgets it for good. Your journal entry stays." : {
       "localizations" : {
         "es" : {
@@ -979,6 +995,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · P %2$lld g · C %3$lld g · G %4$lld g"
+          }
+        }
+      }
+    },
+    "%@ · Private" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · Privado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · Privado"
           }
         }
       }
@@ -15582,6 +15614,22 @@
         }
       }
     },
+    "Delete private memory" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar recuerdo privado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar recuerdo privado"
+          }
+        }
+      }
+    },
     "Delete recipe" : {
       "localizations" : {
         "es" : {
@@ -15723,6 +15771,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Eliminar esta foto?"
+          }
+        }
+      }
+    },
+    "Delete this private memory?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar este recuerdo privado?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar este recuerdo privado?"
           }
         }
       }
@@ -15878,6 +15942,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Deletes all ^[%lld memory](inflect: true) on this phone and in iCloud, and your ^[%lld private memory](inflect: true). This can't be undone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deletes all ^[%1$lld memory](inflect: true) on this phone and in iCloud, and your ^[%2$lld private memory](inflect: true). This can't be undone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elimina todos los recuerdos (^[%lld recuerdo](inflect: true)) de este móvil y de iCloud, y tus recuerdos privados (^[%lld recuerdo privado](inflect: true)). No se puede deshacer."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elimina todos los recuerdos (^[%lld recuerdo](inflect: true)) de este teléfono y de iCloud, y tus recuerdos privados (^[%lld recuerdo privado](inflect: true)). No se puede deshacer."
           }
         }
       }
@@ -19720,6 +19806,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet no pudo confirmar a quién se la enviaba, así que esa foto se quedó en tu propio muro."
+          }
+        }
+      }
+    },
+    "Fernlet couldn't keep this private just now. It's still in your memories." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no ha podido mantenerlo en privado ahora. Sigue en tus recuerdos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo mantenerlo en privado ahora. Sigue en tus recuerdos."
           }
         }
       }
@@ -26549,6 +26651,22 @@
         }
       }
     },
+    "Keep private" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantener en privado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantener en privado"
+          }
+        }
+      }
+    },
     "Keep suggesting %@" : {
       "comment" : "Spoken name of the Undo button under a Don't suggest mark; the argument is the exercise",
       "localizations" : {
@@ -30355,6 +30473,22 @@
         }
       }
     },
+    "Moves it into Private, sealed on this iPhone. It leaves Home and your other devices, and only shows here while Private is open." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo pasa a Privado, sellado en este iPhone. Sale de Inicio y de tus otros dispositivos, y solo se ve aquí mientras Privado está abierto."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo pasa a Privado, sellado en este iPhone. Sale de Inicio y de tus otros dispositivos, y solo se ve aquí mientras Privado está abierto."
+          }
+        }
+      }
+    },
     "Moves to the next cooking step or repeats the current step." : {
       "localizations" : {
         "es" : {
@@ -33849,6 +33983,22 @@
         }
       }
     },
+    "Only here, while Private is open. Never on Home, never synced, and never given to the AI." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo aquí, mientras Privado está abierto. Nunca en Inicio, nunca sincronizados y nunca se dan a la IA."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo aquí, mientras Privado está abierto. Nunca en Inicio, nunca sincronizados y nunca se dan a la IA."
+          }
+        }
+      }
+    },
     "Only in this hangout" : {
       "localizations" : {
         "es" : {
@@ -34075,6 +34225,22 @@
         }
       }
     },
+    "Open Private first to keep a memory private." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Privado primero para mantener un recuerdo en privado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Privado primero para mantener un recuerdo en privado."
+          }
+        }
+      }
+    },
     "Open Private to finish." : {
       "comment" : "Privacy & Data: a Sealed backup choice waits for the next visit to the Private tab.",
       "localizations" : {
@@ -34088,6 +34254,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abre Privado para terminar."
+          }
+        }
+      }
+    },
+    "Open Private to unlock them. They stay sealed on this iPhone and in your journal's Sealed backup." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Privado para desbloquearlos. Siguen sellados en este iPhone y en la copia de seguridad sellada de tu diario."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Privado para desbloquearlos. Siguen sellados en este iPhone y en la copia de seguridad sellada de tu diario."
           }
         }
       }
@@ -37387,6 +37569,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Las notas privadas del diario, del ciclo y de intimidad pueden quedar protegidas con el código propio de Fernlet."
+          }
+        }
+      }
+    },
+    "Private memories" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recuerdos privados"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recuerdos privados"
           }
         }
       }
@@ -58903,6 +59101,22 @@
         }
       }
     },
+    "^[%lld private memory](inflect: true) — unlock to see" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "^[%lld recuerdo privado](inflect: true): desbloquea para verlo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "^[%lld recuerdo privado](inflect: true): desbloquea para verlo"
+          }
+        }
+      }
+    },
     "^[%lld serving](inflect: true)" : {
       "localizations" : {
         "es" : {
@@ -66276,6 +66490,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "el estado de tu sesión de amigos cerca"
+          }
+        }
+      }
+    },
+    "deleteAll.store.privateMemories" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. The Core memories the person chose to keep private. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your private memories"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tus recuerdos privados"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tus recuerdos privados"
           }
         }
       }
