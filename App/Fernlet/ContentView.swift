@@ -889,17 +889,10 @@ struct ContentView: View {
             // does — so the fields and scroll views inside them keep clearing the keyboard.
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomSafeArea = $0 }
-            // FLOW-15 (artboard 4b): the meal-logged toast sits at the BOTTOM, lifted over the bar so
-            // the two never cover each other. Outside the keyboard ignore above, so with the keyboard
-            // up it rests on the keyboard instead of hiding behind it with the bar.
-            .overlay(alignment: .bottom) { mealLogToastOverlay }
+            // The World panel over the map, with the meal toast and the stamp banners drawn above it
+            // (``worldPanelLayer``).
+            .overlay { worldPanelLayer }
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
-            // A silly-stats stamp earned just now: a banner at the TOP, clear of the meal toast a
-            // cookie's log raises at the bottom.
-            .overlay { worldOverlayPanel }
-            .overlay(alignment: .top) { sillyStampBannerOverlay }
-            // Round 7: a passport stamp earned just now, in the same slot and by the same rules (World-Passport-Spec §6).
-            .overlay(alignment: .top) { passportStampBannerOverlay }
             // DEBUG screenshots of Sprout's passport, page 1 (round 7); nothing in Release.
             .overlay { PassportSproutHarnessHost(store: store) }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownStampBanner)
@@ -907,6 +900,29 @@ struct ContentView: View {
             .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
             .background(sceneBackground.ignoresSafeArea())
+    }
+
+    /// The panel that is not a tab (Today, Log, Settings) and what is drawn over everything: the meal
+    /// toast at the BOTTOM (FLOW-15, artboard 4b), lifted over the item bar so the two never cover each
+    /// other, and the stamp banners at the TOP, clear of the toast. The toast and banners sit ABOVE the
+    /// panel: a meal logged from the Log or Today panel raised its toast underneath it, where a tap on
+    /// Undo landed on the panel and the meal stayed logged (VoiceOverTaskUITests). While a panel is
+    /// open the group is modal, so VoiceOver and the audit stay off the map under it (G4 recount:
+    /// the status plate, Sprout's bubble and the notices read through the panel) and still reach the
+    /// toast and banners, which are inside the group.
+    private var worldPanelLayer: some View {
+        ZStack {
+            worldOverlayPanel
+            mealLogToastOverlay
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            sillyStampBannerOverlay
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // Round 7: a passport stamp earned just now, in the same slot and by the same rules
+            // (World-Passport-Spec §6).
+            passportStampBannerOverlay
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .modifier(WorldPanelModality(isModal: worldOverlay != nil))
     }
 
     /// How far the meal-logged toast rises off the interface's bottom edge: clear of the item bar while
@@ -978,10 +994,6 @@ struct ContentView: View {
                          stampBannerShowing: shownStampBanner != nil || shownPassportBanner != nil,
                          isCameraOpen: $isWorldCameraOpen,
                          onMealsLogged: mealLogReporter)
-                // A panel over the map (Today, Log, Settings) covers it edge to edge, so the map's plate,
-                // Sprout's bubble and notices leave the accessibility tree while one is open: VoiceOver
-                // and the audit reached them through the panel (G4 recount 2026-11-14).
-                .accessibilityHidden(worldOverlay != nil)
                 .tabPage(.home)
             WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
                 FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -1101,8 +1113,6 @@ struct ContentView: View {
                     )
                 }
             }
-            // Full screen over the map: VoiceOver stays inside the panel until it closes.
-            .accessibilityAddTraits(.isModal)
             .transition(.opacity)
         }
     }
@@ -2514,4 +2524,20 @@ struct LaunchScreen: View {
 
 #Preview {
     ContentView(store: FernletStore(), healthKitService: HealthKitService())
+}
+
+/// Makes the World panel layer modal while a panel is open (``ContentView``'s `worldPanelLayer`), and
+/// leaves it a plain group otherwise, so the toast over the map never traps VoiceOver.
+private struct WorldPanelModality: ViewModifier {
+    let isModal: Bool
+
+    func body(content: Content) -> some View {
+        if isModal {
+            content
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isModal)
+        } else {
+            content
+        }
+    }
 }
