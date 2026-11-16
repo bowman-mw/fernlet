@@ -15342,6 +15342,7 @@
       }
     },
     "Delete %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15369,6 +15370,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Eliminar de Salud la copia de Fernlet?"
+          }
+        }
+      }
+    },
+    "Delete all" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar todo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar todo"
+          }
+        }
+      }
+    },
+    "Delete all memories" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar todos los recuerdos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar todos los recuerdos"
+          }
+        }
+      }
+    },
+    "Delete all memories?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar todos los recuerdos?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar todos los recuerdos?"
           }
         }
       }
@@ -15829,6 +15878,22 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Deletes all ^[%lld memory](inflect: true) on this phone and in iCloud. This can't be undone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elimina todos los recuerdos (^[%lld recuerdo](inflect: true)) de este móvil y de iCloud. No se puede deshacer."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elimina todos los recuerdos (^[%lld recuerdo](inflect: true)) de este teléfono y de iCloud. No se puede deshacer."
           }
         }
       }
@@ -16514,6 +16579,22 @@
         }
       }
     },
+    "Done. Fernlet has let go of ^[%lld memory](inflect: true)." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hecho. Fernlet ha olvidado ^[%lld recuerdo](inflect: true)."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Listo. Fernlet olvidó ^[%lld recuerdo](inflect: true)."
+          }
+        }
+      }
+    },
     "Double tap to pet." : {
       "localizations" : {
         "es" : {
@@ -16559,6 +16640,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Revisa con calma los alimentos de abajo antes de registrarlos."
+          }
+        }
+      }
+    },
+    "Double-tap to keep or forget this memory." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca dos veces para conservar u olvidar este recuerdo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca dos veces para conservar u olvidar este recuerdo."
           }
         }
       }
@@ -19822,6 +19919,22 @@
         }
       }
     },
+    "Fernlet deletes the patterns it has worked out, on this phone and your other devices, and learns only from today on. Your memories and your days stay." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet elimina los patrones que ha descubierto, en este móvil y en tus otros dispositivos, y solo aprende a partir de hoy. Tus recuerdos y tus días se quedan."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet elimina los patrones que descubrió, en este teléfono y en tus otros dispositivos, y solo aprende a partir de hoy. Tus recuerdos y tus días se quedan."
+          }
+        }
+      }
+    },
     "Fernlet didn't find a barcode or a nutrition label in this photo." : {
       "localizations" : {
         "es" : {
@@ -20439,6 +20552,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet envió “%1$@” a %2$@ por tu conexión privada. Si le llega, podrá elegir si la guarda. No recibirás ningún aviso en ningún caso."
+          }
+        }
+      }
+    },
+    "Fernlet stops keeping memories from your journal and stops working out patterns, and deletes the patterns it has. You can delete the ^[%lld memory](inflect: true) it kept as well, or keep them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet deja de guardar recuerdos de tu diario y de descubrir patrones, y elimina los patrones que tiene. También puedes eliminar lo que ha guardado (^[%lld recuerdo](inflect: true)) o conservarlo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet deja de guardar recuerdos de tu diario y de descubrir patrones, y elimina los patrones que tiene. También puedes eliminar lo que guardó (^[%lld recuerdo](inflect: true)) o conservarlo."
           }
         }
       }
@@ -21593,6 +21722,7 @@
       }
     },
     "Forget ^[%lld memory](inflect: true) matching \"%@\"?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21610,6 +21740,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Olvidar ^[%1$lld recuerdo](inflect: true) con “%2$@”?"
+          }
+        }
+      }
+    },
+    "Forget by date or feeling" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar por fecha o sentimiento"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar por fecha o sentimiento"
+          }
+        }
+      }
+    },
+    "Forget by filters" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar con filtros"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar con filtros"
           }
         }
       }
@@ -21642,6 +21804,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Olvidar las búsquedas corregidas?"
+          }
+        }
+      }
+    },
+    "Forget patterns" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar patrones"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar patrones"
+          }
+        }
+      }
+    },
+    "Forget patterns?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Olvidar patrones?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Olvidar patrones?"
+          }
+        }
+      }
+    },
+    "Forget these (%lld)" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar estos (%lld)"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar estos (%lld)"
           }
         }
       }
@@ -22165,6 +22375,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Pestaña Amigos"
+          }
+        }
+      }
+    },
+    "From" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desde"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desde"
           }
         }
       }
@@ -26405,6 +26631,22 @@
         }
       }
     },
+    "Keeps the feeling of each journal entry and works out patterns from your days." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guarda el sentimiento de cada entrada del diario y descubre patrones en tus días."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guarda el sentimiento de cada entrada del diario y descubre patrones en tus días."
+          }
+        }
+      }
+    },
     "Keepsake shelf" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -26434,6 +26676,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recuerdos"
+          }
+        }
+      }
+    },
+    "Kept" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se conserva"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se conserva"
           }
         }
       }
@@ -26905,6 +27163,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Menos ayuda"
+          }
+        }
+      }
+    },
+    "Let Fernlet remember" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar que Fernlet recuerde"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar que Fernlet recuerde"
           }
         }
       }
@@ -31458,6 +31732,7 @@
       }
     },
     "No memories match \"%@\"." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -31485,6 +31760,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ningún recuerdo coincide con esa búsqueda."
+          }
+        }
+      }
+    },
+    "No memories match." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ningún recuerdo coincide."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ningún recuerdo coincide."
           }
         }
       }
@@ -31828,6 +32119,7 @@
       }
     },
     "No tier 2 memories yet. They are extracted from journals when Foundation Models are available." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -31839,6 +32131,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aún no hay recuerdos de nivel 2. Se extraen del diario cuando Foundation Models está disponible."
+          }
+        }
+      }
+    },
+    "No tier 2 memories yet. They are worked out from your days (goal gaps, routines, workouts and mood) once a few days are logged." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay recuerdos de nivel 2. Salen de tus días (distancia con los objetivos, rutinas, ejercicio y ánimo) cuando hay unos cuantos días registrados."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay recuerdos de nivel 2. Salen de tus días (distancia con los objetivos, rutinas, ejercicio y ánimo) cuando hay unos cuantos días registrados."
           }
         }
       }
@@ -33521,6 +33829,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un toque guarda cómo te sientes hoy. No hace falta escribir."
+          }
+        }
+      }
+    },
+    "Only between two dates" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo entre dos fechas"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo entre dos fechas"
           }
         }
       }
@@ -35231,6 +35555,7 @@
       }
     },
     "Pattern" : {
+      "comment" : "Customize: the slot for a pattern on the companion's body (freckles, stripes…): its page title and row name",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -35242,6 +35567,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Patrón"
+          }
+        }
+      }
+    },
+    "Patterns" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patrones"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patrones"
+          }
+        }
+      }
+    },
+    "Patterns are what Fernlet works out from your days: gaps between your goals and your days, your routines, and how workouts and mood go together." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los patrones son lo que Fernlet descubre en tus días: la distancia entre tus objetivos y tus días, tus rutinas y cómo van juntos el ejercicio y el ánimo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los patrones son lo que Fernlet descubre en tus días: la distancia entre tus objetivos y tus días, tus rutinas y cómo van juntos el ejercicio y el ánimo."
           }
         }
       }
@@ -38560,6 +38917,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guardado"
+          }
+        }
+      }
+    },
+    "Remembering" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recuerdos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recuerdos"
           }
         }
       }
@@ -46406,6 +46779,22 @@
         }
       }
     },
+    "Stop remembering?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Dejar de recordar?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Dejar de recordar?"
+          }
+        }
+      }
+    },
     "Stop sharing" : {
       "localizations" : {
         "es" : {
@@ -50236,6 +50625,22 @@
         }
       }
     },
+    "Ticked memories are forgotten" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los recuerdos marcados se olvidan"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los recuerdos marcados se olvidan"
+          }
+        }
+      }
+    },
     "Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only." : {
       "localizations" : {
         "es" : {
@@ -50385,6 +50790,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Horas sin zona horaria"
+          }
+        }
+      }
+    },
+    "To" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta"
           }
         }
       }
@@ -51306,6 +51727,22 @@
         }
       }
     },
+    "Turn off and delete" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desactivar y eliminar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desactivar y eliminar"
+          }
+        }
+      }
+    },
     "Turn off encrypted %@ backup?" : {
       "localizations" : {
         "es" : {
@@ -51414,6 +51851,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Desactivar el código?"
+          }
+        }
+      }
+    },
+    "Turn off, keep them" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desactivar y conservarlos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desactivar y conservarlos"
           }
         }
       }
@@ -51714,6 +52167,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dos para soñar"
+          }
+        }
+      }
+    },
+    "Type \"forget\" and a word in the search, or pick dates or feelings, to find memories to forget." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe “forget” y una palabra en la búsqueda, o elige fechas o sentimientos, para encontrar recuerdos que olvidar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribe “forget” y una palabra en la búsqueda, o elige fechas o sentimientos, para encontrar recuerdos que olvidar."
           }
         }
       }
@@ -54012,6 +54481,22 @@
         }
       }
     },
+    "Will be forgotten" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se olvidará"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se olvidará"
+          }
+        }
+      }
+    },
     "Wind camera" : {
       "localizations" : {
         "es" : {
@@ -54158,6 +54643,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Madera"
+          }
+        }
+      }
+    },
+    "Words" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabras"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Palabras"
           }
         }
       }
