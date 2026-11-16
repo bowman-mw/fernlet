@@ -135,6 +135,24 @@ struct CloudKitDataServiceTests {
         #expect(summary.sleepRecordCount == 1)
     }
 
+    /// G9-1: a deleted design leaves a tombstone record (its `idString` starts with "tombstone:", no
+    /// design inside). Tombstones are not designs, so a closet whose every design was deleted does not
+    /// count as custom items in iCloud.
+    @Test func detectionSkipsCustomItemTombstones() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        let live = record(type: "CD_CustomItemRecord", name: "item-1", zoneID: zoneID)
+        live["CD_idString"] = UUID().uuidString
+        let tombstone = record(type: "CD_CustomItemRecord", name: "item-2", zoneID: zoneID)
+        tombstone["CD_idString"] = "tombstone:" + UUID().uuidString
+        database.recordsByType["CD_CustomItemRecord"] = [live, tombstone]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData())
+
+        #expect(summary.customItemCount == 1)
+    }
+
     /// M8 regression: a second device that holds only per-row data the blob summary can't see — custom
     /// clothing items, coin-ledger rows, or day rows older than the summary window — must still be detected,
     /// otherwise the multi-device warning never fires. The pre-fix detector counted only the aggregate

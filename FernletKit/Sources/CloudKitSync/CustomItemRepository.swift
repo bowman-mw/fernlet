@@ -121,6 +121,12 @@ public struct CustomItemRepository: CustomItemRepositoring {
         return items.filter { !deleted.contains($0.id) }
     }
 
+    /// Lifts the soft delete of `ids` (their tombstones are removed), so the next upsert writes them
+    /// again — the re-bought design's path (``RowTombstones/restore(ids:)``).
+    public func restore(ids: [UUID]) -> Bool {
+        tombstones.restore(ids: ids)
+    }
+
     /// Removes every custom-item row — the delete-all/reset path.
     public func deleteAll() -> Bool {
         let context = controller.container.viewContext

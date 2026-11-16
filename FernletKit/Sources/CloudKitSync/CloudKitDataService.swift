@@ -423,7 +423,7 @@ public final class CloudKitDataService {
             // (so another device cannot bring its entries back); it still counts, which is right: this
             // account has used Fernlet with sync, and the rows are there.
             for type in ["CD_CustomItemRecord", "CustomItemRecord"] {
-                summary.customItemCount += try await countRecords(type: type, in: zoneIDs)
+                summary.customItemCount += try await countLiveCustomItems(type: type, in: zoneIDs)
             }
             for type in ["CD_CoinLedgerRecord", "CoinLedgerRecord"] {
                 summary.coinLedgerCount += try await countRecords(type: type, in: zoneIDs)
@@ -1241,6 +1241,20 @@ public final class CloudKitDataService {
 
     private func countRecords(type: String, in zoneIDs: [CKRecordZone.ID]) async throws -> Int {
         try await recordIDsForExistingType(type, in: zoneIDs).count
+    }
+
+    /// The custom-item records of `type` that are designs, not G9-1 deletion records: a tombstone row's
+    /// `idString` starts with `RowTombstones.idPrefix`, and it holds no design, so a closet whose every
+    /// design was deleted does not read as "iCloud holds data". Reads the records whole (about 1 KB
+    /// each), on the rare detection path only.
+    private func countLiveCustomItems(type: String, in zoneIDs: [CKRecordZone.ID]) async throws -> Int {
+        let ids = try await recordIDsForExistingType(type, in: zoneIDs)
+        guard !ids.isEmpty else { return 0 }
+        let records = try await database.records(for: ids)
+        return records.filter { record in
+            let idString = (record["CD_idString"] as? String) ?? (record["idString"] as? String) ?? ""
+            return !idString.hasPrefix(RowTombstones.idPrefix)
+        }.count
     }
 
     private func recordIDsForExistingType(_ recordType: String, in zoneIDs: [CKRecordZone.ID]) async throws -> [CKRecord.ID] {

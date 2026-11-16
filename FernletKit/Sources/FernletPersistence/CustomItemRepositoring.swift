@@ -33,4 +33,13 @@ public protocol CustomItemRepositoring {
     func delete(ids: [UUID]) -> Bool
     /// Removes every row (used only by a full account reset).
     func deleteAll() -> Bool
+    /// Lifts an earlier deletion of `ids`, so the next ``upsert(_:)`` of them is written (G9-1: a
+    /// deleted item's tombstone otherwise makes upserts of its id skip). Only for an item the person
+    /// deliberately gets back.
+    func restore(ids: [UUID]) -> Bool
+}
+
+public extension CustomItemRepositoring {
+    // A store with no tombstones has nothing to lift.
+    func restore(ids: [UUID]) -> Bool { true }
 }

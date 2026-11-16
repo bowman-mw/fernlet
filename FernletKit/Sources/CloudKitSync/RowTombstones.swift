@@ -137,6 +137,32 @@ struct RowTombstones {
         }
     }
 
+    /// Lifts the deletion of `ids`: hard-deletes their tombstone rows so a later upsert of the same id
+    /// is written again. Only for an item the person deliberately gets back (a re-bought design keeps
+    /// its seller's id — "buy once, own forever"); never on a read or a sync path.
+    ///
+    /// - Returns: `false` when the fetch or save fails (rolled back, audited as
+    ///   `"<auditStore>.tombstone.restore.failed"`).
+    func restore(ids: [UUID]) -> Bool {
+        guard !ids.isEmpty else { return true }
+        let context = controller.container.viewContext
+        let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+        request.predicate = NSPredicate(format: "idString IN %@", ids.map(Self.tombstoneIDString(for:)))
+        do {
+            for record in try context.fetch(request) {
+                context.delete(record)
+            }
+            if context.hasChanges {
+                try context.save()
+            }
+            return true
+        } catch {
+            PersistenceFailureAudit.record("\(auditStore).tombstone.restore.failed", error: error)
+            context.rollback()
+            return false
+        }
+    }
+
     /// Hard-deletes the live rows for tombstoned `ids` — rows another phone's stale edit brought
     /// back. Audit-logged by count only. A failed save is rolled back and audited; the rows stay
     /// hidden by the read filter either way, so the next read retries.
