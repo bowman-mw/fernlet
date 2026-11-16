@@ -547,6 +547,41 @@ struct WorryBoxView: View {
     }
 
     var body: some View {
+        // The page is the root of a stack of its own, as Journal and Places are beside it in the
+        // Private hub: a keyboard toolbar declared on a stack-less hub page reached no host and the
+        // composer's keyboard showed no Done (KeyboardDoneAccessoryUITests). The stack's bar is
+        // hidden; the hub's picker and the panel's plate stay the page's chrome.
+        NavigationStack {
+            page
+                .toolbar(.hidden, for: .navigationBar)
+                // Return adds a line in the composer, so the accessory is the way to put the
+                // keyboard away. On the stack's root page, the host that renders it.
+                .keyboardDoneToolbar()
+        }
+        // Leaving COMMITS the pending release — the same contract as Mail's Undo Send. The strip is
+        // the undo affordance while the user is on the page; once the page is gone, the ceremony the
+        // user just completed ("releasing one lets it go for good") must not quietly un-happen and
+        // put the worry back with nothing said.
+        .onDisappear { commitPendingRelease() }
+        // Driven from the STRIP APPEARING, not from the release task that sets `pendingRelease`:
+        // at that point the toast — and the "Keep it" button this focuses — has not been built yet,
+        // so the focus request would land on nothing and the announcement would be the only channel.
+        .onChange(of: pendingRelease?.id) { _, id in
+            guard id != nil else { return }
+            announceKeepItWindow()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Backgrounding takes the strip away just as thoroughly as leaving does, and the pending
+            // timer can be suspended — or the app killed — long before its deadline. Commit here too,
+            // synchronously, while there is still a runloop to do it on. `claimPendingRelease`
+            // consumes the worry, so an `onDisappear` that follows finds nothing left to delete.
+            if phase == .background { commitPendingRelease() }
+        }
+    }
+
+    /// The page itself: header, composer, and the kept worries over the panel's dotted page, with the
+    /// "Keep it" strip along the bottom.
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 ScreenHeader(title: "Worry box", subtitle: "Set it down for a while.", identifier: "screen.worryBox")
@@ -582,29 +617,6 @@ struct WorryBoxView: View {
         // World (b2-worry-box): the panel's dotted page.
         .fernletPageBackground()
         .overlay(alignment: .bottom) { keepItToast }
-        // Return adds a line in the composer, so the accessory is the way to put the keyboard away.
-        // Declared here because this page is a tab page with no stack and no sheet chrome around it:
-        // nothing else in its host declares one (2026-10-01).
-        .keyboardDoneToolbar()
-        // Leaving COMMITS the pending release — the same contract as Mail's Undo Send. The strip is
-        // the undo affordance while the user is on the page; once the page is gone, the ceremony the
-        // user just completed ("releasing one lets it go for good") must not quietly un-happen and
-        // put the worry back with nothing said.
-        .onDisappear { commitPendingRelease() }
-        // Driven from the STRIP APPEARING, not from the release task that sets `pendingRelease`:
-        // at that point the toast — and the "Keep it" button this focuses — has not been built yet,
-        // so the focus request would land on nothing and the announcement would be the only channel.
-        .onChange(of: pendingRelease?.id) { _, id in
-            guard id != nil else { return }
-            announceKeepItWindow()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            // Backgrounding takes the strip away just as thoroughly as leaving does, and the pending
-            // timer can be suspended — or the app killed — long before its deadline. Commit here too,
-            // synchronously, while there is still a runloop to do it on. `claimPendingRelease`
-            // consumes the worry, so an `onDisappear` that follows finds nothing left to delete.
-            if phase == .background { commitPendingRelease() }
-        }
     }
 
     /// The "Released — Keep it" strip: the whole undo window, and the only thing standing between a
