@@ -21,6 +21,9 @@ struct PrivateDateTimeButton: View {
     @State private var open: Half?
     @Environment(\.fernletFramedLook) private var look
 
+    /// The halves' words' accessibility identifier (the approved cap's audit exemption keys on it).
+    static let wordsIdentifier = "privateDateTime.words"
+
     /// The button's two halves.
     enum Half: Hashable {
         case date, time
@@ -56,6 +59,8 @@ struct PrivateDateTimeButton: View {
                 .font(Font.custom(FernletFontName.dmSansBold, size: 16, relativeTo: .body))
                 // The halves' words grow to about 19 pt and stop there; the pickers keep iOS's size.
                 .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                // Kept by the owner (2026-11-15); the audit's one exemption names these words by this id.
+                .accessibilityIdentifier(Self.wordsIdentifier)
                 .foregroundStyle(look?.text ?? WorldPalette.bark)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)

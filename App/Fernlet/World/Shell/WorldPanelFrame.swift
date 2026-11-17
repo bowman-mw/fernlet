@@ -125,9 +125,19 @@ struct WorldPanelFrame<Content: View>: View {
             // The approved largest-text plate draws its title at 31 pt, not the full accessibility size,
             // so a one-word title ("Appearance") never breaks inside the word.
             .dynamicTypeSize(...WorldType.plateTitleCap)
+            // The cap is the owner's (2026-11-15: keep it, as a system bar title does); the long press
+            // shows the title at full size, and the id lets the audit's one exemption name this title.
+            .accessibilityShowsLargeContentViewer()
             .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier(WorldPlateTitle.identifier)
             .accessibilityFocused($isTitleFocused)
     }
+}
+
+/// Names shared by every panel's title plate (``WorldPanelFrame`` is generic, so they live here).
+nonisolated enum WorldPlateTitle {
+    /// The plate title's accessibility identifier, on every panel and pushed page.
+    static let identifier = "world.panel.title"
 }
 
 /// The 44-pt paper ✕ on a title plate.

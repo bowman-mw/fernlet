@@ -21,12 +21,20 @@ struct SettingsSearchField: View {
         let shape = RoundedRectangle(cornerRadius: 10)
         HStack(spacing: 10) {
             FernletIcon(.search, scale: 2)
-            TextField(title, text: $text, prompt: .fieldPrompt(title))
+            // Vertical, so the field grows a line rather than cutting its text at large sizes (the audit's
+            // "Text clipped" on a one-line field, G4 recount); `.onSubmit` keeps Return a search, never a
+            // new line, as ``SheetGrowingTextField`` does.
+            TextField(title, text: $text, prompt: .fieldPrompt(title), axis: .vertical)
+                .lineLimit(1...3)
+                .onSubmit {}
                 .font(look == nil ? .fernlet(.body) : FernletFramedFont.field)
                 .foregroundStyle(look?.text ?? Color.bark)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
+                // The title shows only as the prompt, which a field drops as its label once it has
+                // text; name it outright so VoiceOver and Voice Control always have it (G4 recount).
+                .accessibilityLabel(Text(title))
                 .accessibilityAddTraits(.isSearchField)
                 .accessibilityIdentifier(identifier)
             if !text.isEmpty {

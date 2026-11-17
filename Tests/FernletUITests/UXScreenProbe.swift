@@ -1004,7 +1004,7 @@ struct UXScreenProbe {
     /// Contrast they match nothing, because nothing there fails. An unused entry therefore cannot be
     /// failed the way the grep-wall's allowlist fails one, and an entry whose control is deleted
     /// stays here silently. Re-measure the list whenever a gallery screen changes its accents.
-    static let auditExemptions: [AuditExemption] = mossTextExemptions + [
+    static let auditExemptions: [AuditExemption] = mossTextExemptions + approvedTypeCapExemptions + [
         AuditExemption(
             auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Home",
             reason: """
@@ -1078,6 +1078,25 @@ struct UXScreenProbe {
     ///
     /// Labels are written as ``identity(_:)`` keys them (``normalisedLabel(_:)``: "Call 988" is
     /// "Call #", "0g" is "#g").
+    /// The World design's approved Dynamic Type caps, kept by the owner on 2026-11-15 rather than let
+    /// grow: the panel title plate (31 pt at most, like a system bar title) and the map's own text (the
+    /// status plate's fixed steps, Sprout's bubble to AX1, the notices to AX2). The audit's Dynamic Type
+    /// check reports ANY cap as "partially unsupported", so each entry names one identifier the app sets
+    /// on exactly that capped text (`WorldPlateTitle` and `WorldMapCappedText` in the app); a new
+    /// capped text anywhere else still fails the wall until someone decides on it.
+    static let approvedTypeCapExemptions: [AuditExemption] = [
+        ("world.panel.title", "THE PANEL TITLE PLATE. 25 pt Fraunces that stops at xxxLarge, 31 pt, the approved largest-text plate (`WorldType.plateTitleCap`), so a one-word title never breaks inside the word; it wraps to three lines at accessibility sizes instead of shrinking, and the long press shows it full size (Large Content Viewer)."),
+        ("world.status.letter", "THE STATUS PLATE'S P, C AND F. The plate sits on the map and follows the approved design's fixed steps (`WorldType.plateTextCap`, xLarge); its whole meaning is also spoken as the plate's one label."),
+        ("world.status.water", "THE STATUS PLATE'S WATER COUNT. Same plate, same approved steps (`WorldType.plateTextCap`)."),
+        ("world.status.todayTab", "THE TODAY TAB UNDER THE STATUS PLATE. 13.5 pt, then 17 pt at accessibility sizes, as the approved plate draws it (`WorldTodayTab`); hidden from VoiceOver, since the plate says \"Opens Today\"."),
+        ("world.notice.line", "A MAP NOTICE'S LINES. They grow to AX2 and stop (`WorldMapNotice`), so at the largest sizes a notice still leaves the map visible; VoiceOver reads them in full."),
+        ("privateDateTime.words", "LOG INTIMACY'S DATE AND TIME BUTTON. Its words grow to about 19 pt (xxLarge) and stop, as approved (`ref-int-date`, `PrivateDateTimeButton`); the pickers it opens are iOS's own, at iOS's size, and VoiceOver reads each half's name and value."),
+        ("world.speech", "SPROUT'S SPEECH BUBBLE ON THE MAP. It grows to AX1 and stops (`WorldSpeechBubble.typeCap`), so the bubble never covers the map at the largest sizes; VoiceOver reads it in full."),
+    ].map { identifier, reason in
+        AuditExemption(auditType: .dynamicType, descriptionContains: "Dynamic Type font sizes are partially unsupported",
+                       elementIdentifier: identifier, reason: reason)
+    }
+
     static let mossTextExemptions: [AuditExemption] = [
         AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "sheet.done",
                        reason: mossIncreaseContrastRoute),
