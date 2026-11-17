@@ -22,7 +22,7 @@
 // suite of this name.
 
 @testable import ProximityKit
-import FernletSocial
+@testable import FernletSocial
 import FernletConnections
 import Foundation
 import Testing
@@ -467,6 +467,9 @@ struct RecipeShareTransferTests {
         // ML5 (invariant HP0): the host is hoisted so it outlives the manager's `unowned` store.
         let host = NamedTransferTestHost(name: "Alex")
         let manager = ProximityRecipeShareManager(store: host)
+        // SEC-L29 (ProximityKit 0.2.0): the name rides the air only under the person's opt-in.
+        #expect(manager.discoveryInfoForTesting["name"] == nil)
+        manager.pairSession.setNameDisclosure(toEveryone: true, friendTags: [])
         #expect(manager.discoveryInfoForTesting["name"] == "Alex")
 
         let rendered = ItemNameModeration.moderatedPeerDisplayName(
@@ -479,6 +482,7 @@ struct RecipeShareTransferTests {
     @Test func managerAdvertisesAByteBoundedName() {
         let host = NamedTransferTestHost(name: String(repeating: "健", count: 40))
         let manager = ProximityRecipeShareManager(store: host)
+        manager.pairSession.setNameDisclosure(toEveryone: true, friendTags: [])   // SEC-L29's opt-in
         let fields = manager.discoveryInfoForTesting
         #expect(fields["v"] == "1")
         #expect(fields["mode"] == "recipe")

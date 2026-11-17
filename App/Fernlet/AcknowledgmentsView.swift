@@ -289,14 +289,16 @@ struct AcknowledgmentsView: View {
     }
 
     /// The attribution the Open Government Licence – Canada asks for, as the licence words it (a notice,
-    /// never translated here; food rows carry the localized ``FoodItemSource/attributionLine``).
+    /// never translated here; food rows carry the localized `FoodItemSource.attributionLine`).
     static let canadianNutrientFileNotice = "Contains information licensed under the Open Government Licence – Canada."
 
     /// The licence's own page. A constant, checked by the host wall; Safari opens it, the app sends it nothing.
     static let openGovernmentLicenceCanadaURL = URL(string: "https://open.canada.ca/en/open-government-licence-canada")
 
-    /// Where the World map's atlas comes from (round 7, `Docs/World-Atlas-Pack.md`): Natural Earth, public
-    /// domain, credited though it asks for none; and Beck et al.'s Köppen-Geiger maps under CC BY 4.0, whose
+    /// Where the World map's data comes from: the land and water pack (`Docs/World-Shore-Pack.md`), OpenStreetMap
+    /// under the ODbL, credited as "© OpenStreetMap contributors" with the licence's name and a note that Fernlet
+    /// changed the data, beside the same linked credit the map draws; and the atlas (round 7,
+    /// `Docs/World-Atlas-Pack.md`): Natural Earth, public domain, credited though it asks for none; and Beck et al.'s Köppen-Geiger maps under CC BY 4.0, whose
     /// licence asks for the credit, the licence's name and a note that Fernlet changed the data. The
     /// citation stays in English, as its authors wrote it; the licence's address is in NOTICE, not here.
     private var mapDataSection: some View {

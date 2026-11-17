@@ -37,10 +37,10 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// The rules that find the head, each for a naming convention the catalog really uses:
 ///
 /// - **USDA's "Category, specific, qualifiers" form.** The first comma segment is the food. When that
-///   segment is one of USDA's ingredient CLASSES (``classNames`` — "Cheese", "Spices", "Nuts",
+///   segment is one of USDA's ingredient CLASSES (`classNames` — "Cheese", "Spices", "Nuts",
 ///   "Squash", "Fish" …), the second segment names a member that stands alone as the ingredient
 ///   ("Cheese, parmesan" is parmesan, "Squash, zucchini" is zucchini), so its head counts too. When the
-///   second segment only QUALIFIES the class (``qualifierSegments`` — "Squash, summer, zucchini",
+///   second segment only QUALIFIES the class (`qualifierSegments` — "Squash, summer, zucchini",
 ///   "Chicken, broilers or fryers, thigh", "Pork, cured, bacon") or its head is one of the typed
 ///   modifiers ("Beef, flank, steak" for "flank steak"), the member is the third segment, and its head
 ///   counts as well. Dish and product categories ("Cookies", "Bread", "Soup", "Oil", "Flour") are
@@ -52,24 +52,24 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 ///   product phrase makes the row a composite ("Zucchini With Marinara", "Yeast With Poppy Seed Filling
 ///   Cake"), which is no head at all. And the first segment is the product only when every later
 ///   segment merely repeats its words — the catalog's `, <flavor>` echo ("Dark Chocolate Chips, Dark")
-///   — or names a variant of it (``variantDescriptors``: "Chocolate Chips, Semi-sweet", "Salsa, Mild",
+///   — or names a variant of it (`variantDescriptors`: "Chocolate Chips, Semi-sweet", "Salsa, Mild",
 ///   "Butter, Salted"); otherwise the first segment is a flavor list ("Lemon, Ginger Drink", "Lime,
 ///   Cherry, Berry Blue, … Jelly Beans") and the name gives no head
-///   (``productPhraseCounts(_:personNamed:)``).
+///   (`productPhraseCounts(_:personNamed:)`).
 /// - **A person's own food is read by its first segment** (``isNamedByPerson(_:)``, fix round 2): the
 ///   person named it, so what follows the comma is theirs too — "Chicken breast, grilled" is chicken
 ///   breast, never a flavor list — and the echo requirement does not apply. A preposition still makes it
 ///   a composite ("Chicken with rice").
-/// - **A phrase ends at a preposition** (``phraseEndWords``, USDA reference rows): "Pork with chili and
+/// - **A phrase ends at a preposition** (`phraseEndWords`, USDA reference rows): "Pork with chili and
 ///   tomatoes" is pork, "Chicken, canned, no broth" says nothing about broth.
 /// - **Coordination** ("or", "and", "&"): "Chicken or turkey salad" shares the head "salad"; two whole
 ///   phrases ("Egg omelet or scrambled egg", "Macaroni and cheese", "Wild Pacific Sardines Cumin &
 ///   Coriander") count only when both end in the same noun ("Half and half").
-/// - **A part that is the food** (``partNouns``): "Ginger root" is ginger and "garlic cloves" are
+/// - **A part that is the food** (`partNouns`): "Ginger root" is ginger and "garlic cloves" are
 ///   garlic. Leaves are not on the list: grape and sweet-potato leaves are not grapes or sweet potatoes.
 /// - **A one-word parenthetical is a synonym**: "Coriander (cilantro) leaves" is cilantro, "Green
 ///   onion, (scallion)" a scallion.
-/// - **A seed spice is its plant** (``memberPartNouns``, class members only): "Spices, cumin seed" is
+/// - **A seed spice is its plant** (`memberPartNouns`, class members only): "Spices, cumin seed" is
 ///   cumin, the spice a recipe calls cumin.
 /// - **USDA's inverted compound**: USDA writes "tomato paste" as "Tomato, paste" and "cocoa powder" as
 ///   "Cocoa, dry powder" — the modifier first. When the first segment's head is one of the query's
@@ -80,7 +80,7 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// or "Oil, olive" from "Oil, corn, peanut, and olive". USDA's reference form can: it writes the kind
 /// right after the food ("Milk, whole", "Oil, olive", "Beans, black") and, for a class, in the member's
 /// qualifier ("Spices, pepper, black"). A reference row that says a typed modifier there
-/// (``namesKind(_:modifierForms:)``) is ``compoundLevel``; the rest of the identity group is
+/// (`namesKind(_:modifierForms:)`) is ``compoundLevel``; the rest of the identity group is
 /// ``ingredientLevel``. Product names never reach it — their word order is free, so "All Purpose Flour"
 /// would otherwise leap over "Flour, wheat, all-purpose", which gives the kind one segment later — and
 /// neither does any row in a brand query, where the brand tier already leads.
@@ -104,7 +104,7 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// name alone cannot tell. Since roadmap G1 (2026-11-13) the row's branded CATEGORY does: in a
 /// composite aisle (sweets, snacks, drinks, mixes, sauces, prepared meals) a product is the ingredient
 /// only when the category names that noun, the name says every typed modifier, or the name is
-/// nothing but the typed words (``categoryAdmits(_:headForms:modifierForms:)``). A product in an aisle
+/// nothing but the typed words (`categoryAdmits(_:headForms:modifierForms:)`). A product in an aisle
 /// outside that list (a spice jar, bagged produce) still reads by its name alone. Nor can the name
 /// tell a flavor-first name whose second segment happens to be a variant word ("Southwest Cilantro,
 /// Medium", a salsa) from the plain product.
@@ -113,8 +113,8 @@ public nonisolated enum FoodSearchRanking: Sendable, Equatable {
 /// the catalog's English USDA names after `FoodItemSearch.normalized`, never displayed.
 /// `LocalizationBoundaryTests.frozenIngredientIdentityWords` pins them.
 ///
-/// Bounded (Power-of-10 R2/R3): a name is scanned for at most ``maxScannedCharacters`` characters and
-/// ``maxSegments`` comma segments; every other loop walks one of those segments.
+/// Bounded (Power-of-10 R2/R3): a name is scanned for at most `maxScannedCharacters` characters and
+/// `maxSegments` comma segments; every other loop walks one of those segments.
 public nonisolated enum FoodIngredientIdentity {
     /// Words that end a name's main noun phrase: what follows them accompanies or qualifies the food.
     static let phraseEndWords: Set<String> = [
@@ -283,7 +283,7 @@ public nonisolated enum FoodIngredientIdentity {
     /// Whether a row's name follows USDA's reference naming — "Category, specific, qualifiers", a
     /// class's member, a phrase that ends at a preposition, the inverted compound: USDA reference rows
     /// only. A product description (branded, restaurant, a person's own food) is free-form and is read
-    /// as one product phrase instead (``productPhraseCounts(_:personNamed:)``).
+    /// as one product phrase instead (`productPhraseCounts(_:personNamed:)`).
     public static func followsReferenceNaming(of foodItem: FoodItem) -> Bool {
         guard foodItem.source.isBundledReference else { return false }
         switch foodItem.dataType {
@@ -294,7 +294,7 @@ public nonisolated enum FoodIngredientIdentity {
 
     /// Whether a row's name was written by the person — their own food (`.manual`: a custom food, a
     /// custom recipe ingredient) — so it is read by its first segment, without the product echo
-    /// requirement (``productPhraseCounts(_:personNamed:)``). A scanned product (`.openFoodFacts`) keeps
+    /// requirement (`productPhraseCounts(_:personNamed:)`). A scanned product (`.openFoodFacts`) keeps
     /// the product reading: its name is the label's, not theirs.
     public static func isNamedByPerson(_ foodItem: FoodItem) -> Bool {
         foodItem.source == .manual
@@ -332,7 +332,7 @@ public nonisolated enum FoodIngredientIdentity {
 
     /// Whether a product name's first segment IS its product: it holds no preposition (a composite —
     /// "Zucchini With Marinara") and every later segment only repeats its words or names a variant (the
-    /// `, <flavor>` echo, "Dark Chocolate Chips, Dark"; ``variantDescriptors``, "Salsa, Mild").
+    /// `, <flavor>` echo, "Dark Chocolate Chips, Dark"; `variantDescriptors`, "Salsa, Mild").
     /// Otherwise the first segment is a flavor or the first item of a list ("Lemon, Ginger Drink"). A
     /// name the person wrote (`personNamed`) needs no echo: its later segments are theirs.
     static func productPhraseCounts(_ parsed: NameSegments, personNamed: Bool) -> Bool {
@@ -356,7 +356,7 @@ public nonisolated enum FoodIngredientIdentity {
     }
 
     /// Whether a class's second segment defers its member to the third: it is one of
-    /// ``qualifierSegments``, or its head is one of the typed modifiers ("Beef, flank, steak").
+    /// `qualifierSegments`, or its head is one of the typed modifiers ("Beef, flank, steak").
     static func readsThirdSegment(_ second: [String], modifierForms: Set<String>) -> Bool {
         if qualifierSegments.contains(second.joined(separator: " ")) { return true }
         guard let head = phraseCore(second).last else { return false }
@@ -386,7 +386,7 @@ public nonisolated enum FoodIngredientIdentity {
         return heads
     }
 
-    /// The tokens before the first ``phraseEndWords`` word — empty when the segment opens with one.
+    /// The tokens before the first `phraseEndWords` word — empty when the segment opens with one.
     static func phraseCore(_ tokens: [String]) -> [String] {
         guard let end = tokens.firstIndex(where: phraseEndWords.contains) else { return tokens }
         return Array(tokens[..<end])

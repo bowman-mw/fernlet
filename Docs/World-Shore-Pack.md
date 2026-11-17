@@ -49,7 +49,9 @@ tile grid in a public repository can be read back as data. So the safer reading 
 **Attribution.** The OSMF's guideline puts the credit in a corner of the map, adjacent to it, or on a splash screen, and
 says a person should not have to interact to see it. So each map that draws this data shows a small
 "© OpenStreetMap" beside Apple's credit, linked to <https://www.openstreetmap.org/copyright>. Settings → Privacy &
-data → Acknowledgments, `NOTICE` and the site carry the longer form. Any screenshot or marketing image showing the fog
+data → Acknowledgments, `NOTICE` and the site carry the longer form: "© OpenStreetMap contributors, under the Open
+Database License (ODbL)", with a note that Fernlet changed the data. `AcknowledgmentsTests` pins the credit in all
+of those places. Any screenshot or marketing image showing the fog
 needs the credit visible too.
 
 **Still open for a person, not settled by the guidelines:** whether App Store FairPlay reaches a resource file and

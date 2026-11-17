@@ -143,6 +143,7 @@ on the reasoning.
 | `meshGroupKeyWrapV1` | `fernlet.mesh.groupkey.v1` | `IdentityService` |
 | `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.v1` | `MeshRoutedContentKeyWrapper` |
 | `meshRoutedStoreV1` | `fernlet.mesh.routed-store.v1` | `MeshRoutedStore` (the at-rest seal for `MeshRoutedIndex.sealed` and every `MeshRoutedChunks/<uuid>.chunk` file) |
+| `meshDialProofV1` | `fernlet.mesh.dial-proof.v1` | ProximityKit 0.2.0's `IdentityService.meshDialProofKey(with:)`: the HKDF salt of the pairwise key the mesh's dial proof tags and accepts are HMACs under, before either side sends its hello |
 | `heartDropOuterSealV1` | `fernlet.heartdrop.seal.v1` | `HeartDropSealer` |
 | `lockScryptWrappingV1` | `fernlet.lock.scrypt.wrapping.v1` | — |
 | `journalNarrativeLegacyV1` | `journal-narrative` | `ColumnCrypto`, `JournalNarrativeRepository` |
@@ -157,6 +158,7 @@ on the reasoning.
 |---|---|---|
 | `heartDropDayTagV1` | `fernlet.heartdrop.day.v1` | `IdentityService+HeartDrop` (FernletSocial) |
 | `presenceEpochTagV1` | `fernlet.presence.epoch.v1` | `IdentityService+PresenceTags` (FernletSocial) |
+| `recipeFriendEpochTagV1` | `fernlet.recipe.friend.epoch.v1` | `IdentityService+PresenceTags` (FernletSocial): the recipe radio's friend tag (SEC-L29), never the presence tag |
 
 #### AEAD
 

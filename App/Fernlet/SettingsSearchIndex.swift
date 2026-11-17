@@ -1095,6 +1095,17 @@ nonisolated enum SettingsSearchIndex {
             route: .nearbyFriends
         ),
         SettingsSearchEntry(
+            // SEC-L29 (owner 2026-11-13): off by default; only kept friends see the name.
+            title: "Show my name to everyone",
+            display: LocalizedStringResource(
+                "settings.search.title.showMyNameToEveryone", defaultValue: "Show my name to everyone",
+                comment: "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to."),
+            keywords: ["name", "my name", "show name", "everyone", "strangers", "display name", "privacy",
+                       "recipe share"],
+            breadcrumb: .nearbyFriends,
+            route: .nearbyFriends
+        ),
+        SettingsSearchEntry(
             title: "Clothing shops with friends",
             display: LocalizedStringResource(
                 "settings.search.title.clothingShopsWithFriends", defaultValue: "Clothing shops with friends",

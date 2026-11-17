@@ -86,6 +86,9 @@ final class TapToConnectController {
     private(set) var metByTappingFingerprints: Set<String> = []
     /// Signing keys matched by a tap this launch, which the mesh's narrowed doors admit.
     private(set) var matchedSigningKeys: Set<Data> = []
+    /// The X25519 keys of the people a tap matched this launch, newest first: the mesh's dial proof
+    /// candidates beside the kept friends' (ProximityKit 0.2.0). Bounded by ``maxRemembered``.
+    private(set) var matchedKeyAgreementKeys: [Data] = []
     /// Runs when a match or a hand-off ending should re-run the run policy.
     var onPolicyInputsChanged: (() -> Void)?
 
@@ -170,13 +173,28 @@ final class TapToConnectController {
     }
 
     private func matched(_ match: ProximityTapRendezvousMatch) {
-        recordMatch(signingPublicKey: match.signingPublicKey, fingerprint: match.fingerprint)
+        recordMatch(signingPublicKey: match.signingPublicKey, fingerprint: match.fingerprint,
+                    keyAgreementPublicKey: match.keyAgreementPublicKey)
+    }
+
+    /// The mesh's dial-proof candidates (ProximityKit 0.2.0): the people a tap matched, newest first,
+    /// then the kept friends (neither blocked nor removed), most recently seen first. The mesh proves
+    /// the first 24 when it dials and answers any of them when it is dialed; nobody else is sent a key.
+    func meshDialProofKeys(friends: [ProximityTrustedPeerRecord]) -> [Data] {
+        let kept = friends
+            .filter { $0.blockedAt == nil && $0.revokedAt == nil && !$0.keyAgreementPublicKey.isEmpty }
+            .sorted { $0.lastSeenAt > $1.lastSeenAt }
+            .map(\.keyAgreementPublicKey)
+        return matchedKeyAgreementKeys + Array(kept.prefix(Self.maxRemembered))
     }
 
     /// Both people said yes to `signingPublicKey`'s owner: remember them for the doors and for Keep as
     /// friends?, and open the hand-off window (also the seam a unit test drives a match through).
-    func recordMatch(signingPublicKey: Data, fingerprint: String) {
+    func recordMatch(signingPublicKey: Data, fingerprint: String, keyAgreementPublicKey: Data = Data()) {
         if matchedSigningKeys.count < Self.maxRemembered { matchedSigningKeys.insert(signingPublicKey) }
+        if !keyAgreementPublicKey.isEmpty, !matchedKeyAgreementKeys.contains(keyAgreementPublicKey) {
+            matchedKeyAgreementKeys = Array(([keyAgreementPublicKey] + matchedKeyAgreementKeys).prefix(Self.maxRemembered))
+        }
         if metByTappingFingerprints.count < Self.maxRemembered { metByTappingFingerprints.insert(fingerprint) }
         pendingHangout = PendingTapHangout(
             signingPublicKey: signingPublicKey, fingerprint: fingerprint,

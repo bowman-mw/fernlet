@@ -226,7 +226,11 @@ struct PrivacyPolicyParityTests {
         "only that location is sent, with nothing about you attached",
         // Travel-day memories (2026-11-15): the one travel fact that may reach the AI, a city, on the iPhone only.
         "Sprout's memory can note which city you travelled to",
-        "only the city, never the airport, times or where you were"
+        "only the city, never the airport, times or where you were",
+        // SEC-L29 (2026-11-15, owner's option c of 2026-11-13; wording awaits the owner's approval): the
+        // recipe radio shows a name only to kept friends unless the person turns on the opt-in.
+        "nearby phones see your name only if they belong to friends you added",
+        "(Nearby friends, off by default)"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

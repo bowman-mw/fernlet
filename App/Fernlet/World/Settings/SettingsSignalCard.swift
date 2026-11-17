@@ -38,9 +38,11 @@ struct SettingsSignalCard: View {
             strengthStrip
             FlowLayout(spacing: 6) {
                 // The engine's raw keys ("journals.tag") never reach the card; these name what the
-                // person actually logged.
+                // person actually logged. A tag with a fill draws the kit's dark ink, so the fill must
+                // stay light in dark mode too: `look.raised` turned dark there and read 1.27:1. The
+                // Trends page's light tag fill, the same in both modes.
                 ForEach(signal.sourceFields, id: \.self) { field in
-                    FernletTag(text: Text(SignalPresentation.sourceLabel(for: field)), fill: look.raised)
+                    FernletTag(text: Text(SignalPresentation.sourceLabel(for: field)), fill: WorldPalette.gameCream)
                 }
             }
             nutrientGaps

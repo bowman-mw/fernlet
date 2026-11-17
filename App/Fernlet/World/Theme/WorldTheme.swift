@@ -63,6 +63,22 @@ nonisolated enum WorldType {
     static let plateTitleCap = DynamicTypeSize.xxxLarge
 }
 
+/// Accessibility identifiers for the map's text that stops growing at an approved size (``WorldType``'s
+/// caps, the bubble's and the notices'). The owner kept those caps on 2026-11-15, so the UI audit
+/// exempts its Dynamic Type finding for these ids alone: a new capped text elsewhere still fails it.
+nonisolated enum WorldMapCappedText {
+    /// The status plate's P, C and F.
+    static let statusLetter = "world.status.letter"
+    /// The status plate's water count ("+2", "3 / 8").
+    static let statusWater = "world.status.water"
+    /// The "Today ›" tab under the status plate.
+    static let todayTab = "world.status.todayTab"
+    /// A map notice's two lines ("Your map starts here", "It uncovers as you go…").
+    static let noticeLine = "world.notice.line"
+    /// Sprout's speech bubble on the map.
+    static let speech = "world.speech"
+}
+
 extension WorldTheme {
     /// The design language for everything in the World build (`FernletFramedLook`, `b1-language`):
     /// paper in a 2-pt ink frame with a solid shadow, dotted parchment pages, wood for the sheet's

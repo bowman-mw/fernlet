@@ -432,8 +432,9 @@ struct CreationStudioView: View {
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.5)
                     .padding(8)
-                    // Full-strength ink: over the paper and the companion's ghost the dim ink read 4.47:1.
-                    .foregroundStyle(WorldPalette.ink)
+                    // Full-strength text ink: over the paper and the companion's ghost the dim ink read
+                    // 4.47:1, and the frame ink (`ink`) is near-black in dark mode, 2.26:1 on dark paper.
+                    .foregroundStyle(WorldPalette.bark)
                     .allowsHitTesting(false)
                     // Words on screen, so VoiceOver can read them (hidden, they were the editor's "Potentially
                     // inaccessible text" audit finding); its own id, never the canvas's `studio.canvas`.

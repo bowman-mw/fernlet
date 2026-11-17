@@ -124,7 +124,7 @@ public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiab
 
     public var id: String { rawValue }
 
-    /// The localized name the onboarding and profile Sex pickers draw. Display only: ``rawValue`` is
+    /// The localized name the onboarding and profile Sex pickers draw. Display only: `rawValue` is
     /// the persisted token, and nothing else reads this (traced 2026-10-20).
     public var label: String {
         switch self {
@@ -1927,7 +1927,7 @@ public nonisolated enum PreparedDishHeuristic {
     /// dish by naming the carrier and denying it — *Chili hot dog, no bun*, *Hamburger, no bun* — so a
     /// plain substring test read the row that is LEAST assembled as the most. Measured: `hot dog`
     /// demoted every no-bun row and surfaced *Pickle relish, hot dog* as its top-1. Nor does a carrier
-    /// inside a ``carrierUsePhrases`` phrase: USDA's "…, salad or cooking" oils are oils, and reading
+    /// inside a `carrierUsePhrases` phrase: USDA's "…, salad or cooking" oils are oils, and reading
     /// them as salads sank every plain vegetable oil beneath branded bottles and oil-roasted peanuts.
     public nonisolated static func isPreparedDish(_ foodItem: FoodItem) -> Bool {
         let name = FoodItemSearch.normalized(foodItem.name)
@@ -1936,7 +1936,7 @@ public nonisolated enum PreparedDishHeuristic {
         return tokens.intersection(carrierTokens).contains { !isNegated($0, in: name) && !namesAUse($0, in: name) }
     }
 
-    /// Whether `carrier` appears in `normalizedName` inside one of ``carrierUsePhrases`` — "salad" in
+    /// Whether `carrier` appears in `normalizedName` inside one of `carrierUsePhrases` — "salad" in
     /// "oil olive salad or cooking". `normalizedName` must already be `FoodItemSearch.normalized`.
     private nonisolated static func namesAUse(_ carrier: String, in normalizedName: String) -> Bool {
         carrierUsePhrases.contains { $0.hasPrefix(carrier + " ") && normalizedName.contains($0) }
@@ -2231,7 +2231,7 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable, Sendable
     public var id: String { rawValue }
 
     /// The unit's name in the recipe editor's unit menu and its spoken value. Localized display only:
-    /// ``rawValue`` is the persisted and shared token (`LocalizationBoundaryTests.frozenRecipeUnitTokens`).
+    /// `rawValue` is the persisted and shared token (`LocalizationBoundaryTests.frozenRecipeUnitTokens`).
     public var label: String {
         switch self {
         case .milligram: String(localized: "recipeUnit.milligram", defaultValue: "Milligrams", bundle: .module, comment: "Recipe unit menu: milligrams")
@@ -3214,7 +3214,7 @@ extension FoodItem {
     /// ``defaultRecipeQuantity(for:)`` of it.
     ///
     /// INVARIANT (ingredient-search round, F1(c)): the answer's default amount CONVERTS. The unit the
-    /// food's data suggests (``preferredRecipeUnitCandidate``) is returned only when
+    /// food's data suggests (`preferredRecipeUnitCandidate`) is returned only when
     /// ``tapDefaultConverts(_:)`` holds for it; otherwise grams, and — for a serving the converter
     /// cannot weigh (IU, a survey "sandwich") — "1 serving". A tap used to land on an amount the editor
     /// then refused with Save disabled: 1,030 "oil" rows served by mass with no portions defaulted
@@ -3384,7 +3384,7 @@ extension FoodItem {
 
 extension FoodPortion {
     /// The recipe unit this portion states EXACTLY: its whole unit string is one of the
-    /// ``RecipeUnit/normalized(_:)`` spellings, or — for an empty or "undetermined" unit — its
+    /// ``RecipeUnit/normalized(_:languages:)`` spellings, or — for an empty or "undetermined" unit — its
     /// description reads "<amount> <count unit>" ("1 slice"). The reading every build before the
     /// ingredient-search round's F4a used; the strict first answer beneath the tolerant
     /// ``recipeUnit`` (FoodPortionReader.swift), so a portion stated exactly never loses to a

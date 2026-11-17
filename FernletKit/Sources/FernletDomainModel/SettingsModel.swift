@@ -218,6 +218,11 @@ public nonisolated struct FernletSettings: Codable {
     /// nothing and no rings show; friends still find each other through Nearby friends (presence), and
     /// codes still work. The radio that listens for the tap reads it through the run policy.
     public var allowConnectByTapping: Bool = true
+    /// Whether the recipe radio shows this person's name to everyone nearby (SEC-L29, owner 2026-11-13,
+    /// option c): Settings › Nearby friends, "Show my name to everyone". OFF by default, and a settings
+    /// blob written before the switch existed decodes it off. Off, kept friends still see the name (their
+    /// phones match a rotating friend tag and read it from their own records) and strangers see none.
+    public var advertiseNameToEveryoneNearby: Bool = false
     /// Opt-IN: send/receive "good vibes" hearts with trusted friends in person. Unlike recipe/clothing
     /// shares (which only invite on an explicit user send), the heart listener AUTO-connects to discover
     /// reachable friends, so a brief signed-identity exchange happens before a non-friend can be
@@ -616,6 +621,7 @@ public nonisolated struct FernletSettings: Codable {
         recipeShareIncludesPicture = try container.decodeIfPresent(Bool.self, forKey: .recipeShareIncludesPicture) ?? true
         allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
         allowConnectByTapping = try container.decodeIfPresent(Bool.self, forKey: .allowConnectByTapping) ?? true
+        advertiseNameToEveryoneNearby = try container.decodeIfPresent(Bool.self, forKey: .advertiseNameToEveryoneNearby) ?? false
         allowNearbyHearts = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyHearts) ?? false
         heartsAwayDelivery = try container.decodeIfPresent(Bool.self, forKey: .heartsAwayDelivery) ?? false
         allowNearbyPresence = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyPresence) ?? false
@@ -808,6 +814,7 @@ public nonisolated struct FernletSettings: Codable {
         case bodybuildingCalendar
         case allowConnectByTapping
         case memoryExtractionEnabled, tierTwoLearnFrom
+        case advertiseNameToEveryoneNearby
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -912,6 +919,7 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(recipeShareIncludesPicture, forKey: .recipeShareIncludesPicture)
         try container.encode(allowNearbyClothingShares, forKey: .allowNearbyClothingShares)
         try container.encode(allowConnectByTapping, forKey: .allowConnectByTapping)
+        try container.encode(advertiseNameToEveryoneNearby, forKey: .advertiseNameToEveryoneNearby)
         try container.encode(allowNearbyHearts, forKey: .allowNearbyHearts)
         try container.encode(heartsAwayDelivery, forKey: .heartsAwayDelivery)
         try container.encode(allowNearbyPresence, forKey: .allowNearbyPresence)

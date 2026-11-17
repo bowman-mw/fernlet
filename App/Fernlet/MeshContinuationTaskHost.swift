@@ -308,7 +308,16 @@ final class MeshContinuationTaskHost {
     /// - Parameter isForeground: Whether the scene is not backgrounded.
     func appForegroundDidChange(_ isForeground: Bool) {
         sceneIsDark = !isForeground
-        guard heldTask != nil else { return }
+        guard heldTask != nil else {
+            // The re-arm (owner 2026-11-13): a lit return after a delivered task EXPIRED submits
+            // again. Idempotent like the rest of this door: the second lit call finds the claim
+            // already `requested`, which absorbs the edge.
+            guard isForeground, driver.state == .expired else { return }
+            driver.appDidReturnWithoutATask()
+            submitOnEntry(from: .expired)
+            feedStore()
+            return
+        }
         guard isForeground else {
             driver.sceneDidGoDark()
             return

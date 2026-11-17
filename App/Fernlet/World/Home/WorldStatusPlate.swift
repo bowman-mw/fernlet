@@ -80,6 +80,8 @@ struct WorldStatusPlate: View {
                 .dynamicTypeSize(...WorldType.plateTextCap)
                 .foregroundStyle(WorldPalette.bark)
                 .frame(minWidth: 9)
+                // The approved plate steps (owner, 2026-11-15: keep the cap); the audit's exemption names it.
+                .accessibilityIdentifier(WorldMapCappedText.statusLetter)
             ZStack(alignment: .leading) {
                 WorldPalette.barEmpty
                 colour.frame(width: max(0, width - 6) * macro.fraction)
@@ -105,6 +107,7 @@ struct WorldStatusPlate: View {
                         .font(WorldType.plateCount(large: false))
                         .dynamicTypeSize(...WorldType.plateTextCap)
                         .foregroundStyle(WorldPalette.bark)
+                        .accessibilityIdentifier(WorldMapCappedText.statusWater)
                 }
             }
         case .count(let bottles, let target) where target > 0:
@@ -114,6 +117,7 @@ struct WorldStatusPlate: View {
                     .font(WorldType.plateCount(large: isLarge))
                     .dynamicTypeSize(...WorldType.plateTextCap)
                     .foregroundStyle(WorldPalette.bark)
+                    .accessibilityIdentifier(WorldMapCappedText.statusWater)
             }
         case .count:
             EmptyView()

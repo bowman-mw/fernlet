@@ -941,3 +941,32 @@ extension CloudKitDataServiceTests {
         #expect((database.recordsByType["RecoveryEscrowRecord"] ?? []).isEmpty)
     }
 }
+
+// MARK: - Per-record refusals are not swallowed (G9-2 field report, 2026-11-16)
+
+extension CloudKitDataServiceTests {
+    /// A modify operation whose records were each refused reports success at the operation level, so
+    /// the live database throws the first per-record refusal. A record already gone does not fail a
+    /// delete, but it does fail a save.
+    @Test func perRecordRefusalsSurfaceAndAMissingRecordOnlyFailsASave() throws {
+        let missing = CKError(.unknownItem)
+        let refused = CKError(.serverRejectedRequest)
+        #expect(CloudKitPerRecordFailures.firstRefusal(in: [], toleratingMissingRecords: false) == nil)
+        let saveError = try #require(CloudKitPerRecordFailures.firstRefusal(in: [refused], toleratingMissingRecords: false) as? CKError)
+        #expect(saveError.code == .serverRejectedRequest)
+        #expect((CloudKitPerRecordFailures.firstRefusal(in: [missing], toleratingMissingRecords: false) as? CKError)?.code == .unknownItem)
+        #expect(CloudKitPerRecordFailures.firstRefusal(in: [missing, missing], toleratingMissingRecords: true) == nil)
+        #expect((CloudKitPerRecordFailures.firstRefusal(in: [missing, refused], toleratingMissingRecords: true) as? CKError)?.code
+                == .serverRejectedRequest)
+    }
+
+    /// The live database reads the per-record blocks: a source pin, since no test can run a real
+    /// `CKModifyRecordsOperation` against CloudKit.
+    @Test func theLiveDatabaseReadsThePerRecordBlocks() throws {
+        let source = try String(contentsOf: RepoRoot.url.appendingPathComponent(
+            "FernletKit/Sources/CloudKitSync/CloudKitDataService.swift"), encoding: .utf8)
+        #expect(source.contains("operation.perRecordSaveBlock"))
+        #expect(source.contains("operation.perRecordDeleteBlock"))
+        #expect(source.components(separatedBy: "CloudKitPerRecordFailures.firstRefusal(").count == 3)
+    }
+}

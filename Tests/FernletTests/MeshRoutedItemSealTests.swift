@@ -578,11 +578,13 @@ struct MeshRoutedItemSealGoldenTests {
         // round (round 7, piece B1, 2026-10-29) registered `KeyDerivation.bodyTallyV1`, the sealed body
         // tally's column, which no item seal touches; 97 since road trip mode's photos (PR 3, owner-approved
         // 2026-11-10) registered `AEAD.privateRoadTripPhoto{Image,Thumbnail,Index}V1`, the trip roll's three
-        // at-rest domains, which no item seal touches; 98 since G9-3's private memories (owner call M6 = A,
-        // 2026-11-15) registered `KeyDerivation.privateMemoryV1`, the sealed private memory's column, which
-        // no item seal touches. This count is a tripwire on the registry, not on the
-        // item seal: a new row must be acknowledged here, deliberately.
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 98)
+        // at-rest domains, which no item seal touches. This count is a tripwire on the registry, not on the
+        // item seal: a new row must be acknowledged here, deliberately. 101 since G9-2 (2026-11-15)
+        // registered its two recovery-code domains and G5 (ProximityKit 0.2.0, 2026-11-15) registered
+        // `KeyDerivation.meshDialProofV1` and `HMAC.recipeFriendEpochTagV1`, none of which an item seal touches;
+        // 102 since G9-3 (owner call M6 = A, 2026-11-15) registered `KeyDerivation.privateMemoryV1`, the sealed
+        // private memory's column, which no item seal touches.
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 102)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

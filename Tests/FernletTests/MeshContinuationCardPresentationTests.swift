@@ -2,7 +2,7 @@
 // FernletTests
 //
 // Network migration P8 item 7: the card table, whole. Every pair of (claim state × the token that
-// named its last move) is answered — the 23 that show a card are DATA below, and the other 37 must
+// named its last move) is answered — the 25 that show a card are DATA below, and the other 41 must
 // show none — so a row that changes its mind has to change this table too, rather than a helper
 // that re-derives the same `switch` and proves nothing.
 //
@@ -48,6 +48,7 @@ import Testing
         (.refused, .cancelled, .refused),
         (.refused, .completed, .refused),
         (.refused, .meshChanged, .refused),
+        (.refused, .rearmed, .refused),
         (.refused, .absorbed, .refused),
         (.expired, nil, .expired),
         (.expired, .registered, .expired),
@@ -58,6 +59,7 @@ import Testing
         (.expired, .cancelled, .endedBySystem),
         (.expired, .completed, .expired),
         (.expired, .meshChanged, .expired),
+        (.expired, .rearmed, .expired),
         (.expired, .absorbed, .expired),
         (.completed, .refused, .refused),
         (.completed, .expired, .expired),
@@ -66,10 +68,10 @@ import Testing
 
     /// The whole product is answered, and exactly the table's pairs show a card.
     @Test func everyClaimIsAnsweredAndOnlyTheTableShowsACard() {
-        #expect(Self.audits.count == 10, "nine tokens plus no token at all")
+        #expect(Self.audits.count == 11, "ten tokens plus no token at all")
         #expect(MeshContinuationState.allCases.count == 6, "item 4's six states")
-        #expect(Self.presenting.count == 23, "the table's rows — change the table, not the count")
-        // R2: bounded by 6 × 10.
+        #expect(Self.presenting.count == 25, "the table's rows — change the table, not the count")
+        // R2: bounded by 6 × 11.
         for state in MeshContinuationState.allCases {
             for audit in Self.audits {
                 let expected = Self.presenting.first { $0.0 == state && $0.1 == audit }?.2

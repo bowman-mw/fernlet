@@ -273,7 +273,9 @@ private struct MacroTargetRow: View {
                 .font(look == nil ? .fernlet(.body) : FoodFont.rowName)
                 .foregroundStyle(look?.text ?? Color.bark)
             Spacer()
-            TextField("\(placeholder)", text: text, prompt: .fieldPrompt("\(placeholder)"))
+            // The prompt is the target in effect, information rather than a hint, so it takes the text
+            // ink (italic still marks it as Fernlet's number): slate read 4.08:1 on dark raised paper.
+            TextField("\(placeholder)", text: text, prompt: .fieldPrompt("\(placeholder)", ink: look?.text ?? Color.bark))
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .font(look == nil ? .fernlet(.stat) : FernletFramedFont.field)

@@ -79,7 +79,7 @@ public final class DiaryStore {
     /// wipe (`resetDiary` sets `recentMeals = []`, publishing an empty profile so a wipe cannot leave
     /// the live catalog promoting deleted meals' foods) and a remote sync (`applyDiarySlice`), which
     /// three separate call-site writes would each have had to remember. `foodItems` above uses the
-    /// same seam for the same reason. Nothing durable is written — see ``FoodSearchHistory``.
+    /// same seam for the same reason. Nothing durable is written — see `FoodSearchHistory`.
     public var recentMeals: [Meal] {
         didSet { foodCatalog.setSearchHistory(FoodSearchHistory.from(recentMeals: recentMeals)) }
     }
@@ -869,11 +869,14 @@ public final class DiaryStore {
     /// the copy. The copy always drops the source meal's note and is stamped "Repeated" — see
     /// `Meal.copyForToday(mealType:)`.
     ///
-    /// - Parameter mealType: The slot to file the repeat under. Pass the log sheet's explicit choice,
-    ///   or the by-time "Auto" classification (`MealParser.classifyMealType`) when the user made
-    ///   none — repeating a yogurt bowl at 7:35 PM must not inherit Breakfast from the meal it
-    ///   copies. Deliberately NOT re-derived here when `nil`: a caller that already resolved the slot
-    ///   would have it silently overwritten by a classification of the meal's NAME.
+    /// - Parameters:
+    ///   - meal: The past meal to repeat; it is left as it was.
+    ///   - mealType: The slot to file the repeat under. Pass the log sheet's explicit choice,
+    ///     or the by-time "Auto" classification (`MealParser.classifyMealType`) when the user made
+    ///     none — repeating a yogurt bowl at 7:35 PM must not inherit Breakfast from the meal it
+    ///     copies. Deliberately NOT re-derived here when `nil`: a caller that already resolved the slot
+    ///     would have it silently overwritten by a classification of the meal's NAME.
+    /// - Returns: The copy, already appended to today.
     @discardableResult public func copyMeal(_ meal: Meal, mealType: MealType? = nil) -> Meal {
         let copiedMeal = meal.copyForToday(mealType: mealType)
         appendMeal(copiedMeal, date: todayKey)
@@ -1620,7 +1623,7 @@ public final class DiaryStore {
     /// Creates a MULTIPART manual recipe from the editor's parts (a dressing, then the salad).
     ///
     /// Each part's rows resolve through the same upsert and step sanitizer as
-    /// ``addRecipe(name:servings:notes:ingredients:steps:)``, via ``RecipeComponentAssembly``. Fewer than
+    /// ``addRecipe(name:servings:notes:ingredients:steps:)``, via `RecipeComponentAssembly`. Fewer than
     /// two non-empty parts store a plain one-part recipe.
     /// - Returns: The newly created recipe.
     @discardableResult public func addRecipe(name: String, servings: Int, notes: String = "", parts: [RecipeComponentInput]) -> RecipeDefinition {
@@ -1710,7 +1713,7 @@ public final class DiaryStore {
 
     /// A previously web-imported product matching `query` (by stored query tag or normalized
     /// name), so a repeat lookup needs no new import — while it is still fresh. A product older than
-    /// its `verificationPolicyDays` (``FoodItem/isPastVerification(asOf:)``) is not offered, so the
+    /// its `verificationPolicyDays` (`FoodItem.isPastVerification(asOf:)`) is not offered, so the
     /// lookup runs again and the save refreshes it in place (roadmap G1: cached web products were
     /// reused at any age).
     public func cachedWebImportedFoodProduct(for query: String, now: Date = Date()) -> FoodItem? {
@@ -1738,7 +1741,7 @@ public final class DiaryStore {
     ///
     /// A recipe other recipes use as an ingredient (recipes as building blocks, owner pick P06a): each
     /// recipe in the book that uses it gets its steps, and those of the recipes it used, copied in front
-    /// of its own (``RecipeFoodSync/parent(_:afterDeleting:allRecipes:maxSteps:)``). Its recipe food is
+    /// of its own (`RecipeFoodSync.parent(_:afterDeleting:allRecipes:maxSteps:)`). Its recipe food is
     /// frozen into a fixed food by the next ``syncRecipeFoods(alsoConsidering:)``, which the app runs
     /// right after, so those recipes keep its last numbers.
     public func deleteRecipe(_ recipe: RecipeDefinition) {
@@ -1756,7 +1759,7 @@ public final class DiaryStore {
     // MARK: - Recipes as building blocks
 
     /// Brings every recipe food in ``foodItems`` up to date with the book and `otherRecipes` (the app's
-    /// saved and web recipes, which live outside this store): see ``RecipeFoodSync/synced(foodItems:recipes:)``.
+    /// saved and web recipes, which live outside this store): see `RecipeFoodSync.synced(foodItems:recipes:)`.
     /// Writes and persists only when something changed. The app calls it after every recipe change and
     /// after every sync; `otherRecipes` must be every recipe outside the book, or a recipe food whose
     /// recipe is missing from the list is frozen as if that recipe were deleted.
@@ -1767,7 +1770,7 @@ public final class DiaryStore {
     }
 
     /// Converts every multipart recipe in the book into separate recipes (owner pick P07a, see
-    /// ``RecipePartsMigration``) and persists; returns how many were converted. Idempotent and a no-op
+    /// `RecipePartsMigration`) and persists; returns how many were converted. Idempotent and a no-op
     /// when no recipe has parts, so the app runs it at launch and after every sync: a multipart
     /// recipe an older paired device makes, or a multipart share, is converted when it arrives.
     @discardableResult public func migrateRecipeParts() -> Int {
@@ -1785,7 +1788,7 @@ public final class DiaryStore {
         batchSnapshotPersistence { foodItems = updated }
     }
 
-    /// Writes only a recipe's "Makes" amount (``RecipeDefinition/makes``), validated, and persists: the
+    /// Writes only a recipe's "Makes" amount (`RecipeDefinition.makes`), validated, and persists: the
     /// editor saves it beside the rest of the recipe. A no-op when the recipe id is no longer in the book
     /// or the amount is unchanged.
     public func setRecipeMakes(_ makes: RecipeYield?, forRecipeID recipeID: UUID) {

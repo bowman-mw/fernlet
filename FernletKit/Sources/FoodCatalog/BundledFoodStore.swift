@@ -125,6 +125,7 @@ public nonisolated protocol BundledFoodSource: Sendable {
     /// Retrieval is deliberately the wider of the two on THAT axis: narrowing the FTS side would give
     /// the scorer no way to reconsider.
     ///
+    /// - Parameter query: The search text whose tokens every returned row must match.
     /// - Parameter stripsStopwords: Must be the SAME value the scorer will use for this query (see
     ///   `FoodItemSearch.results(for:in:limit:stripsStopwords:)`). It is a parameter rather than an
     ///   assumption because the two sides silently disagreeing is a measured hazard, not a
@@ -146,11 +147,11 @@ public nonisolated protocol BundledFoodSource: Sendable {
     /// words on the NAME. Bounded by `limit`.
     func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem]
     /// The words this source's search index knows, with their food counts, for the offered spelling
-    /// suggestion (``FoodSearchVocabulary``). At most `limit` words; empty when the index cannot say.
+    /// suggestion (`FoodSearchVocabulary`). At most `limit` words; empty when the index cannot say.
     func searchVocabulary(limit: Int) -> [FoodSearchTerm]
     /// Rows whose index states `letters` as an exact, adjacent run of single-character words and passes
     /// the gate for `productQuery` (which may be empty) — the typed surface's single-letter-brand route
-    /// (``FoodBrandInitialism``; "m&m's" is stored as the words "m m s"). A candidate pool: ``FoodCatalog``
+    /// (`FoodBrandInitialism`; "m&m's" is stored as the words "m m s"). A candidate pool: ``FoodCatalog``
     /// checks that the NAME states the letters. Bounded by `limit`.
     func initialismCandidates(letters: [String], productQuery: String, limit: Int) -> [FoodItem]
     var count: Int { get }
@@ -277,6 +278,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// All rows whose indexed name/category/tags pass the FTS5 prefix-AND gate for `query`, hydrated
     /// up to the candidate cap in data-type-priority order (see the in-body comments for the
     /// de-bias rationale).
+    /// - Parameter query: The search text, tokenized into the FTS5 MATCH expression.
     /// - Parameter stripsStopwords: Passed straight to `FoodItemSearch.searchTokens`, so the MATCH
     ///   expression is built from the SAME token set the scorer will gate on.
     ///
@@ -358,7 +360,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 
     /// The product words' FTS gate, narrowed to rows whose `brand_source` has a word starting with
     /// `brandWord` (a `LIKE` over the rows the gate already chose, so no full-table scan, and at most
-    /// ``brandFieldScanLimit`` of them). `brandWord` is a normalized search token — letters and digits
+    /// `brandFieldScanLimit` of them). `brandWord` is a normalized search token — letters and digits
     /// only — so it carries no `LIKE` wildcard. A hyphen in the brand field reads as a space, as it
     /// does in a normalized query, so "cola" reaches "Coca-Cola".
     public func brandFieldCandidates(brandWord: String, productQuery: String, stripsStopwords: Bool, limit: Int) -> [FoodItem] {
@@ -429,7 +431,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
     /// nothing. 500 is comfortably inside SQLite's default (999) on every platform Fernlet ships to.
     static let maxIDsPerQuery = 500
 
-    /// Batch point lookup — a single `IN` query per ``maxIDsPerQuery`` chunk; rows come back in
+    /// Batch point lookup — a single `IN` query per `maxIDsPerQuery` chunk; rows come back in
     /// SQLite's own order, not the caller's `ids` order.
     public func items(ids: [UUID]) -> [FoodItem] {
         guard !ids.isEmpty else { return [] }
@@ -560,7 +562,7 @@ public nonisolated final class SQLiteBundledFoodSource: BundledFoodSource, @unch
 /// A trivial bundled source backed by an in-memory array — the test double for
 /// ``SQLiteBundledFoodSource``.
 ///
-/// Used by tests (and as ``FoodCatalog/bundled(bundle:)``'s empty fallback when the SQLite resource
+/// Used by tests (and as `bundled(bundle:)`'s empty fallback when the SQLite resource
 /// is missing) so they don't need the generated database. `candidates(forQuery:)` returns
 /// everything; ``FoodCatalog``'s scorer applies the real gate and ranking, so results match the
 /// SQLite path for the same item set.

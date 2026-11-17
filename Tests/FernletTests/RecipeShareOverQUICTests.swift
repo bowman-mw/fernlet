@@ -85,6 +85,12 @@ final class FakeRecipeShareRadioSession: ProximityPairRadioSession, NetworkChann
         isStarted = true
     }
 
+    /// ProximityKit 0.2.0 (SEC-L29): the owner's record changed; the fake keeps each one it was handed.
+    func republish(advertisement: [String: String]) {
+        guard isStarted else { return }
+        advertised.append(advertisement)
+    }
+
     func stop() {
         stopCount += 1
         isStarted = false

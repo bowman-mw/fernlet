@@ -298,6 +298,8 @@ struct ProximityNamespaceGoldenTests {
                                today: .text(fernletDerivation.meshSessionContextV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshRoutedStoreV1", frozen: "fernlet.mesh.routed-store.v1",
                                today: .text(fernletDerivation.meshRoutedStoreV1.rawValue)),
+            NamespaceGoldenRow(.label, derivation + "meshDialProofV1", frozen: "fernlet.mesh.dial-proof.v1",
+                               today: .text(fernletDerivation.meshDialProofV1.rawValue)),
             NamespaceGoldenRow(.label, aead + "proximityTransportV2", frozen: "fernlet.proximity.transport.aead.v2",
                                today: .text(fernletAEAD.proximityTransportV2.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshGroupKeyWrapV2", frozen: "fernlet.mesh.groupkey.wrap.aead.v2",
@@ -468,9 +470,9 @@ struct ProximityNamespaceGoldenTests {
     /// by `starts(with:)` and several AADs are bare concatenations, so a prefix would be a collision.
     @Test func theTableHoldsEveryNamespaceValueOnce() {
         let table = Self.table
-        #expect(table.count == 64, "the golden table has \(table.count) rows")
+        #expect(table.count == 65, "the golden table has \(table.count) rows")
         let expected: [NamespaceGoldenRow.Group: Int] = [
-            .label: 41, .radio: 7, .verifyQR: 2, .keychain: 9, .storage: 4, .logSubsystem: 1
+            .label: 42, .radio: 7, .verifyQR: 2, .keychain: 9, .storage: 4, .logSubsystem: 1
         ]
         // R2: bounded by the six groups.
         for (group, count) in expected {
@@ -1062,13 +1064,13 @@ struct ProximityNamespaceGoldenTests {
         return values
     }
 
-    /// The value FernletConnections ships IS the literal column: exactly the table's 63 namespace
+    /// The value FernletConnections ships IS the literal column: exactly the table's 64 namespace
     /// fields, each equal to its frozen literal byte for byte, and the labels in the table's order.
     @Test func everyFernletValueIsItsFrozenLiteral() {
         let values = Self.fernletValues
         let rows = Self.table.filter { $0.field != Self.qrHostField }
-        #expect(rows.count == 63, "the table holds \(rows.count) namespace values besides the QR host")
-        #expect(values.count == 63, "`.fernlet` was read for \(values.count) fields")
+        #expect(rows.count == 64, "the table holds \(rows.count) namespace values besides the QR host")
+        #expect(values.count == 64, "`.fernlet` was read for \(values.count) fields")
         let unpinned = Set(values.keys).subtracting(rows.map(\.field)).sorted()
         let unread = Set(rows.map(\.field)).subtracting(values.keys).sorted()
         #expect(unpinned.isEmpty && unread.isEmpty, "no frozen row for \(unpinned); never read off `.fernlet`: \(unread)")
@@ -1120,8 +1122,8 @@ struct ProximityNamespaceGoldenTests {
     /// FernletCrypto declares them) and the epoch domain raw.
     @Test func everyFernletLabelCarriesTheRoleItsFieldFixes() {
         let rows = ProximityNamespace.fernlet.labelRows
-        #expect(rows.count == 41, "`.fernlet` has \(rows.count) labels")
-        // R2: bounded by the 41 label rows.
+        #expect(rows.count == 42, "`.fernlet` has \(rows.count) labels")
+        // R2: bounded by the 42 label rows.
         for row in rows {
             #expect(row.purpose.role == Self.designedRole(of: row.field),
                     "\(row.field) has the role \(row.purpose.role), the design fixes \(String(describing: Self.designedRole(of: row.field)))")
@@ -1129,7 +1131,7 @@ struct ProximityNamespaceGoldenTests {
         let tally = Dictionary(grouping: rows, by: { $0.purpose.role }).mapValues(\.count)
         let designed: [ProximityCryptographicPurpose.Role: Int] = [
             .signature(.lengthPrefixed): 17, .signature(.rawPrefix): 2, .signature(.absent): 2,
-            .keyDerivationSalt: 5, .tlsExporterLabel: 1, .columnSeal: 2, .aeadAssociatedData: 5,
+            .keyDerivationSalt: 6, .tlsExporterLabel: 1, .columnSeal: 2, .aeadAssociatedData: 5,
             .hashDomain(.lengthPrefixed): 6, .hashDomain(.rawPrefix): 1
         ]
         #expect(tally == designed, "the roles tally \(tally), the design \(designed)")
@@ -1186,6 +1188,7 @@ struct ProximityNamespaceGoldenTests {
             (derivation + "meshRoutedContentKeyWrapV1", KeyDerivation.meshRoutedContentKeyWrapV1),
             (derivation + "meshSessionContextV1", KeyDerivation.meshSessionContextV1),
             (derivation + "meshRoutedStoreV1", KeyDerivation.meshRoutedStoreV1),
+            (derivation + "meshDialProofV1", KeyDerivation.meshDialProofV1),
             (aead + "proximityTransportV2", AEAD.proximityTransportV2),
             (aead + "meshGroupKeyWrapV2", AEAD.meshGroupKeyWrapV2),
             (aead + "meshEncryptedMetadataV2", AEAD.meshEncryptedMetadataV2),
@@ -1214,9 +1217,9 @@ struct ProximityNamespaceGoldenTests {
     @Test func everyCoreLabelIsSpelledLikeItsFernletCryptoTwin() {
         let twins = Self.registryTwins
         let purposes = Self.fernletPurposes
-        #expect(twins.count == 40, "\(twins.count) twins listed")
+        #expect(twins.count == 41, "\(twins.count) twins listed")
         let twinFields = Set(twins.map(\.field))
-        #expect(twinFields.count == 40, "a field is listed twice")
+        #expect(twinFields.count == 41, "a field is listed twice")
         #expect(twinFields == Set(purposes.keys).subtracting([Self.epochField]),
                 "every `.fernlet` label but the epoch domain has a registry twin, and no other field does")
         // R2: bounded by the 40 twins.
@@ -1337,18 +1340,19 @@ struct ProximityNamespaceGoldenTests {
     /// routing on; this is CDST's rule run over both registries at once.
     @Test func noLabelOfTheRegistryAndFernletTogetherIsAPrefixOfAnother() {
         var names: [Data: String] = [:]
-        // R2: bounded by the 100 registry entries (83, plus the World build's four map-store domains, the
+        // R2: bounded by the 102 registry entries (83, plus the World build's four map-store domains, the
         // solo camera's three, step 5c's three place domains, round 7's passport and corner, the
-        // bodybuilding round's body tally, road trip mode's three photo domains, and G9-2's two recovery-code domains and G9-3's private memory).
+        // bodybuilding round's body tally, road trip mode's three photo domains, G9-2's two recovery-code
+        // domains, and G5's mesh dial proof and recipe friend tag, and G9-3's private memory).
         for domain in CryptographicDomainSeparationTests.allDomains where names[domain.purpose.data] == nil {
             names[domain.purpose.data] = "FernletCryptoPurpose.\(domain.name)"
         }
-        #expect(names.count == 100, "the registry holds \(names.count) distinct labels")
-        // R2: bounded by the 41 label rows.
+        #expect(names.count == 102, "the registry holds \(names.count) distinct labels")
+        // R2: bounded by the 42 label rows.
         for row in ProximityNamespace.fernlet.labelRows where names[row.purpose.data] == nil {
             names[row.purpose.data] = ".fernlet \(row.field)"
         }
-        #expect(names.count == 101, "together \(names.count) distinct labels; the 40 twins coincide and the epoch domain is new")
+        #expect(names.count == 103, "together \(names.count) distinct labels; the 41 twins coincide and the epoch domain is new")
         let exceptions = CryptographicDomainSeparationTests.prefixExceptions
         var offenders: [String] = []
         var excused = 0
@@ -1393,7 +1397,7 @@ struct ProximityNamespaceGoldenTests {
             pending.append(contentsOf: children.reversed())
         }
         #expect(pending.isEmpty, "the reflection walk stopped at \(visits) nodes with \(pending.count) left")
-        #expect(reflected.count == 39, "reflection found \(reflected.count) labels in `.fernlet`'s fixed fields")
+        #expect(reflected.count == 40, "reflection found \(reflected.count) labels in `.fernlet`'s fixed fields")
         let declared = namespace.family.purposes.feature.entries.map {
             (field: "family.purposes.feature." + $0.name, purpose: $0.purpose)
         }
@@ -1858,7 +1862,7 @@ struct ProximityNamespaceGoldenTests {
         }
         #expect(signed == 19, "\(signed) labels signed; the design has 17 canonical and 2 QR transcripts")
         let expectedRefusals: [ProximityCryptographicPurpose.Role: Int] = [
-            .signature(.absent): 2, .keyDerivationSalt: 5, .tlsExporterLabel: 1, .columnSeal: 2,
+            .signature(.absent): 2, .keyDerivationSalt: 6, .tlsExporterLabel: 1, .columnSeal: 2,
             .aeadAssociatedData: 5, .hashDomain(.lengthPrefixed): 6, .hashDomain(.rawPrefix): 1
         ]
         #expect(refused == expectedRefusals, "sign refused \(refused); the design refuses \(expectedRefusals)")
@@ -1897,7 +1901,7 @@ struct ProximityNamespaceGoldenTests {
             #expect(accepted == twinAccepted,
                     "\(row.field) verifies \(accepted) of [lp+body, label+body, body]; its twin \(twinAccepted)")
         }
-        #expect(compared == 21 && refusing == 20, "\(compared) signature labels compared and \(refusing) refusing")
+        #expect(compared == 21 && refusing == 21, "\(compared) signature labels compared and \(refusing) refusing")
     }
 
     // MARK: Group 9 — the signed transcripts read the namespace they are handed (A0.2.4)
@@ -3993,7 +3997,8 @@ private enum ForeignAppNamespace {
             meshTLSExporterV1: "acme.mesh.tls-exporter.v1",
             meshRoutedContentKeyWrapV1: "acme.mesh.routed.content-key.v1",
             meshSessionContextV1: "acme.mesh.session-context.v1",
-            meshRoutedStoreV1: "acme.mesh.routed-store.v1"
+            meshRoutedStoreV1: "acme.mesh.routed-store.v1",
+            meshDialProofV1: "acme.mesh.dial-proof.v1"
         )
     }
 

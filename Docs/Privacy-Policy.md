@@ -415,6 +415,8 @@ nearby person whose phone is also on Home can tell you use Fernlet. Only when yo
 together does each phone see the other's name and companion, and your public key is shared only after
 you both tap **Start hangout**. Turn the switch off and phones coming together do nothing.
 
+**Sharing a recipe in person.** Before you share, nearby phones see your name only if they belong to friends you added, which recognize yours by rotating codes only the two of you can work out; anyone else sees no name. Turn on **Show my name to everyone** (Nearby friends, off by default) to let every nearby Fernlet see it.
+
 When you add a friend in person, your devices exchange your display names, public keys, avatar
 appearances, and a **fuzzy** wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends **never**
 see your numeric score, your goals, your cycle information, or any raw health data. You can send

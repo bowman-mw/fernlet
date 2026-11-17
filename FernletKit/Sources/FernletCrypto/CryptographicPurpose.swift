@@ -369,6 +369,8 @@ public nonisolated enum FernletCryptoPurpose {
         ///
         /// Changing this spelling orphans every sealed routed file already on disk.
         public static let meshRoutedStoreV1 = CryptographicPurpose("fernlet.mesh.routed-store.v1")
+        /// The mesh dial proof's HKDF salt (ProximityKit 0.2.0), the twin of the Fernlet namespace's label.
+        public static let meshDialProofV1 = CryptographicPurpose("fernlet.mesh.dial-proof.v1")
         public static let heartDropOuterSealV1 = CryptographicPurpose("fernlet.heartdrop.seal.v1")
         /// Scrypt has no `info` argument. This constant names its sole consumer; the v2 wrapping
         /// AEAD below authenticates the same purpose beside the derived key.
@@ -417,6 +419,9 @@ public nonisolated enum FernletCryptoPurpose {
     public nonisolated enum HMAC {
         public static let heartDropDayTagV1 = CryptographicPurpose("fernlet.heartdrop.day.v1")
         public static let presenceEpochTagV1 = CryptographicPurpose("fernlet.presence.epoch.v1")
+        /// The recipe radio's friend tag (SEC-L29, 2026-11-15): the presence pair secret over this
+        /// label instead of presence's, so the two radios never publish the same token.
+        public static let recipeFriendEpochTagV1 = CryptographicPurpose("fernlet.recipe.friend.epoch.v1")
     }
 
     /// Additional-authenticated-data domains for symmetric encryption formats.

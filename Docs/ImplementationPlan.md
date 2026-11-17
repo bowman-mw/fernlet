@@ -60,7 +60,7 @@ None of this was in the original phase list. PR numbers are the merges that land
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| **ProximityKit extracted** | ✅ | The peer-to-peer subsystem moved to the external `ProximityKit` package at A1.3 (2026-10-15), pinned exactly (0.1.x, 0.1.2 today). `App/Fernlet/Proximity/` keeps only audit, feasibility-probe and UI pieces. |
+| **ProximityKit extracted** | ✅ | The peer-to-peer subsystem moved to the external `ProximityKit` package at A1.3 (2026-10-15), pinned exactly (0.2.0 today, since roadmap G5). `App/Fernlet/Proximity/` keeps only audit, feasibility-probe and UI pieces. |
 | **World: live-map Home** | ✅ | Home became a live pixel map with fog of war (#69). The fog and Your world draw real coasts, lakes and rivers from a bundled OpenStreetMap shore pack (#134); passport shore rules (#135). |
 | **Stamps and stamp book** | ✅ | Silly-stat stamps at first reveal, a top banner and companion line, and a device-local stamp book; stamps also show in a widget. |
 | **Sprout's passport** | ✅ | Tap the companion for a passport book over the map: flights (one page, a log per year), planned flights as dashed stubs (#132), free pinch zoom on Your world (#133), road trips, and Customize. |

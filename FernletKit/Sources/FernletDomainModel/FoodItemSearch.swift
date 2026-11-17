@@ -35,7 +35,7 @@ public nonisolated enum FoodBrandLexicon {
         chains.first { $0.contains(" ") && $0.replacingOccurrences(of: " ", with: "") == word }
     }
 
-    /// Whether `query` names a restaurant chain as WORDS (``namedChains(in:)``), which flips the
+    /// Whether `query` names a restaurant chain as WORDS (`namedChains(in:)`), which flips the
     /// data-type priority to restaurant/branded first.
     ///
     /// Roadmap G1, F11 (2026-11-13): this used to be a raw substring test, so a chain spelled inside
@@ -74,7 +74,7 @@ public nonisolated enum FoodBrandLexicon {
         }.sorted()
     }
 
-    /// The token-level twin of ``queryContainsBrandToken``: every chain name (not just whether one
+    /// The token-level twin of ``queryContainsBrandToken(_:)``: every chain name (not just whether one
     /// exists) that `text` contains as a normalized substring, sorted for a deterministic order.
     ///
     /// Added for research §26 fix 1.5 — `DishTemplateLexicon` needs to name WHICH chain a description
@@ -90,9 +90,9 @@ public nonisolated enum FoodBrandLexicon {
     /// be silently missed while the incidentally-already-collapsed spelling worked. This also checks a
     /// possessive-collapsed form of `text` (a lone "s" token folded back onto the word before it —
     /// "mcdonald" + "s" → "mcdonalds") in addition to the plain normalized form.
-    /// ``queryContainsBrandToken`` now reads the same way (roadmap G1, F11, 2026-11-13: §37 Q7's
+    /// ``queryContainsBrandToken(_:)`` now reads the same way (roadmap G1, F11, 2026-11-13: §37 Q7's
     /// token-boundary question, answered as "words, not substrings"); both go through
-    /// ``namedChains(in:)``, which also keeps "chipotle" and "chilis" as food words unless the text
+    /// `namedChains(in:)`, which also keeps "chipotle" and "chilis" as food words unless the text
     /// reads as the restaurant.
     ///
     /// **Widened again, same review, the Lm-apostrophe finding.** U+2019/U+2018 (the curly "smart
@@ -154,7 +154,7 @@ public nonisolated enum FoodBrandLexicon {
 /// what keeps this option (a) — data type still outranks the score everywhere. Fix 1.9 then added
 /// step 1a ABOVE all of them, and only for callers that hand in a non-empty ``FoodSearchHistory``.
 /// 1. the hard match gate — every *search token* must equal-or-prefix some indexed token, where the
-///    search tokens are stopword-filtered by position (fix 1.6, see ``searchTokens(in:)``);
+///    search tokens are stopword-filtered by position (fix 1.6, see ``searchTokens(in:stripsStopwords:)``);
 /// 1a. **the history tier** — a food this person has logged outranks one they have not, and among
 ///    logged foods the `log(1 + count)` × recency-decayed weight orders them (fix 1.9, see
 ///    ``FoodSearchHistory``). It sits above `sourcePriority`, which is §14's published hierarchy
@@ -180,12 +180,12 @@ public nonisolated enum FoodBrandLexicon {
 ///    preparation and form-specificity biases), then the name as a final tie-break;
 /// 4. **the search floor** — a row whose NAME does not carry every search token is dropped rather
 ///    than presented undifferentiated beside real hits, AND it must clear ``minimumBindScore``
-///    (fix 1.8's two halves — see ``nameCarriesQuery(_:query:)``). Applied during scoring, so a
+///    (fix 1.8's two halves — see ``nameCarriesQuery(_:query:stripsStopwords:)``). Applied during scoring, so a
 ///    floored row never enters the ranking at all;
 /// 5. **prepared-dish demotion** — for a query whose head noun is not a dish word, assembled dishes
 ///    sink below the raw ingredients, but only below ingredients that match at least as well
 ///    (fix 1.7a, see ``PreparedDishHeuristic/demotingDishes(scored:forQuery:)``). Applied to a
-///    bounded window (``demotionWindow``) BEFORE the caller's `limit`, so it can surface a row the
+///    bounded window (`demotionWindow`) BEFORE the caller's `limit`, so it can surface a row the
 ///    top-6 truncation would otherwise have hidden, without paying a per-keystroke cost over the
 ///    whole result set.
 ///
@@ -425,7 +425,7 @@ public nonisolated enum FoodItemSearch {
     ///
     /// A pool is a CANDIDATE set. Its rows join the answer only when ``FoodBrandAgreement`` reads the
     /// run as the typed brand, counting these rows, so a generic first word ("turkey burger") adds
-    /// nothing. ``FoodCatalog`` builds at most ``FoodBrandAgreement/maximumRunWords`` pools, each capped.
+    /// nothing. `FoodCatalog` builds at most ``FoodBrandAgreement/maximumRunWords`` pools, each capped.
     public struct BrandFieldPool: Sendable {
         /// The leading brand run, in query order.
         public let run: [String]
@@ -471,7 +471,7 @@ public nonisolated enum FoodItemSearch {
     ///
     /// * `tokens` — stopword-stripped, so `bowl of oatmeal` reaches the 690 `oatmeal` rows instead of
     ///   AND-ing an `of*` term nothing satisfies. `BundledFoodStore` builds its FTS5 MATCH expression
-    ///   from the same ``searchTokens(in:)``, so the retrieval gate and this scorer's gate stay the
+    ///   from the same ``searchTokens(in:stripsStopwords:)``, so the retrieval gate and this scorer's gate stay the
     ///   identical set (the "FTS gate == scorer gate" invariant).
     /// * `effective` — the tokens rejoined, so the exact / prefix / substring name bonuses and the
     ///   length penalty are measured against what was actually searched for. Without it every row for
@@ -536,6 +536,10 @@ public nonisolated enum FoodItemSearch {
         )
     }
 
+    /// - Parameter query: The text to search for, as typed or as a resolver sub-phrase.
+    /// - Parameter index: The prepared catalog rows to search.
+    /// - Parameter limit: The most rows to return; zero or less returns none.
+    /// - Parameter now: The moment the history tier measures recency from.
     /// - Parameter stripsStopwords: Whether fix 1.6's position-based stopword filter applies.
     ///   **True only for a query a PERSON TYPED.** `FoodSelectionCandidateBuilder.searchPhrases`
     ///   already decomposes a description into overlapping 3/2/1-word sub-phrases, which is its own
@@ -575,7 +579,7 @@ public nonisolated enum FoodItemSearch {
 
     /// Bounded leave-one-out fallback for a typed query whose normal AND result was empty.
     ///
-    /// This deliberately does NOT feed ``scoredResults`` or resolver candidates: a row missing a
+    /// This deliberately does NOT feed ``scoredResults(for:in:limit:stripsStopwords:)`` or resolver candidates: a row missing a
     /// token is a discovery aid, not evidence strong enough to bind or auto-commit. Callers must
     /// first run the ordinary gate and pass only the fetched fallback candidates here.
     public static func partialResults(
@@ -612,12 +616,12 @@ public nonisolated enum FoodItemSearch {
     }
 
     /// The first `limit` ranked rows with fix 1.7a's dish demotion applied to the first
-    /// ``demotionWindow`` of them. Rows past the window follow in ranked order, untouched: a caller
+    /// `demotionWindow` of them. Rows past the window follow in ranked order, untouched: a caller
     /// asking for more than the window (the typed surface's duplicate collapse, roadmap G1, which reads
     /// past 60 rows when one product fills them, as 53 "Candy Corn" rows did) gets the same top 60 as
     /// every other caller. R2: bounded by `limit`.
     ///
-    /// The window counts ``demotionWindow`` rows that are NOT generic-layer rows
+    /// The window counts `demotionWindow` rows that are NOT generic-layer rows
     /// (`.supplementalReference`, 2026-11-13), and carries every layer row ranked among them: the
     /// layers rank above branded data, so counted they pushed the branded rows that set the window's
     /// best ingredient score out of it, and "salmon" stopped sinking "Salmon nuggets, breaded".
@@ -630,7 +634,7 @@ public nonisolated enum FoodItemSearch {
         return Array((demoted + rest).prefix(limit))
     }
 
-    /// How many leading rows of `ranked` hold ``demotionWindow`` non-layer rows (see
+    /// How many leading rows of `ranked` hold `demotionWindow` non-layer rows (see
     /// `demotingWindow`). R2: one bounded pass over `ranked`.
     private static func windowLength(of ranked: [(foodItem: FoodItem, score: Int)]) -> Int {
         var counted = 0
@@ -664,7 +668,7 @@ public nonisolated enum FoodItemSearch {
     /// so callers can apply a confidence floor (e.g. drop weak binds, flag low-confidence matches).
     ///
     /// Every returned row already carries every search token in its NAME (fix 1.8's floor,
-    /// ``nameCarriesQuery(_:query:)``), so a caller's own `minimumBindScore` check now sits on top of
+    /// ``nameCarriesQuery(_:query:stripsStopwords:)``), so a caller's own `minimumBindScore` check now sits on top of
     /// a name-signal guarantee rather than being the only thing standing between a tag-only match and
     /// a logged meal.
     ///
@@ -825,9 +829,12 @@ public nonisolated enum FoodItemSearch {
         }
     }
 
-    /// ``carries(_:nameTokens:name:)`` over a raw name, for callers that hold a food rather than an
-    /// index entry (the corpus instrument asserts the RULE with this, not a pinned row list).
+    /// The retrieval floor's carriage rule (the private `carries(_:nameTokens:name:)`) over a raw name,
+    /// for callers that hold a food rather than an index entry (the corpus instrument asserts the RULE
+    /// with this, not a pinned row list).
     ///
+    /// - Parameter name: The food's name, normalized here before the check.
+    /// - Parameter query: The search text whose tokens the name must carry.
     /// - Parameter stripsStopwords: Must match the call that produced the row. It defaults to `true`
     ///   (the typed-query surface) and the default is a TRAP for anyone checking a row that came back
     ///   from a `stripsStopwords: false` search: tested with stripping on, "cheese pizza slice" asks
@@ -845,7 +852,7 @@ public nonisolated enum FoodItemSearch {
     ///
     /// A stricter question than ``nameCarriesQuery(_:query:stripsStopwords:)``, and asked for a
     /// different purpose. Carriage is the RETRIEVAL floor and deliberately accepts a word found inside
-    /// a longer one ("burger" in *Hamburger, NFS*, see ``carries(_:nameTokens:name:)``), and the
+    /// a longer one ("burger" in *Hamburger, NFS*, see `carries(_:nameTokens:name:)`), and the
     /// scorer's +500 prefix / +250 substring bonuses reward it the same way — so a row can clear
     /// ``confidentBindScore`` on a word it never says. `apple` scores *APPLEBEE'S, chili* 749, because
     /// the brand begins with the five letters. This is what a CONFIDENCE stamp must also ask: did the
@@ -1236,7 +1243,7 @@ public nonisolated enum FoodItemSearch {
     /// `form*` prefix term by FTS, so the two paths stay in lockstep: a food token passes iff some
     /// variant is a prefix of it, exactly what `form*` matches in the index.
     ///
-    /// A consonant-"y" singular adds its "-ies" plural (``iesPlural(of:)``: "strawberry" →
+    /// A consonant-"y" singular adds its "-ies" plural (`iesPlural(of:)`: "strawberry" →
     /// "strawberries"), the one regular plural its own `form*` prefix does not reach.
     ///
     /// In an active ``LanguagePack``'s language its plural rules add their singulars too (Spanish

@@ -443,7 +443,7 @@ enum DishTemplateLexicon {
     /// Verbatim, AS-TYPED chips for the brand/retailer tokens `itemName` names that `matchedKey` —
     /// the template name/alias that actually matched it — does not account for (research §26 fix 1.5).
     ///
-    /// `matchedKey` equals ``FoodItemSearch/normalized(_:)`` of `itemName` exactly for an exact-key
+    /// `matchedKey` equals `FoodItemSearch.normalized(_:)` of `itemName` exactly for an exact-key
     /// match, so a template whose OWN alias names a chain ("chipotle bowl") never false-positives: the
     /// token is inside the key by construction. It is only ever a strict prefix/substring of the
     /// normalized item for a longest-substring match, which is the one case where typed text can
@@ -451,14 +451,14 @@ enum DishTemplateLexicon {
     ///
     /// Reuses ``FoodProductWebSearch/retailerTerms`` (store/grocer names — verified possessive-safe:
     /// "trader joe" already matches "trader joe's" as a plain substring with no collapsing needed) and
-    /// ``FoodBrandLexicon/matchedChainTokens(in:)`` (restaurant chains, possessive-aware as of the
+    /// `FoodBrandLexicon.matchedChainTokens(in:)` (restaurant chains, possessive-aware as of the
     /// review's finding F1) rather than a third parallel list. Returns each match's ORIGINAL substring
     /// out of `itemName` — not the lexicon's own spelling — so "Wendy's" surfaces as "Wendy's", not a
     /// sentence-cased "Wendys" (review finding F3, which also dissolves finding F8: `retailerTerms`
     /// stays undisplayed matching-input English, because what reaches the screen is the user's own
     /// text, never the lexicon term). Chain matching is by whole words since roadmap G1 (F11,
     /// 2026-11-13), and "chipotle" the pepper or "chilis" the vegetable no longer read as the chain
-    /// unless the text reads as the restaurant (``FoodBrandLexicon/matchedChainTokens(in:)``).
+    /// unless the text reads as the restaurant (`FoodBrandLexicon.matchedChainTokens(in:)`).
     static func unaccountedBrandChips(itemName: String, matchedKey: String) -> [String] {
         let itemNorm = FoodItemSearch.normalized(itemName)
         var terms: [String] = []
