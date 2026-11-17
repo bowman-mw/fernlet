@@ -4056,6 +4056,9 @@ struct LocalizationBoundaryTests {
                      source: "The road trip's summary card, VoiceOver: the towns passed ('1 town')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "roadTrip.passport.count",
                      source: "Sprout's passport Road trips page: the road trips ('1 road trip')"),
+        // Ferry and train paths (2026-11-16): the worn way sheet's header, which would read "used 1 times".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "wornWay.sheet.used",
+                     source: "The worn way sheet's header: the trips along the path ('used 1 time')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

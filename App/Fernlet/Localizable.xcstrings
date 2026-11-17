@@ -105909,6 +105909,954 @@
         }
       }
     },
+    "wornTransit.ask.busOrCar" : {
+      "comment" : "Home: answer that the ride guessed as a train went by road",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bus or car"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autobús o coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camión o carro"
+          }
+        }
+      }
+    },
+    "wornTransit.ask.carOrBus" : {
+      "comment" : "Home: answer that the ride guessed as a ferry went by road",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Car or bus"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coche o autobús"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carro o camión"
+          }
+        }
+      }
+    },
+    "wornTransit.ask.ferry" : {
+      "comment" : "Home: answer that the ride asked about was a ferry or another boat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ferry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ferri"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ferry"
+          }
+        }
+      }
+    },
+    "wornTransit.ask.ferryQuestion" : {
+      "comment" : "Home: asks whether the ride that just ended was on a ferry or another boat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Was that a ferry?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Era un ferri?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Era un ferry?"
+          }
+        }
+      }
+    },
+    "wornTransit.ask.keptFerry" : {
+      "comment" : "Spoken after answering Home's question: the ride is now a ferry ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept as a ferry ride."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado como viaje en ferri."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado como viaje en ferry."
+          }
+        }
+      }
+    },
+    "wornTransit.ask.keptRoad" : {
+      "comment" : "Spoken after answering Home's question: the ride went by road",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept as a road trip."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado como viaje por carretera."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado como viaje por carretera."
+          }
+        }
+      }
+    },
+    "wornTransit.ask.keptTrain" : {
+      "comment" : "Spoken after answering Home's question: the ride is now a train ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kept as a train ride."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado como viaje en tren."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado como viaje en tren."
+          }
+        }
+      }
+    },
+    "wornTransit.ask.line" : {
+      "comment" : "Home: under the question whether a ride was a train or a ferry",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your answer sets how that ride shows on your map."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu respuesta decide cómo se ve ese viaje en tu mapa."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu respuesta decide cómo se ve ese viaje en tu mapa."
+          }
+        }
+      }
+    },
+    "wornTransit.ask.notSure" : {
+      "comment" : "Home: answer to the train or ferry question; keeps the guess",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not sure"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No lo sé"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No sé"
+          }
+        }
+      }
+    },
+    "wornTransit.ask.train" : {
+      "comment" : "Home: answer that the ride asked about was a train",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Train"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tren"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tren"
+          }
+        }
+      }
+    },
+    "wornTransit.ask.trainQuestion" : {
+      "comment" : "Home: asks whether the ride that just ended was on a train",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Was that a train?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Era un tren?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Era un tren?"
+          }
+        }
+      }
+    },
+    "wornWay.kind.road" : {
+      "comment" : "Worn way sheet: under a kept ride's date, the ride went by road",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Road"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carretera"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carretera"
+          }
+        }
+      }
+    },
+    "wornWay.nearby.away" : {
+      "comment" : "Paths near you: how far a worn path is from the person, e.g. '650 ft away'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ away"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a %@"
+          }
+        }
+      }
+    },
+    "wornWay.nearby.none" : {
+      "comment" : "Spoken when Paths near you finds no worn road, railway or ferry route nearby",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No worn paths near you."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay caminos frecuentes cerca de ti."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay caminos frecuentes cerca de ti."
+          }
+        }
+      }
+    },
+    "wornWay.nearby.title" : {
+      "comment" : "Home: VoiceOver action on the companion, and the sheet listing worn roads, railways and ferry routes nearby",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Paths near you"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caminos cerca de ti"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caminos cerca de ti"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.change" : {
+      "comment" : "Worn way sheet: menu on one ride to change what it was",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.changeRide" : {
+      "comment" : "Worn way sheet: VoiceOver label for one ride's change menu",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change this ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar este viaje"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar este viaje"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forget" : {
+      "comment" : "Worn way sheet: destructive button on one ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetPath" : {
+      "comment" : "Worn way sheet: destructive button that forgets every ride along this path",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget this path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar este camino"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar este camino"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetPathBody" : {
+      "comment" : "Worn way sheet: confirmation message before forgetting a path",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Every ride kept along it is forgotten, and it comes off your map. This can't be undone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se olvidan todos los viajes guardados por él y desaparece de tu mapa. No se puede deshacer."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se olvidan todos los viajes guardados por él y desaparece de tu mapa. No se puede deshacer."
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetPathConfirm" : {
+      "comment" : "Worn way sheet: destructive confirmation button for forgetting a path",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar camino"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar camino"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetPathTitle" : {
+      "comment" : "Worn way sheet: confirmation title before forgetting a path",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget this path?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Olvidar este camino?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Olvidar este camino?"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetRide" : {
+      "comment" : "Worn way sheet: VoiceOver label for one ride's Forget button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget this ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar este viaje"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar este viaje"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetRideBody" : {
+      "comment" : "Worn way sheet: confirmation message before forgetting one ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Its record is deleted and it comes off your map. This can't be undone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se borra su registro y desaparece de tu mapa. No se puede deshacer."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se borra su registro y desaparece de tu mapa. No se puede deshacer."
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetRideConfirm" : {
+      "comment" : "Worn way sheet: destructive confirmation button for forgetting one ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar viaje"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidar viaje"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgetRideTitle" : {
+      "comment" : "Worn way sheet: confirmation title before forgetting one ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget this ride?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Olvidar este viaje?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Olvidar este viaje?"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.forgotten" : {
+      "comment" : "Spoken after a path or a ride is forgotten",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forgotten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Olvidado."
+          }
+        }
+      }
+    },
+    "wornWay.sheet.last" : {
+      "comment" : "Worn way sheet header, last part: when the path was last used, e.g. 'last 3 days ago', 'last yesterday'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el último %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el último %@"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.noRides" : {
+      "comment" : "Worn way sheet: no ride records through this spot (counted before rides were kept)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No rides are kept here yet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay viajes guardados aquí."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía no hay viajes guardados aquí."
+          }
+        }
+      }
+    },
+    "wornWay.sheet.rides" : {
+      "comment" : "Worn way sheet: header over the list of kept rides through the tapped spot",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rides through here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viajes por aquí"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viajes por aquí"
+          }
+        }
+      }
+    },
+    "wornWay.sheet.used" : {
+      "comment" : "Worn way sheet header, middle part: how many kept trips have used this path",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "used %lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "used %lld times"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viaje"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viajes"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viaje"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld viajes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "wornWay.sheet.wholePath" : {
+      "comment" : "Worn way sheet: header over the fixes for the whole path",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este camino"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este camino"
+          }
+        }
+      }
+    },
+    "wornWay.thisWas.ferry" : {
+      "comment" : "Worn way sheet: changes the path, or one ride, to a ferry or boat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was a ferry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Era un ferri"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Era un ferry"
+          }
+        }
+      }
+    },
+    "wornWay.thisWas.rail" : {
+      "comment" : "Worn way sheet: changes the path, or one ride, to a train",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was a train"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Era un tren"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Era un tren"
+          }
+        }
+      }
+    },
+    "wornWay.thisWas.road" : {
+      "comment" : "Worn way sheet: changes the path, or one ride, to a road (a car or a bus)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was a road"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Era por carretera"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Era por carretera"
+          }
+        }
+      }
+    },
+    "wornWay.title.ferry" : {
+      "comment" : "Worn way sheet: the name of a ferry or boat route the person's rides have worn",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ferry path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruta de ferri"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruta de ferry"
+          }
+        }
+      }
+    },
+    "wornWay.title.rail" : {
+      "comment" : "Worn way sheet: the name of a railway the person's rides have worn",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Train path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Línea de tren"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Línea de tren"
+          }
+        }
+      }
+    },
+    "wornWay.title.road" : {
+      "comment" : "Worn way sheet: the name of a road the person drives often",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Frequent road"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carretera frecuente"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carretera frecuente"
+          }
+        }
+      }
+    },
     "worryBox.error.compose" : {
       "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
       "extractionState" : "extracted_with_value",
