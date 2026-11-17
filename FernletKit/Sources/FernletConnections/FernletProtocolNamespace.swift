@@ -134,15 +134,16 @@ nonisolated extension ProximityNamespace.Signature {
 
 nonisolated extension ProximityNamespace.KeyDerivation {
 
-    /// The three HKDF salts, the QUIC channel binding's exporter label and the two sealed mesh stores'
-    /// column seals.
+    /// The four HKDF salts (the mesh dial proof's since ProximityKit 0.2.0), the QUIC channel binding's
+    /// exporter label and the two sealed mesh stores' column seals.
     public nonisolated static let fernlet = ProximityNamespace.KeyDerivation(
         proximityTransportV1: "fernlet.proximity.v1",
         meshGroupKeyWrapV1: "fernlet.mesh.groupkey.v1",
         meshTLSExporterV1: "fernlet.mesh.tls-exporter.v1",
         meshRoutedContentKeyWrapV1: "fernlet.mesh.routed.content-key.v1",
         meshSessionContextV1: "fernlet.mesh.session-context.v1",
-        meshRoutedStoreV1: "fernlet.mesh.routed-store.v1"
+        meshRoutedStoreV1: "fernlet.mesh.routed-store.v1",
+        meshDialProofV1: "fernlet.mesh.dial-proof.v1"
     )
 }
 

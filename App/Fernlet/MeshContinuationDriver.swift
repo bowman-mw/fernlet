@@ -278,6 +278,16 @@ final class MeshContinuationDriver {
         offer(.firstPeerCommitted)
     }
 
+    /// The app came back to the foreground with no task in hand (the re-arm edge, owner 2026-11-13).
+    ///
+    /// Item 4's table re-arms an ``MeshContinuationState/expired`` claim on this edge and absorbs it
+    /// everywhere else a task is not held; no row it can take ends a delivered task, so nothing is
+    /// raised. As with ``firstPeerDidCommit()``, entry into ``MeshContinuationState/requested`` IS
+    /// the submission instruction and the caller reads ``state`` after this returns.
+    func appDidReturnWithoutATask() {
+        offer(.appForegrounded)
+    }
+
     /// The system refused the request this claim submitted (item 6's refusal edge).
     ///
     /// The claim lands on ``MeshContinuationState/refused``, which is the Friends card's "this

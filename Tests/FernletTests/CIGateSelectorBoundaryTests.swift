@@ -1046,7 +1046,8 @@ import Testing
     static let releasedRevisions = [
         "0.1.0": "6648094f6acf5cb6f37ef0102f182540d83146cd",
         "0.1.1": "e09affe44af0d763478a1f84207bdad7a3d650c1",
-        "0.1.2": "c0a3ffab44ac8a8424dbd6f29775b450bce9e411"
+        "0.1.2": "c0a3ffab44ac8a8424dbd6f29775b450bce9e411",
+        "0.2.0": "11d4458eabe8b2be7b28b9f6d616b0768dfc1fd0"
     ]
 
     /// Every tag of the CryptoSwift fork Fernlet has pinned, each with the commit its tag names, under

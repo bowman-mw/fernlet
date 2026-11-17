@@ -419,6 +419,27 @@ struct MeshContinuationTaskHostTests {
         #expect(card?.kind == .expired, "and the Friends card is the expiry's")
     }
 
+    /// **An expired claim re-arms on the next return** (owner, 2026-11-13; #137 left it out): the lit
+    /// edge after an expiry submits a second request, once, and a second lit edge submits nothing.
+    @Test func anExpiredClaimSubmitsAgainOnTheNextReturnAndOnlyOnce() throws {
+        let (host, scheduler, identifier) = hostWithARequestIn()
+        let handle = FakeContinuationTaskHandle()
+        host.appForegroundDidChange(false)
+        scheduler.deliver(handle)
+        let expire = try #require(handle.expirationHandler, "the host installed no expiration handler")
+        expire()
+        #expect(host.driver.state == .expired && scheduler.submitted.count == 1, "the claim expired in the background")
+
+        host.appForegroundDidChange(true)
+        #expect(scheduler.submitted.count == 2, "the return asked for the session's background time again")
+        #expect(scheduler.submitted.last?.identifier == identifier, "for the same mesh's identifier")
+        #expect(host.driver.state == .requested, "the claim is in again")
+        #expect(store.meshContinuationLastAudit == .rearmed, "named by the re-arm's own token")
+
+        host.appForegroundDidChange(true)
+        #expect(scheduler.submitted.count == 2, "a second lit edge is absorbed: one return, one request")
+    }
+
     /// A session ending completes the task `succeeded` and withdraws any pending request.
     @Test func theSessionEndingCompletesTheTaskSucceededAndWithdrawsTheRequest() {
         let (host, scheduler, identifier) = hostWithARequestIn()

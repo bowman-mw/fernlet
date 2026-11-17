@@ -124,7 +124,12 @@ its public API at that tag. **2026-10-17:** Fernlet pins `0.1.1`, a fix release 
 public API and added two (`ProximityPairSession.inspector`, `init(host:profile:inspector:)`). **2026-10-31:** Fernlet
 pins `0.1.2`, which added the tap rendezvous (`ProximityTapRendezvous` and its types),
 `MeshNetworkManager.admissibleStrangerSigningKeys` and the mesh responder's withheld hello, and removed or changed no
-public API, so "that tag" is `0.1.2`.
+public API. **2026-11-15:** Fernlet pins `0.2.0` (roadmap G5, mesh privacy): the pair radio advertises no name
+unless `ProximityPairSession.setNameDisclosure(toEveryone:friendTags:)` says so and names friends by
+`resolveFriendName`; the mesh dial proof runs before the hello (`MeshNetworkManager.dialProofPeerKeyAgreementKeys`,
+`IdentityService.meshDialProofKey(with:)`, the namespace's `KeyDerivation.meshDialProofV1`, introduction
+protocol version 2, so 0.1.x and 0.2.0 phones do not meet on the mesh); the mesh `sid` rotates with the posture;
+and the `recipe.quic.*` tokens are `pair.quic.*`. So "that tag" is `0.2.0`.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
@@ -368,7 +373,7 @@ holds each radio to the namespace it is built from (group 12).
 | `NetworkMeshSession.init(namespace:)` | Keeps `serviceType`, `alpn`, `heartbeatDatagram`, `tlsExporterLabel`, `purposes` and `namespaceSoundness` as `nonisolated let`s and a private instance `Logger` (`proximity.transport.quic`); `connectionParameters()` and `listenerParameters(identity:)` are instance methods reading the instance ALPN. |
 | `NetworkMeshSession.channelBindingHash(for:exporterLabel:)` | SHA-256 of the connection's TLS exporter secret under the label it is handed, whole (role `.tlsExporterLabel`); its one caller hands it the radio's `tlsExporterLabel`. |
 | `NetworkPresenceSession.init(namespace:)` / `NetworkPairSession.init(namespace:profile:)` | Keep `serviceType` and `alpn` from `family.radios.presence` / the profile's `radio` (Fernlet's recipe profile: `family.radios.pair`), the recipe radio also the profile's `advertisementMode`, `namespaceSoundness`, and a private instance `Logger`. |
-| `NetworkMeshSession.start(discoveryInfo:)` / `NetworkPresenceSession.start(posture:discoveryInfo:)` / `NetworkPairSession.start(advertisement:)` | Refuse first under an unsound namespace: `ProximityNamespaceGate.refuseUnsound(namespaceSoundness, …, at: .start)` throws and audits `mesh.quic.namespaceUnsound` / `presence.quic.namespaceUnsound` / `recipe.quic.namespaceUnsound` before anything is minted, listened on or advertised. |
+| `NetworkMeshSession.start(discoveryInfo:)` / `NetworkPresenceSession.start(posture:discoveryInfo:)` / `NetworkPairSession.start(advertisement:)` | Refuse first under an unsound namespace: `ProximityNamespaceGate.refuseUnsound(namespaceSoundness, …, at: .start)` throws and audits `mesh.quic.namespaceUnsound` / `presence.quic.namespaceUnsound` / `pair.quic.namespaceUnsound` before anything is minted, listened on or advertised. |
 | `MeshNetworkManager.init` / `ProximityPairSession.init` / `ProximityPresenceSession.makeRadio` | Build their radio from the stored `namespace` (the pair session with its profile); the presence engine's `makeRadio` is set in its `init`, a closure capturing the `Sendable` value. |
 
 ### At rest: names, rows and scopes
@@ -1293,6 +1298,7 @@ Presence's derivations, as extensions of ProximityKit's `IdentityService` with t
 | --- | --- |
 | `presencePairSecret(with:)` | The pair secret both friends derive: `IdentityService.pairSecret(with:purpose:)` under `FernletFeaturePurposes.presencePairV1` (`fernlet.presence.tag.v1`). Throws `notProvisioned` first when the identity holds no key-agreement key, then `invalidKeyData` for a friend key that is not a raw X25519 key, then the door's own. |
 | `presenceTag(for:epoch:)` | The rotating tag one friend pair advertises and matches by: HMAC-SHA256 keyed by the pair secret over `fernlet.presence.epoch.v1` ‖ be64(epoch) (through `TagCounterBytes`), its first `presenceTagByteCount` bytes. Both members of a pair derive the same tag for an epoch; the epoch is ProximityKit's `IdentityService.presenceEpoch(at:)`. |
+| `recipeFriendTag(for:epoch:)` | The recipe radio's friend tag (SEC-L29, ProximityKit 0.2.0): the same pair secret over `fernlet.recipe.friend.epoch.v1` ‖ be64(epoch), its first `presenceTagByteCount` bytes. Mutual and per epoch like the presence tag, and never equal to it, so the two radios' records share no token. |
 | `IdentityService.presenceTagByteCount` | 8: the truncated tag's length, 12 base64 characters on the air, which keeps a 24-tag roster inside the TXT budget. `nonisolated`. |
 
 ### `FernletSocial/Presence/FriendStateCache.swift`
@@ -1406,7 +1412,10 @@ run. Its own state is the diagnostics ring and the inbound queue.
 | `ProximityRecipeShareDiagnosticEvent.init(...)` | Creates a timestamped diagnostic event. |
 | `ProximityRecipeShareDiagnostics.appending(_:to:maxCount:)` | Appends and caps diagnostics to the newest events (presence's connection log rides it too). |
 | `init(store:)` / `init(pairSession:)` | `init(store:)` builds the pair session over the host under `ProximityPairProfile.recipeShare(in: store.proximityNamespace)`; `init(pairSession:)` (internal) takes a built one and makes this manager its `payloadHandler` and its event sink (`onEvent`, capturing the manager weakly: the manager holds the session), each event rendered by `diagnostic(for:)` and appended synchronously. The test target's `init(store:makeSession:identity:)` restores the seam shape over the session's. |
-| `start()` / `stop()` / `refreshDiscovery()` / `wipeIdentityForDeleteAll()` | The pair session's. |
+| `start()` / `stop()` / `refreshDiscovery()` / `wipeIdentityForDeleteAll()` | The pair session's. Since ProximityKit 0.2.0 `start()` first applies this epoch's name disclosure (`refreshNameDisclosure(at:)`) and arms its rotation, and `stop()` cancels it. |
+| `applyNameDisclosure(toEveryone:friends:identity:at:)` | SEC-L29 (owner 2026-11-13, option c): derives one `recipeFriendTag` per kept friend (presence's eligibility rule, at most `maxAdvertisedFriendTags`, most recently seen first) for the session to advertise in place of the name, and the matching map, the epoch beside this one on either side, that names a browsed record; hands both and the switch to `ProximityPairSession.setNameDisclosure(toEveryone:friendTags:)`. |
+| `NameDisclosureInputs` / `nameDisclosureInputs` / `refreshNameDisclosure(at:)` | The host's source of the switch, the trust vault and the identity (`FernletStore.recipeNameDisclosureInputs()`), and the re-read the store calls when the switch or the roster changes. A 900 s rotation loop (`maxRotationStepSeconds` 30 s steps) calls it while the radio runs. |
+| `friendName(matching:)` / `advertisesNameToEveryone` | The session's `resolveFriendName`: the kept friend's name one of a record's tags names, or nil; and the session's account of the switch. |
 | `sendRecipeShare(_:to:)` | Hands the session `PayloadType.recipeShare`'s token, the summary `Recipe share` over the recipe's ingredient count (DO NOT LOCALIZE: signed into the canonical bytes and shown in the receiver's inspector), the recipe's title as the subject, and an encoder (a default `JSONEncoder`) the session runs when the pairing verifies. |
 | `dismissRecipeShare(_:)` / `dismissRecipeShare(id:)` | Removes a pending inbound share. |
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | The session's payload handler: accepts `recipeShare` envelopes under a 1 MiB size gate before decoding, the format and version check, the 512 KiB image drop and the review clamps, a 3 s per-sender rate limit (keyed by the raw fingerprint) and an eight-share queue, and records its own four diagnostic lines. |

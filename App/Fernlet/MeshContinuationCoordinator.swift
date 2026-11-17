@@ -219,6 +219,9 @@ nonisolated enum MeshContinuationAudit: String, Equatable, Sendable, CaseIterabl
     /// The claim ended on the app's terms — the session finished, or the foreground took over.
     case completed = "mesh.continuation.completed"
 
+    /// The app came back after a delivered task expired: the claim is asked for again.
+    case rearmed = "mesh.continuation.rearmed"
+
     /// A new mesh replaced the one the claim belonged to; a stale delivered task is completed first.
     case meshChanged = "mesh.continuation.meshChanged"
 
@@ -360,8 +363,16 @@ nonisolated enum MeshContinuationCoordinator {
 
     /// A spent claim — refused, or a delivered task that ended.
     ///
-    /// Both absorb ``MeshContinuationEvent/appForegrounded``: the card is READ in the foreground, and
-    /// clearing the state on a foreground edge would make it unreachable.
+    /// A refused claim absorbs ``MeshContinuationEvent/appForegrounded``: the card is READ in the
+    /// foreground, and clearing the state on a foreground edge would make it unreachable, and a request
+    /// the system refused once would only be refused again.
+    ///
+    /// **An expired claim re-arms on it** (owner, 2026-11-13; #137 left it out): a delivered task that
+    /// ended in the background is a grant the system already made once, so the next return submits
+    /// again, through ``MeshContinuationState/requested`` exactly as the running row's foreground edge
+    /// does, under the task host's per-session submission cap. Before this a session was
+    /// foreground-only for the rest of its life after one expiry, because every other event this state
+    /// takes is absorbed. Its token is ``MeshContinuationAudit/rearmed``.
     ///
     /// ``MeshContinuationEvent/sessionEnded`` lands on ``MeshContinuationState/completed`` here as it
     /// does everywhere else, and no completion fires: `completed` is the terminal after a session
@@ -384,6 +395,7 @@ nonisolated enum MeshContinuationCoordinator {
         case .meshStarted: return outcome(.idle, .meshChanged)
         case .taskStarted: return outcome(.running, .started)
         case .sessionEnded: return outcome(.completed, .completed)
+        case .appForegrounded where state == .expired: return outcome(.requested, .rearmed)
         case .firstPeerCommitted, .taskRefused, .taskExpired, .taskCancelled, .appForegrounded:
             return outcome(state, .absorbed)
         }

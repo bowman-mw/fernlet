@@ -2529,8 +2529,13 @@ struct ProximityVocabularyGoldenTests {
     /// A0.7.3 its pair session's, `ProximityRecipeShareManager(store: host).pairSession.discoveryInfoForTesting`,
     /// the production builder (read on the session directly, never through a test binding); until then
     /// the manager's own.
+    ///
+    /// Since ProximityKit 0.2.0 (SEC-L29) the record names the device only under the person's opt-in,
+    /// so the manager is opted in first: the cap is what this reads, and the cap binds the opt-in's name.
     static func recipeAdvertisedFields(host: any ProximityHost) -> [String: String] {
-        ProximityRecipeShareManager(store: host).pairSession.discoveryInfoForTesting
+        let manager = ProximityRecipeShareManager(store: host)
+        manager.pairSession.setNameDisclosure(toEveryone: true, friendTags: [])
+        return manager.pairSession.discoveryInfoForTesting
     }
 
     /// The radio a recipe-share manager over `host` builds: since plan step A0.7.3 its pair session's,
@@ -2585,6 +2590,12 @@ struct ProximityVocabularyGoldenTests {
         #expect(wide.count == 1 && wide.utf8.count == 81, "the wide name is \(wide.count) graphemes, \(wide.utf8.count) bytes")
         let unnamed = recipeAdvertisedFields(host: PresentationNamespaceHost(namespace: .fernlet, displayName: wide))
         #expect(unnamed == ["v": "1", "mode": "recipe"], "a name no TXT value can carry was advertised as \(unnamed)")
+        // SEC-L29 (ProximityKit 0.2.0): without the person's opt-in the record names nobody.
+        let host = PresentationNamespaceHost(namespace: .fernlet, displayName: "Alex")
+        let quiet = withExtendedLifetime(host) {   // the session's `store` is `unowned`
+            ProximityRecipeShareManager(store: host).pairSession.discoveryInfoForTesting
+        }
+        #expect(quiet == ["v": "1", "mode": "recipe"], "the default record names the device: \(quiet)")
     }
 
     /// 15a's join: the radio's published record for Alex's fields plus `fp` is the four fields with its
@@ -2635,9 +2646,9 @@ struct ProximityVocabularyGoldenTests {
         #expect(radio?.alpn == "fernlet-recipe-v1", "the manager's radio binds \(radio?.alpn ?? "nothing")")
     }
 
-    /// 15a's sighting: one `recipe.quic.sighted` line per browsed record, its `recipe` context `true` for
+    /// 15a's sighting: one `pair.quic.sighted` line per browsed record, its `recipe` context `true` for
     /// a recipe advertisement and `false` for another mode. The capture is process-global and other
-    /// suites write `recipe.quic.*` lines, so each record is browsed under an instance name no other
+    /// suites write `pair.quic.*` lines, so each record is browsed under an instance name no other
     /// suite uses, and only the lines whose `peer` is this radio's salted label for that key count.
     static func expectRecipeSightingContext() {
         let radio = recipeRadio(namespace: .fernlet)
@@ -2652,8 +2663,8 @@ struct ProximityVocabularyGoldenTests {
             let key = MeshLinkKey("\(row.name).\(radio.serviceType).local.")
             radio.noteBrowsedForTesting(key, instanceName: row.name, advertisement: ["v": "1", "mode": row.mode, "sid": "abc"])
             let label = radio.peerLabel(for: key)
-            let lines = capture.count(of: "recipe.quic.sighted", where: { $0["peer"] == label })
-            let marked = capture.count(of: "recipe.quic.sighted", where: { $0["peer"] == label && $0["recipe"] == row.recipe })
+            let lines = capture.count(of: "pair.quic.sighted", where: { $0["peer"] == label })
+            let marked = capture.count(of: "pair.quic.sighted", where: { $0["peer"] == label && $0["recipe"] == row.recipe })
             #expect(lines == 1 && marked == 1, "a `\(row.mode)` record was sighted \(lines) times, \(marked) with recipe=\(row.recipe)")
         }
     }

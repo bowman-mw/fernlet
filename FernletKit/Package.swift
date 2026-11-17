@@ -64,7 +64,7 @@ let package = Package(
         // (CIGateSelectorBoundaryTests holds both Package.resolved files to the same pin). It depends on
         // nothing; FernletProximityUI, FernletConnections and FernletSocial depend on its product, never
         // the reverse.
-        .package(url: "https://github.com/bowman-mw/proximitykit", exact: "0.1.2"),
+        .package(url: "https://github.com/bowman-mw/proximitykit", exact: "0.2.0"),
     ],
     targets: [
         .target(

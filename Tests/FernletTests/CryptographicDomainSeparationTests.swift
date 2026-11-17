@@ -97,6 +97,7 @@ struct CryptographicDomainSeparationTests {
         Domain("KeyDerivation.meshRoutedContentKeyWrapV1", FernletCryptoPurpose.KeyDerivation.meshRoutedContentKeyWrapV1),
         Domain("KeyDerivation.meshSessionContextV1", FernletCryptoPurpose.KeyDerivation.meshSessionContextV1),
         Domain("KeyDerivation.meshRoutedStoreV1", FernletCryptoPurpose.KeyDerivation.meshRoutedStoreV1),
+        Domain("KeyDerivation.meshDialProofV1", FernletCryptoPurpose.KeyDerivation.meshDialProofV1),
         Domain("KeyDerivation.heartDropOuterSealV1", FernletCryptoPurpose.KeyDerivation.heartDropOuterSealV1),
         Domain("KeyDerivation.lockScryptWrappingV1", FernletCryptoPurpose.KeyDerivation.lockScryptWrappingV1),
         Domain("KeyDerivation.journalNarrativeLegacyV1", FernletCryptoPurpose.KeyDerivation.journalNarrativeLegacyV1),
@@ -108,6 +109,7 @@ struct CryptographicDomainSeparationTests {
         // HMAC
         Domain("HMAC.heartDropDayTagV1", FernletCryptoPurpose.HMAC.heartDropDayTagV1),
         Domain("HMAC.presenceEpochTagV1", FernletCryptoPurpose.HMAC.presenceEpochTagV1),
+        Domain("HMAC.recipeFriendEpochTagV1", FernletCryptoPurpose.HMAC.recipeFriendEpochTagV1),
         // AEAD
         Domain("AEAD.sealedBackupV2", FernletCryptoPurpose.AEAD.sealedBackupV2),
         Domain("AEAD.sealedPhotoBackupV3", FernletCryptoPurpose.AEAD.sealedPhotoBackupV3),

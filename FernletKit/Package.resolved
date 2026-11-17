@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/bowman-mw/proximitykit",
       "state" : {
-        "revision" : "c0a3ffab44ac8a8424dbd6f29775b450bce9e411",
-        "version" : "0.1.2"
+        "revision" : "11d4458eabe8b2be7b28b9f6d616b0768dfc1fd0",
+        "version" : "0.2.0"
       }
     }
   ],

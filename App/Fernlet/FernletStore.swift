@@ -348,7 +348,16 @@ final class FernletStore {
         presenter: SessionPhotoReviewOverlayPresenter(),
         saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }
     )
-    @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = ProximityRecipeShareManager(store: self)
+    @ObservationIgnored private(set) lazy var recipeShareManager: ProximityRecipeShareManager = {
+        let manager = ProximityRecipeShareManager(store: self)
+        // SEC-L29: the radio advertises no name unless the person chose it; kept friends are named by
+        // tags derived here. Weak: the store owns the manager.
+        manager.nameDisclosureInputs = { [weak self] in self?.recipeNameDisclosureInputs() }
+        return manager
+    }()
+    /// The identity the recipe radio's friend tags are derived under (SEC-L29): the app's one factory,
+    /// built once rather than per epoch.
+    @ObservationIgnored private lazy var recipeTagIdentity: IdentityService = makeProximityIdentity()
     /// Meeting someone new by tapping phones on Home (World Friends §1): the tap rendezvous, what Home
     /// draws for it, and the hand-off to the hangout mesh (`FernletStore+TapToConnect.swift`).
     @ObservationIgnored private(set) lazy var tapToConnect: TapToConnectController = makeTapToConnect()
@@ -1979,6 +1988,25 @@ final class FernletStore {
         diary.setShowProximityDebugTools(value)
     }
 
+    /// Settings › Nearby friends' "Show my name to everyone" switch (SEC-L29, owner 2026-11-13, option c):
+    /// writes the synced setting, re-derives what the recipe radio advertises at once, and schedules the
+    /// save. Off (the default), only kept friends see the name, through rotating friend tags.
+    func setAdvertiseNameToEveryoneNearby(_ value: Bool) {
+        settings.advertiseNameToEveryoneNearby = value
+        recipeShareManager.refreshNameDisclosure()
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// What the recipe radio's name disclosure reads (SEC-L29): the switch, the trust vault and the
+    /// app identity, built once.
+    func recipeNameDisclosureInputs() -> ProximityRecipeShareManager.NameDisclosureInputs {
+        ProximityRecipeShareManager.NameDisclosureInputs(
+            toEveryone: settings.advertiseNameToEveryoneNearby,
+            friends: trustedProximityPeers,
+            identity: recipeTagIdentity
+        )
+    }
+
     func setAllowNearbyRecipeShares(_ value: Bool) {
         settings.allowNearbyRecipeShares = value
         // P7 item 3: the opt-in is a run-policy INPUT. Re-running the policy here is what stops the
@@ -2432,6 +2460,9 @@ final class FernletStore {
         )
         // World Friends P1: the join doors admit kept friends and the people a tap matched, no one else.
         meshNetworkManager.admissibleStrangerSigningKeys = tapToConnect.meshDoorKeys(friends: trustedProximityPeers)
+        // ProximityKit 0.2.0: and only they can complete the dial proof that precedes the hello, so
+        // nobody else is ever sent this phone's long-term key.
+        meshNetworkManager.dialProofPeerKeyAgreementKeys = tapToConnect.meshDialProofKeys(friends: trustedProximityPeers)
         executeProximityRunActions(
             ProximityRunTransition.actions(from: previous, to: verdict, mesh: meshFacts)
         )
@@ -2555,6 +2586,7 @@ final class FernletStore {
         // The presence roster derives from the vault — pick up the new friend immediately
         // (no-op while the presence radio isn't running).
         presenceManager.refreshRoster()
+        recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
         // ONE-TIME enable prompt at the first kept friend (owner decision: presence defaults
         // off, prompted once). `hasPromptedForPresence` flips the moment the prompt is
         // requested, so it can never fire twice — even if the alert is dismissed by a
@@ -2581,6 +2613,7 @@ final class FernletStore {
         proximityTrustVault.revoke(signingPublicKey: signingPublicKey)
         forgetProximityFriendCaches(signingPublicKey: signingPublicKey)
         presenceManager.refreshRoster()
+        recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
     }
 
     func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool {
@@ -2601,12 +2634,14 @@ final class FernletStore {
         // Pairwise-DH tags mean a blocked friend's tag disappears from our broadcast (and their
         // ads stop matching) at the next roster rebuild — do that rebuild NOW.
         presenceManager.refreshRoster()
+        recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
         snapshotSaveCoordinator.schedule()
     }
 
     func unblockProximityPeer(signingPublicKey: Data) {
         proximityTrustVault.unblock(signingPublicKey: signingPublicKey)
         presenceManager.refreshRoster()
+        recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
         snapshotSaveCoordinator.schedule()
     }
 
@@ -2622,6 +2657,7 @@ final class FernletStore {
         proximityTrustVault.report(signingPublicKey: signingPublicKey, reason: reason.rawValue, blockAlso: true)
         forgetProximityFriendCaches(signingPublicKey: signingPublicKey)
         presenceManager.refreshRoster()
+        recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
         snapshotSaveCoordinator.schedule()
     }
 
@@ -2653,6 +2689,7 @@ final class FernletStore {
             proximityTrustVault.report(signingPublicKey: sellerKey, reason: reason.rawValue, blockAlso: true)
             forgetProximityFriendCaches(signingPublicKey: sellerKey)
             presenceManager.refreshRoster()
+            recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
         }
         reconcileModerationBans()
         snapshotSaveCoordinator.schedule()

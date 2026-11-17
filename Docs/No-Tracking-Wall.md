@@ -104,7 +104,7 @@ tag at the commit that tag was cut on:
 | Package | URL | Requirement | Why it may be here |
 |---|---|---|---|
 | CryptoSwift | `https://github.com/bowman-mw/CryptoSwift` | exactly `1.10.0-fernlet.2` (since 2026-10-25; up to next minor from 1.10.0 on upstream `https://github.com/krzyzanowskim/CryptoSwift` before) | `FernletLock`'s memory-hard Scrypt KDF: pure local computation, no network code. Fernlet's fork, which differs from upstream 1.10.0 in one line of `Package.swift`, the iOS floor, and the comment marking it as altered, so the app image keeps class_ro_t pointer signing ([Enhanced-Security.md](Enhanced-Security.md)); no source file differs. |
-| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.1.2` (since 2026-10-31, the tap rendezvous; `0.1.1` from 2026-10-17, `0.1.0` from plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). It names no internet host: its own no-tracking scan (`Scripts/no-tracking-scan.py` there, run by its CI's Walls step) refuses a `scheme://` literal on any code line of its sources, and a web view or in-app browser, the pasteboard and app-wide defaults there too, while `hardcodedNetworkDestinationsAreExactlyTheAllowlist` and this repository's web-view, pasteboard and persisted-surface walls read Fernlet's code only since plan step A1.3. |
+| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.2.0` (since 2026-11-15, mesh privacy; `0.1.2` from 2026-10-31, the tap rendezvous; `0.1.1` from 2026-10-17, `0.1.0` from plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). It names no internet host: its own no-tracking scan (`Scripts/no-tracking-scan.py` there, run by its CI's Walls step) refuses a `scheme://` literal on any code line of its sources, and a web view or in-app browser, the pasteboard and app-wide defaults there too, while `hardcodedNetworkDestinationsAreExactlyTheAllowlist` and this repository's web-view, pasteboard and persisted-surface walls read Fernlet's code only since plan step A1.3. |
 
 ### Two design decisions worth knowing
 
@@ -271,12 +271,12 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 | **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | ProximityKit's `Sources/ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
 | **Network.framework / QUIC** — **the friend mesh's transport**, since the cutover of 2026-09-21 (the factory it flipped left the tree with the MultipeerConnectivity radio on 2026-09-22; there is one radio now and nothing selects it); migrated per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | ProximityKit's `Sources/ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
 | **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | ProximityKit's `Sources/ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
-| **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift` | `_fernlet-recipe2._udp` |
+| **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held. Since ProximityKit 0.2.0 (SEC-L29, owner 2026-11-13) its TXT record carries **no display name** unless the person turns on Settings › Nearby friends › "Show my name to everyone" (off by default): kept friends are named from their own records by rotating pairwise tags (`recipeFriendTag`, never equal to presence's), and a stranger sees no name | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift` | `_fernlet-recipe2._udp` |
 | **Network.framework / QUIC** — **tap to connect** (World Friends, 2026-10-31): Home's tap rendezvous, ProximityKit's `ProximityTapRendezvous` on the recipe radio's pair row under its own TXT mode `tap`; listens only while Home is the front page of a foreground app with "Connect by tapping phones" on, never in the background, a decoy session, Low Power Mode or a hangout (`ProximityRunPolicy`'s `tapRendezvous` row) | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift`, driven by `Sources/ProximityKit/TapRendezvous/` | `_fernlet-recipe2._udp` (the pair row; no new type) |
 | **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
 
 The ranging session and the three QUIC radios are ProximityKit's, which Fernlet consumes from its own
-repository since plan step A1.3, at exactly `0.1.2` (§2); that repository's local-link scan permits the
+repository since plan step A1.3, at exactly `0.2.0` (§2); that repository's local-link scan permits the
 local-link API in those three files and nowhere else, and this repository's `permittedLocalLinkFiles`
 holds the DEBUG probe alone. The service types they advertise are Fernlet's: its namespace
 (`ProximityNamespace.fernlet`, in FernletConnections) supplies them, and this wall pins them in the
@@ -429,15 +429,18 @@ If the PR touches the allowlist, the reviewer's job is the `reason` string, not 
 
 A privacy claim that overstates itself is worse than none. Specifically:
 
-- **A hangout search still shows a dialer this phone's long-term signing key.** While the friend mesh
-  searches (the Album's Friends nearby page, or a tap's hand-off on Home), the side that dials sends its
-  channel hello, which carries its long-term signing key, to the advertisement it dialed, before it
-  knows who is behind it. The responder no longer answers a dialer it refuses, and the doors admit only
-  kept friends and tap matches, so nothing above the hello reaches anyone else; but a phone that
-  advertises the mesh's service type while the search is up can learn that key. The mesh's `sid` also
-  lasts the launch. Hiding the dialer's identity needs a friends-only pre-shared secret on the mesh hello
-  (as presence's tags are), which is not built. Meeting someone new does not use the mesh until both
-  people said yes.
+- **A hangout search no longer shows anyone this phone's long-term key (ProximityKit 0.2.0, owner
+  2026-11-15), but it still shows that a Fernlet is searching.** Before either side of a mesh tunnel
+  sends the hello that carries its long-term signing key, the dialer sends 24 short tags bound to that
+  one TLS connection, one for each kept friend or tap match it would accept (padded with random ones),
+  and the answering phone replies only if one of them is a pair key it shares; otherwise it closes the
+  tunnel having sent nothing, and the dialer sends its hello only after checking that reply. A phone
+  that advertises the mesh's service type therefore learns no key and nothing it can replay or link.
+  The mesh `sid` and the radio's Bonjour name and TLS identity now rotate at every search start and
+  every 15 minutes rather than lasting the launch. What remains: a nearby phone can see that a Fernlet
+  is advertising or dialing the mesh while a search is up (the service type is public), and, inside one
+  15-minute window, that it is the same one. Phones on ProximityKit 0.1.x and 0.2.0 do not meet on the
+  mesh. Design: `Docs/Mesh-Dialer-Privacy-Design.md`.
 
 - **This cannot stop a malicious fork.** Anyone can clone the repo, delete
   `NoTrackingBoundaryTests.swift`, and ship a build that phones home. The wall protects **this
