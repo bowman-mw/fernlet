@@ -92,6 +92,10 @@ final class WorldFogKeeper {
     /// Those of them only driven past, never walked, which the map draws as see-through fog (owner 2026-11-09); the
     /// history's, or in a decoy session the decoy's own.
     private(set) var drivenCells: Set<HexCell> = []
+    /// The frequent-way counter the map draws roads from (worn paths build, owner 2026-11-15): each (cell, kind)'s trips
+    /// and last day. Empty in a decoy session and after a wipe. Replaced, not mutated in place, at most once per trip
+    /// or unlock, so a view that holds it redraws rarely.
+    private(set) var wornWays: [WornWayKey: WornTally] = [:]
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
     /// The drive's last lifted reading, which the next joins; nil off a drive.
