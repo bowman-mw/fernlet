@@ -110,6 +110,14 @@ final class WorldFogKeeper {
     /// Those of them only driven past, never walked, which the map draws as see-through fog (owner 2026-11-09); the
     /// history's, or in a decoy session the decoy's own.
     private(set) var drivenCells: Set<HexCell> = []
+    /// The kept trips (ferry and train build, owner 2026-11-15: every drive-speed ride, kept until forgotten or the map
+    /// is cleared), newest first. Empty in a decoy session.
+    internal(set) var wornTrips: [WornTrip] = []
+    /// The trip Home asks about ("Was that a train?", owner's C1: at most once a day), or nil.
+    internal(set) var transitQuestion: WornTrip?
+    /// The ground under a trip (shore pack, atlas roads, rail pack) for telling a ferry or a train from a drive; set
+    /// once the packs load. Nil classifies every trip as a road.
+    @ObservationIgnored var transitGeography: (any WornTransitGeography)?
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
     /// The frequent roads the map draws: each way's trip count and last day (option B, owner 2026-11-15), published
