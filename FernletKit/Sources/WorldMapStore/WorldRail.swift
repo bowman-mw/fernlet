@@ -61,7 +61,8 @@ public nonisolated struct WorldRail: Sendable {
     public var ferryPointCount: Int { ferry.lons.count }
 
     /// Whether a rail line passes within `metres` of `point` (point-to-segment distance, the nearest one-degree cells
-    /// only). False for an invalid point or a distance that isn't positive; `metres` is capped at ``maxQueryMetres``.
+    /// only). False for an invalid point or a distance that isn't positive and finite; `metres` is capped at
+    /// ``maxQueryMetres``.
     public func isNearRail(_ point: GeoPoint, within metres: Double) -> Bool {
         rail.isNear(point, within: metres)
     }
@@ -121,6 +122,8 @@ nonisolated struct WorldRailLayer: Sendable {
     let lats: [Int32]
     /// Each piece's first point index, then the end (pieceCount + 1 entries).
     let starts: [Int32]
+    /// Each piece's box (west, south, east, north, 1e-5°), so a query skips the pieces out of reach unread.
+    let boxes: [WorldRailBox]
     let cells: [Int: [Int32]]
 
     /// `lines`: u32 pieceCount · per piece u16 pointCount (≥ 2) · i32 lon · i32 lat · zigzag deltas.
@@ -129,8 +132,9 @@ nonisolated struct WorldRailLayer: Sendable {
         var reader = AtlasByteReader(lines, tag: tags.lines)
         let count = Int(try reader.u32())
         guard count <= WorldRail.maxPieces else { throw WorldAtlasPackError.malformed(tags.lines, "count") }
-        var lons: [Int32] = [], lats: [Int32] = [], starts: [Int32] = [0]
+        var lons: [Int32] = [], lats: [Int32] = [], starts: [Int32] = [0], boxes: [WorldRailBox] = []
         starts.reserveCapacity(count + 1)
+        boxes.reserveCapacity(count)
         // Bounded: count <= maxPieces, each at most UInt16.max points, the total capped at maxPoints.
         for _ in 0..<count {
             let points = Int(try reader.u16())
@@ -138,6 +142,7 @@ nonisolated struct WorldRailLayer: Sendable {
                 throw WorldAtlasPackError.malformed(tags.lines, "points")
             }
             var lon = Int64(try reader.i32()), lat = Int64(try reader.i32())
+            var box = WorldRailBox(west: Int32.max, south: Int32.max, east: Int32.min, north: Int32.min)
             for step in 0..<points {
                 if step > 0 {
                     lon += try reader.zigzag()
@@ -148,13 +153,17 @@ nonisolated struct WorldRailLayer: Sendable {
                 }
                 lons.append(Int32(lon))
                 lats.append(Int32(lat))
+                box.add(lon: Int32(lon), lat: Int32(lat))
             }
+            guard box.east - box.west <= 18_000_000 else { throw WorldAtlasPackError.malformed(tags.lines, "piece") }
             starts.append(Int32(lons.count))
+            boxes.append(box)
         }
         try reader.expectEnd()
         self.lons = lons
         self.lats = lats
         self.starts = starts
+        self.boxes = boxes
         cells = try Self.index(index, pieces: count, tag: tags.index)
     }
 
@@ -199,6 +208,7 @@ nonisolated struct WorldRailLayer: Sendable {
         let eastColumn = Int((point.longitude + dLon + 180).rounded(.down))
         let kx = GeoPoint.metresPerDegree * cosine / 100_000, ky = GeoPoint.metresPerDegree / 100_000
         let originLon = point.longitude * 100_000, originLat = point.latitude * 100_000
+        let reachLon = dLon * 100_000, reachLat = dLat * 100_000
         var seen = Set<Int32>()
         // Bounded: reach <= 20 km and cos >= 0.05, so at most 3 rows and 9 columns; each cell's listing was capped
         // at decode, and each piece is read once.
@@ -206,6 +216,8 @@ nonisolated struct WorldRailLayer: Sendable {
             for column in westColumn...eastColumn {
                 let key = row * 360 + ((column % 360) + 360) % 360
                 for piece in cells[key] ?? [] where seen.insert(piece).inserted {
+                    guard boxes[Int(piece)].reaches(lon: originLon, lat: originLat, reachLon: reachLon,
+                                                    reachLat: reachLat) else { continue }
                     let first = Int(starts[Int(piece)]), end = Int(starts[Int(piece) + 1])
                     var previous = local(first, originLon: originLon, originLat: originLat, kx: kx, ky: ky)
                     for index in (first + 1)..<end {
@@ -229,5 +241,32 @@ nonisolated struct WorldRailLayer: Sendable {
     /// The one-degree row of `latitude` (0 at 90°S, 179 at the last degree).
     private static func row(_ latitude: Double) -> Int {
         min(max(Int((latitude + 90).rounded(.down)), 0), 179)
+    }
+}
+
+/// One piece's box in 1e-5°. Pieces never cross the antimeridian (the generator cuts them there, and the reader refuses
+/// a box wider than 180°).
+nonisolated struct WorldRailBox: Sendable {
+    var west: Int32
+    var south: Int32
+    var east: Int32
+    var north: Int32
+
+    mutating func add(lon: Int32, lat: Int32) {
+        west = min(west, lon)
+        east = max(east, lon)
+        south = min(south, lat)
+        north = max(north, lat)
+    }
+
+    /// Whether the box, widened by `reachLon` and `reachLat`, holds (`lon`, `lat`), across 180° too.
+    func reaches(lon: Double, lat: Double, reachLon: Double, reachLat: Double) -> Bool {
+        guard lat >= Double(south) - reachLat, lat <= Double(north) + reachLat else { return false }
+        // Bounded: the point as given and shifted one turn either way.
+        for shift in [0.0, 36_000_000, -36_000_000] {
+            let shifted = lon + shift
+            if shifted >= Double(west) - reachLon, shifted <= Double(east) + reachLon { return true }
+        }
+        return false
     }
 }

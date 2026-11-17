@@ -61,14 +61,15 @@ section (4-byte tag · u32 offset · u32 storedLength · u32 rawLength) · bodie
 
 `RAIL`, `RIDX`, `FERY` and `FIDX` are required. `WorldRail` (`FernletKit/Sources/WorldMapStore/WorldRail.swift`)
 refuses, never trapping, a file over 2 MiB, a bad header or table, a section out of bounds, over 8 MiB raw or of the
-wrong length, a missing section, more than 400,000 pieces or 1,500,000 points a layer, a piece under two points, a
+wrong length, a missing section, more than 400,000 pieces or 1,500,000 points a layer, a piece under two points or wider than 180°, a
 point off the globe, keys out of order, and a listing of a piece that doesn't exist; `WorldRail.decode(_:)` turns any
 of those into nil.
 
 ## Queries
 
 `isNearRail(_:within:)` and `isNearFerryRoute(_:within:)` read the cells the box of `within` metres (capped at 20 km)
-touches, then each listed piece's segments once, measuring point-to-segment distance in a flat local frame, and stop
+touches, skip each listed piece whose box (worked out at decode) is out of reach, then read the rest's segments once,
+measuring point-to-segment distance in a flat local frame, and stop
 at the first hit. The densest cell (Bohemia, around 50°N 14°E) holds 211 pieces and about 1,600 points, so a query
 reads a few thousand segments at most. The app's `WorldTransitGeography` (`App/Fernlet/World/Atlas/`) joins them with
 the shore mask's water and the atlas's `isNearMajorRoad(_:within:)` for the fog keeper's classifier; `WorldAtlasKeeper`

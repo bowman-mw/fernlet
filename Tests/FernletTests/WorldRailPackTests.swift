@@ -63,14 +63,15 @@ struct WorldRailPackTests {
         #expect(!rail.isNearFerryRoute(GeoPoint(45.54478, -122.64), within: 1_000))
     }
 
-    /// Bad input answers false, never traps: an invalid point, a distance that isn't positive or finite.
+    /// Bad input answers false, never traps: an invalid point, a distance that isn't positive and finite.
     @Test func badQueriesAnswerFalse() throws {
         let rail = try #require(Self.rail)
         #expect(!rail.isNearRail(GeoPoint(95, 0), within: 1_000))
         #expect(!rail.isNearRail(GeoPoint(45.54478, -122.64), within: 0))
         #expect(!rail.isNearRail(GeoPoint(45.54478, -122.64), within: -.infinity))
         #expect(!rail.isNearRail(GeoPoint(45.54478, -122.64), within: .nan))
-        #expect(rail.isNearRail(GeoPoint(45.54478, -122.64), within: .infinity))
+        #expect(!rail.isNearRail(GeoPoint(45.54478, -122.64), within: .infinity))
+        #expect(rail.isNearRail(GeoPoint(45.54478, -122.64), within: 1_000_000))
         #expect(!rail.isNearRail(GeoPoint(89.9, 179.9), within: 20_000))
     }
 
