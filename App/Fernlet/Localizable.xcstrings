@@ -49675,18 +49675,18 @@
         }
       }
     },
-    "The countries, states and provinces, seas, cities and major roads, and the coarser land and lakes the passport's rules start from, come from Natural Earth, which is in the public domain and asks for no credit. All of the map's sources travel inside the app: Fernlet never downloads map data." : {
+    "The countries, states and provinces, seas, cities, major roads, railways and ferry routes, and the coarser land and lakes the passport's rules start from, come from Natural Earth, which is in the public domain and asks for no credit. All of the map's sources travel inside the app: Fernlet never downloads map data." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos más generales de los que parten las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+            "value" : "Los países, los estados y provincias, los mares, las ciudades, las carreteras principales, las vías de tren y las rutas de ferri, y la tierra y los lagos más generales de los que parten las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los países, los estados y provincias, los mares, las ciudades y las carreteras principales, y la tierra y los lagos más generales de los que parten las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
+            "value" : "Los países, los estados y provincias, los mares, las ciudades, las carreteras principales, las vías de tren y las rutas de ferry, y la tierra y los lagos más generales de los que parten las reglas del pasaporte, vienen de Natural Earth, que es de dominio público y no pide reconocimiento. Todas las fuentes del mapa viajan dentro de la app: Fernlet nunca descarga datos de mapas."
           }
         }
       }

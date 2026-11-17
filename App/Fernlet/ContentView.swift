@@ -481,7 +481,11 @@ struct ContentView: View {
     /// scoring contexts first (before any load can observe a missing gate), then the lock / worry-box
     /// activation and the delete-all hooks, then the post-launch sequence.
     private func performLaunchWiring() async {
-        // The world atlas opens off the main actor while the launch screen is up, never in Home's first frame.
+        // The world atlas opens off the main actor while the launch screen is up, never in Home's first frame. The
+        // rail pack opens with it, and the ground under a trip (shore, roads, rail) goes to the fog keeper's classifier.
+        store.worldFog.atlas.onTransitGeography = { [weak fog = store.worldFog] geography in
+            fog?.transitGeography = geography
+        }
         store.worldFog.atlas.beginOpening()
         #if DEBUG
         UITestPrivateHubSeed.applyLaunchHooks(lockService: lockService)
