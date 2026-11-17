@@ -24,6 +24,10 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// while "Log my bike rides" or background mapping is on, and allowed); nil when Motion is off, and the stop watch then keeps its
     /// speed rule (W-14).
     var inCar: Bool? = nil
+    /// Whether CarPlay or one of the person's cars (`WorldCarKeeper.isLinked`) was connected (ferry and train build,
+    /// owner 2026-11-15): a train never has one, a ferry may carry one. Unlike ``inCar`` (Motion's automotive, true on a
+    /// train too), false proves nothing: a taxi, a bus, a friend's car.
+    var carLinked = false
     /// Whether the reading is inside the grounds of the airport just landed at (the flight gate): the passport
     /// reads nothing from it, so a country and its continent stamp only once the person leaves (World-Airports-Spec
     /// §4.2, the owner's note on 9).
@@ -748,6 +752,7 @@ final class WorldLocationSource: NSObject {
         if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
         var stamped = fix
         stamped.inCar = rides.inCarFlag
+        stamped.carLinked = cars.isLinked
         stamped.atLandedAirport = flights.layoverAirport != nil
         stamped.atAirport = flights.currentAirport != nil
         latest = stamped

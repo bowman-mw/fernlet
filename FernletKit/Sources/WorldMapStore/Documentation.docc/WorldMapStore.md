@@ -51,6 +51,8 @@ A key that can't be read right now is an error, never a reason to mint a new one
 
 ``WornWayStore`` (2026-11-16, frequent roads, option B of `Docs/World-Frequent-Paths-Exploration-2026-11-15.md`) counts, for each cell a drive passed along, how many trips and the day of the last, keyed by ``WornWayKey`` (cell and ``WornWayKind``; only roads are written, rail and ferry are reserved). ``WornTally`` turns a count and a day into a ``WornLevel`` that fades one level every 30 idle days. Its own locked-phone buffer holds a trip's cells with their day until the next unlock. `fog-ways.bin` and `fog-pending-ways.bin` reuse the fog's and the buffer's purposes and keys under their own context, in ``WornWayCodec``'s fixed-size records. Device-only like the rest of the vault: never synced, exported, given to the AI or sent to friends.
 
+**Ferry and train paths** (2026-11-17, `Docs/World-Transit-Paths-Exploration-2026-11-15.md` §9): ``WornRideClassifier`` tells a ferry (1 km over water at 8–70 km/h, not along a major road) or a train (rail layer, learned rail cells, sustained speed; never with a car connected) from a drive when a drive-speed trip ends, over a ``WornTransitGeography`` the app supplies, and splits a drive with a crossing into ``WornRideSegment``s. ``WornTripStore`` keeps every such ride as a ``WornTrip`` (kind, day, start and end, the thinned line on 1/100,000-degree steps, ``WornTripCodec``) forever, until it is forgotten or the map is cleared, in pieces of 200 (`worn-trips-<piece>.bin`), with Home's question state in `worn-trip-meta.bin` and a ride in progress in `worn-trip-ride.bin` (``WornRideCheckpointCodec``). All three use the walk lines' purpose under the buffer key (a drive ends locked), bound to their own context. Bounded at 100,000 trips (refused and counted past it, never evicted); memory holds only ``WornTripSummary``s. Device-only like the rest of the vault: never synced, exported, given to the AI or sent to friends.
+
 **Wipes.** ``WorldMapVault/clearAll()`` removes the folder and both keys. Delete everything and the duress silent wipe reach it through `FernletStore.resetAll()`; the duress recovery lock through its own purge hook (design page answer 16). A decoy session never reads or writes it.
 
 ### The atlas
@@ -115,6 +117,17 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``DrivenFogStore``
 - ``WornWayStore``
 - ``WornWayCodec``
+- ``WornTripStore``
+- ``WornTripCodec``
+- ``WornTripSummary``
+- ``WornTrip``
+- ``WornRideCheckpointCodec``
+- ``WornRideClassifier``
+- ``WornRideSegment``
+- ``WornRideSample``
+- ``WornRideVerdict``
+- ``WornRideConfidence``
+- ``WornTransitGeography``
 - ``FogCellCodec``
 - ``WorldRouteStore``
 - ``WorldRouteCodec``

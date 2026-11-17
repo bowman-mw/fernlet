@@ -5,7 +5,8 @@ import WorldMapStore
 
 /// Worn paths and frequent roads (Docs/World-Frequent-Paths-Exploration-2026-11-15.md §8): the fading tally, the
 /// footpath tallies from saved lines, the long road runs for Your world, the sealed per-cell counter, and the fog
-/// keeper counting each drive trip's centre line once (never a walk, a decoy or a road friends handed over).
+/// keeper counting each drive trip's centre line once when the trip ends (never a walk, a decoy or a road friends
+/// handed over).
 @MainActor
 struct WornWaysTests {
     private static let here = GeoPoint(45.5205, -122.6255)
@@ -220,6 +221,8 @@ struct WornWaysTests {
         #expect(keeper.wornWays.values.allSatisfy { $0.count == 1 }, "a trip over known road shows nothing until it ends")
         Self.drive(keeper, minutes: 30)
         keeper.flush()
+        #expect(keeper.wornWays.values.allSatisfy { $0.count == 2 }, "ten quiet minutes end a trip; the next counts at its end")
+        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 35))
         #expect(keeper.wornWays.values.allSatisfy { $0.count == 3 }, "a walk and ten quiet minutes each end a trip")
         let reopened = try Self.keeper(vault)
         #expect(reopened.wornWays == keeper.wornWays, "the counter is saved")
@@ -266,6 +269,7 @@ struct WornWaysTests {
         let keeper = try Self.keeper(vault, unlocked: lock)
         lock.isOn = false
         Self.drive(keeper, andBack: true)
+        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 5))
         #expect(keeper.wornWays.isEmpty)
         lock.isOn = true
         keeper.load()
@@ -279,7 +283,7 @@ struct WornWaysTests {
         defer { _ = vault.clearAll() }
         let keeper = try Self.keeper(vault)
         Self.drive(keeper)
-        keeper.flush()
+        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 5))
         #expect(!keeper.wornWays.isEmpty)
         _ = keeper.clearAll()
         #expect(keeper.wornWays.isEmpty)
