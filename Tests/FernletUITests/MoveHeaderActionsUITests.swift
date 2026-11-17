@@ -32,11 +32,13 @@ final class MoveHeaderActionsUITests: XCTestCase {
 
     /// FLOW-03: the Move root's always-rendered "Today's workout" card offers Suggest in its empty
     /// state, and tapping it opens the suggestion flow directly — one sheet, straight from the
-    /// root. Asserted (never skipped) like everything else here: a fresh launch has no approved
-    /// plan, so the empty state MUST be showing.
+    /// root. Asserted (never skipped) like everything else here: the launch clears today's plan
+    /// (`FERNLET_UI_TEST_CLEAR_GUIDED_PLAN`), so the empty state MUST be showing. The plan file
+    /// outlives the app, so without the clear this test passed only when no suite before it on the
+    /// same simulator had committed today's plan.
     @MainActor
     func testMoveRootCardOffersSuggestWhenNothingPlanned() {
-        let app = openMove()
+        let app = openMove(extraEnvironment: ["FERNLET_UI_TEST_CLEAR_GUIDED_PLAN": "1"])
 
         let suggest = element("workout.suggestToday", in: app)
         XCTAssertTrue(suggest.waitForExistence(timeout: 8),
@@ -84,8 +86,8 @@ final class MoveHeaderActionsUITests: XCTestCase {
     // MARK: - Helpers
 
     @MainActor
-    private func openMove() -> XCUIApplication {
-        let app = UXTestApp.launch()
+    private func openMove(extraEnvironment: [String: String] = [:]) -> XCUIApplication {
+        let app = UXTestApp.launch(extraEnvironment: extraEnvironment)
         let move = app.buttons["Move"].firstMatch
         XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move button in the item bar")
         move.tap()

@@ -733,7 +733,7 @@ private struct CookingResumeCard: View {
 }
 
 /// The Food tab's way in to ``NutritionTargetsEditor`` — the same card Settings shows, wrapped in a
-/// sheet under the pinned ``SheetHeader``. The editor commits live, so Done sits top-right and is
+/// sheet under the pinned `SheetHeader`. The editor commits live, so Done sits top-right and is
 /// the whole exit (2026-08-21 template) — no bottom bar.
 ///
 /// The macro card names targets the user can't reach from here otherwise; this keeps "nudge a target"
@@ -1173,7 +1173,7 @@ private struct SavedRecipeRow: View {
 ///
 /// Web imports carry free-text ingredient lines and no structured ingredients, so unlike
 /// ``RecipeSheet`` there is nothing structural to edit: ingredients and macros render read-only, the
-/// source link opens in an in-app Safari sheet, and the pinned ``SheetHeader``'s Done (top-right,
+/// source link opens in an in-app Safari sheet, and the pinned `SheetHeader`'s Done (top-right,
 /// the whole exit — 2026-08-21 template, no bottom bar) commits the notes via
 /// `FernletStore.updateSavedRecipeNotes`. The header title is the recipe's name — runtime text, so
 /// it renders through the `Text(verbatim:)` initializer.
@@ -1243,7 +1243,7 @@ struct SavedRecipeNotesSheet: View {
     }
 
     /// The web import's source-link row, when there is one. The recipe's name itself lives in the
-    /// pinned ``SheetHeader`` (2026-08-21 template), not in the scroll content.
+    /// pinned `SheetHeader` (2026-08-21 template), not in the scroll content.
     @ViewBuilder private var sourceLinkSection: some View {
         if let sourceURL = webImport?.sourceURL {
             SourceLinkRow(url: sourceURL) { showingSafari = true }
@@ -1628,7 +1628,7 @@ struct RecipeSheet: View {
             NavigationStack {
                 recipeContent
                     // Presented as a sheet: a swipe-down used to discard a typed recipe with no
-                    // warning. The guard also renders the pinned ``SheetHeader`` (Cancel + title) —
+                    // warning. The guard also renders the pinned `SheetHeader` (Cancel + title) —
                     // the sheet's title lives there, not in the scroll content (2026-08-21
                     // template). On the editor page, not around the stack: the header's top inset
                     // never reached this page's scroll view through the stack, so the first rows
@@ -1886,7 +1886,7 @@ struct RecipeSheet: View {
     }
 
     /// The editor's own title, used in the nav bar when pushed and in the draft-guard's pinned
-    /// ``SheetHeader`` when presented as a sheet. `LocalizedStringKey` so both call sites localize.
+    /// `SheetHeader` when presented as a sheet. `LocalizedStringKey` so both call sites localize.
     private var editorTitle: LocalizedStringKey { editingRecipe == nil ? "New recipe" : "Edit recipe" }
 
     /// Leaves the editor after a save/delete: pops all the way back to the host's landing screen when
@@ -2328,7 +2328,7 @@ nonisolated struct CatalogTypeaheadResultSet {
 }
 
 /// What a typed catalog field says when it settles on no rows (roadmap G1, F9): "Keep typing to
-/// search." while the text is too short to search (``FoodShortQuery``), so a person halfway through a
+/// search." while the text is too short to search (`FoodShortQuery`), so a person halfway through a
 /// word is not told the food is missing; "No catalog matches." otherwise.
 enum CatalogMissCopy {
     static func title(for query: String) -> LocalizedStringKey {
@@ -4718,7 +4718,7 @@ private struct MealRow: View {
 ///
 /// A component rebuilt from a stored snapshot has only whole grams to scale from. One added fresh
 /// from a decimal custom food (``fresh(from:)``) also keeps that food's exact grams at the base
-/// quantity (`exactBaseMacros`), so re-quantifying rounds ONCE, by ``FoodItem/scaledMacros(by:)``'s
+/// quantity (`exactBaseMacros`), so re-quantifying rounds ONCE, by `FoodItem.scaledMacros(by:)`'s
 /// rule: 3 servings of a 3.4 g food save 10 g, as they count in a recipe, never 3 × 3 = 9.
 nonisolated struct MealComponentCorrectionInput: Identifiable {
     let id: UUID
@@ -7248,7 +7248,7 @@ struct SafariView: UIViewControllerRepresentable {
 /// the eventual Safari presentation — no HTTP request is issued and nothing is rendered. Egress
 /// note (Docs/No-Tracking-Wall.md §4b): this contacts the recipe's own source host on
 /// detail-appear, before any tap. HTTPS-only (pre-warming plaintext HTTP buys nothing), gated on
-/// ``URL/isSafariPresentable``, and the token is invalidated on disappear so warmed connections
+/// `URL.isSafariPresentable`, and the token is invalidated on disappear so warmed connections
 /// don't outlive the page that justified them.
 ///
 /// A PEER-SUPPLIED source is excluded entirely (``prewarmURL(for:)``): the justification for the

@@ -505,7 +505,7 @@ public nonisolated enum WorkoutPlanSource: String, Codable, CaseIterable, Identi
     public var id: String { rawValue }
 
     /// Who made the plan, on screen (the planned row's tag), localized (2026-10-20, idea 16). Display
-    /// only: ``rawValue`` is the persisted token.
+    /// only: `rawValue` is the persisted token.
     public var title: String {
         switch self {
         case .user: String(localized: "workoutPlanSource.user", defaultValue: "User", bundle: .module,
@@ -1345,7 +1345,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     /// deadlift) or the same work with another tool (a cable overhead triceps extension beside the
     /// pushdown). The planner fills a slot with it only where no staple can (the gap it was added for:
     /// triceps with dumbbells only) or as the supported choice for a mild injury
-    /// (``WorkoutProgram/bestExercise(for:in:excluding:biasTokens:experience:location:limits:)``);
+    /// (`WorkoutProgram.bestExercise(for:in:excluding:biasTokens:experience:location:limits:)`);
     /// otherwise it is the harder step at the heaviest weight, a swap, a coach's pick or a how-to page.
     /// Adding variations to the catalog (2026-10-21) therefore leaves the plans people already follow,
     /// and the weight history behind them, as they were.

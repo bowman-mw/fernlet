@@ -14,7 +14,7 @@ public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifi
 
     public var id: String { rawValue }
 
-    /// The level's name on screen, localized (2026-10-20, idea 16). ``rawValue`` is the token the
+    /// The level's name on screen, localized (2026-10-20, idea 16). `rawValue` is the token the
     /// profile persists and onboarding parses.
     public var displayName: String {
         switch self {
@@ -317,7 +317,7 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
     }
 
     /// The piece's name on screen — the location editor's cards and the custom-exercise form's
-    /// required-gear chips — localized (2026-10-20, idea 16). ``rawValue`` is the frozen token: it is
+    /// required-gear chips — localized (2026-10-20, idea 16). `rawValue` is the frozen token: it is
     /// what a location persists, the trainer export carries and the catalog's `requiredGear` names.
     public var displayName: String {
         switch self {
@@ -897,7 +897,7 @@ public nonisolated struct TrainingSplit: Identifiable, Sendable {
     public var daysPerWeek: Int { days.count }
     public var sessionsPerWeek: Int { days.reduce(0) { $0 + $1.sessions.count } }
 
-    /// The one-line description on screen, by the split's stable id (``TrainingSplitSummaries``);
+    /// The one-line description on screen, by the split's stable id (`TrainingSplitSummaries`);
     /// empty for a split the catalog does not have. Display only.
     ///
     /// A method taking the user's term of address rather than a stored `String`: Recovery Flow's
@@ -1613,7 +1613,7 @@ public nonisolated enum WorkoutProgram {
     /// exercise is left out of every block, so each slot falls back to its next eligible pick, and a
     /// slot only hidden exercises could fill is dropped with its own note; a saved alternate replaces
     /// the planner's pick only when it passes everything the pick did
-    /// (``preferredAlternate(for:slot:block:inputs:used:)``). The default changes nothing.
+    /// (`preferredAlternate(for:slot:block:inputs:used:)`). The default changes nothing.
     ///
     /// `cardioSeed` picks among the location's cardio machines; the app passes
     /// ``cardioSessionsLogged(in:recentSessionNames:)`` so they alternate from one cardio day to the
@@ -1736,6 +1736,7 @@ public nonisolated enum WorkoutProgram {
     /// calendar day a session. Now each finished day advances the program by one, whenever it
     /// happens, so every session comes round in turn.
     ///
+    /// - Parameter split: The split whose days are chosen among; an empty split answers 0.
     /// - Parameter recentSessionNames: one entry per past day that logged workouts, most recent
     ///   first, each the names logged that day. Pass days BEFORE today, so today's plan stays put
     ///   once its session is logged. A day matches the split day sharing the most session display

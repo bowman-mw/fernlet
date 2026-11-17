@@ -534,7 +534,7 @@ final class LaunchPreparationService {
     }
 
     /// The day summary's session instructions — then, outside English, the line saying which
-    /// language to write in and how to address the person (``AIPromptLanguage/replyInstruction``):
+    /// language to write in and how to address the person (`AIPromptLanguage.replyInstruction`):
     /// the summary is stored and drawn on the day review, so it is in the person's language.
     /// Outside the `#if` so a test can pin the English bytes and the Spanish line on any host.
     nonisolated static func daySummaryInstructions(for payload: DaySummaryPayload) -> String {

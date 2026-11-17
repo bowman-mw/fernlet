@@ -2,10 +2,10 @@ import Foundation
 import FernletDomainModel
 import FernletFoundation
 
-/// Builds the planner's ``WorkoutLoadContext`` from the day history.
+/// Builds the planner's `WorkoutLoadContext` from the day history.
 ///
 /// Each lift's sessions come from two sources, oldest first:
-/// - a row's structured ``ExerciseResult``s (the runner's record of what was prescribed, the weight
+/// - a row's structured `ExerciseResult`s (the runner's record of what was prescribed, the weight
 ///   picked, and the reps done; a lift entered set by set in the Log sheet; a set corrected later in
 ///   the Edit sheet) — first-class;
 /// - a hand-logged row's other lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb") — what the
@@ -17,7 +17,7 @@ import FernletFoundation
 /// lifted (every guided log before load tracking, and the "Mark done" path), so reading it would make
 /// a fixed "4 x 5" plan look like a stall every week.
 ///
-/// Every session carries its G10 flag (``WorkoutSessionFlag``): the night before it — the day's own
+/// Every session carries its G10 flag (`WorkoutSessionFlag`): the night before it — the day's own
 /// sleep log, else Health's figure for the night — against 6 h and against the person's median of
 /// the 14 nights before, the night before that for the firmer flag, a workout logged as light, and a
 /// travel day (World-Airports-Spec §13.4: `travelDays` is day keys only, the composition root's per-day
@@ -233,7 +233,7 @@ enum WorkoutLoadContextBuilder {
         return nights
     }
 
-    /// The G10 sleep flag for a session on `date` (``WorkoutSessionFlags/sleepFlag(lastNight:previousNight:earlierNights:)``):
+    /// The G10 sleep flag for a session on `date` (`WorkoutSessionFlags.sleepFlag(lastNight:previousNight:earlierNights:)`):
     /// last night is the day's own sleep, the night before is the previous day's, and the median comes
     /// from the 14 nights before last night. A night with nothing logged is absent, never short.
     static func sleepFlag(on date: Date, nights: [String: Double]) -> SleepFlag? {
@@ -246,7 +246,7 @@ enum WorkoutLoadContextBuilder {
         return WorkoutSessionFlags.sleepFlag(lastNight: night(0), previousNight: night(1), earlierNights: earlier)
     }
 
-    /// Protein over the last ``RecoverySummary/loggedWeeks`` weeks, today excluded (it isn't over), in
+    /// Protein over the last `RecoverySummary.loggedWeeks` weeks, today excluded (it isn't over), in
     /// grams per kilogram of `bodyKilograms`, with the days that had meals counted week by week so the
     /// summary can tell whether the logging is good enough to read (G11). Sleep is not averaged here:
     /// it flags single sessions instead (``sleepFlag(on:nights:)``).

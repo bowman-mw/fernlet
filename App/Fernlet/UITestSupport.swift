@@ -85,6 +85,12 @@ enum UITestSupport {
     /// launch wiring. Writes only the two switches; it asks Apple Health for nothing.
     static var pinsHealthSharingOff: Bool { env["FERNLET_UI_TEST_HEALTH_SHARING_OFF"] == "1" }
 
+    /// `FERNLET_UI_TEST_CLEAR_GUIDED_PLAN=1` — start with no guided plan for today. The plan file
+    /// outlives the app, so a suite that committed today's plan left the Move root's card on it for
+    /// every later launch that day; a test of the card's empty state sets this instead of depending
+    /// on running first. Consumed by `ContentView`'s launch wiring.
+    static var clearsTodaysGuidedPlan: Bool { env["FERNLET_UI_TEST_CLEAR_GUIDED_PLAN"] == "1" }
+
     /// `FERNLET_UI_TEST_OPEN_SHEET=<FernletSheet.id>` — present a sheet directly on
     /// launch (e.g. "workout", "settings", "trends"). Generalizes the older
     /// `FERNLET_UI_TEST_OPEN_SETTINGS=1` hook, which is still honored for back-compat.
@@ -319,6 +325,7 @@ enum UITestSupport {
     static var enableCoachExchange: Bool { false }
     static var enableWebNutritionLookup: Bool { false }
     static var pinsHealthSharingOff: Bool { false }
+    static var clearsTodaysGuidedPlan: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var forceCaptureCover: Bool { false }
     static var shouldOpenJournalEditor: Bool { false }

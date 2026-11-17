@@ -698,6 +698,8 @@ struct ContentView: View {
                 preferences.healthKitCapabilityEnabled[HealthCapability.cycleTracking.rawValue] = false
             }
         }
+        // Move's empty-state suite: no plan for today, whatever an earlier suite committed.
+        if UITestSupport.clearsTodaysGuidedPlan { store.clearTodaysGuidedPlanForUITest() }
         // P8 item 7: seed the background-continuation claim so the Friends tab can render the
         // refused / expired / system-ended card. Through the kind's own inverse, so the hook can
         // only ask for a cell the presentation table answers; no task, no radio, no scene edge.

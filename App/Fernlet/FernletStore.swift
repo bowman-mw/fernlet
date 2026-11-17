@@ -516,7 +516,7 @@ final class FernletStore {
     /// Owns its own store instances over `photoDocumentsDirectory`; see `OwnPhotoBackupCoordinator`.
     @ObservationIgnored private lazy var ownPhotoBackupCoordinator = ownPhotoBackupCoordinatorFactory?(self)
         ?? OwnPhotoBackupCoordinator(host: self, documentsDirectory: photoDocumentsDirectory)
-    /// Builds ``ownPhotoBackupCoordinator`` over this store. Nil in production, where the coordinator
+    /// Builds `ownPhotoBackupCoordinator` over this store. Nil in production, where the coordinator
     /// gets the real identity, CloudKit and `UserDefaults.standard`; a test sets it BEFORE the first
     /// photo-backup call, to drive the store's own enable, Retry and wipe legs over a mock record
     /// database (bug confirmation 2026-10-15 §1).
@@ -787,7 +787,7 @@ final class FernletStore {
     @ObservationIgnored let deviceDaySummaryStore: any DeviceDaySummaryStoring
     /// The travel days Tier-2 reads (G7 follow-on, 2026-11-15): the newest snapshot of this
     /// iPhone's travel days by day key, each with its flight's English cities, published from the
-    /// map's vault and the passport by ``publishTierTwoTravel(now:)`` and read by the Tier-2 refresher
+    /// map's vault and the passport by `publishTierTwoTravel(now:)` and read by the Tier-2 refresher
     /// after each save (`FernletStore+HealthKitResidue.swift`). In memory only, never persisted: the
     /// travel days themselves stay in the map's vault. Empty in a decoy, with "Airports and flights"
     /// off, and after "Delete everything".
@@ -1488,7 +1488,7 @@ final class FernletStore {
         }
     }
 
-    /// Publishes `settings.customExercises` into ``WorkoutExerciseCatalog``, the registry the planning
+    /// Publishes `settings.customExercises` into `WorkoutExerciseCatalog`, the registry the planning
     /// engine, safety filter, rest guidance, and exercise picker all read.
     ///
     /// Called wherever settings become live — both inits and `apply(_:)` for a remote sync — because
@@ -3459,7 +3459,7 @@ final class FernletStore {
     /// row it also:
     /// - clears the guided completion (session id + progression) when the row was guided-logged from a
     ///   generated session and the committed plan is still resolvable, so the Start card / "Mark done"
-    ///   honestly re-offer it (a planned workout's run, ``Workout/isPlanRun``, never touched either);
+    ///   honestly re-offer it (a planned workout's run, `Workout.isPlanRun`, never touched either);
     /// - restores the planned row a completion consumed (best-effort; the original planned id is
     ///   preserved so weekly copy-forward identity survives);
     /// - records a tombstone + fires a targeted Health delete by `fernlet.workoutID`, so an app-authored
@@ -3632,7 +3632,7 @@ final class FernletStore {
     /// activity capability is not on, or the read fails.
     ///
     /// Read on demand and held only in memory by ``SillyStatsService``: a Health value never
-    /// reaches synced state. The window is capped at ``FernletDate/maxDayKeySpan`` days (R3) and
+    /// reaches synced state. The window is capped at `FernletDate.maxDayKeySpan` days (R3) and
     /// bucketed by year, so the read is a handful of statistics whatever the history's length.
     func lifetimeHealthSteps(since start: Date, now: Date = .now) async -> Int? {
         guard let healthKitService, healthKitService.isCapabilityRequestedAndEnabled(.activityContext) else { return nil }
@@ -4803,7 +4803,7 @@ final class FernletStore {
         diary.setSelectedSplit(id)
     }
 
-    /// Saves Workout setup's session length and stretch switches (``WorkoutSessionOptions``).
+    /// Saves Workout setup's session length and stretch switches (`WorkoutSessionOptions`).
     func setWorkoutSessionOptions(_ options: WorkoutSessionOptions) {
         diary.setWorkoutSessionOptions(options)
     }
@@ -4828,7 +4828,7 @@ final class FernletStore {
     /// and reps/sets reflect logged progression.
     ///
     /// On a rest day (``needsRestToday`` — today marked unwell) the split is not consulted at all:
-    /// the plan is ``WorkoutPlanningService/restDayPlan(locationName:)``, one gentle un-guided
+    /// the plan is ``WorkoutPlanningService/restDayPlan(locationName:limits:)``, one gentle un-guided
     /// movement line the user can take or leave, so neither the preview nor a committed plan can put
     /// strength work in front of someone who said they are unwell.
     ///
@@ -4919,7 +4919,7 @@ final class FernletStore {
     /// `guidedCompletedSessionIDs` empty. Only tagged rows count: a manual Log-sheet entry or a planned
     /// completion that happens to share a guided session's name ("Legs", "Push") must NOT make the
     /// guided flow claim itself done or refuse a rework. A guided run of a planned workout is tagged
-    /// too, but it is matched by its plan's id, never by name (``Workout/isPlanRun``), so it is left
+    /// too, but it is matched by its plan's id, never by name (`Workout.isPlanRun`), so it is left
     /// out here. The guided log itself carries the tag, so the relaunch double-log protection still
     /// holds. Observable via `day`.
     var loggedGuidedWorkoutNamesToday: Set<String> {
@@ -4948,7 +4948,7 @@ final class FernletStore {
     ///
     /// The one switch the rest-day surfaces turn on: Home's ambient line, the Move root card's copy,
     /// the Suggest sheet's light-only chips and rest line, and the gentle rest plan
-    /// ``workoutDayPlan(intensity:context:)`` builds instead of the split's session. Read from the
+    /// ``workoutDayPlan(intensity:context:sessionLength:)`` builds instead of the split's session. Read from the
     /// signal rather than from ``isSick(on:)`` so every surface agrees with the Trends row and the AI
     /// context about what today's readiness IS; ``setSick(_:on:)`` rebuilds the signal at once.
     var needsRestToday: Bool {
@@ -5522,7 +5522,7 @@ final class FernletStore {
     /// Apple Health copy is written from.
     ///
     /// A planned workout's run whose planned row was removed mid-run logs here too, as a plain guided
-    /// run with no plan id, but it stays that plan's run (``Workout/isPlanRun``, by the plan's lines
+    /// run with no plan id, but it stays that plan's run (`Workout.isPlanRun`, by the plan's lines
     /// it keeps): no name backstop against the generated plan, and no step up its rep ladder. Its
     /// durable backstop is its id instead: the row is filed under the run's session id, which
     /// `logPlannedRun` finds when the finish is seen again.
@@ -6006,7 +6006,7 @@ final class FernletStore {
     /// the next search for that text answers with their own choice first.
     ///
     /// Also the one funnel for recipe picks (F9b, origin `.recipePick`): a saved recipe's rows
-    /// (``rememberRecipeSave(_:)``) and the swap sheet's "Save as new recipe". The memory applies the
+    /// (`rememberRecipeSave(_:)`) and the swap sheet's "Save as new recipe". The memory applies the
     /// precedence — an ordinary pick never overwrites a correction.
     ///
     /// Called from a Save, never from the pick itself: a correction the user cancels out of must not
@@ -6230,7 +6230,7 @@ final class FernletStore {
     /// The no-network half of ``reimportSavedRecipeFromSource(_:)``, split out so tests can
     /// exercise the replace-and-preserve contract without a live fetch: merges the fresh import
     /// over the CURRENT saved row — re-resolved by id at write time, the same live-row rule as
-    /// ``markRecipeWebImageSuppressed(_:)``, so notes edited or suppression stamped during the
+    /// `markRecipeWebImageSuppressed(_:)`, so notes edited or suppression stamped during the
     /// multi-second fetch are preserved rather than reverted by the caller's stale snapshot — and
     /// persists it through the saved-recipe update path. The explicit re-import also re-arms THIS
     /// device's one automatic web-image attempt (the synced suppression, if any, still wins), so a
@@ -6255,7 +6255,7 @@ final class FernletStore {
     }
 
     /// The recipe's own lines saved with no nutrition, which leave its totals low (owner decision
-    /// 2026-11-15; ``RecipeNutritionGaps``).
+    /// 2026-11-15; `RecipeNutritionGaps`).
     func linesWithoutNutrition(in recipe: RecipeDefinition) -> Int {
         // A sub-recipe's own empty lines count too (recipes as building blocks, design §3).
         let all = allRecipesForNesting
@@ -7416,7 +7416,7 @@ final class FernletStore {
             diary.resetDiary()
             connectionSessionLogs = []
         }
-        // `resetDiary()` cleared `settings.customExercises` in the blob, but ``WorkoutExerciseCatalog``
+        // `resetDiary()` cleared `settings.customExercises` in the blob, but `WorkoutExerciseCatalog`
         // is a PROCESS-GLOBAL registry — without this re-publish, exercises imported from a coach plan
         // stay live in the picker, the safety filter, and the planning engine until the app is
         // relaunched, which is exactly the "deleted but still there" state this funnel exists to

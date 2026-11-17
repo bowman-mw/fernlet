@@ -275,6 +275,16 @@ extension FernletStore {
         guidedPlanMemo = GuidedPlanMemo()
         guidedPlanDisk = GuidedPlanDiskState(loaded: true, needsWrite: false)
     }
+
+    #if DEBUG
+    /// Starts a UI-test launch with no plan for today (`FERNLET_UI_TEST_CLEAR_GUIDED_PLAN`): forgets
+    /// the plan in memory and deletes its file, so the Move root's "Today's workout" card opens on its
+    /// empty state whatever an earlier test on the same simulator committed. DEBUG only.
+    func clearTodaysGuidedPlanForUITest() {
+        forgetTodaysGuidedPlanForWipe()
+        persistTodaysGuidedPlan()
+    }
+    #endif
 }
 
 /// The plan pane's "Updated for Home." line (the owner's fix e4), composed from a
