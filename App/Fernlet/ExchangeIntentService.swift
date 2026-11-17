@@ -53,7 +53,8 @@ final class ExchangeIntentService: @unchecked Sendable {
     func exportRecipe(_ entity: RecipeEntity, includesNotes: Bool) async throws -> IntentFile {
         let store = try await storeAccess.load()
         guard let recipe = recipe(in: store, id: entity.id) else { throw ExchangeIntentServiceError.notFound }
-        let packet = try RecipeExchangePacket(recipe: recipe, foodItems: store.foodCatalog.items(forRecipe: recipe),
+        let packet = try RecipeExchangePacket(recipe: store.sharingDefinition(for: recipe),
+                                              foodItems: store.foodCatalog.items(forRecipe: recipe),
                                                includesNotes: includesNotes)
         let data = try packet.encodedData()
         return IntentFile(data: data, filename: sanitizedFilename(recipe.name, suffix: "fernletrecipe"), type: .fernletRecipe)

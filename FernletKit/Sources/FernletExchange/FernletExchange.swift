@@ -72,29 +72,62 @@ public nonisolated enum ExchangeRecipePayloadBuilder {
     /// than two non-empty groups) takes the original path unchanged: flat ingredients in stored order,
     /// `steps` passed through verbatim. A multipart recipe resolves each part's ingredients on its own,
     /// so an ingredient dropped as unresolvable shrinks only its own part's count.
-    public static func componentPayload(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> SharedRecipePayload {
+    public static func componentPayload(
+        for recipe: RecipeDefinition, foodItems: [FoodItem], subRecipeIndex: [UUID: Int] = [:]
+    ) -> SharedRecipePayload {
         let parts = recipe.resolvedComponents
         guard parts.count >= RecipeComponentLimits.minComponents else {
             return SharedRecipePayload(
                 name: recipe.name,
                 servings: recipe.servings,
                 notes: recipe.notes,
-                ingredients: sharedIngredients(for: recipe.ingredients, foodItems: foodItems),
+                ingredients: sharedIngredients(for: recipe.ingredients, foodItems: foodItems, subRecipeIndex: subRecipeIndex),
                 steps: recipe.steps
             )
         }
         let contents = parts.map { part in
             SharedRecipeComponentContent(name: part.name ?? "",
-                                         ingredients: sharedIngredients(for: part.ingredients, foodItems: foodItems),
+                                         ingredients: sharedIngredients(for: part.ingredients, foodItems: foodItems,
+                                                                        subRecipeIndex: subRecipeIndex),
                                          steps: part.steps)
         }
         return SharedRecipePayload.assembled(name: recipe.name, servings: recipe.servings, notes: recipe.notes,
                                              parts: contents)
     }
 
+    /// A recipe that uses other saved recipes, with them (recipes as building blocks, pick P09a): the
+    /// recipe flattened so every reader sees its sub-recipes' steps as labelled leading parts
+    /// (``RecipeDefinition/flattenedForSharing(graph:recipesByID:)``), plus ``SharedRecipePayload/subRecipes``,
+    /// deepest first, each line that uses one naming it. `recipes` is every recipe that may be used;
+    /// `foodItems` must hold the foods of the recipe and of every sub-recipe. A recipe that uses none
+    /// is exactly ``componentPayload(for:foodItems:subRecipeIndex:)``. Web-imported sub-recipes stay
+    /// fixed ingredients, and at most ``SharedRecipeLimits/maxSubRecipes`` are sent.
+    public static func nestedPayload(
+        for recipe: RecipeDefinition, foodItems: [FoodItem], recipes: [RecipeDefinition]
+    ) -> SharedRecipePayload {
+        let graph = RecipeNestingGraph(recipes: recipes)
+        let byID = Dictionary(recipes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let children = graph.makingOrder(below: recipe.id).compactMap { byID[$0] }
+            .filter { $0.webImport == nil && !$0.ingredients.isEmpty }
+            .prefix(SharedRecipeLimits.maxSubRecipes)
+        guard !children.isEmpty else { return componentPayload(for: recipe, foodItems: foodItems) }
+        var index: [UUID: Int] = [:]
+        var subPayloads: [SharedRecipePayload] = []
+        for child in children {
+            // A sub-recipe's lines may name only the sub-recipes before it (deepest first).
+            subPayloads.append(componentPayload(for: child, foodItems: foodItems, subRecipeIndex: index).droppingComponents())
+            index[child.id] = subPayloads.count - 1
+        }
+        var payload = componentPayload(for: recipe.flattenedForSharing(graph: graph, recipesByID: byID),
+                                       foodItems: foodItems, subRecipeIndex: index)
+        payload.subRecipes = subPayloads
+        return payload
+    }
+
     private static func sharedIngredients(
         for ingredients: [RecipeIngredient],
-        foodItems: [FoodItem]
+        foodItems: [FoodItem],
+        subRecipeIndex: [UUID: Int] = [:]
     ) -> [SharedRecipeIngredient] {
         ingredients.compactMap { ingredient in
             guard let foodItem = foodItems.first(where: { $0.id == ingredient.foodItemId }),
@@ -102,7 +135,8 @@ public nonisolated enum ExchangeRecipePayloadBuilder {
             let macros = conversion.scaledMacros(for: foodItem)
             return SharedRecipeIngredient(name: foodItem.name, quantity: ingredient.quantity, unit: ingredient.unit,
                                           protein: macros.protein, carbs: macros.carbs, fat: macros.fat,
-                                          preciseMacros: wirePreciseMacros(for: foodItem, conversion: conversion))
+                                          preciseMacros: wirePreciseMacros(for: foodItem, conversion: conversion),
+                                          subRecipeIndex: subRecipeIndex[ingredient.foodItemId])
         }
     }
 
@@ -226,7 +260,7 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
         // Fractional grams are stripped BEFORE hashing: `RecipeHashInput` is frozen, and an older
         // reader re-hashes the payload it decoded — without the key it does not know.
         var payload = ExchangeRecipePayloadBuilder.componentPayload(for: definition, foodItems: foodItems)
-            .droppingPreciseMacros()
+            .droppingPreciseMacros().droppingSubRecipes()
         if !includesNotes { payload.notes = "" }
         format = Self.format
         formatVersion = payload.components == nil ? Self.formatVersion : Self.multipartFormatVersion
@@ -256,7 +290,7 @@ public nonisolated struct RecipeExchangePacket: Codable, Equatable, Sendable {
                                 originContentID: packet.originContentID, includesNotes: packet.includesNotes, recipe: packet.recipe)
         guard packet.contentHash == expected else { throw ExchangePacketError.invalidHash }
         guard packet.includesNotes == !packet.recipe.notes.isEmpty, packet.carriesItsVersionsShape,
-              !packet.recipe.carriesPreciseMacros else {
+              !packet.recipe.carriesPreciseMacros, !packet.recipe.carriesSubRecipes else {
             throw ExchangePacketError.invalidPayload
         }
         try ExchangeRecipePayloadValidator.validate(packet.recipe)
