@@ -66,6 +66,11 @@ public protocol FernletRepository {
     /// leaves the full history on disk to be reloaded by `loadAllDays()` on the next launch — and
     /// re-uploaded to iCloud. "Reset everything" was doing exactly that.
     func purgeAllPersistedData() -> Bool
+    /// Deletes this device's Tier-2 pattern store, and nothing else (G9-3 "Forget patterns", and a
+    /// remote change bringing a newer learn-from date). The next save rebuilds it.
+    ///
+    /// - Returns: `false` when a store existed and could not be removed.
+    func purgeTierTwoMemories() -> Bool
 }
 
 public extension FernletRepository {
@@ -79,6 +84,9 @@ public extension FernletRepository {
     // `purgeAllPersistedData` would report a complete wipe of data it never touched, in the one
     // flow where a false success is directly user-visible.
     func purgeAllPersistedData() -> Bool { true }
+
+    // INVARIANT, as for `purgeAllPersistedData`: a conformer that keeps Tier-2 records MUST override it.
+    func purgeTierTwoMemories() -> Bool { true }
 
     // INVARIANT for the default below, as for `purgeAllPersistedData`: a conformer with ANY persistent
     // state MUST override it. The default calls every ``loadAllDays()`` whole — every row read, none

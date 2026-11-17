@@ -281,6 +281,49 @@ struct TierTwoDeviceLocalTests {
 
     /// Both repositories' purge removes the sidecar — including the Core Data one, whose legacy JSON
     /// file typically does not exist at all in the shipping configuration.
+    // MARK: - G9-3 memory controls
+
+    /// "Let Fernlet remember" off: the next save deletes the sidecar instead of refreshing it, on
+    /// both backends (the setting rides the synced blob, so both read it at save time).
+    @Test func rememberOffDeletesTheSidecarAtTheNextSave() {
+        var settings = FernletSettings()
+        settings.memoryExtractionEnabled = false
+        let local = LocalFernletRepository(fileURL: temporaryDatabaseURL("off-local"))
+        let coreData = CoreDataFernletRepository(
+            controller: PersistenceController(inMemory: true),
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("off-coredata"))
+        )
+        let pairs: [(any FernletRepository, TierTwoMemoryStore)] = [
+            (local, local.tierTwoMemoryStore), (coreData, coreData.tierTwoMemoryStore)
+        ]
+        for (repository, sidecar) in pairs {
+            let today = seedEnoughHistory(into: repository)
+            #expect(FileManager.default.fileExists(atPath: sidecar.fileURL.path))
+            var off = snapshot(activeDay(today))
+            off.settings = settings
+            #expect(repository.saveSnapshot(off))
+            #expect(!FileManager.default.fileExists(atPath: sidecar.fileURL.path))
+        }
+    }
+
+    /// "Forget patterns": after the purge, a save with a learn-from date of today cannot rebuild the
+    /// patterns from the older days that are still in history.
+    @Test func aLearnFromDateKeepsForgottenPatternsForgotten() {
+        let coreData = CoreDataFernletRepository(
+            controller: PersistenceController(inMemory: true),
+            legacyRepository: LocalFernletRepository(fileURL: temporaryDatabaseURL("learnfrom"))
+        )
+        let today = seedEnoughHistory(into: coreData)
+        #expect(!coreData.loadTierTwoMemories().isEmpty, "precondition: the engine emitted patterns")
+
+        #expect(coreData.purgeTierTwoMemories())
+        var forgot = snapshot(activeDay(today))
+        forgot.settings.tierTwoLearnFrom = today
+        #expect(coreData.saveSnapshot(forgot))
+
+        #expect(coreData.loadTierTwoMemories().isEmpty, "patterns came back from days before the learn-from date")
+    }
+
     @Test func purgeRemovesTheSidecarOnBothBackends() {
         let local = LocalFernletRepository(fileURL: temporaryDatabaseURL("purge-local"))
         _ = seedEnoughHistory(into: local)

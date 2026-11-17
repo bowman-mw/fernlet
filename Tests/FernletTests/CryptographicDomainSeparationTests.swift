@@ -106,6 +106,7 @@ struct CryptographicDomainSeparationTests {
         Domain("KeyDerivation.intimacyLogLegacyV1", FernletCryptoPurpose.KeyDerivation.intimacyLogLegacyV1),
         Domain("KeyDerivation.cycleRecordV1", FernletCryptoPurpose.KeyDerivation.cycleRecordV1),
         Domain("KeyDerivation.bodyTallyV1", FernletCryptoPurpose.KeyDerivation.bodyTallyV1),
+        Domain("KeyDerivation.privateMemoryV1", FernletCryptoPurpose.KeyDerivation.privateMemoryV1),
         // HMAC
         Domain("HMAC.heartDropDayTagV1", FernletCryptoPurpose.HMAC.heartDropDayTagV1),
         Domain("HMAC.presenceEpochTagV1", FernletCryptoPurpose.HMAC.presenceEpochTagV1),

@@ -301,6 +301,8 @@ public final class CloudKitDataService {
         "MilestoneLedgerRecord",
         "CD_DayRecord",
         "DayRecord",
+        // G9-3: Core memories' own rows (mirror-only; no build ever wrote a bare `MemoryRecord`).
+        "CD_MemoryRecord",
         "CD_MenstrualNarrative",
         "MenstrualNarrative"
     ]

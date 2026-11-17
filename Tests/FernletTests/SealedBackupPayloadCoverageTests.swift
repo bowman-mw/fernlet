@@ -264,6 +264,29 @@ final class FakeSealedBackupHost: SealedBackupContext {
     func tearDownBodyTallies() {
         KeychainItem.deleteAll(service: bodyTallyKeyService)
     }
+
+    // MARK: Private memories (G9-3)
+
+    /// The in-memory sealed store the private memories live in (made on first use).
+    lazy var privateMemoriesController = PrivatePersistenceController(inMemory: true)
+    /// The private-memory funnel the journal's head reads and merges into — production's
+    /// `PrivateMemoryVault`, over ``privateMemoriesController``.
+    lazy var privateMemories = PrivateMemoryVault(controller: privateMemoriesController)
+    /// Whether the private memories can't be read right now (a test's stand-in for a store that does
+    /// not answer): the export throws `PrivateMemoryVaultError.storeError`.
+    var privateMemoriesUnreadable = false
+
+    /// Mirrors `FernletStore.sealedBackupPrivateMemories(hubKey:)`: the funnel's export, refused in a decoy.
+    func sealedBackupPrivateMemories(hubKey: SymmetricKey) throws -> [MemoryNote] {
+        guard !privateMemoriesUnreadable else { throw PrivateMemoryVaultError.storeError }
+        return try privateMemories.backupExport(key: hubKey, isDecoy: duressSessionActive)
+    }
+
+    /// Mirrors `FernletStore.restoreSealedBackupPrivateMemories(_:hubKey:)`: the funnel's merge, refused
+    /// in a decoy.
+    func restoreSealedBackupPrivateMemories(_ memories: [MemoryNote], hubKey: SymmetricKey) throws {
+        try privateMemories.mergeRestored(memories, key: hubKey, isDecoy: duressSessionActive)
+    }
 }
 
 @MainActor

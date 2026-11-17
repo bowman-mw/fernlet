@@ -1,5 +1,6 @@
 import CloudKitSync
 import CryptoKit
+import FernletDomainModel
 import FernletFoundation
 import Foundation
 import PrivateHealthStore
@@ -115,6 +116,15 @@ struct SealedBackupJournalReferences: Equatable {
 /// (``restoreBodyTallies(_:)``) — before the records. Tallies that can't be read right now (the
 /// keychain not answering, a decoy) fail the export rather than write a head without them, and a
 /// failed merge keeps the restore unresolved for a later pass. With no tally they are left off.
+///
+/// **The private memories** (G9-3, owner call M6 = A: "include private memories in the encrypted
+/// backup now"). The same head also carries every private memory (``headPrivateMemories(hubKey:)``;
+/// `"privateMemories"` in ``SealedBackupV2Envelope``), read under the live hub key, so they survive a
+/// lost phone and reach another one through restore and the recovery code while never syncing as plain
+/// rows. A restore merges them before the records (``restorePrivateMemories(_:hubKey:)``: absent ones
+/// added, this iPhone's kept, never a delete); a section a newer Fernlet wrote is skipped and logged,
+/// never a failed restore. Memories that can't be read right now fail the export; with none they are
+/// left off.
 @MainActor
 final class JournalBackupAdapter: SealedBackupV2Adapter {
     /// Answers the sealed journal store — read on first use, so an adapter whose payload never runs
@@ -134,6 +144,8 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     let reinstate: @MainActor ([JournalNarrativeSkeleton]) -> Bool
     /// Reads and merges the body tallies the head carries (round 7 piece B2).
     let bodyTallies: SealedBackupBodyTallyBridge
+    /// Reads and merges the private memories the head carries (G9-3).
+    let privateMemories: SealedBackupPrivateMemoryBridge
 
     /// Creates the adapter.
     ///
@@ -145,13 +157,16 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     ///   - deviceKey: The journal device key, read without minting.
     ///   - reinstate: Rebuilds day skeletons; false when a write failed.
     ///   - bodyTallies: Reads every body tally now and merges restored ones; both throw when they can't.
+    ///   - privateMemories: Reads every private memory now and merges restored ones; both throw when
+    ///     they can't.
     init(
         repository: @escaping @MainActor () -> JournalNarrativeRepository,
         isOpen: @escaping @MainActor () -> Bool,
         references: @escaping @MainActor () -> SealedBackupJournalReferences?,
         deviceKey: @escaping @MainActor () -> SealedDeviceKeyRead,
         reinstate: @escaping @MainActor ([JournalNarrativeSkeleton]) -> Bool,
-        bodyTallies: SealedBackupBodyTallyBridge
+        bodyTallies: SealedBackupBodyTallyBridge,
+        privateMemories: SealedBackupPrivateMemoryBridge
     ) {
         self.repositoryProvider = repository
         self.isOpen = isOpen
@@ -159,6 +174,7 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
         self.deviceKey = deviceKey
         self.reinstate = reinstate
         self.bodyTallies = bodyTallies
+        self.privateMemories = privateMemories
     }
 
     /// The sealed journal store (resolved once).
@@ -272,6 +288,29 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     func restoreBodyTallies(_ tallies: SealedBackupBodyTallies) throws {
         try withOpenSeam {
             try bodyTallies.merge(tallies.days)
+        }
+    }
+
+    /// Every private memory for the head, or nil while there is none. Throws while the seam is shut or
+    /// the memories can't be read right now, so no head is written without them.
+    func headPrivateMemories(hubKey: SymmetricKey) throws -> SealedBackupPrivateMemories? {
+        try withOpenSeam {
+            let memories = try privateMemories.export(hubKey)
+            return memories.isEmpty ? nil : SealedBackupPrivateMemories(memories: memories)
+        }
+    }
+
+    /// Merges the head's private memories into this iPhone's (absent ones added, nothing removed). A
+    /// section a newer Fernlet wrote is skipped and logged — the journal still restores. A failed merge
+    /// is rethrown, so the restore stays unresolved and a later pass merges again.
+    func restorePrivateMemories(_ section: SealedBackupPrivateMemories, hubKey: SymmetricKey) throws {
+        try withOpenSeam {
+            if let version = section.newerVersion {
+                FernletAuditLog.log("sealedBackup.v2.privateMemoriesSkipped", context: ["version": "\(version)"])
+                return
+            }
+            guard !section.memories.isEmpty else { return }
+            try privateMemories.merge(section.memories, hubKey)
         }
     }
 }

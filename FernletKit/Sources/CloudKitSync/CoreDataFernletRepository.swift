@@ -51,6 +51,16 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     private let controller: PersistenceController
     private let legacyRepository: LocalFernletRepository
     private let dayRecordRepository: any DayRecordRepositoring
+    /// G9-3: Core memories' own per-row store. The blob's `memories` is written empty.
+    private let memoryRepository: any MemoryRepositoring
+    /// The bytes of every memory this repository has served (on a load) or written (on a save) in this
+    /// process, by id. Its keys are the memories it KNOWS: a save soft-deletes only known ids the
+    /// snapshot no longer holds, so a row another phone added after the last load is never deleted.
+    /// Its values let a save skip memories whose bytes did not change.
+    private var memoryRowBytes: [UUID: Data] = [:]
+    /// Ids of blob memories whose copy into rows failed in this process: served from the blob until
+    /// the copy (or the next save's upsert) lands, so a failed copy never hides a memory.
+    private var pendingBlobMemoryIDs: Set<UUID> = []
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     /// The device-local Tier-2 sidecar — the legacy repository's own, so both backends agree on one
@@ -68,7 +78,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// of the app into the device-local sidecar: nothing here receives them, so nothing here can write
     /// them into the mirrored blob or a row. Nil (tests, and before the app wires it) keeps the
     /// repository's own refresh over the stripped window.
-    public var tierTwoRefresher: (@MainActor (_ window: [(String, FernletDay)], _ goals: [FitnessGoal]) -> Void)?
+    ///
+    /// `learning` (G9-3) is what the synced settings allow (``TierTwoLearning``): the refresher passes
+    /// it on to ``TierTwoMemoryStore/refresh(from:goals:travel:learning:)``, which deletes the sidecar
+    /// when "Let Fernlet remember" is off and reads only days from the learn-from date.
+    public var tierTwoRefresher: (@MainActor (_ window: [(String, FernletDay)], _ goals: [FitnessGoal],
+                                              _ learning: TierTwoLearning) -> Void)?
 
     private var cachedDatabase: LocalFernletDatabase?
     private var cachedRecordUpdatedAt: Date?
@@ -130,7 +145,8 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     public init(
         controller: PersistenceController? = nil,
         legacyRepository: LocalFernletRepository? = nil,
-        dayRecordRepository: (any DayRecordRepositoring)? = nil
+        dayRecordRepository: (any DayRecordRepositoring)? = nil,
+        memoryRepository: (any MemoryRepositoring)? = nil
     ) {
         let resolvedController = controller ?? .shared
         let resolvedLegacy = legacyRepository ?? LocalFernletRepository(fileURL: LocalFernletRepository.defaultFileURL())
@@ -138,6 +154,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         self.legacyRepository = resolvedLegacy
         self.tierTwoMemoryStore = resolvedLegacy.tierTwoMemoryStore
         self.dayRecordRepository = dayRecordRepository ?? DayRecordRepository(controller: resolvedController)
+        self.memoryRepository = memoryRepository ?? MemoryRecordRepository(controller: resolvedController)
         self.encoder = RowPayloadCoders.makeEncoder()
         self.decoder = RowPayloadCoders.makeDecoder()
         self.cancellable = self.controller.remoteChangePublisher
@@ -245,21 +262,102 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // clears the blob's days entirely, so the bound here is moot — apply still writes the aggregate.
         let blobDayBound = database.daysMigratedToRows ? FernletLimits.derivedLogWindowDays : nil
         database.apply(snapshot, maxStoredDays: blobDayBound)
+        // G9-3: memories persist as their own rows BEFORE the blob is written without them, so a failed
+        // row write leaves the blob as it was and the save is retried.
+        if !isPersistenceBlocked {
+            guard writeMemoryRows(snapshot.memories) else { return false }
+            database.memories = []
+        }
         let recent = refreshRowDerivedState(&database, todayKey: snapshot.todayKey, justWrote: (snapshot.todayKey, snapshot.day))
         guard saveDatabase(database, invalidatesDayCache: false) else { return false }
-        refreshTierTwo(from: recent, goals: database.goals)
+        refreshTierTwo(from: recent, goals: database.goals, settings: database.settings)
         return true
     }
 
     /// The device-local Tier-2 refresh after a save that landed: the app's ``tierTwoRefresher`` when one
     /// is installed (it restores this device's HealthKit residue first), else the sidecar's own refresh
     /// over the stripped window. Derived and best-effort either way; it never changes a save's answer.
-    private func refreshTierTwo(from window: [(String, FernletDay)], goals: [FitnessGoal]) {
+    private func refreshTierTwo(from window: [(String, FernletDay)], goals: [FitnessGoal], settings: FernletSettings) {
+        let learning = TierTwoLearning(settings: settings)
         guard let tierTwoRefresher else {
-            tierTwoMemoryStore.refresh(from: window, goals: goals)
+            tierTwoMemoryStore.refresh(from: window, goals: goals, learning: learning)
             return
         }
-        tierTwoRefresher(window, goals)
+        tierTwoRefresher(window, goals, learning)
+    }
+
+    /// Writes the memories whose bytes changed since this process last read or wrote them, and
+    /// soft-deletes the ids it knows that `memories` no longer holds (G9-3). An id it never served is
+    /// never deleted: that is a row another phone added after this phone's last load.
+    ///
+    /// - Returns: `false` when the upsert or the soft delete fails; the known set is then left as it
+    ///   was, so the retry writes the same changes again.
+    private func writeMemoryRows(_ memories: [MemoryNote]) -> Bool {
+        var changed: [MemoryNote] = []
+        var bytes: [UUID: Data] = [:]
+        for memory in memories {
+            let data = encodedMemory(memory)
+            if let data { bytes[memory.id] = data }
+            if data == nil || memoryRowBytes[memory.id] != data { changed.append(memory) }
+        }
+        let removed = Set(memoryRowBytes.keys).subtracting(memories.map(\.id))
+        guard memoryRepository.upsert(changed) else { return false }
+        guard memoryRepository.delete(ids: Array(removed)) else { return false }
+        if !removed.isEmpty {
+            FernletAuditLog.log("memory.rows.forgotten", context: ["count": "\(removed.count)"])
+        }
+        removed.forEach { memoryRowBytes[$0] = nil }
+        memoryRowBytes.merge(bytes) { _, new in new }
+        pendingBlobMemoryIDs = []
+        return true
+    }
+
+    /// One memory's row bytes, or nil (audited) when it will not encode; such a memory is always
+    /// handed to the row store, which skips it the same way.
+    private func encodedMemory(_ memory: MemoryNote) -> Data? {
+        do {
+            return try encoder.encode(memory)
+        } catch {
+            PersistenceFailureAudit.record("memory.encode.failed", error: error)
+            return nil
+        }
+    }
+
+    /// The snapshot's memories (G9-3): the rows, plus any blob memory whose copy into rows failed in
+    /// this process. A blob memory the copy declined (it has a tombstone) is not served. Every row
+    /// served joins the known set (``memoryRowBytes``); a pending blob memory does not, so the next
+    /// save writes it.
+    private func servedMemories(from database: LocalFernletDatabase) -> [MemoryNote] {
+        let rows = memoryRepository.load()
+        let rowIDs = Set(rows.map(\.id))
+        let pending = database.memories.filter { !rowIDs.contains($0.id) && pendingBlobMemoryIDs.contains($0.id) }
+        // Only the rows join the known set: a pending blob memory has no row yet, so the next save must
+        // see it as changed and write it (marking it known here would let that save empty the blob over it).
+        for memory in rows {
+            if let data = encodedMemory(memory) { memoryRowBytes[memory.id] = data }
+        }
+        return (rows + pending).sorted { $0.sourceDate < $1.sourceDate }
+    }
+
+    /// G9-3 blob-to-row copy, run whenever a loaded blob still holds memories (the first launch after
+    /// the update, or an older build that wrote its list back): copies them into rows, skipping any
+    /// that already have a row or a tombstone, then saves the blob with `memories` empty, only after
+    /// the rows saved. Not behind a one-time flag, so an old build's re-write is moved too.
+    private func moveBlobMemoriesToRows(_ database: LocalFernletDatabase) -> LocalFernletDatabase {
+        guard !database.memories.isEmpty, !isPersistenceBlocked else { return database }
+        guard memoryRepository.adoptMissing(database.memories) else {
+            FernletAuditLog.log("coredata.memoryMigration.rowsFailed", context: ["count": "\(database.memories.count)"])
+            pendingBlobMemoryIDs.formUnion(database.memories.map(\.id))
+            return database
+        }
+        var moved = database
+        moved.memories = []
+        guard saveDatabase(moved) else {
+            // The rows landed; the blob keeps its copy until the next save writes it empty.
+            FernletAuditLog.log("coredata.memoryMigration.saveFailed")
+            return database
+        }
+        return moved
     }
 
     /// After day rows are written, refresh the blob's row-derived state from the bounded recent window:
@@ -329,7 +427,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // once migrated, keep the blob's days cleared).
         let recent = refreshRowDerivedState(&database, todayKey: todayKey, justWrote: (dateKey, day))
         guard saveDatabase(database, invalidatesDayCache: false) else { return false }
-        refreshTierTwo(from: recent, goals: database.goals)
+        refreshTierTwo(from: recent, goals: database.goals, settings: database.settings)
         return true
     }
 
@@ -639,7 +737,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         if let cached = cachedDatabase {
             // Permanent lazy backfill: if a prior migration attempt didn't finish, retry on every load
             // until the rows are written (the flag flips true) — what makes retiring the blob safe.
-            return .resolved(cached.daysMigratedToRows ? cached : migrateDaysToRowsIfNeeded(cached))
+            return .resolved(moveBlobMemoriesToRows(cached.daysMigratedToRows ? cached : migrateDaysToRowsIfNeeded(cached)))
         }
 
         // Stage 1: Check if a record exists at all.
@@ -652,6 +750,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             clearReadOnlyRecoveryFlags()
             var migrated = migrateDatabase(todayKey: todayKey)
             migrated = migrateDaysToRowsIfNeeded(migrated)
+            migrated = moveBlobMemoriesToRows(migrated)
             if cachedDatabase == nil, !saveDatabase(migrated) {
                 FernletAuditLog.log("coredata.legacyMigration.saveFailed")
             }
@@ -679,7 +778,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // The record decoded, so the first-launch migration is done and the legacy JSON can never be read
         // again (only a `.missing` record reads it). Left behind, it is stale data a store reset would revive.
         legacyRepository.retireMigratedDatabaseFile()
-        let database = migrateDaysToRowsIfNeeded(decoded)
+        let database = moveBlobMemoriesToRows(migrateDaysToRowsIfNeeded(decoded))
         if cachedDatabase == nil {
             cachedDatabase = database
             cachedRecordUpdatedAt = recordUpdatedAt
@@ -752,6 +851,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     public func purgeAllPersistedData() -> Bool {
         var succeeded = dayRecordRepository.deleteAll()
         if !tierTwoMemoryStore.purge() { succeeded = false }
+        // G9-3: memory rows and their tombstones go too (a wipe is not a forget: nothing to keep out).
+        if !memoryRepository.deleteAll() { succeeded = false }
+        memoryRowBytes = [:]
+        pendingBlobMemoryIDs = []
 
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: "FernletDatabaseRecord")
@@ -774,6 +877,12 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         persistenceBlockedByDecodeFailure = false
         persistenceBlockedByFetchFailure = false
         return succeeded
+    }
+
+    /// Deletes the device-local Tier-2 sidecar only (G9-3 "Forget patterns", or a remote change that
+    /// brought a newer learn-from date); the next save rebuilds it from the days that date allows.
+    public func purgeTierTwoMemories() -> Bool {
+        tierTwoMemoryStore.purge()
     }
 
     /// Encodes and persists the aggregate blob to its single Core Data record, refusing while a
@@ -910,7 +1019,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         let day = dayRecordRepository.load(dateKeys: [todayKey])[todayKey]
             ?? database.days[todayKey]
             ?? FernletDay(date: todayKey)
-        return .assembled(todayKey: todayKey, day: day, from: database)
+        var snapshot = FernletSnapshot.assembled(todayKey: todayKey, day: day, from: database)
+        // G9-3: memories come from their own rows (the blob's `memories` is empty once moved).
+        snapshot.memories = servedMemories(from: database)
+        return snapshot
     }
 
     /// A coarse count of logged items on a day, used ONLY as the migration content-merge tiebreak (item D)

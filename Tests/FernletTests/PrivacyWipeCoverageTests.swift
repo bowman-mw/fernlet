@@ -271,6 +271,8 @@ struct PrivacyWipeCoverageTests {
         "identityRotatedHook",
         "deviceJournalKey",
         "deviceWorryKey",
+        // G9-3: the private memories' keyless leg in `resetAll` ("your private memories").
+        "deleteAllPrivateMemoriesForWipe",
         "invalidateEncryptionKeyCache",
         // The session photos' two at-rest key caches (the friend wall's and the pending corpus's),
         // dropped immediately after the mesh's identity wipe, inside the same `do` and before

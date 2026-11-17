@@ -36,17 +36,21 @@ import FernletFoundation
 ///   the four-entity model every shipped build wrote, frozen verbatim and pinned by its
 ///   `versionChecksum`; `makeManagedObjectModel()` is V2 = V1 plus `CycleRecord`, whose only columns
 ///   are `id`, `schemaVersion` and one `payloadCiphertext` blob — no plaintext date, day key or
-///   HealthKit id. V3 (`makeManagedObjectModel()` today, World bodybuilding round 7) = the frozen V2
+///   HealthKit id. V3 (World bodybuilding round 7) = the frozen V2
 ///   (`makeManagedObjectModelV2()`) plus `BodyTally`, shaped exactly like `CycleRecord`: one sealed
-///   blob per day of bathroom visits and free-meal tags, no plaintext day key. A store on disk is
-///   carried forward by a staged migration with in-memory model references — V1 → V2 → V3, each
-///   stage additive and lightweight — attached to the one store description so a rebuild or reload
-///   re-adds under the same migration. This is a LOCAL model change only: the store is never
+///   blob per day of bathroom visits and free-meal tags, no plaintext day key. V4
+///   (`makeManagedObjectModel()` today, G9-3 private memories) = the frozen V3
+///   (`makeManagedObjectModelV3()`) plus `PrivateMemory`, shaped the same way: one sealed blob per
+///   kept-private Core memory, whose plaintext `id` is the memory's own random id. A store on disk
+///   is carried forward by a staged migration with in-memory model references — V1 → V2 → V3 → V4,
+///   each stage additive and lightweight — attached to the one store description so a rebuild or
+///   reload re-adds under the same migration. This is a LOCAL model change only: the store is never
 ///   attached to iCloud, so no CloudKit schema moves.
 /// - **There is no way back down.** An earlier build (V1 model, automatic inferred migration)
 ///   opening a newer store finds the newer model in the store's own model cache, infers "drop the
 ///   entities I do not know" and migrates the file down: it loads, every V1 row survives, and every
-///   cycle record and body tally is deleted (`PrivateStoreModelMigrationTests` pins it). Installing
+///   cycle record, body tally and private memory is deleted (`PrivateStoreModelMigrationTests`
+///   pins it). Installing
 ///   an older build on a phone that has stored those rows is therefore unsupported (review L-U3-R2).
 ///
 /// Concurrency: this module is nonisolated; ``shared`` is `nonisolated(unsafe)` because
@@ -63,7 +67,8 @@ public final class PrivatePersistenceController {
     public static let preview = PrivatePersistenceController(inMemory: true)
 
     /// The local-only container hosting the sealed entities (`MenstrualNarrative`,
-    /// `JournalNarrative`, `IntimacyLog`, `WorryNarrative`, `CycleRecord`, `BodyTally` — see
+    /// `JournalNarrative`, `IntimacyLog`, `WorryNarrative`, `CycleRecord`, `BodyTally`,
+    /// `PrivateMemory` — see
     /// ``sealedEntityNames``).
     public let container: NSPersistentContainer
     /// `true` when the persistent store failed to load; the error is logged and the controller
@@ -101,7 +106,7 @@ public final class PrivatePersistenceController {
     ///     cannot express — chiefly ``rebuildStore()``, whose whole contract is about the sqlite
     ///     file, its `-wal`/`-shm` sidecars, and the `_SUPPORT` blob directory really being
     ///     destroyed and re-created. Production always passes `nil`.
-    ///   - model: An explicit managed-object model, overriding the current (V3) one. The test seam
+    ///   - model: An explicit managed-object model, overriding the current (V4) one. The test seam
     ///     for the model-migration tests: a store written under `makeManagedObjectModelV1()` is what
     ///     every shipped build left on disk, and the production controller must open it. A supplied
     ///     model gets NO staged migration (it is a fixture shape, not a migration target).
@@ -220,8 +225,9 @@ public final class PrivatePersistenceController {
     /// deletes and ``sealedRowCount()`` counts, so the two can never disagree about what "sealed"
     /// covers. A new sealed entity joins here in the same commit that adds it to the model:
     /// `CycleRecord` (period-data design 2026-09-30, §5.2) did, so the app-lock reset purges it and a
-    /// passcode setup's prior-data check counts it. `BodyTally` (World bodybuilding, round 7) did too.
-    public static let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally"]
+    /// passcode setup's prior-data check counts it. `BodyTally` (World bodybuilding, round 7) did too,
+    /// and so did `PrivateMemory` (G9-3, the memories a person keeps private).
+    public static let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally", "PrivateMemory"]
 
     /// How many rows the sealed entities hold between them — KEYLESS: a `count(for:)` per entity,
     /// never a fetch of a column, so it answers with the app lock closed and decrypts nothing.
@@ -491,17 +497,19 @@ public final class PrivatePersistenceController {
 
     // MARK: - Model
 
-    /// The version identifier of the current model (V3). Informational only — Core Data matches a
+    /// The version identifier of the current model (V4). Informational only — Core Data matches a
     /// store to a model by entity version hashes and the checksum, never by this string (the
     /// identifiers do not enter `versionChecksum`; `PrivateStoreModelMigrationTests` proves it).
-    static let currentModelVersionIdentifier = "FernletPrivate.v3"
+    static let currentModelVersionIdentifier = "FernletPrivate.v4"
+    /// The version identifier of the frozen V3 model. Informational only, like the others.
+    static let versionThreeModelVersionIdentifier = "FernletPrivate.v3"
     /// The version identifier of the frozen V2 model. Informational only, like the others.
     static let versionTwoModelVersionIdentifier = "FernletPrivate.v2"
     /// The version identifier of the frozen V1 model. Informational only, like the others.
     static let versionOneModelVersionIdentifier = "FernletPrivate.v1"
 
-    /// Builds the CURRENT programmatic model: V3 = the frozen V2 entities plus `BodyTally` (World
-    /// bodybuilding, round 7). Every call builds fresh entity descriptions — an
+    /// Builds the CURRENT programmatic model: V4 = the frozen V3 entities plus `PrivateMemory` (G9-3,
+    /// the Core memories a person keeps private). Every call builds fresh entity descriptions — an
     /// `NSEntityDescription` belongs to exactly one model.
     ///
     /// - Important: A version bump is one-way. A build that predates this version and opens a store
@@ -510,8 +518,19 @@ public final class PrivatePersistenceController {
     ///   `PrivateStoreModelMigrationTests.anEarlierBuildOpeningACurrentStoreLoadsButDropsTheNewerEntities`.
     static func makeManagedObjectModel() -> NSManagedObjectModel {
         let model = NSManagedObjectModel()
-        model.entities = makeVersionOneEntities() + [makeCycleRecordEntity(), makeBodyTallyEntity()]
+        model.entities = makeVersionOneEntities() + [makeCycleRecordEntity(), makeBodyTallyEntity(), makePrivateMemoryEntity()]
         model.versionIdentifiers = [currentModelVersionIdentifier]
+        return model
+    }
+
+    /// The model every build from the bodybuilding round (2026-10-29) until G9-3 wrote: V2 plus
+    /// `BodyTally`, FROZEN. It is the destination of the V2 → V3 stage and the source of the V3 → V4
+    /// stage, so it must stay the shape those builds left on disk — its `versionChecksum` is pinned by
+    /// `PrivateStoreModelMigrationTests`. Never edit it; a new column or entity is a new version.
+    static func makeManagedObjectModelV3() -> NSManagedObjectModel {
+        let model = NSManagedObjectModel()
+        model.entities = makeVersionOneEntities() + [makeCycleRecordEntity(), makeBodyTallyEntity()]
+        model.versionIdentifiers = [versionThreeModelVersionIdentifier]
         return model
     }
 
@@ -543,31 +562,61 @@ public final class PrivatePersistenceController {
         [makeMenstrualNarrativeEntity(), makeJournalNarrativeEntity(), makeIntimacyLogEntity(), makeWorryNarrativeEntity()]
     }
 
-    /// The staged migration that carries a V1 or V2 store to `target`: two custom stages, V1 → V2
-    /// and V2 → `target`, whose sources and destinations are IN-MEMORY model references (the models
-    /// are programmatic — no compiled `.momd` exists to look them up by name). With no handlers,
-    /// each stage is a lightweight migration; each version only adds an entity, so both are
-    /// additive. Core Data starts at the stage whose source matches the store on disk.
+    /// The staged migration that carries a V1, V2 or V3 store to `target`: three custom stages,
+    /// V1 → V2, V2 → V3 and V3 → `target`, whose sources and destinations are IN-MEMORY model
+    /// references (the models are programmatic — no compiled `.momd` exists to look them up by
+    /// name). With no handlers, each stage is a lightweight migration; each version only adds an
+    /// entity, so every stage is additive. Core Data starts at the stage whose source matches the
+    /// store on disk.
     ///
-    /// - Parameter target: The production (V3) model the container was built with — the same
+    /// - Parameter target: The production (V4) model the container was built with — the same
     ///   instance, so the last stage's destination checksum is the coordinator's.
     static func makeStagedMigrationManager(to target: NSManagedObjectModel) -> NSStagedMigrationManager {
         let versionOne = makeManagedObjectModelV1()
         let versionTwo = makeManagedObjectModelV2()
+        let versionThree = makeManagedObjectModelV3()
         // A model is frozen once a coordinator holds it, and reading the checksum of one that is
         // still editable logs a Core Data error (on every launch, here). Store-less coordinators
         // freeze the sources; the container's coordinator already froze the target.
         _ = NSPersistentStoreCoordinator(managedObjectModel: versionOne)
         _ = NSPersistentStoreCoordinator(managedObjectModel: versionTwo)
+        _ = NSPersistentStoreCoordinator(managedObjectModel: versionThree)
         let firstStage = NSCustomMigrationStage(
             migratingFrom: NSManagedObjectModelReference(model: versionOne, versionChecksum: versionOne.versionChecksum),
             to: NSManagedObjectModelReference(model: versionTwo, versionChecksum: versionTwo.versionChecksum)
         )
         let secondStage = NSCustomMigrationStage(
             migratingFrom: NSManagedObjectModelReference(model: versionTwo, versionChecksum: versionTwo.versionChecksum),
+            to: NSManagedObjectModelReference(model: versionThree, versionChecksum: versionThree.versionChecksum)
+        )
+        let thirdStage = NSCustomMigrationStage(
+            migratingFrom: NSManagedObjectModelReference(model: versionThree, versionChecksum: versionThree.versionChecksum),
             to: NSManagedObjectModelReference(model: target, versionChecksum: target.versionChecksum)
         )
-        return NSStagedMigrationManager([firstStage, secondStage])
+        return NSStagedMigrationManager([firstStage, secondStage, thirdStage])
+    }
+
+    /// The sealed private-memory entity (V4, G9-3 owner call M6 = A): EXACTLY the three attributes
+    /// `BodyTally` has — `id` (indexed; the memory's own random id, so a forget can drop a row
+    /// without the key), `schemaVersion` (the payload format, plaintext) and one `payloadCiphertext`
+    /// blob holding the whole memory (its category, words, source date and edited flag). No date or
+    /// category column, no uniqueness constraint and no external binary storage, for the reasons
+    /// ``makeCycleRecordEntity()`` gives; one row per id is `PrivateMemoryRepository`'s upsert.
+    static func makePrivateMemoryEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "PrivateMemory"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            CoreDataModelBuilding.makeAttribute("id", type: .UUIDAttributeType),
+            CoreDataModelBuilding.makeAttribute("schemaVersion", type: .integer16AttributeType),
+            CoreDataModelBuilding.makeAttribute("payloadCiphertext", type: .binaryDataAttributeType, allowsExternalBinaryDataStorage: false)
+        ]
+        if let idProp = entity.propertiesByName["id"] {
+            entity.indexes = [NSFetchIndexDescription(name: "privateMemoryByID", elements: [
+                NSFetchIndexElementDescription(property: idProp, collationType: .binary)
+            ])]
+        }
+        return entity
     }
 
     /// The sealed body-tally entity (V3, World bodybuilding round 7): EXACTLY the three attributes

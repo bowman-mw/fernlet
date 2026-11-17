@@ -75,7 +75,8 @@ extension SealedBackupV2Engine {
     /// R4–R10: fetch, open, verify and merge; throws ``SealedBackupV2Stop`` at a gate. Without an
     /// escrow key only the head's existence is read (no decrypt): none resolves the restore (R5); one
     /// waits for the synced key (`.deferredKeyNotSynced`). A head's body tallies (the journal's,
-    /// round 7) merge just before the records, under the same gate.
+    /// round 7) and private memories (the journal's, G9-3) merge just before the records, under the
+    /// same gate; a private-memory section a newer Fernlet wrote is skipped, never a failure.
     private func fetchAndMerge<A: SealedBackupV2Adapter>(
         _ adapter: A,
         service: SealedBackupService,
@@ -102,11 +103,13 @@ extension SealedBackupV2Engine {
             try Self.decodingAuthenticated { try openAndVerify(adapter, head: head, suffix: suffix, service: service) }
         }
         let bodyTally = try Self.decodingAuthenticated { try SealedBackupV2Format.bodyTallies(of: head.plaintext) }
+        let privateMemories = try Self.decodingAuthenticated { try SealedBackupV2Format.privateMemories(of: head.plaintext) }
         try ensureGate(adapter, epoch: epoch)
         guard let key = liveHubKey else { throw SealedBackupV2Stop.gate(.hubClosed) }
         // The head's body tallies (higher count, union of tags, never a delete) merge first, so a retry
         // after the records' merge or a skeleton write failed only merges them again.
         if let bodyTally { try adapter.restoreBodyTallies(bodyTally) }
+        if let privateMemories { try adapter.restorePrivateMemories(privateMemories, hubKey: key) }
         let merged = try adapter.restoreMerging(records, hubKey: key)
         let followedUp = adapter.didRestore(merged)
         return acceptRestore(adapter, head: head, merged: merged, followedUp: followedUp,

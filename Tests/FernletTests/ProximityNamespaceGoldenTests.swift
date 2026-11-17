@@ -1340,19 +1340,19 @@ struct ProximityNamespaceGoldenTests {
     /// routing on; this is CDST's rule run over both registries at once.
     @Test func noLabelOfTheRegistryAndFernletTogetherIsAPrefixOfAnother() {
         var names: [Data: String] = [:]
-        // R2: bounded by the 101 registry entries (83, plus the World build's four map-store domains, the
+        // R2: bounded by the 102 registry entries (83, plus the World build's four map-store domains, the
         // solo camera's three, step 5c's three place domains, round 7's passport and corner, the
         // bodybuilding round's body tally, road trip mode's three photo domains, G9-2's two recovery-code
-        // domains, and G5's mesh dial proof and recipe friend tag).
+        // domains, and G5's mesh dial proof and recipe friend tag, and G9-3's private memory).
         for domain in CryptographicDomainSeparationTests.allDomains where names[domain.purpose.data] == nil {
             names[domain.purpose.data] = "FernletCryptoPurpose.\(domain.name)"
         }
-        #expect(names.count == 101, "the registry holds \(names.count) distinct labels")
+        #expect(names.count == 102, "the registry holds \(names.count) distinct labels")
         // R2: bounded by the 42 label rows.
         for row in ProximityNamespace.fernlet.labelRows where names[row.purpose.data] == nil {
             names[row.purpose.data] = ".fernlet \(row.field)"
         }
-        #expect(names.count == 102, "together \(names.count) distinct labels; the 41 twins coincide and the epoch domain is new")
+        #expect(names.count == 103, "together \(names.count) distinct labels; the 41 twins coincide and the epoch domain is new")
         let exceptions = CryptographicDomainSeparationTests.prefixExceptions
         var offenders: [String] = []
         var excused = 0
