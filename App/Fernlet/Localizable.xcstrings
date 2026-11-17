@@ -106558,25 +106558,25 @@
       }
     },
     "wornWay.sheet.last" : {
-      "comment" : "Worn way sheet header, last part: when the path was last used, e.g. 'last 3 days ago', 'last yesterday'",
+      "comment" : "Worn way sheet header, last part: when the path was last used, e.g. 'last used 3 days ago', 'last used yesterday'",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "last %@"
+            "value" : "last used %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "el último %@"
+            "value" : "última vez %@"
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "el último %@"
+            "value" : "última vez %@"
           }
         }
       }

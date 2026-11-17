@@ -43,7 +43,7 @@ struct WornWayBook {
 }
 
 /// The small sheet a tap on a worn road, railway or ferry wake opens (ferry and train build, owner's C2 with the note
-/// "Add a per trip record", 2026-11-15): "Train path · used 12 times · last 3 days ago", the whole path's fixes
+/// "Add a per trip record", 2026-11-15): "Train path · used 12 times · last used 3 days ago", the whole path's fixes
 /// (This was a road / a ferry, Forget this path, which asks first), and the rides kept through the spot, newest
 /// first, each with its own change and Forget.
 struct WornWaySheet: View {
@@ -153,7 +153,7 @@ struct WornWayDetail: View {
         }
     }
 
-    /// "Train path · used 12 times · last 3 days ago" (the title alone once the way has gone).
+    /// "Train path · used 12 times · last used 3 days ago" (the title alone once the way has gone).
     private var header: String {
         guard let tally = book.tally(key) else { return String(localized: WornWayCopy.title(key.kind)) }
         return WornWayCopy.header(kind: key.kind, tally: tally, today: WornDay.number(for: Date()))
@@ -334,10 +334,10 @@ nonisolated enum WornWayCopy {
                                 comment: "Worn way sheet header, middle part: how many kept trips have used this path")
     }
 
-    /// "last 3 days ago" (`when` is a relative date, already localized).
+    /// "last used 3 days ago" (`when` is a relative date, already localized).
     static func last(_ when: String) -> LocalizedStringResource {
-        LocalizedStringResource("wornWay.sheet.last", defaultValue: "last \(when)",
-                                comment: "Worn way sheet header, last part: when the path was last used, e.g. 'last 3 days ago', 'last yesterday'")
+        LocalizedStringResource("wornWay.sheet.last", defaultValue: "last used \(when)",
+                                comment: "Worn way sheet header, last part: when the path was last used, e.g. 'last used 3 days ago', 'last used yesterday'")
     }
 
     /// "650 ft away" (`distance` already formatted).
@@ -346,7 +346,7 @@ nonisolated enum WornWayCopy {
                                 comment: "Paths near you: how far a worn path is from the person, e.g. '650 ft away'")
     }
 
-    /// The sheet's line: "Train path · used 12 times · last 3 days ago".
+    /// The sheet's line: "Train path · used 12 times · last used 3 days ago".
     static func header(kind: WornWayKind, tally: WornTally, today: UInt16, locale: Locale = .current) -> String {
         let days = max(0, Int(today) - Int(tally.lastDay))
         return [String(localized: title(kind)), String(localized: used(Int(tally.count))),

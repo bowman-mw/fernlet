@@ -107,7 +107,7 @@ struct WornTransitAskTests {
     @Test func theHeaderReadsKindUsesAndLastDay() {
         let line = WornWayCopy.header(kind: .rail, tally: WornTally(count: 12, lastDay: Self.today - 3), today: Self.today,
                                       locale: Self.english)
-        #expect(line == "Train path · used 12 times · last 3 days ago")
+        #expect(line == "Train path · used 12 times · last used 3 days ago")
         let ferry = WornWayCopy.header(kind: .ferry, tally: WornTally(count: 1, lastDay: Self.today), today: Self.today,
                                        locale: Self.english)
         #expect(ferry == "Ferry path · used 1 time · last today")
