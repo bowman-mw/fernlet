@@ -239,11 +239,13 @@ struct WorkoutExerciseSelectionTests {
 
     /// An unknown token from a newer catalog falls back to the default instead of throwing — a
     /// custom row lives in the synced settings blob, where one throw would fail the whole decode.
+    /// The unknown gear token was `sled` until G2 (#153) made the sled real gear (`GymEquipment.sled`,
+    /// for Sled push and Sled pull); `jetpack` is a token no catalog will grow.
     @Test func unknownCurationTokensFallBackToDefaults() throws {
         let json = """
         {"name": "Future move", "primaryMuscles": ["chest"], "modality": "aquatic", "difficulty": 9,
          "measure": "meters", "plane": "diagonal", "alternativeEquipment": ["hoverboard", "dumbbell"],
-         "requiredGear": ["sled", "weightBench"]}
+         "requiredGear": ["jetpack", "weightBench"]}
         """
         let decoded = try JSONDecoder().decode(ExerciseTarget.self, from: Data(json.utf8))
         #expect(decoded.modality == .strength)

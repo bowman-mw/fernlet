@@ -541,6 +541,7 @@ RecipeSourceURLMatcherTests	Tests/FernletTests/RecipeSourceURLTests.swift	-
 RecipeStepsTests	Tests/FernletTests/RecipeStepsTests.swift	-
 RecipeWebImageTests	Tests/FernletTests/RecipeWebImageTests.swift	-
 RecipeWebImporterTests	Tests/FernletTests/RecipeWebImporterTests.swift	-
+RecoveryCodeGoldenTests	Tests/FernletTests/RecoveryCodeGoldenTests.swift	crypto-goldens
 RetiredLockWrapFormatTests	Tests/FernletTests/FernletLockServiceTests.swift	-
 ReviewHostsExportFailureSourceWallTests	Tests/FernletTests/PhotoSaveFailureAcknowledgementTests.swift	-
 RewrapStagingSweepTests	Tests/FernletTests/FernletLockServiceTests.swift	-
