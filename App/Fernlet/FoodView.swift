@@ -1510,18 +1510,25 @@ struct RecipeSheet: View {
     @State private var makesUnit = RecipeUnit.cup.rawValue
     /// "From your recipes": the list of saved recipes this one may use (owner pick P10a).
     @State private var showingRecipeChoices = false
+    /// The row "Make a recipe for it" opened a new recipe for (owner picks P11a, P12a); its save binds it.
+    @State private var makingRecipeForRow: ManualRecipeIngredientInput?
+    /// Told the recipe a create-mode save made: "Make a recipe for it" binds the row that asked.
+    private var onCreated: ((RecipeDefinition) -> Void)?
 
     init(
         store: FernletStore,
         recipe: RecipeDefinition? = nil,
         pasted: PastedRecipeSeed? = nil,
+        newRecipe: NewRecipeSeed? = nil,
         isEmbeddedInNavigationStack: Bool = false,
         startsWithScanner: Bool = false,
         onSaved: ((String) -> Void)? = nil,
+        onCreated: ((RecipeDefinition) -> Void)? = nil,
         onMealsLogged: MealLogReporter = .none
     ) {
         self.store = store
         self.editingRecipe = recipe
+        self.onCreated = onCreated
         self.isEmbeddedInNavigationStack = isEmbeddedInNavigationStack
         self.startsWithScanner = startsWithScanner
         self.onSaved = onSaved
@@ -1573,6 +1580,11 @@ struct RecipeSheet: View {
             ))
         } else {
             let first = ManualRecipeIngredientInput()
+            // "Make a recipe for it" (recipes as building blocks, pick P12a): named after the line, and
+            // making the line's amount. Opened as unsaved edits, so backing out asks first.
+            _name = State(initialValue: newRecipe?.name ?? "")
+            _makesQuantity = State(initialValue: newRecipe?.makes?.quantity)
+            _makesUnit = State(initialValue: newRecipe?.makes?.unit ?? RecipeUnit.cup.rawValue)
             _ingredients = State(initialValue: [first])
             _expandedId = State(initialValue: first.id)
             _originalDraft = State(initialValue: RecipeDraftSnapshot(
@@ -1601,6 +1613,20 @@ struct RecipeSheet: View {
         if let editingRecipe {
             RecipeUsedInNote(users: store.recipesUsing(editingRecipe))
         }
+    }
+
+    /// Binds the row "Make a recipe for it" asked for to the recipe just made: all its servings, which
+    /// is the line's amount, because the new recipe makes exactly that (pick P12a).
+    private func bindRow(_ rowID: UUID, to recipe: RecipeDefinition) {
+        guard let index = ingredients.firstIndex(where: { $0.id == rowID }),
+              let food = store.prepareRecipeFood(for: recipe) else { return }
+        ingredients[index].name = food.name
+        ingredients[index].selectedFoodItemId = food.id
+        ingredients[index].quantity = Double(max(recipe.servings, 1))
+        ingredients[index].unit = RecipeUnit.serving.rawValue
+        ingredients[index].portion = nil
+        ingredients[index].pickedForSearch = nil
+        expandedId = nil
     }
 
     /// The "Makes" amount as typed, when it is a usable one.
@@ -1728,7 +1754,8 @@ struct RecipeSheet: View {
             VStack(spacing: 8) {
                 RecipeIngredientRows(ingredients: $ingredients, expandedId: $expandedId, store: store,
                                      onRemove: removeIngredient, pastedRowNotes: pastedRowNotes,
-                                     recipeSource: .from(store, editing: editingRecipe?.id))
+                                     recipeSource: .from(store, editing: editingRecipe?.id,
+                                                         makeRecipe: { makingRecipeForRow = $0 }))
                 // Stacks at accessibility sizes: side by side, "Add ingredient" / "Scan barcode"
                 // squeezed to the edge and broke mid-word.
                 AdaptiveStack(spacing: 8) {
@@ -1759,6 +1786,10 @@ struct RecipeSheet: View {
                 .disabled(ingredients.count >= RecipeLimits.maxIngredients)
                 .accessibilityIdentifier("recipeEditor.fromYourRecipes")
             }
+        }
+        .sheet(item: $makingRecipeForRow) { row in
+            RecipeSheet(store: store, newRecipe: NewRecipeSeed(row: row),
+                        onCreated: { made in bindRow(row.id, to: made) })
         }
         .sheet(isPresented: $showingRecipeChoices) {
             RecipeChoicesSheet(choices: store.recipeIngredientChoices(editing: editingRecipe?.id)) { recipe in
@@ -1936,7 +1967,8 @@ struct RecipeSheet: View {
         // an ingredient.
         AdaptiveStack(spacing: 10) {
             Button {
-                addDraftRecipe()
+                let recipe = addDraftRecipe()
+                onCreated?(recipe)
                 finishAfterSave(named: name)
             } label: {
                 Text("Save recipe").frame(maxWidth: .infinity)
@@ -1946,6 +1978,7 @@ struct RecipeSheet: View {
 
             Button {
                 let recipe = addDraftRecipe()
+                onCreated?(recipe)
                 // Reported before the save finishes, so a host that pops or closes on save already
                 // knows a meal toast is coming (the recipe book then leaves the speaking to it).
                 if let meal = store.logRecipe(recipe) {
@@ -2641,6 +2674,9 @@ struct RecipeIngredientEditor: View {
                 isCreatingCustomIngredient = true
             }
             .accessibilityIdentifier("recipeIngredient.catalogMiss")
+            if let makeRecipe = recipeSource.makeRecipe, !ingredient.trimmedName.isEmpty {
+                MakeRecipeForItButton { makeRecipe(ingredient) }
+            }
         } else if isCreatingCustomIngredient {
             Text("Add its macros below, then save the custom ingredient.")
                 .font(.fernlet(.bodySmall))

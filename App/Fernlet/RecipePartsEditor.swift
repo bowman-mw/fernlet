@@ -41,6 +41,9 @@ struct RecipeIngredientRows: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let note, note.isUnmatched {
                     PastedRowNoteView(note: note)
+                    if let makeRecipe = recipeSource.makeRecipe {
+                        MakeRecipeForItButton { makeRecipe(ingredient) }
+                    }
                 }
                 row($ingredient)
                 if let note, !note.isUnmatched {
