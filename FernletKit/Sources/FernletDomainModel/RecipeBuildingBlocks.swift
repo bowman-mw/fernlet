@@ -277,3 +277,28 @@ extension RecipeDefinition {
         }
     }
 }
+
+extension RecipeDefinition {
+    /// This recipe as a share sends it when it uses other recipes (recipes as building blocks, pick
+    /// P09a): its sub-recipes' steps become leading parts with no ingredients, named after each
+    /// sub-recipe, before this recipe's own part(s), so every reader, older ones included, sees which
+    /// steps make the sauce. The lines are unchanged (a sub-recipe line is an ordinary ingredient to
+    /// an older reader). `self` when no sub-recipe has steps.
+    public func flattenedForSharing(graph: RecipeNestingGraph, recipesByID: [UUID: RecipeDefinition]) -> RecipeDefinition {
+        let sections = stepSections(graph: graph, recipesByID: recipesByID)
+        let ownIDs = Set(resolvedComponents.map(\.id))
+        let subSections = sections.filter { !ownIDs.contains($0.id) }
+        guard !subSections.isEmpty else { return self }
+        let ownParts = resolvedComponents
+        var copy = self
+        copy.steps = subSections.flatMap(\.steps) + ownParts.flatMap(\.steps)
+        copy.components = subSections.map { section in
+            RecipeComponent(id: section.id, name: RecipeComponentNaming.normalized(section.name ?? "", position: 0),
+                            ingredientIDs: [], stepIDs: section.steps.map(\.id))
+        } + ownParts.map { part in
+            RecipeComponent(id: part.id, name: RecipeComponentNaming.normalized(part.name ?? name, position: 0),
+                            ingredientIDs: part.ingredients.map(\.id), stepIDs: part.steps.map(\.id))
+        }
+        return copy
+    }
+}

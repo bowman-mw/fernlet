@@ -1,6 +1,6 @@
 # ``PrivateMemoryStore``
 
-The sealed journal and Worry Box store: column-encrypted, local-only persistence for the user's free-text memories on the protected side of the S3 privacy wall.
+The sealed journal, Worry Box and private-memory store: column-encrypted, local-only persistence for the user's free-text memories on the protected side of the S3 privacy wall.
 
 ## Overview
 
@@ -67,6 +67,19 @@ the synced blob at all — they are write-once, device-only, excluded from `Seal
 device-key → user-key migration (``WorryStoring/reencryptAll(from:to:)``) because
 `WorryBoxService` lets the user write worries before any app lock exists.
 
+**Private memories (G9-3, owner call M6 = A, 2026-11-15).** ``PrivateMemoryRepository`` is the third
+repository: the Core memories a person chose to "Keep private", moved out of the synced memory rows
+into this store. One `ColumnCrypto` blob per memory under the registered purpose
+`fernlet.private-memory.v1` (the whole `MemoryNote`: category, words, source date, edited flag), sealed
+under the Private tab's content key — the journal's — so a private memory opens exactly when the journal
+does; the only plaintext column beside it is the memory's own random id, which lets a forget or a wipe
+drop a row without the key (``PrivateMemoryRepository/delete(ids:)``, ``PrivateMemoryRepository/deleteAll()``,
+and the keyless ``PrivateMemoryRepository/rowCount()`` behind the page's "N private memories — unlock to
+see"). Reads answer a ``PrivateMemoryPage`` (opened, dead, undecided); a restore from the journal's
+Sealed backup merges through ``PrivateMemoryRepository/mergeRestored(_:key:)`` — absent ids inserted,
+rows that open kept, dead rows replaced, never a delete. The app reaches it only through
+``PrivateMemoryStoring``, the seam its `PrivateMemoryVault` holds.
+
 Concurrency: this target sets no `defaultIsolation(MainActor.self)` — both repositories are plain
 nonisolated `final class`es whose every operation runs synchronously inside
 `NSManagedObjectContext.performAndWait` on the sealed store's view context, so they can be called
@@ -108,6 +121,13 @@ key the rows spoke for is provably gone.
 - ``JournalNarrativeMergeResult``
 - ``JournalNarrativeSkeleton``
 - ``JournalNarrativeRepositoryError``
+
+### Private memories
+
+- ``PrivateMemoryStoring``
+- ``PrivateMemoryRepository``
+- ``PrivateMemoryPage``
+- ``PrivateMemoryRepositoryError``
 
 ### Worry Box
 

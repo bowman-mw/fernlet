@@ -442,6 +442,9 @@ nonisolated enum DeleteAllStoreNames {
         "your Worry Box notes": LocalizedStringResource(
             "deleteAll.store.worryBoxNotes", defaultValue: "your Worry Box notes",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your private memories": LocalizedStringResource(
+            "deleteAll.store.privateMemories", defaultValue: "your private memories",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. The Core memories the person chose to keep private. Keep it lowercase unless it is a name."),
         "your sealed store": LocalizedStringResource(
             "deleteAll.store.sealedStore", defaultValue: "your sealed store",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),

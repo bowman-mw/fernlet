@@ -1835,6 +1835,75 @@ public final class DiaryStore {
         batchSnapshotPersistence {
             memories[index].category = trimmedCategory.isEmpty ? "note" : trimmedCategory
             memories[index].text = String(trimmedText.prefix(240))
+            // G9-3: the summarizer never fills it, and the cap drops unedited memories first.
+            memories[index].userEdited = true
+        }
+    }
+
+    // MARK: - Memory controls (G9-3)
+
+    /// Forgets the memories with the listed ids (the "Forget these" checklist). The save soft-deletes
+    /// their rows, so another phone cannot bring them back. Audit-logged by count only.
+    ///
+    /// - Returns: How many memories were forgotten.
+    @discardableResult
+    public func forgetMemories(ids: Set<UUID>) -> Int {
+        let before = memories.count
+        guard !ids.isEmpty else { return 0 }
+        batchSnapshotPersistence {
+            memories.removeAll { ids.contains($0.id) }
+        }
+        let forgotten = before - memories.count
+        FernletAuditLog.log("memory.forgetFiltered", context: ["count": "\(forgotten)"])
+        return forgotten
+    }
+
+    /// Deletes every Core memory ("Delete all memories"). Audit-logged by count only.
+    ///
+    /// - Returns: How many memories were deleted.
+    @discardableResult
+    public func deleteAllMemories() -> Int {
+        let count = memories.count
+        batchSnapshotPersistence {
+            memories = []
+        }
+        FernletAuditLog.log("memory.deleteAll", context: ["count": "\(count)"])
+        return count
+    }
+
+    /// "Forget patterns" (owner call M3 = A): the Tier-2 learn-from date becomes today (synced, so every
+    /// device forgets), this device's pattern store is deleted, and the save it schedules rebuilds it
+    /// from today's days only. Audit-logged by count only.
+    public func forgetPatterns() {
+        let count = tierTwoMemories.count
+        let purged = repository.purgeTierTwoMemories()
+        batchSnapshotPersistence {
+            settings.tierTwoLearnFrom = Self.newerLearnFrom(settings.tierTwoLearnFrom, todayKey)
+        }
+        FernletAuditLog.log("memory.forgetPatterns", context: ["count": "\(count)", "purged": purged ? "true" : "false"])
+    }
+
+    /// "Let Fernlet remember" (owner call M2 = A). Off stops journal capture and pattern-making; with
+    /// `deleteExisting`, every Core memory goes too. Patterns are emptied either way when off (the
+    /// next save's refresh deletes the store). Audit-logged by count only.
+    public func setMemoryExtraction(enabled: Bool, deleteExisting: Bool) {
+        let deleted = (!enabled && deleteExisting) ? memories.count : 0
+        batchSnapshotPersistence {
+            settings.memoryExtractionEnabled = enabled
+            if deleted > 0 { memories = [] }
+        }
+        if !enabled, !repository.purgeTierTwoMemories() {
+            FernletAuditLog.log("memory.extraction.purgeFailed")
+        }
+        FernletAuditLog.log("memory.extraction.set", context: ["enabled": enabled ? "true" : "false", "deleted": "\(deleted)"])
+    }
+
+    /// The later of two learn-from day keys (`yyyy-MM-dd` keys sort by date); nil only when both are.
+    public static func newerLearnFrom(_ first: String?, _ second: String?) -> String? {
+        switch (first, second) {
+        case let (first?, second?): return max(first, second)
+        case let (first?, nil): return first
+        case let (nil, second): return second
         }
     }
 
@@ -2097,6 +2166,7 @@ public final class DiaryStore {
     /// app-only collaborators (retry queue, trust vault, journal sealing, derived signals).
     public func applyDiarySlice(_ snapshot: FernletSnapshot) {
         let existingOwnedDesignerIDs = settings.ownedDesignerIDs
+        let existingLearnFrom = settings.tierTwoLearnFrom
         // The snapshot's day came from a row, which never carries HealthKit values; put this
         // device's back (a remote reload must not blank today's steps and sleep).
         day = withDeviceHealthKitValues(snapshot.day)
@@ -2105,6 +2175,9 @@ public final class DiaryStore {
         // the set is monotonic, so union-on-apply gives every device the full history of the user's ids
         // without clobbering — the fix for own-device items reading as "a friend's" after a sync.
         settings.ownedDesignerIDs.formUnion(existingOwnedDesignerIDs)
+        // G9-3: the Tier-2 learn-from date is newest-wins, not last-writer-wins: a stale blob from a
+        // phone that never heard of "Forget patterns" must not move the date back.
+        settings.tierTwoLearnFrom = Self.newerLearnFrom(existingLearnFrom, settings.tierTwoLearnFrom)
         recentMeals = snapshot.recentMeals
         previousJournals = snapshot.previousJournals
         memories = snapshot.memories

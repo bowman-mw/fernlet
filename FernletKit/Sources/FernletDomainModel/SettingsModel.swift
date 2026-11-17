@@ -355,6 +355,18 @@ public nonisolated struct FernletSettings: Codable {
     /// shape exactly.
     public var bodybuildingCalendar = BodybuildingCalendarSettings()
 
+    /// "Let Fernlet remember" (G9-3, owner call M2 = A). Off, journal entries leave no Core memory
+    /// (neither the emotion-only note nor a summary) and no patterns are worked out from your days:
+    /// the device-local Tier-2 store is emptied at the next save. Synced, at the top level, and absent
+    /// from a blob while on (the default), so every blob saved before keeps its shape.
+    public var memoryExtractionEnabled = true
+
+    /// The first day (`yyyy-MM-dd`) Tier-2 patterns may learn from (G9-3, owner call M3 = A): set to
+    /// today by "Forget patterns", so the next save cannot rebuild what was forgotten from older days.
+    /// Synced (patterns are rebuilt on each device from the same synced days), and the NEWEST key wins
+    /// when a remote blob carries an older one (``DiaryStore`` merges it on apply). Absent while nil.
+    public var tierTwoLearnFrom: String? = nil
+
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
     /// side channels above (and the TODO that used to sit in `init(from:)`): when a device on an OLDER
@@ -424,6 +436,10 @@ public nonisolated struct FernletSettings: Codable {
         try decodeWorkoutAndExport(from: container)
         bodybuildingCalendar = try container.decodeIfPresent(BodybuildingCalendarSettings.self, forKey: .bodybuildingCalendar)
             ?? BodybuildingCalendarSettings()
+        memoryExtractionEnabled = try container.decodeIfPresent(Bool.self, forKey: .memoryExtractionEnabled) ?? true
+        // R5: only a well-formed day key; a foreign string would compare as "after every day" forever.
+        tierTwoLearnFrom = (try container.decodeIfPresent(String.self, forKey: .tierTwoLearnFrom))
+            .flatMap { Self.isDayKeyShaped($0) ? $0 : nil }
         try parkUnknownKeys(from: decoder)
     }
 
@@ -707,6 +723,19 @@ public nonisolated struct FernletSettings: Codable {
 
     /// Keeps only the newest ``maxDayKeyedEntries`` entries of a `yyyy-MM-dd`-keyed map (the keys
     /// sort chronologically, so lexicographic order is date order).
+    /// Whether `key` has the `yyyy-MM-dd` shape: ten characters, ASCII digits with dashes at 4 and 7.
+    public static func isDayKeyShaped(_ key: String) -> Bool {
+        let characters = Array(key.utf8)
+        guard characters.count == 10 else { return false }
+        for (index, byte) in characters.enumerated() {
+            let wantsDash = index == 4 || index == 7
+            if wantsDash ? byte != UInt8(ascii: "-") : !(UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte) {
+                return false
+            }
+        }
+        return true
+    }
+
     private static func newestDayKeys<Value>(_ map: [String: Value]) -> [String: Value] {
         guard map.count > maxDayKeyedEntries else { return map }
         let keep = Set(map.keys.sorted().suffix(maxDayKeyedEntries))
@@ -784,6 +813,7 @@ public nonisolated struct FernletSettings: Codable {
         case recipeShareIncludesNotes, recipeShareIncludesPicture
         case bodybuildingCalendar
         case allowConnectByTapping
+        case memoryExtractionEnabled, tierTwoLearnFrom
         case advertiseNameToEveryoneNearby
     }
 
@@ -804,6 +834,11 @@ public nonisolated struct FernletSettings: Codable {
         if bodybuildingCalendar != BodybuildingCalendarSettings() {
             try container.encode(bodybuildingCalendar, forKey: .bodybuildingCalendar)
         }
+        // G9-3: written only once they differ from the default, like the calendar above.
+        if !memoryExtractionEnabled {
+            try container.encode(memoryExtractionEnabled, forKey: .memoryExtractionEnabled)
+        }
+        try container.encodeIfPresent(tierTwoLearnFrom, forKey: .tierTwoLearnFrom)
 
         // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
         // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard

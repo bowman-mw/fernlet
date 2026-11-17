@@ -42,6 +42,11 @@ struct SealedBackupHeadStamp: Equatable, Hashable, Sendable {
 /// ride the journal's switch, owner hold, compare-and-swap and deletes. Absent on every other chunk,
 /// on every other payload's set, and while there is no tally. An earlier build ignores the key.
 /// (The World passport is NOT on this head: it has its own `worldPassport` payload and switch.)
+///
+/// **The private memories** (G9-3, owner call M6 = A). The journal head may also carry
+/// `"privateMemories"`: ``SealedBackupPrivateMemories`` (`{"v":1,"memories":[…]}`), the Core memories a
+/// person kept private, under the same journal path and switch. An earlier build ignores the key, and a
+/// newer shape of it is skipped rather than failing the restore.
 struct SealedBackupV2Envelope<Record: Codable>: Codable {
     /// The envelope format this build writes.
     static var formatVersion: Int { 2 }
@@ -56,21 +61,28 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
     var records: [Record]
     /// The body tallies (the journal head only); nil everywhere else.
     var bodyTally: SealedBackupBodyTallies?
+    /// The private memories (the journal head only); nil everywhere else.
+    var privateMemories: SealedBackupPrivateMemories?
 
     /// FROZEN keys.
     enum CodingKeys: String, CodingKey {
         case version = "v"
         case writer, set, total, records
         case bodyTally
+        case privateMemories
     }
 
     /// Creates an envelope.
-    init(writer: String, set: String, total: Int?, records: [Record], bodyTally: SealedBackupBodyTallies? = nil) {
+    init(
+        writer: String, set: String, total: Int?, records: [Record],
+        bodyTally: SealedBackupBodyTallies? = nil, privateMemories: SealedBackupPrivateMemories? = nil
+    ) {
         self.writer = writer
         self.set = set
         self.total = total
         self.records = records
         self.bodyTally = bodyTally
+        self.privateMemories = privateMemories
     }
 
     /// Decodes an envelope. A `v` other than ``formatVersion`` throws
@@ -84,6 +96,7 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
         total = header.total
         records = try container.decode([Record].self, forKey: .records)
         bodyTally = try container.decodeIfPresent(SealedBackupBodyTallies.self, forKey: .bodyTally)
+        privateMemories = try container.decodeIfPresent(SealedBackupPrivateMemories.self, forKey: .privateMemories)
     }
 
     /// Encodes the frozen shape.
@@ -95,6 +108,7 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
         try container.encodeIfPresent(total, forKey: .total)
         try container.encode(records, forKey: .records)
         try container.encodeIfPresent(bodyTally, forKey: .bodyTally)
+        try container.encodeIfPresent(privateMemories, forKey: .privateMemories)
     }
 }
 

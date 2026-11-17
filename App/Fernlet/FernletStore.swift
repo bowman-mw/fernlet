@@ -3892,6 +3892,11 @@ final class FernletStore {
     /// Nil (unwired: tests, previews) means no key, which fails closed.
     @ObservationIgnored var hubContentKeyProvider: (() -> SymmetricKey?)?
 
+    /// The sealed funnel for private memories (G9-3, "Keep private"): the Core memories a person moved
+    /// into the Private tab's sealed store. Made on first use over the shared sealed store; tests point
+    /// it at an in-memory one. Reached only through `FernletStore+PrivateMemories.swift`.
+    @ObservationIgnored lazy var privateMemoryVault = PrivateMemoryVault()
+
     /// The persisted "ambient restores wait for the device owner" bit — see ``SealedBackupRestoreHold``.
     /// Internal-settable ONLY so tests can point it at an isolated defaults suite.
     @ObservationIgnored var sealedBackupRestoreHold = SealedBackupRestoreHold(defaults: .standard)
@@ -4683,10 +4688,13 @@ final class FernletStore {
     /// `requestJournalMemorySummary` may later upgrade it with an on-device summary. AI off,
     /// unavailable, over budget, failed, filtered, or the app dying first: the emotion-only memory
     /// is the whole memory.
+    ///
+    /// G9-3: with "Let Fernlet remember" off nothing is captured, not even the emotion. The 300 cap
+    /// drops memories nobody edited first (`MemoryNote.capped`).
     private func rememberJournalEntry(_ entry: JournalEntry) {
-        guard let memory = MemoryNote.emotionOnly(for: entry) else { return }
+        guard settings.memoryExtractionEnabled, let memory = MemoryNote.emotionOnly(for: entry) else { return }
         memories.append(memory)
-        memories = Array(memories.suffix(300))
+        memories = MemoryNote.capped(memories)
         requestJournalMemorySummary(memoryID: memory.id, entryText: entry.text)
     }
 
@@ -4725,10 +4733,11 @@ final class FernletStore {
     /// one a delete-all wiped, cannot come back, and words the user typed in the editor are never
     /// overwritten.
     private func applyJournalMemorySummary(_ candidate: String?, memoryID: UUID, entryText: String) {
-        guard settings.aiStatus != .off, let candidate,
+        // G9-3: never with "Let Fernlet remember" off, and never over a memory the person edited.
+        guard settings.aiStatus != .off, settings.memoryExtractionEnabled, let candidate,
               let summary = JournalMemorySummaryPolicy.accepted(candidate, entryText: entryText),
               let index = memories.firstIndex(where: { $0.id == memoryID }),
-              memories[index].text.isEmpty
+              memories[index].text.isEmpty, !memories[index].userEdited
         else { return }
         memories[index].text = summary
         scheduleSnapshotSave()
@@ -6303,12 +6312,24 @@ final class FernletStore {
         return nested + RecipeNutritionGaps.linesWithoutNutrition(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
+    /// `recipe` as the hash-covered shares (Files, Shortcuts, Messages) send it: its sub-recipes' steps
+    /// as labelled leading parts, so every reader sees them; those wires cannot carry the sub-recipes
+    /// themselves, which arrive as fixed ingredients (recipes as building blocks, design §9).
+    func sharingDefinition(for recipe: RecipeDefinition) -> RecipeDefinition {
+        let all = allRecipesForNesting
+        return recipe.flattenedForSharing(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all))
+    }
+
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
         MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     func proximityRecipeSharePayload(for recipe: RecipeDefinition) -> ProximityRecipeSharePayload {
-        var payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
+        // The recipes it uses travel with it (recipes as building blocks, pick P09a).
+        let all = allRecipesForNesting
+        let used = RecipeNestingGraph(recipes: all).descendants(of: recipe.id)
+        let foods = foodCatalog.items(forRecipes: [recipe] + all.filter { used.contains($0.id) })
+        var payload = RecipeShareCodec.proximityPayload(for: recipe, foodItems: foods, recipes: all)
         #if canImport(UIKit)
         // Attach the recipe's picture (the user's own pick or the web-derived default) as a
         // downscaled, size-capped JPEG so the receiving device gets it over the mesh and never
@@ -6515,49 +6536,113 @@ final class FernletStore {
         }
 
         let now = Date()
-        return batchSnapshotPersistence {
-            let recipeIngredients = payload.ingredients.map { ingredient in
-                let trimmedIngredientName = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                let unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RecipeUnit.serving.rawValue : ingredient.unit
-                let quantity = min(max(ingredient.quantity, 0.01), RecipeImportLimits.maxQuantity)
-                let foodItem = FoodItem(
-                    name: trimmedIngredientName.isEmpty ? "Imported ingredient" : trimmedIngredientName,
-                    brandSource: "Imported recipe",
-                    servingSize: quantity,
-                    servingUnit: unit,
-                    macros: Macros(protein: max(ingredient.protein, 0),
-                                   carbs: max(ingredient.carbs, 0),
-                                   fat: max(ingredient.fat, 0)),
-                    micronutrients: Micronutrients(),
-                    category: "recipe ingredient",
-                    source: .manual,
-                    lastVerified: now,
-                    tags: ["recipe", "imported"],
-                    // The sender's fractional grams (paste text, mesh `.local`), already checked at
-                    // decode to round to exactly the whole-gram fields above. Absent from older senders.
-                    preciseMacros: ingredient.preciseMacros
-                )
-                foodItems.append(foodItem)
-                return RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)
+        let imported = batchSnapshotPersistence {
+            // Sub-recipes first, deepest first (recipes as building blocks, pick P09a): each becomes a
+            // recipe of its own, or reuses the same recipe already here, so the lines naming it bind.
+            var subRecipeIDs: [UUID] = []
+            for sub in payload.subRecipes ?? [] {
+                if let existing = matchingRecipe(for: sub) {
+                    subRecipeIDs.append(existing.id)
+                    continue
+                }
+                let recipe = importedRecipe(from: sub, id: UUID(), subRecipeIDs: subRecipeIDs, now: now)
+                recipes.insert(recipe, at: 0)
+                subRecipeIDs.append(recipe.id)
             }
-            // F5 steps (sanitized, nil when a peer sent none) and, for a multipart share, its parts
-            // rebuilt from the partition with the flattening labels removed — one rule for every path.
-            let layout = RecipeComponentImport.layout(for: payload, ingredientIDs: recipeIngredients.map(\.id))
-
-            let recipe = RecipeDefinition(
-                id: importedRecipeID ?? UUID(),
-                name: trimmedName,
-                servings: payload.servings,
-                ingredients: recipeIngredients,
-                notes: payload.notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                source: "imported",
-                createdAt: now,
-                updatedAt: now,
-                steps: layout.steps,
-                components: layout.components
-            )
+            let recipe = importedRecipe(from: payload, id: importedRecipeID ?? UUID(), subRecipeIDs: subRecipeIDs, now: now)
             recipes.insert(recipe, at: 0)
             return recipe
+        }
+        // The recipe foods its sub-recipe lines need. A multipart share stays in parts until the next
+        // launch or sync converts it (`migrateRecipePartsAndSync`), like a recipe saved in parts.
+        syncRecipeFoods()
+        return imported
+    }
+
+    /// One shared recipe as this device stores it: each ingredient minted as an imported food, except a
+    /// line naming a sub-recipe (``SharedRecipeIngredient/subRecipeIndex``), which uses that recipe by
+    /// the serving. The sub-recipes' labelled step parts are dropped: their steps now come from the
+    /// sub-recipes themselves.
+    private func importedRecipe(
+        from payload: SharedRecipePayload, id: UUID, subRecipeIDs: [UUID], now: Date
+    ) -> RecipeDefinition {
+        let recipeIngredients = payload.ingredients.map { ingredient in
+            let quantity = min(max(ingredient.quantity, 0.01), RecipeImportLimits.maxQuantity)
+            if let index = ingredient.subRecipeIndex, subRecipeIDs.indices.contains(index) {
+                return RecipeIngredient(foodItemId: subRecipeIDs[index], quantity: quantity, unit: RecipeUnit.serving.rawValue)
+            }
+            let trimmedIngredientName = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RecipeUnit.serving.rawValue : ingredient.unit
+            let foodItem = FoodItem(
+                name: trimmedIngredientName.isEmpty ? "Imported ingredient" : trimmedIngredientName,
+                brandSource: "Imported recipe",
+                servingSize: quantity,
+                servingUnit: unit,
+                macros: Macros(protein: max(ingredient.protein, 0),
+                               carbs: max(ingredient.carbs, 0),
+                               fat: max(ingredient.fat, 0)),
+                micronutrients: Micronutrients(),
+                category: "recipe ingredient",
+                source: .manual,
+                lastVerified: now,
+                tags: ["recipe", "imported"],
+                // The sender's fractional grams (paste text, mesh `.local`), already checked at
+                // decode to round to exactly the whole-gram fields above. Absent from older senders.
+                preciseMacros: ingredient.preciseMacros
+            )
+            foodItems.append(foodItem)
+            return RecipeIngredient(foodItemId: foodItem.id, quantity: quantity, unit: unit)
+        }
+        // F5 steps (sanitized, nil when a peer sent none) and, for a multipart share, its parts
+        // rebuilt from the partition with the flattening labels removed — one rule for every path.
+        var layout = RecipeComponentImport.layout(for: payload, ingredientIDs: recipeIngredients.map(\.id))
+        if let subs = payload.subRecipes, !subs.isEmpty {
+            layout = Self.droppingSubRecipeParts(
+                layout, named: Set(subs.map { RecipeComponentNaming.normalized($0.name, position: 0) }))
+        }
+        return RecipeDefinition(
+            id: id,
+            name: payload.name.trimmingCharacters(in: .whitespacesAndNewlines),
+            servings: payload.servings,
+            ingredients: recipeIngredients,
+            notes: payload.notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            source: "imported",
+            createdAt: now,
+            updatedAt: now,
+            steps: layout.steps,
+            components: layout.components
+        )
+    }
+
+    /// `layout` without the leading steps-only parts a sender wrote for its sub-recipes (named after
+    /// them), which a receiver that imports the sub-recipes reads from those recipes instead.
+    static func droppingSubRecipeParts(_ layout: RecipeComponentImport.Layout, named names: Set<String>) -> RecipeComponentImport.Layout {
+        guard let components = layout.components else { return layout }
+        let dropped = components.filter { $0.ingredientIDs.isEmpty && names.contains($0.name) }
+        guard !dropped.isEmpty else { return layout }
+        let droppedSteps = Set(dropped.flatMap(\.stepIDs))
+        let kept = components.filter { part in !dropped.contains { $0.id == part.id } }
+        let steps = (layout.steps ?? []).filter { !droppedSteps.contains($0.id) }
+        var result = layout
+        result.steps = steps.isEmpty ? nil : steps
+        result.components = kept.count >= RecipeComponentLimits.minComponents ? kept : nil
+        return result
+    }
+
+    /// A recipe already here that is the same as a shared sub-recipe: the same name, servings and
+    /// ingredient lines (names, amounts and units). Reused instead of making a second copy (P09a).
+    private func matchingRecipe(for payload: SharedRecipePayload) -> RecipeDefinition? {
+        let name = FoodItemSearch.normalized(payload.name)
+        let wanted = payload.ingredients.map { "\(FoodItemSearch.normalized($0.name))|\($0.quantity)|\($0.unit)" }
+        return recipes.first { recipe in
+            guard FoodItemSearch.normalized(recipe.name) == name, recipe.servings == payload.servings,
+                  recipe.ingredients.count == wanted.count else { return false }
+            let foods = foodCatalog.items(forRecipe: recipe)
+            let lines = recipe.ingredients.map { line in
+                let foodName = foods.first { $0.id == line.foodItemId }?.name ?? ""
+                return "\(FoodItemSearch.normalized(foodName))|\(line.quantity)|\(line.unit)"
+            }
+            return lines == wanted
         }
     }
 
@@ -6571,6 +6656,32 @@ final class FernletStore {
 
     func updateMemory(_ memory: MemoryNote, category: String, text: String) {
         diary.updateMemory(memory, category: category, text: text)
+    }
+
+    /// G9-3 memory controls — forwards to `DiaryStore`, each audit-logged there by count only. Forget
+    /// and Delete all also reach the private memories, but only while Private is open (and never in a
+    /// decoy): see `FernletStore+PrivateMemories.swift`.
+    ///
+    /// - Returns: How many memories were forgotten, Core and private together.
+    @discardableResult
+    func forgetMemories(ids: Set<UUID>) -> Int {
+        diary.forgetMemories(ids: ids) + forgetPrivateMemories(ids: ids)
+    }
+
+    /// Deletes every Core memory and, while Private is open, every private memory.
+    ///
+    /// - Returns: How many memories were deleted, Core and private together.
+    @discardableResult
+    func deleteAllMemories() -> Int {
+        diary.deleteAllMemories() + deleteAllPrivateMemories()
+    }
+
+    func forgetPatterns() {
+        diary.forgetPatterns()
+    }
+
+    func setMemoryExtraction(enabled: Bool, deleteExisting: Bool) {
+        diary.setMemoryExtraction(enabled: enabled, deleteExisting: deleteExisting)
     }
 
     /// Queues a meal-analysis retry; its note is a companion line, resolved for the user's term of
@@ -7531,6 +7642,10 @@ final class FernletStore {
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
         // because the delete dialog promises "Worry Box notes" by name.
         if worryBoxResetHook?() != true { incompleteStores.append("your Worry Box notes") }
+        // Private memories (G9-3, "Keep private"): sealed rows, keyless and ungated, so a locked phone
+        // and a no-lock phone lose them too. The store rebuild below also takes them; this leg is the
+        // one that reports a failure by name.
+        if !deleteAllPrivateMemoriesForWipe() { incompleteStores.append("your private memories") }
         // Received-heart records (friend names, fingerprints, glow, rate-limit keys) outlive the
         // trust-vault wipe otherwise; clear the device-local sidecar too.
         heartLedger.clearAll()
@@ -7637,18 +7752,18 @@ final class FernletStore {
         // G8: the gentle reminders' record — breathing and grounding finish dates and which cards
         // showed or were put off when.
         AmbientReminderMemory.clearAll()
-        // G9-2 and recipe blocks (2026-11-16): two device-local flags. The recovery code's "offered
-        // once" mark goes, since the wipe deletes the code's escrow and the next backup turned on
-        // should offer a new code; and the recipe book's pending "parts are now their own recipes"
-        // note goes with the recipes it describes.
-        RecoveryCodePresenter.clearOfferedFlag()
-        webImageAttemptDefaults.removeObject(forKey: Self.recipePartsMigratedNoteKey)
         // Three traces of use nobody decided should survive (the former "Open gaps"): the
         // day-summary backfill's last-run day, and the past-day journal scrub's latch and retry
         // counter. Post-wipe both jobs simply run once more over an empty store.
         LaunchPreparationService.clearDaySummaryRunMarker()
         pastDayJournalScrubDefaults.removeObject(forKey: Self.pastDayJournalScrubFlagKey)
         pastDayJournalScrubDefaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
+        // The recovery code's one-time offer flag (G9-2): a trace that a sealed backup was turned on
+        // here. Post-wipe the offer may show once more, and only when no code exists.
+        RecoveryCodePresenter.clearOfferedFlag(in: .standard)
+        // The recipe book's pending "Your recipe parts are now their own recipes" note: the recipes it
+        // speaks of are gone with the wipe.
+        webImageAttemptDefaults.removeObject(forKey: Self.recipePartsMigratedNoteKey)
     }
 
     /// The guided-workout leg of ``resetAll()``, split out of it for the 60-line rule (R4) when
@@ -8237,7 +8352,9 @@ final class FernletStore {
     }
 
     private func apply(_ snapshot: FernletSnapshot) {
+        let learnFromBefore = settings.tierTwoLearnFrom
         diary.applyDiarySlice(snapshot)
+        purgeTierTwoIfLearnFromMoved(from: learnFromBefore)
         // A remote (CloudKit) blob may have been re-encoded by a pre-gate peer that dropped the visibility
         // keys — reconcile immediately, before any read or the derived-signals rebuild below, so a mixed-
         // version sync can't re-open a hidden period/intimacy surface.
@@ -8263,6 +8380,16 @@ final class FernletStore {
         // Credit any newly active synced day (and reconcile milestones over the synced-in history).
         // Idempotent — re-running never double-grants.
         reconcileCoinLedger()
+    }
+
+    /// G9-3: a remote change brought a newer Tier-2 learn-from date ("Forget patterns" on another
+    /// device). This device purges its own pattern store and schedules a save, whose refresh rebuilds
+    /// it from that date only. The apply merge already kept the newer of the two dates.
+    private func purgeTierTwoIfLearnFromMoved(from before: String?) {
+        guard let after = settings.tierTwoLearnFrom, after != before else { return }
+        let purged = repository.purgeTierTwoMemories()
+        FernletAuditLog.log("memory.forgetPatterns.remote", context: ["purged": purged ? "true" : "false"])
+        scheduleSnapshotSave()
     }
 
     private func currentSnapshot() -> SanitizedSnapshot {

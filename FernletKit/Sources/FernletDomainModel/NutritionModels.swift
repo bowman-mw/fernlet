@@ -2826,8 +2826,20 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
     /// recipe, which keeps those bytes identical to earlier builds. Validated at decode by
     /// ``SharedRecipeComponent/validatedPartition(_:ingredientCount:stepCount:)``.
     public var components: [SharedRecipeComponent]?
+    /// The saved recipes this one uses as ingredients, sent along so the receiver gets them as recipes
+    /// of their own (recipes as building blocks, owner pick P09a): deepest first, each a flat payload
+    /// with no `subRecipes` of its own. A line that uses one names it by
+    /// ``SharedRecipeIngredient/subRecipeIndex``; a sub-recipe's own lines may name only sub-recipes
+    /// before it, so the list is in making order and can never loop.
+    ///
+    /// WIRE-COMPAT: an OPTIONAL key on version 1, like `steps` and `components`. An older reader ignores
+    /// it and reads the line as an ordinary ingredient with its macros, so its totals are right, and
+    /// reads the sub-recipes' steps as the labelled leading parts the sender also writes. Absent from
+    /// every recipe that uses no other recipe. Not carried by the hash-covered exchange packet
+    /// (``droppingSubRecipes()``). At most ``SharedRecipeLimits/maxSubRecipes``.
+    public var subRecipes: [SharedRecipePayload]?
 
-    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient], steps: [RecipeStep]? = nil, components: [SharedRecipeComponent]? = nil) {
+    public init(format: String = "fernlet.recipe", version: Int = 1, name: String, servings: Int, notes: String, ingredients: [SharedRecipeIngredient], steps: [RecipeStep]? = nil, components: [SharedRecipeComponent]? = nil, subRecipes: [SharedRecipePayload]? = nil) {
         self.format = format
         self.version = version
         self.name = name
@@ -2836,6 +2848,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
         self.ingredients = ingredients
         self.steps = steps
         self.components = components
+        self.subRecipes = subRecipes
     }
 
     /// Bounded decode (R3/R5). This type is built from UNTRUSTED bytes — pasted share text and mesh
@@ -2886,6 +2899,35 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
             c.decodeIfPresent([SharedRecipeComponent].self, forKey: .components),
             ingredientCount: decodedIngredients.count, stepCount: decodedSteps?.count ?? 0
         )
+        // A sub-recipe never carries sub-recipes of its own: the key is not even read below the first
+        // level, so a hostile payload cannot nest the decode deeper than one.
+        let isSubRecipe = decoder.codingPath.contains { $0.stringValue == CodingKeys.subRecipes.stringValue }
+        let decodedSubRecipes = isSubRecipe ? nil : try c.decodeIfPresent([SharedRecipePayload].self, forKey: .subRecipes)
+        subRecipes = decodedSubRecipes
+        guard Self.subRecipeReferencesAreValid(ingredients: decodedIngredients, subRecipes: decodedSubRecipes,
+                                               isSubRecipe: isSubRecipe) else {
+            throw RecipeImportError.invalidPayload
+        }
+    }
+
+    /// The sub-recipe rules (``subRecipes``): at most ``SharedRecipeLimits/maxSubRecipes``, none
+    /// empty, the top recipe's lines naming only listed ones, and each one's lines naming only those
+    /// before it. A sub-recipe's own references are checked by the top-level decode, which knows its
+    /// position.
+    private static func subRecipeReferencesAreValid(
+        ingredients: [SharedRecipeIngredient], subRecipes: [SharedRecipePayload]?, isSubRecipe: Bool
+    ) -> Bool {
+        if isSubRecipe { return ingredients.allSatisfy { ($0.subRecipeIndex ?? 0) >= 0 } }
+        let subs = subRecipes ?? []
+        guard subs.count <= SharedRecipeLimits.maxSubRecipes,
+              ingredients.allSatisfy({ line in line.subRecipeIndex.map { (0..<subs.count).contains($0) } ?? true })
+        else { return false }
+        for (position, sub) in subs.enumerated() {
+            guard !sub.ingredients.isEmpty, !sub.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  sub.ingredients.allSatisfy({ line in line.subRecipeIndex.map { (0..<position).contains($0) } ?? true })
+            else { return false }
+        }
+        return true
     }
 
     /// Rejects an over-long free-text field rather than silently truncating it — a truncated recipe
@@ -2897,7 +2939,7 @@ public nonisolated struct SharedRecipePayload: Codable, Equatable, Sendable {
 
     /// Wire JSON keys for a shared recipe payload.
     private enum CodingKeys: String, CodingKey {
-        case format, version, name, servings, notes, ingredients, steps, components
+        case format, version, name, servings, notes, ingredients, steps, components, subRecipes
     }
 }
 
@@ -2911,6 +2953,9 @@ public nonisolated enum SharedRecipeLimits {
     public static let maxNameCharacters = 120
     public static let maxNotesCharacters = 2000
     public static let maxServings = 99
+    /// Most sub-recipes one share carries (``SharedRecipePayload/subRecipes``): as many as a recipe can
+    /// have parts, and each costs at most one more recipe's ingredients on import.
+    public static let maxSubRecipes = RecipeComponentLimits.maxComponents
     public static let maxQuantity = 5000.0
     /// Largest per-ingredient macro, in grams. No real ingredient approaches this; the cap exists
     /// so peer-supplied `Int`s can never overflow a macro SUM in a view body (`Macros.calories`
@@ -2962,9 +3007,14 @@ public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     public var fat: Int
     /// The exact grams behind the three whole-gram fields, when they carry a fraction; else `nil`.
     public var preciseMacros: PreciseMacros?
+    /// For a line that uses another saved recipe: that recipe's position in the payload's
+    /// ``SharedRecipePayload/subRecipes``, else `nil`. The line's own `quantity` is then servings of it,
+    /// and its macros are what those servings hold, so an older reader (which ignores this optional
+    /// key) totals it as an ordinary ingredient (recipes as building blocks, pick P09a).
+    public var subRecipeIndex: Int?
 
     public init(name: String, quantity: Double, unit: String, protein: Int, carbs: Int, fat: Int,
-                preciseMacros: PreciseMacros? = nil) {
+                preciseMacros: PreciseMacros? = nil, subRecipeIndex: Int? = nil) {
         self.name = name
         self.quantity = quantity
         self.unit = unit
@@ -2972,6 +3022,7 @@ public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
         self.carbs = carbs
         self.fat = fat
         self.preciseMacros = preciseMacros
+        self.subRecipeIndex = subRecipeIndex
     }
 
     /// True when `preciseMacros` is absent, or valid and — at the tenths of a gram an importing
@@ -2986,7 +3037,7 @@ public nonisolated struct SharedRecipeIngredient: Codable, Equatable, Sendable {
     /// Wire JSON keys. Frozen tokens: every build reads the first six, and `preciseMacros` is read by
     /// every build that understands decimal grams.
     private enum CodingKeys: String, CodingKey {
-        case name, quantity, unit, protein, carbs, fat, preciseMacros
+        case name, quantity, unit, protein, carbs, fat, preciseMacros, subRecipeIndex
     }
 }
 
@@ -2994,6 +3045,26 @@ extension SharedRecipePayload {
     /// True when any ingredient carries fractional grams.
     public var carriesPreciseMacros: Bool {
         ingredients.contains { $0.preciseMacros != nil }
+    }
+
+    /// True when the payload carries sub-recipes or a line naming one.
+    public var carriesSubRecipes: Bool {
+        subRecipes != nil || ingredients.contains { $0.subRecipeIndex != nil }
+    }
+
+    /// This payload with its sub-recipes and every line's reference to one removed: the form the
+    /// hash-covered exchange packet carries (its older readers re-hash exactly the keys they know). Each
+    /// such line stays an ordinary ingredient with its macros, and the sub-recipes' steps stay in the
+    /// labelled leading parts, so the recipe arrives whole, with its sub-recipes as fixed ingredients.
+    public func droppingSubRecipes() -> SharedRecipePayload {
+        var copy = self
+        copy.subRecipes = nil
+        copy.ingredients = ingredients.map { line in
+            var plain = line
+            plain.subRecipeIndex = nil
+            return plain
+        }
+        return copy
     }
 
     /// This payload with every ingredient's `preciseMacros` removed: the form the hash-covered

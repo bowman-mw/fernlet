@@ -752,9 +752,30 @@ nonisolated public final class PersistenceController {
             makeCustomItemRecordEntity(),
             makeCoinLedgerRecordEntity(),
             makeMilestoneLedgerRecordEntity(),
-            makeDayRecordEntity()
+            makeDayRecordEntity(),
+            makeMemoryRecordEntity()
         ]
         return model
+    }
+
+    /// G9-3 (owner call M1 = A): one Core memory per row, keyed by its UUID, beside a tombstone row per
+    /// forgotten memory (`RowTombstones`), so a forget on one phone survives another phone's stale
+    /// write. Additive: a new entity is a lightweight inferred migration, and it must go through the
+    /// CloudKit production schema deploy (Docs/CloudKit-Schema-Deploy.md) before a shipping build syncs it.
+    private static func makeMemoryRecordEntity() -> NSEntityDescription {
+        let entity = NSEntityDescription()
+        entity.name = "MemoryRecord"
+        entity.managedObjectClassName = NSStringFromClass(NSManagedObject.self)
+        entity.properties = [
+            // The memory's UUID string, or `"tombstone:" + uuid` for a forgotten one.
+            CoreDataModelBuilding.makeAttribute("idString", type: .stringAttributeType),
+            // The MemoryNote as JSON (a feeling token, a date and at most 240 characters). Plain binary,
+            // not external storage (CloudKit rejects external storage at store load).
+            CoreDataModelBuilding.makeAttribute("payloadData", type: .binaryDataAttributeType),
+            // When this phone last wrote the row (a tombstone: when the memory was forgotten).
+            CoreDataModelBuilding.makeAttribute("updatedAt", type: .dateAttributeType)
+        ]
+        return entity
     }
 
     private static func makeFernletDatabaseRecordEntity() -> NSEntityDescription {

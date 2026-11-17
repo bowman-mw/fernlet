@@ -402,6 +402,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// Its own versioned spelling: no registered spelling is a prefix of it and it prefixes none
         /// (`noPurposeIsAPrefixOfAnother`). Changing it orphans every body tally on every device.
         public static let bodyTallyV1 = CryptographicPurpose("fernlet.body-tally.v1")
+        /// **Registered 2026-11-15 (G9-3, owner call M6 = A).** The `ColumnCrypto` purpose of the sealed
+        /// `PrivateMemory` entity's one ciphertext column — one blob per Core memory the person chose
+        /// to keep private (its category, words, source date and edited flag): the HKDF `info` its
+        /// column key is derived under from the Private tab's content key (the journal's key, so it
+        /// opens exactly when the journal does) and, with the install's binding ID, the column's
+        /// authenticated data. Its own domain, so a private-memory blob can never open as a journal
+        /// column under that same key, nor the reverse.
+        ///
+        /// Its own versioned spelling: no registered spelling is a prefix of it and it prefixes none
+        /// (`noPurposeIsAPrefixOfAnother`). Changing it orphans every private memory on every device.
+        public static let privateMemoryV1 = CryptographicPurpose("fernlet.private-memory.v1")
     }
 
     /// Domains embedded in HMAC messages.

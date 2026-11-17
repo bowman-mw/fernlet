@@ -247,6 +247,43 @@ struct JournalMemoryCaptureTests {
         try expectEmotionOnly(store)
     }
 
+    // MARK: - G9-3 "Let Fernlet remember" and userEdited
+
+    @Test func rememberOffLeavesNoMemoryAndAsksForNoSummary() async {
+        let fake = FakeJournalSummarizer(reply: Self.paraphrase)
+        let store = makeStore(aiOn: true, summarizer: fake)
+        store.setMemoryExtraction(enabled: false, deleteExisting: false)
+
+        await write(to: store)
+
+        #expect(store.memories.isEmpty, "with remembering off not even the emotion is kept")
+        #expect(fake.payloads.isEmpty)
+    }
+
+    @Test func turningRememberOffMidFlightDropsTheSummary() async throws {
+        let fake = FakeJournalSummarizer(reply: Self.paraphrase)
+        let store = makeStore(aiOn: true, summarizer: fake)
+        fake.onSummarize = { [weak store] in store?.setMemoryExtraction(enabled: false, deleteExisting: false) }
+
+        await write(to: store)
+
+        try expectEmotionOnly(store)
+    }
+
+    @Test func anEditedMemoryIsMarkedAndKeepsItsWords() async throws {
+        let fake = FakeJournalSummarizer(reply: Self.paraphrase)
+        let store = makeStore(aiOn: true, summarizer: fake)
+        fake.onSummarize = { [weak store] in
+            guard let store, let memory = store.memories.first else { return }
+            store.updateMemory(memory, category: "note", text: "Mine.")
+        }
+
+        await write(to: store)
+
+        #expect(store.memories.map(\.text) == ["Mine."])
+        #expect(store.memories.first?.userEdited == true)
+    }
+
     @Test func wordsTheUserTypedMeanwhileAreNeverOverwritten() async throws {
         let fake = FakeJournalSummarizer(reply: Self.paraphrase)
         let store = makeStore(aiOn: true, summarizer: fake)

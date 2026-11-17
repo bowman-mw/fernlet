@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 import AIContext
+import CryptoKit
+import PrivateStoreCore
 import FernletDomainModel
 @testable import Fernlet
 
@@ -149,6 +151,44 @@ import FernletDomainModel
     @Test func companionThoughtPayloadIncludedFields() {
         let payload = CompanionThoughtPayload(signalSummaries: [], journalTagLabel: nil, filteredMemorySummary: "")
         #expect(payload.includedFieldNames == ["signalSummaries", "journalTagLabel", "filteredMemorySummary"])
+    }
+
+    /// G9-3: Core memories (`MemoryNote`) are never fed to any AI prompt. Forget by filters matches them
+    /// on the device with no model at all, so no payload grows a Core-memory field for it.
+    @Test func noPayloadCarriesCoreMemories() {
+        let payloads: [Any] = [
+            FoodSelectionPayload(mealDescription: "oats", candidates: [], fallbackMealType: nil),
+            DaySummaryPayload(mealNames: [], workoutNames: [], sleepQualityLabel: nil, sleepHours: nil, journalTagLabel: nil),
+            CompanionThoughtPayload(signalSummaries: [], journalTagLabel: nil, filteredMemorySummary: ""),
+        ]
+        for payload in payloads {
+            let fields = Set(Mirror(reflecting: payload).children.compactMap(\.label))
+            #expect(fields.isDisjoint(with: ["memories", "coreMemories", "memoryNotes", "forgetQuery"]))
+        }
+    }
+
+    /// G9-3: a memory kept private never reaches AI context. It leaves `memories` (the one list Home,
+    /// the photo wall and every AI-facing builder can read), and no AI-facing source names the private
+    /// memories at all.
+    @MainActor
+    @Test func aPrivateMemoryNeverReachesAIContext() throws {
+        let store = makeTestStore()
+        store.privateMemoryVault = PrivateMemoryVault(controller: PrivatePersistenceController(inMemory: true))
+        let key = SymmetricKey(size: .bits256)
+        store.hubContentKeyProvider = { key }
+        let secret = MemoryNote(category: "family", text: "Only for me")
+        store.memories = [secret, MemoryNote(category: "note", text: "Ordinary")]
+        #expect(store.keepMemoryPrivate(secret))
+        #expect(!store.memories.contains { $0.id == secret.id })
+        let summary = MemoryAgent.filteredContext(from: store.tierTwoMemories, destinedFor: "companion-thought", maxChars: 400)
+        #expect(!summary.contains("Only for me"))
+        for file in ["App/Fernlet/LaunchPreparationService.swift", "FernletKit/Sources/AIContext/MemoryAgent.swift",
+                     "FernletKit/Sources/AIContext/AIContextPayload.swift"] {
+            let source = try RepoRoot.source(file)
+            for token in ["privateMemor", "PrivateMemoryVault", "PrivateMemoryRepository", "keepMemoryPrivate"] {
+                #expect(!source.contains(token), "\(file) names \(token)")
+            }
+        }
     }
 
     // MARK: - MemoryAgent destination allowlist

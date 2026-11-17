@@ -296,7 +296,8 @@ public struct LocalFernletRepository: FernletRepository {
         let orderedDays = LocalFernletDatabase.sortedDayPairs(database.days)
         database.rebuildDerivedTables(todayKey: snapshot.todayKey, recentDays: orderedDays)
         guard saveDatabase(database) else { return false }
-        tierTwoMemoryStore.refresh(from: orderedDays, goals: database.goals)
+        tierTwoMemoryStore.refresh(from: orderedDays, goals: database.goals,
+                                   learning: TierTwoLearning(settings: database.settings))
         return true
     }
 
@@ -322,7 +323,8 @@ public struct LocalFernletRepository: FernletRepository {
         let orderedDays = LocalFernletDatabase.sortedDayPairs(database.days)
         database.rebuildDerivedTables(todayKey: todayKey, recentDays: orderedDays)
         guard saveDatabase(database) else { return false }
-        tierTwoMemoryStore.refresh(from: orderedDays, goals: database.goals)
+        tierTwoMemoryStore.refresh(from: orderedDays, goals: database.goals,
+                                   learning: TierTwoLearning(settings: database.settings))
         return true
     }
 
@@ -459,6 +461,12 @@ public struct LocalFernletRepository: FernletRepository {
             PersistenceFailureAudit.record("localStore.purge.failed", error: error)
             return false
         }
+    }
+
+    /// Deletes this install's Tier-2 sidecar only (G9-3 "Forget patterns"); the next save rebuilds it
+    /// from the days the learn-from date allows.
+    public func purgeTierTwoMemories() -> Bool {
+        tierTwoMemoryStore.purge()
     }
 
     /// The single write path: refuses under read-only recovery mode, then encodes and atomically

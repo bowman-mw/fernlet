@@ -21,6 +21,21 @@ struct FernletPersistenceTests {
         PersistenceController(inMemory: true)
     }
 
+    /// G9-3: the local-JSON repository (one device, no iCloud) still keeps memories in its own file,
+    /// `userEdited` included; only the iCloud repository moved them to rows.
+    @Test func localRepositoryKeepsMemoriesInItsFile() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
+        let repository = LocalFernletRepository(fileURL: url)
+        let note = MemoryNote(category: "note", text: "Typed by me", userEdited: true)
+        #expect(repository.saveSnapshot(FernletSnapshot(
+            todayKey: "2026-05-19", day: FernletDay(date: "2026-05-19", bottleCount: 1), settings: FernletSettings(),
+            recentMeals: [], previousJournals: [], memories: [note], goals: [], workshop: WorkshopData()
+        )))
+        let reloaded = LocalFernletRepository(fileURL: url).loadSnapshot(todayKey: "2026-05-19")
+        #expect(reloaded.memories.map(\.id) == [note.id])
+        #expect(reloaded.memories.first?.userEdited == true)
+    }
+
     private func makeTemporaryStoreURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

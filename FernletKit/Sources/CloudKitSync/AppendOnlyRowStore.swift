@@ -57,6 +57,10 @@ struct AppendOnlyRowStore<Entry: Codable> {
     /// `Entry` decode; `nil` (the ledgers) fetches every row. Writes are unaffected: `append` fetches
     /// by the entries' own ids, which never match a tombstone's prefixed `idString`.
     var loadPredicate: NSPredicate? = nil
+    /// The date attribute rows are sorted by on load and stamped with on write: `"createdAt"` for the
+    /// ledgers and custom items, `"updatedAt"` for `MemoryRecord` (G9-3), whose `createdAt` closure
+    /// then supplies the write time.
+    var dateKey: String = "createdAt"
 
     /// The audit context every failure record from this engine carries — which row store it was.
     private var auditContext: [String: String] { ["store": auditStore] }
@@ -74,7 +78,7 @@ struct AppendOnlyRowStore<Entry: Codable> {
     private func loadRecords() -> [Entry] {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
-        request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+        request.sortDescriptors = [NSSortDescriptor(key: dateKey, ascending: true)]
         request.predicate = loadPredicate
         let records: [NSManagedObject]
         do {
@@ -128,7 +132,7 @@ struct AppendOnlyRowStore<Entry: Codable> {
                     ?? NSEntityDescription.insertNewObject(forEntityName: entityName, into: context)
                 record.setValue(idString(entry), forKey: "idString")
                 record.setValue(payload, forKey: "payloadData")
-                record.setValue(createdAt(entry), forKey: "createdAt")
+                record.setValue(createdAt(entry), forKey: dateKey)
             }
             if context.hasChanges {
                 try context.save()

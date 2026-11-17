@@ -639,6 +639,12 @@ struct LocalizationBoundaryTests {
         let tail = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: nil, records: []))
         let tailObject = try #require(try JSONSerialization.jsonObject(with: tail) as? [String: Any])
         #expect(Set(tailObject.keys) == ["v", "writer", "set", "records"])
+        // G9-3: the journal head's private memories sit under their own frozen key, beside the body tallies'.
+        let memories = SealedBackupPrivateMemories(memories: [MemoryNote(category: "note", text: "x")])
+        let withMemories = try SealedBackupV2Format.encode(SealedBackupV2Envelope<CycleRecord>(writer: tag, set: tag, total: 0, records: [], privateMemories: memories))
+        let withMemoriesObject = try #require(try JSONSerialization.jsonObject(with: withMemories) as? [String: Any])
+        #expect(Set(withMemoriesObject.keys) == ["v", "writer", "set", "total", "records", "privateMemories"])
+        #expect((withMemoriesObject["privateMemories"] as? [String: Any])?["v"] as? Int == 1)
         #expect(SealedBackupHeadStamp.v1Writer == "v1")
         #expect(SealedBackupBookkeeping.periodRestoreResolvedKey == "fernlet.cycleRecord.periodRestoreResolved")
         #expect(SealedBackupBookkeeping.periodAcceptedHeadKey == "fernlet.sealedBackup.periodAcceptedHead")
@@ -3634,7 +3640,12 @@ struct LocalizationBoundaryTests {
             ("Records session history and shows the live inspector when you open it manually.",
              "SettingsSheet.connectionInspectorModeDescription"),
             ("Alphanumeric password", "AppLockSettingsView.kindLabel"),
-            ("Forget ^[%lld memory](inflect: true) matching \"%@\"?", "Core memory's forget prompt, once an English y/ies splice"),
+            // G9-3 replaced the keyword-only forget prompt with the filters' checklist; its counts
+            // agree by inflection too, never by a spliced English plural.
+            ("Done. Fernlet has let go of ^[%lld memory](inflect: true).", "the forget checklist's confirmation line (G9-3)"),
+            ("Deletes all ^[%lld memory](inflect: true) on this phone and in iCloud. This can't be undone.",
+             "Delete all memories' confirmation (G9-3)"),
+            ("Forget these (%lld)", "the forget checklist's button (G9-3)"),
             ("Daily target: ^[%lld bottle](inflect: true)", "the hydration stepper, once a fixed 'bottles'"),
             ("Enter your current passcode to enable %@.", "the biometric verify prompt, once an English enable/disable splice"),
             ("Enter your current passcode to disable %@.", "the biometric verify prompt, once an English enable/disable splice"),

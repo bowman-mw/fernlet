@@ -581,8 +581,10 @@ struct MeshRoutedItemSealGoldenTests {
         // at-rest domains, which no item seal touches. This count is a tripwire on the registry, not on the
         // item seal: a new row must be acknowledged here, deliberately. 101 since G9-2 (2026-11-15)
         // registered its two recovery-code domains and G5 (ProximityKit 0.2.0, 2026-11-15) registered
-        // `KeyDerivation.meshDialProofV1` and `HMAC.recipeFriendEpochTagV1`, none of which an item seal touches.
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 101)
+        // `KeyDerivation.meshDialProofV1` and `HMAC.recipeFriendEpochTagV1`, none of which an item seal touches;
+        // 102 since G9-3 (owner call M6 = A, 2026-11-15) registered `KeyDerivation.privateMemoryV1`, the sealed
+        // private memory's column, which no item seal touches.
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 102)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

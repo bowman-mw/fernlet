@@ -197,12 +197,6 @@ struct PersistedSurfaceWipeBoundaryTests {
         // G8 (2026-11-15): the gentle reminders' calm finish dates and card schedule.
         "fernlet.ambientReminders.calmFinishes": .cleared(token: "AmbientReminderMemory.clearAll"),
         "fernlet.ambientReminders.schedule": .cleared(token: "AmbientReminderMemory.clearAll"),
-        // G9-2 (#176): the recovery code's one-time offer flag. The wipe deletes the code's escrow,
-        // so a surviving flag would hide the offer from someone who no longer has a code.
-        "fernlet.recoveryCode.offeredOnce": .cleared(token: "RecoveryCodePresenter.clearOfferedFlag"),
-        // Recipe blocks (#178): the pending "parts are now their own recipes" note, a trace of
-        // recipes the wipe deletes.
-        "recipeBook.partsMigratedNotePending": .cleared(token: "webImageAttemptDefaults.removeObject"),
         "fernlet.companionFeelings.bedtimeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "fernlet.companionFeelings.wakeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),
@@ -339,6 +333,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         // G9-1: this install's random day-row device key (no content; never synced). The purge's
         // `dayRecordRepository.deleteAll()` removes it after the rows, so the next write mints a new one.
         "fernlet.sync.dayRowDeviceKey": .cleared(token: "repository.purgeAllPersistedData"),
+        // G9-2 (2026-11-15): the recovery code's one-time offer flag — a trace that a sealed backup was
+        // turned on here. Cleared, so a wiped install may be offered once more (only when no code exists).
+        "fernlet.recoveryCode.offeredOnce": .cleared(token: "RecoveryCodePresenter.clearOfferedFlag"),
+        // Recipes as building blocks (pick P07a): the recipe book's pending "parts are now their own
+        // recipes" note. The recipes it describes go with the wipe, so the note does too.
+        "recipeBook.partsMigratedNotePending": .cleared(token: "webImageAttemptDefaults.removeObject"),
 
         // ── Survives by design ───────────────────────────────────────────────────────────────────
         "com.fernlet.launch.priorUseRecorded": .kept(

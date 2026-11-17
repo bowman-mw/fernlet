@@ -53,6 +53,15 @@ protocol SealedBackupV2Adapter: AnyObject {
     /// so a retry after a later step failed is harmless). Throws for a failure a later pass retries.
     /// Gated; never in a decoy.
     func restoreBodyTallies(_ tallies: SealedBackupBodyTallies) throws
+    /// The private memories this payload's head carries beside its records (G9-3), or nil for none,
+    /// read under the live hub key. Only the journal's carries them (``JournalBackupAdapter``); every
+    /// other payload answers nil (the default in `SealedBackupV2PrivateMemories.swift`). Gated like a
+    /// decrypt, and it THROWS — never nil — when they can't be read right now, so a head never drops them.
+    func headPrivateMemories(hubKey: SymmetricKey) throws -> SealedBackupPrivateMemories?
+    /// Merges the private memories a restored head carried, BEFORE its records merge (idempotent, never
+    /// a delete). A section a newer Fernlet wrote is skipped, never a failure. Throws for a failure a
+    /// later pass retries. Gated; never in a decoy.
+    func restorePrivateMemories(_ section: SealedBackupPrivateMemories, hubKey: SymmetricKey) throws
 }
 
 /// One export chunk's records, classified (§4.1).

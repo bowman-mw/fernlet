@@ -196,12 +196,11 @@ struct PrivacyWipeCoverageTests {
         "CompanionEmotionPreferences.clearAll",
         // G8 (2026-11-15): the gentle reminders' device-local record (calm finish dates, card schedule).
         "AmbientReminderMemory.clearAll",
-        // 2026-11-16: the recovery code's one-time offer flag (G9-2, #176) and the recipe book's
-        // pending converted-parts note (recipe blocks, #178).
-        "RecoveryCodePresenter.clearOfferedFlag",
-        "webImageAttemptDefaults.removeObject",
         "LaunchPreparationService.clearDaySummaryRunMarker",
         "pastDayJournalScrubDefaults.removeObject",
+        // G9-2's recovery-code offer flag and the recipe book's pending parts note (2026-11-16).
+        "RecoveryCodePresenter.clearOfferedFlag",
+        "webImageAttemptDefaults.removeObject",
         // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of
         // 2026-10-20). The heart-rate switches stored beside it are kept; this is about their body.
         "WorkoutZonePreferences.clearMaxHeartRate",
@@ -275,6 +274,8 @@ struct PrivacyWipeCoverageTests {
         "identityRotatedHook",
         "deviceJournalKey",
         "deviceWorryKey",
+        // G9-3: the private memories' keyless leg in `resetAll` ("your private memories").
+        "deleteAllPrivateMemoriesForWipe",
         "invalidateEncryptionKeyCache",
         // The session photos' two at-rest key caches (the friend wall's and the pending corpus's),
         // dropped immediately after the mesh's identity wipe, inside the same `do` and before

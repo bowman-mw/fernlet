@@ -14,8 +14,9 @@ struct SealedStoreConfigTests {
     /// Every sealed entity — `CycleRecord` since the period-data design (2026-09-30, §5.2), whose one
     /// ciphertext column holds a whole cycle entry and so must never reach the mirrored model, and
     /// `BodyTally` since the World bodybuilding round (round 7, piece B1): a day's bathroom visits
-    /// and free-meal tags, sealed, never in CloudKit.
-    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally"]
+    /// and free-meal tags, sealed, never in CloudKit, and `PrivateMemory` since G9-3: the Core memories a
+    /// person kept private.
+    private let sealedEntityNames = ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally", "PrivateMemory"]
     private let cloudEntityNames = ["FernletDatabaseRecord", "SavedRecipeRecord"]
 
     // MARK: - Cloud model exclusion

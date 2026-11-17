@@ -95,14 +95,24 @@ public struct TierTwoMemoryStore: Sendable {
     /// refresher from the app's ``TierTwoTravelHolder``. The repositories' own refreshes pass none: the
     /// local-JSON repository is the legacy migration source only, and the map's vault the travel days
     /// live in is the app's, which a repository never reaches.
-    public func refresh(from days: [(String, FernletDay)], goals: [FitnessGoal], travel: TierTwoTravel = .none) {
-        guard case .records(let existing) = read() else {
+    ///
+    /// `learning` (G9-3) is what the synced settings allow: switched off, the store is deleted and
+    /// nothing is derived; with a learn-from day, only days (and travel days) on or after it reach the
+    /// engine, and records first seen before it are dropped (``TierTwoLearning``).
+    public func refresh(from days: [(String, FernletDay)], goals: [FitnessGoal], travel: TierTwoTravel = .none,
+                        learning: TierTwoLearning = .everything) {
+        guard learning.enabled else {
+            if !purge() { FernletAuditLog.log("tierTwo.refresh.offPurgeFailed") }
+            return
+        }
+        guard case .records(let stored) = read() else {
             FernletAuditLog.log("tierTwo.refresh.skippedUnreadable")
             return
         }
-        let updated = TierTwoMemoryEngine.updateInferences(existing: existing, from: days, goals: goals,
-                                                           travel: travel)
-        guard updated != existing else { return }
+        let existing = learning.learnableRecords(stored)
+        let updated = TierTwoMemoryEngine.updateInferences(existing: existing, from: learning.learnableDays(days),
+                                                           goals: goals, travel: learning.learnableTravel(travel))
+        guard updated != stored else { return }
         if !write(updated) {
             FernletAuditLog.log("tierTwo.refresh.writeFailed", context: ["count": String(updated.count)])
         }

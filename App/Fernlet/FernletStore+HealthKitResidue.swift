@@ -46,10 +46,13 @@ extension FernletStore {
     func attachTierTwoHealthKitResidue() {
         guard let coreData = diary.repository as? CoreDataFernletRepository else { return }
         let sidecar = coreData.tierTwoMemoryStore
-        coreData.tierTwoRefresher = { [weak self, residueStore = deviceHealthResidueStore] window, goals in
+        coreData.tierTwoRefresher = { [weak self, residueStore = deviceHealthResidueStore] window, goals, learning in
+            // G9-3: `learning` filters AFTER the residue is restored, so a HealthKit-only day before the
+            // learn-from date cannot slip back in, and "Let Fernlet remember" off deletes the sidecar.
             let restored = TierTwoMemoryStore.deviceWindow(restoringHealthKitTo: window,
                                                            from: residueStore.allResidues())
-            sidecar.refresh(from: restored, goals: goals, travel: self?.tierTwoTravelForRefresh() ?? .none)
+            sidecar.refresh(from: restored, goals: goals, travel: self?.tierTwoTravelForRefresh() ?? .none,
+                            learning: learning)
         }
     }
 
