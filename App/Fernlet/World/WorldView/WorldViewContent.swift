@@ -26,6 +26,10 @@ nonisolated struct WorldViewContent: Sendable {
     var flights = WorldFlightMap.none
     /// The fine land and water its hexes draw (`WorldShoreMask`), or nil to draw the atlas's land.
     var shore: WorldShoreMask?
+    /// The frequent-road counter (owner 2026-11-15, call 4: long roads show on Your world), and today's ``WornDay``
+    /// for fading; empty in a decoy and while "Show worn paths" is off.
+    var wornWays: [WornWayKey: WornTally] = [:]
+    var wornToday: UInt16 = 0
 
     /// Nothing at all: no atlas, no cities, no fog.
     static let empty = WorldViewContent(atlas: nil, pins: [], cityCount: 0, countryCount: 0, liftedCells: [], start: nil)
@@ -61,6 +65,8 @@ extension WorldViewContent {
                            start: home ?? store.worldLocation.latest?.point,
                            airports: flown ? store.worldLocation.flights.airportsShelf.pack() : nil)
         content.shore = fog.atlas.openedShore
+        content.wornWays = decoy ? [:] : store.wornYourWorldTallies()
+        content.wornToday = WornDay.number(for: Date())
         return content
     }
 }

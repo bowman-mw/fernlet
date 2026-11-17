@@ -26,13 +26,17 @@ struct WorldGround: Equatable {
     /// Whether the roads draw over the fog instead (the city view, `ex-city-view`: "crossed roads show on top"),
     /// with the saved lines drawn again over them so a walk stays readable.
     var roadsOverFog = false
+    /// The worn paths and frequent roads (owner 2026-11-15, ``WornWaysModel``): under the fog, between the crossed roads
+    /// and the saved lines, so they show only where the map is uncovered. Empty while "Show worn paths" is off.
+    var worn: WornWaysDrawing = .none
 
     /// How wide a saved line draws, in points: the mockups' `--m-trail` line, the same for a walk's and a
     /// ride's (owner 2026-10-29, Refinements group 19).
     static let trailWidth: CGFloat = 5
 }
 
-/// Fernlet's own ground layer over whichever base map is underneath: the crossed major roads and the trails, the
+/// Fernlet's own ground layer over whichever base map is underneath: the crossed major roads, the worn paths and
+/// frequent roads (``WornWaysPainter``) and the trails, the
 /// nature fog with its lifted cells (``NatureFogLayer``: ground hexes, grass, flowers, boulders and trees, approved
 /// 2026-10-26), and dotted traces. The roads draw in this layer's own Canvas, never inside the fog's tiles; in the
 /// city view a sibling Canvas over the fog draws them (and the trails again) on top.
@@ -58,6 +62,8 @@ struct WorldGroundLayer: View {
         ZStack(alignment: .topLeading) {
             Canvas { context, size in
                 if !ground.roadsOverFog { drawRoads(in: &context, size: size) }
+                WornWaysPainter.draw(ground.worn, in: &context, size: size, viewport: viewport, dark: darkStyle,
+                                     highContrast: contrast == .increased)
                 drawTrails(in: &context, size: size)
             }
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,

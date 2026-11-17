@@ -171,10 +171,18 @@ struct WorldViewMapCanvas: View {
         let style = { (width: Double) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         context.stroke(drawing.region, with: .color(ink), style: style(WorldViewInk.regionLineWidth))
         context.stroke(drawing.country, with: .color(ink), style: style(WorldViewInk.countryLineWidth))
-        guard !drawing.roads.isEmpty else { return }
+        guard !drawing.roads.isEmpty || !drawing.wornRoads.isEmpty else { return }
         let level = built.level
         context.drawLayer { layer in
             layer.clip(to: drawing.uncovered)
+            // The roads driven most: a thin grey road with an ink edge, under the crossed roads (owner 2026-11-15).
+            if !drawing.wornRoads.isEmpty {
+                let width = WornWaysStyle.yourWorldWidth(at: level)
+                layer.stroke(drawing.wornRoads, with: .color(WorldPalette.rgb(WorldRoadStyle.ink)),
+                             style: StrokeStyle(lineWidth: width + 1.5, lineCap: .round, lineJoin: .round))
+                layer.stroke(drawing.wornRoads, with: .color(WornWaysStyle.ink(WornWaysStyle.road[WornLevel.two.rawValue], dark: drawing.key.dark)),
+                             style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+            }
             // Bounded: one entry per road kind.
             for road in drawing.roads {
                 WorldRoadPainter.stroke(road.path, width: WorldRoadStyle.worldWidth(at: level, kind: road.kind), in: &layer)

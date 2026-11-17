@@ -507,6 +507,16 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: .homeMap,
             route: .homeMap
         ),
+        // Worn paths and frequent roads (owner 2026-11-15): Home map's "Show worn paths".
+        SettingsSearchEntry(
+            title: "Show worn paths",
+            display: LocalizedStringResource(
+                "settings.search.title.wornPaths", defaultValue: "Show worn paths",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["worn paths", "worn", "paths", "frequent roads", "roads", "often", "fade", "abandoned"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
         // Round 7 (car and bike detection): Home map's "Log my bike rides".
         SettingsSearchEntry(
             title: "Log my bike rides",

@@ -14,7 +14,8 @@ import WorldMapStore
 ///   allowed, and allowing Always there later turns it on (W-09).
 /// - **Your car** (``HomeMapCarSection``, owner 2026-11-09): the cars Fernlet knows from their Bluetooth, and how
 ///   Driving Focus and Shortcuts start a drive.
-/// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), "Log my bike
+/// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), "Show worn paths" (on by
+///   default; display only, owner 2026-11-15: the paths and roads used most, hidden everywhere when off), "Log my bike
 ///   rides" (off by default; round 7), how many routes are stored on this iPhone, and Delete all stored
 ///   routes (the walks and runs stay in Move).
 /// - **Log my bike rides** asks for Motion & Fitness only when it is turned on (decided 2026-10-22) and
@@ -33,6 +34,7 @@ struct HomeMapSettingsView: View {
     @Bindable var store: FernletStore
     @State private var uncovers = WorldMapPreferences.uncoverAsYouGo()
     @State private var savesRoutes = WorldMapPreferences.saveNewRoutes()
+    @State private var showsWornPaths = WorldMapPreferences.showWornPaths()
     @State private var remembersSpaces = WorldMapPreferences.rememberSpaces() == true
     @State private var remembersPlaces = WorldMapPreferences.remembersPlaces()
     @State private var remembersEatingOut = WorldMapPreferences.remembersEatingOut()
@@ -108,7 +110,7 @@ struct HomeMapSettingsView: View {
         }
     }
 
-    /// The map: uncovering, saving routes, logging bike rides, the routes stored and their delete.
+    /// The map: uncovering, saving routes, showing worn paths, logging bike rides, the routes stored and their delete.
     private var mapSection: some View {
         FernletFramedSection("The map") {
             Toggle(isOn: $uncovers) { FernletRowLabel("Uncover the map as you go").padding(.vertical, 7) }
@@ -119,6 +121,11 @@ struct HomeMapSettingsView: View {
             }
             .onChange(of: savesRoutes) { _, on in WorldMapPreferences.setSaveNewRoutes(on) }
             .accessibilityIdentifier("settings.homeMap.saveRoutes")
+            Toggle(isOn: $showsWornPaths) {
+                FernletRowLabel("Show worn paths", detail: "The paths and roads you use most.").padding(.vertical, 7)
+            }
+            .onChange(of: showsWornPaths) { _, on in WorldMapPreferences.setShowWornPaths(on) }
+            .accessibilityIdentifier("settings.homeMap.wornPaths")
             Toggle(isOn: bikeRidesBinding) {
                 bikeRidesLabel.padding(.vertical, 7)
             }

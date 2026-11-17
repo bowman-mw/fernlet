@@ -120,8 +120,13 @@
      ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at
      a hotel, sending only that location. Apple Maps is already the map's destination and the point is
      where the person stopped; the answer is held in memory only, and a hotel is kept only if the person
-     checks in. Nothing new is sent to the developer and no promise is weakened under §13. Before
-     submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
+     checks in. Nothing new is sent to the developer and no promise is weakened under §13.
+     And 2026-11-16 (worn paths and frequent roads, the owner's calls of 2026-11-15, this sentence approved
+     word for word): §6 adds that with background mapping on, Fernlet counts how often you pass along
+     each part of the map and when you last did, so the roads you use most show and fade, encrypted on
+     this iPhone with the rest of the map and deleted with it; the map widget's sentence adds the paths
+     and roads you use most. Nothing new is sent to the developer and no promise is weakened under §13.
+     Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
@@ -456,7 +461,8 @@ The one exception is your passport: its stamps, trips and flights go in the pass
 Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
 you're driving or riding, the road you take; to notice a trip starting, it asks iOS to tell it when
-you leave a place, then checks for a couple of minutes. If you turn on background mapping or Log my bike
+you leave a place, then checks for a couple of minutes.
+If you turn on background mapping, Fernlet also counts how often you pass along each part of the map and when you last did, so the roads you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. If you turn on background mapping or Log my bike
 rides, Fernlet uses your iPhone's motion data to tell when you're riding in a car or cycling, on this
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
 exercise; it never keeps the motion data itself. To tell when you're driving, it also notes
@@ -486,8 +492,7 @@ You can delete a day, a photo, or all of it, at any time.
 If you mark a place as your home (up to two) or as a hotel you stay at, Fernlet keeps it,
 encrypted on this iPhone only and never in a backup, to uncover the map around it and to welcome
 you back when you return; it stays until you remove it in Settings › Home map.
-If you add the map widget, Fernlet gives it a picture of the map around you, with your marked places
-and saved trails, on this iPhone only and never in a backup; your visit counts and the history of
+If you add the map widget, Fernlet gives it a picture of the map around you, with your marked places, saved trails, and the paths and roads you use most, on this iPhone only and never in a backup; your visit counts and the history of
 where you've been stay sealed in Private, and the widget's copy is deleted whenever you delete your map history.
 
 To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks

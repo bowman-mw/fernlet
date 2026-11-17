@@ -33,7 +33,9 @@ import WorldMapStore
 /// (§4, ``WorldDiscoveryRouter``, the passport's one discovery reader), and once a week a dashed gold hex marks a new
 /// corner near home, which Sprout mentions once (§5, ``WorldCornerLayer``). The major roads the person's walks have
 /// crossed draw whole in amber where the map is uncovered, and over the fog in the city view (§2, `ex-roads`,
-/// ``WorldCrossedRoadsModel``: derived from the lifted fog, never stored).
+/// ``WorldCrossedRoadsModel``: derived from the lifted fog, never stored). The paths walked and the roads driven most
+/// draw as worn dirt and lit roads under the fog, a saved trail giving way where a worn path runs (``WornWaysModel``,
+/// owner 2026-11-15; "Show worn paths" hides them).
 ///
 /// **The companion** (``WorldMapCompanion``) is Home's: a tap or a hold opens Sprout's passport on page 1, the book
 /// rising from where Sprout stands (World-Passport-Spec §1); a new stamp's banner opens it on the stamp's page, and
@@ -119,6 +121,10 @@ struct WorldMapHome: View {
     @State private var explore = WorldExploreState()
     /// The major roads the lifted fog has crossed (World-Exploration-Spec §2, `ex-roads`), derived, never stored.
     @State private var roads = WorldCrossedRoadsModel()
+    /// The worn paths and frequent roads (owner 2026-11-15), worked out from the saved lines and the road counter,
+    /// never stored; and which reading of ``savedLines`` they last cut.
+    @State private var worn = WornWaysModel()
+    @State private var savedLinesStamp = 0
     /// Sprout's discovery lines and the new-stamp hook (round 7, World-Exploration-Spec §4): the one discovery reader.
     @State private var discoveries = WorldDiscoveryRouter()
     /// The airport banners (World-Airports-Spec §3, §6.3).
@@ -192,11 +198,15 @@ struct WorldMapHome: View {
             terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas, shore: store.worldFog.atlas.openedShore)
         }
         .onChange(of: roadsSource, initial: true) { roads.update(cells: store.worldRoadCells, atlas: store.worldFog.atlas.openedAtlas) }
+        // The road counter changes at most once a trip or an unlock; a decoy's start or end changes it too.
+        .onChange(of: store.worldFog.wornWays) { updateWorn() }
+        .onChange(of: store.duressSessionActive) { updateWorn() }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
         .task(id: tiles.state) { await watchLoading() }
         // The map widget's picture (round 6b, Q36): only while this map is in front and following the person.
-        .worldWidgetMap(store: store, isActive: isFrontmost && scenePhase == .active && hasPlace && camera.follows && !isOffline)
+        .worldWidgetMap(store: store, isActive: isFrontmost && scenePhase == .active && hasPlace && camera.follows && !isOffline,
+                        worn: worn)
         // Location keeps running while a panel or sheet is over the map (W-09 (i)); only the app leaving
         // the foreground stops it (`updateLocation()`, and the app's own background edge).
         .onAppear { updateLocation() }
@@ -253,6 +263,8 @@ struct WorldMapHome: View {
             plates(date: date).opacity(passport?.isPresented == true ? 0 : 1)
         }
         .overlay { bottomControls.opacity(passport?.isPresented == true ? 0 : 1) }
+        // A new day: worn ways fade a level for every 30 days without a trip.
+        .onChange(of: WornDay.number(for: date)) { updateWorn() }
     }
 
     /// What stands on the map, placed from the viewport: the space markers, the companion (saying `line`) and any
@@ -481,11 +493,17 @@ struct WorldMapHome: View {
         let ride = WorldRideLine.drawn(isCycling: isCycling, readings: rideReadings, isDecoy: store.duressSessionActive)
         let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
         let demo = WorldRoadTestScenes.isOn(decoy: store.duressSessionActive)
-        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged).union(demo ? WorldRoadTestScenes.cells : []),
+        let wornScene = wornTestScene
+        // A worn path replaces the saved trail where they overlap (owner's call 3); the walk's guide line and a ride
+        // in progress stay whole.
+        let kept = worn.drawing.trails(for: savedLines, stamp: savedLinesStamp)
+        return WorldGround(lifted: store.worldFog.visibleCells,
+                           uncovered: uncovered.union(staged).union(demo ? WorldRoadTestScenes.cells : []).union(wornScene?.cleared ?? []),
                            veils: airportVeils.veils(for: store), driven: store.worldFog.drivenCells,
-                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
+                           trails: kept + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
                                + (demo ? [WorldRoadTestScenes.walk] : []),
-                           traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog)
+                           traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog,
+                           worn: wornScene?.drawing ?? worn.drawing)
     }
 
     /// What the crossed roads are worked out from: the lifted cells' count, whether a decoy shows, and the atlas.
@@ -501,10 +519,29 @@ struct WorldMapHome: View {
         return roads.cityMemo.foundCity(at: viewport.center, atlas: atlas, book: WorldExploreState.book(store)) != nil
     }
 
-    /// Reads Home's saved lines again (DEBUG `keptride` stands the finished ride's kept line in).
+    /// Reads Home's saved lines again (DEBUG `keptride` stands the finished ride's kept line in), and the worn ways
+    /// with them: a walk or ride just saved may wear a path.
     private func readSavedLines() {
         let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
-        savedLines = WorldRideTestScenes.keptRideLines(around: here) ?? store.worldHomeSavedLines()
+        let lines = WorldRideTestScenes.keptRideLines(around: here) ?? store.worldHomeSavedLines()
+        if lines != savedLines {
+            savedLines = lines
+            savedLinesStamp &+= 1
+        }
+        updateWorn()
+    }
+
+    /// Works the worn paths and frequent roads out again (off the main actor; "Show worn paths" is read here, so the
+    /// switch takes effect when Home comes back to the front).
+    private func updateWorn() {
+        worn.update(store.wornWaysRequest(trails: savedLines, trailStamp: savedLinesStamp), store: store)
+    }
+
+    /// DEBUG `worn`: a footpath and a road at each level round the person, display only; nil in release builds.
+    private var wornTestScene: (drawing: WornWaysDrawing, cleared: Set<HexCell>)? {
+        guard WornWaysTestScenes.isOn(decoy: store.duressSessionActive) else { return nil }
+        let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+        return WornWaysTestScenes.scene(around: here, today: WornDay.number(for: Date()))
     }
 
     /// The bike ride's readings so far (``WorldRideKeeper/ridePoints``; DEBUG `cycling` stages a short ride).

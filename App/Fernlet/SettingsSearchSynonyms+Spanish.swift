@@ -62,6 +62,8 @@ extension SettingsSearchSynonyms {
                                             "bajo consumo", "visitas"],
         "Uncover the map as you go": ["descubrir el mapa mientras vas", "niebla", "descubrir", "explorar"],
         "Save new routes": ["guardar rutas nuevas", "rutas", "ruta", "líneas", "senderos", "borrar rutas"],
+        "Show worn paths": ["mostrar caminos trillados", "caminos trillados", "caminos", "carreteras", "calles",
+                            "frecuentes", "abandonados"],
         "Log my bike rides": ["registrar mis salidas en bici", "bici", "bicicleta", "ciclismo", "movimiento",
                               "movimiento y forma física"],
         "Remember places I stop at": ["recordar los lugares donde me detengo", "lugares", "visitas", "dónde has estado",

@@ -195,6 +195,13 @@ struct WorldWidgetMonoCanvas: View {
             if let outlines = painter.outlines(in: canvasSize) {
                 lines.stroke(outlines, with: .color(.white.opacity(WorldWidgetMonoInk.hexOutline)), lineWidth: 1)
             }
+            // The worn ways in full tint: a road 3 pt, a path 2 pt, an abandoned one broken.
+            for worn in content.worn {
+                let width: CGFloat = worn.isRoad ? 3 : 2
+                lines.stroke(trailPath(worn.points, in: canvasSize), with: .color(.white),
+                             style: StrokeStyle(lineWidth: width, lineCap: .butt, lineJoin: .round,
+                                                dash: worn.level == .abandoned ? [width * 1.5, width] : []))
+            }
             for trail in content.trails {
                 lines.stroke(trailPath(trail, in: canvasSize), with: .color(.white),
                              style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))

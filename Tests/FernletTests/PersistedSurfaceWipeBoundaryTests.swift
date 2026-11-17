@@ -213,6 +213,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.worldMap.uncoverAsYouGo": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.saveNewRoutes": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Worn paths (owner 2026-11-15): "Show worn paths", display only.
+        "fernlet.worldMap.showWornPaths": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.rememberSpaces": .cleared(token: "WorldMapPreferences.clearAll"),
         // Step 5c (2026-10-24): the map intro's answer (`b1-loc-intro`) and the one-time companion hint (`ref-hint`).
         "fernlet.worldMap.locationIntroAnswered": .cleared(token: "WorldMapPreferences.clearAll"),
