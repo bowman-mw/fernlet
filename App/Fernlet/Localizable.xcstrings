@@ -22005,6 +22005,7 @@
       }
     },
     "For a recipe made in stages, like a dressing you make first and a salad you put together after." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -46630,6 +46631,7 @@
       }
     },
     "Split into parts" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -61548,7 +61550,7 @@
       }
     },
     "batches" : {
-      "comment" : "Unit choice for a line that uses another saved recipe: whole batches of that recipe",
+      "comment" : "Unit choice for a line that uses another saved recipe: whole batches of that recipe, e.g. '½ batches'",
       "localizations" : {
         "es" : {
           "stringUnit" : {
