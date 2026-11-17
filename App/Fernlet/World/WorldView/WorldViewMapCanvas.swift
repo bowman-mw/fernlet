@@ -171,7 +171,7 @@ struct WorldViewMapCanvas: View {
         let style = { (width: Double) in StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round) }
         context.stroke(drawing.region, with: .color(ink), style: style(WorldViewInk.regionLineWidth))
         context.stroke(drawing.country, with: .color(ink), style: style(WorldViewInk.countryLineWidth))
-        guard !drawing.roads.isEmpty || !drawing.wornRoads.isEmpty else { return }
+        guard !drawing.roads.isEmpty || !drawing.wornRoads.isEmpty || !drawing.wornRails.isEmpty || !drawing.wornFerries.isEmpty else { return }
         let level = built.level
         context.drawLayer { layer in
             layer.clip(to: drawing.uncovered)
@@ -183,6 +183,7 @@ struct WorldViewMapCanvas: View {
                 layer.stroke(drawing.wornRoads, with: .color(WornWaysStyle.ink(WornWaysStyle.road[WornLevel.two.rawValue], dark: drawing.key.dark)),
                              style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
             }
+            drawWornTransit(drawing, width: WornWaysStyle.yourWorldWidth(at: level), in: &layer)
             // Bounded: one entry per road kind.
             for road in drawing.roads {
                 WorldRoadPainter.stroke(road.path, width: WorldRoadStyle.worldWidth(at: level, kind: road.kind), in: &layer)
@@ -192,6 +193,21 @@ struct WorldViewMapCanvas: View {
 }
 
 private extension WorldViewMapCanvas {
+    /// The railways and ferry crossings ridden most (owner 2026-11-15): a railway a thin dark line with ticks, a
+    /// crossing a thin dashed line, under the crossed roads.
+    static func drawWornTransit(_ drawing: WorldViewMapDrawing, width: CGFloat, in layer: inout GraphicsContext) {
+        let dark = drawing.key.dark
+        if !drawing.wornFerries.isEmpty {
+            layer.stroke(drawing.wornFerries, with: .color(WornWaysStyle.ink(WornWaysStyle.yourWorldWake, dark: dark)),
+                         style: StrokeStyle(lineWidth: max(1, width * 0.7), lineCap: .butt, lineJoin: .round, dash: [width * 2, width * 1.5]))
+        }
+        guard !drawing.wornRails.isEmpty else { return }
+        let rail = WornWaysStyle.ink(WornWaysStyle.yourWorldRail, dark: dark)
+        layer.stroke(drawing.wornRails, with: .color(rail), style: StrokeStyle(lineWidth: max(1, width * 0.6), lineCap: .round, lineJoin: .round))
+        layer.stroke(drawing.wornRails, with: .color(rail),
+                     style: StrokeStyle(lineWidth: width * 2, lineCap: .butt, lineJoin: .bevel, dash: [1, max(3, width * 2)]))
+    }
+
     /// The runways, with a dashed centre line once they are long enough on screen to carry one.
     static func drawRunways(_ drawing: WorldViewMapDrawing, in context: inout GraphicsContext) {
         guard !drawing.runways.isEmpty else { return }

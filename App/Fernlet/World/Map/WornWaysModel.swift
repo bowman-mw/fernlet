@@ -9,7 +9,7 @@ nonisolated struct WornWaysRequest: Sendable {
     var shows: Bool
     /// The workouts whose saved lines wear footpaths (empty while Save new routes is off).
     var routeIDs: Set<UUID>
-    /// The road counter.
+    /// The ways counter: roads, railways and ferry crossings, each cell keyed with its kind.
     var roads: [WornWayKey: WornTally]
     /// Today's ``WornDay`` number, for fading.
     var today: UInt16
@@ -19,7 +19,7 @@ nonisolated struct WornWaysRequest: Sendable {
     var trailStamp: Int
 }
 
-/// Home's worn paths and frequent roads, worked out off the main actor as ``WorldCrossedRoadsModel`` does: nothing is
+/// Home's worn paths, frequent roads, railways and ferry wakes, worked out off the main actor as ``WorldCrossedRoadsModel`` does: nothing is
 /// stored, so a wipe, a decoy and a fresh history each give their own answer. One update runs at a time; a request
 /// while one runs waits, only the newest kept.
 ///
@@ -133,7 +133,7 @@ final class WornWaysModel {
         #if DEBUG
         let total = ContinuousClock.now - started
         Logger(subsystem: "com.fernlet", category: "wornWays").debug(
-            "worn ways: \(routes) lines, \(drawing.footpaths.count) path pieces, \(drawing.roads.count) road pieces in \(total), main \(mainTime)")
+            "worn ways: \(routes) lines, path/road/rail/wake pieces \(drawing.footpaths.count)/\(drawing.roads.count)/\(drawing.rails.count)/\(drawing.ferries.count) in \(total), main \(mainTime)")
         #endif
     }
 }

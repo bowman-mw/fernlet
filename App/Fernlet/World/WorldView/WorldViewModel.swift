@@ -75,7 +75,9 @@ nonisolated struct WorldViewLandRaster: Sendable {
 /// - the major roads the lifted fog has crossed (`AtlasRoadCrossings`), worked out once off the main actor and
 ///   drawn whole on the uncovered hexes (World-Exploration-Spec §2: "on the world view");
 /// - the roads the person drives most, where they run 2 km or more (``WornWaysBuilder/yourWorldRoads(_:today:generation:)``,
-///   owner 2026-11-15, call 4), worked out once off the main actor and drawn thin on the uncovered hexes.
+///   owner 2026-11-15, call 4), and as the roads the railways and ferry crossings ridden most
+///   (``WornWaysBuilder/yourWorldWays(_:kind:today:generation:)``), worked out once off the main actor and drawn thin
+///   on the uncovered hexes.
 @MainActor
 @Observable
 final class WorldViewModel {
@@ -96,6 +98,9 @@ final class WorldViewModel {
     private(set) var roads = WorldRoadDrawing.none
     /// The long frequent roads (none until computed, and always none in a decoy or with "Show worn paths" off).
     private(set) var wornRoads = WorldRoadDrawing.none
+    /// The long railways and ferry crossings ridden most (none, as ``wornRoads``).
+    private(set) var wornRails = WorldRoadDrawing.none
+    private(set) var wornFerries = WorldRoadDrawing.none
     /// Each detail's hexes on found airports' grounds (empty until computed, and always in a decoy).
     private(set) var airportCells: [AtlasZoomDetail: Set<HexCell>] = [:]
     /// Each detail's markers with where their labels stand (empty until worked out).
@@ -166,9 +171,12 @@ final class WorldViewModel {
         }
         if wornRoads.generation == 0, !content.wornWays.isEmpty {
             let ways = content.wornWays, today = content.wornToday
-            wornRoads = await Task.detached(priority: .userInitiated) {
-                WornWaysBuilder.yourWorldRoads(ways, today: today, generation: 1)
+            let made = await Task.detached(priority: .userInitiated) {
+                (WornWaysBuilder.yourWorldWays(ways, kind: .road, today: today, generation: 1),
+                 WornWaysBuilder.yourWorldWays(ways, kind: .rail, today: today, generation: 1),
+                 WornWaysBuilder.yourWorldWays(ways, kind: .ferry, today: today, generation: 1))
             }.value
+            (wornRoads, wornRails, wornFerries) = made
         }
     }
 
@@ -199,7 +207,8 @@ final class WorldViewModel {
     func facts(at detail: AtlasZoomDetail) -> WorldViewMapFacts {
         WorldViewMapFacts(detail: detail, raster: raster, atlas: content.atlas, found: found[detail] ?? [],
                           places: placeCache[detail] ?? [:], roads: roads, lands: landCache[detail] ?? [:],
-                          airports: airportCells[detail] ?? [], runways: runways, shore: content.shore, wornRoads: wornRoads)
+                          airports: airportCells[detail] ?? [], runways: runways, shore: content.shore, wornRoads: wornRoads,
+                          wornRails: wornRails, wornFerries: wornFerries)
     }
 
     /// Keeps the land a map drawing looked up (its copy of the cache, grown), when it still fits the cache.

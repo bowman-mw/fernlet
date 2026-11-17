@@ -83,7 +83,7 @@ struct WornPathsDrawingTests {
         let lone = [WornWayKey(cell: MercatorHexGrid.cell(containing: Self.here), kind: .road): WornTally(count: 40, lastDay: Self.today)]
         #expect(Self.drawing(ways: lone).roads.isEmpty)
         let rail = Dictionary(uniqueKeysWithValues: Self.roads(drive, count: 30).map { (WornWayKey(cell: $0.key.cell, kind: .rail), $0.value) })
-        #expect(Self.drawing(ways: rail).roads.isEmpty, "only roads draw for now")
+        #expect(Self.drawing(ways: rail).roads.isEmpty, "a railway is not a road")
     }
 
     /// Two neighbouring roads at different levels meet at the lower one, and each level is one joined line.

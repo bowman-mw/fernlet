@@ -4,8 +4,8 @@ import WorldMapStore
 
 /// What the map widget's picture draws over Apple's map (owner's Q36: "Places + trails, not history"):
 /// the person's marked places — their homes and the hotel of a stay, and the places they keep to eat and
-/// train — their saved trails, and the paths and roads they use most (owner 2026-11-15, call 6; none while "Show
-/// worn paths" is off). Never a visit count, a day, a photo or Where you've been: those stay sealed in Private.
+/// train — their saved trails, and the paths, roads, railways and ferry crossings they use most (owner 2026-11-15,
+/// call 6 and S3; none while "Show worn paths" is off). Never a visit count, a day, a photo or Where you've been: those stay sealed in Private.
 struct WorldWidgetMapContent: Equatable {
     /// The homes and the current hotel in the picture.
     var homes: [HomePlace] = []
@@ -13,7 +13,7 @@ struct WorldWidgetMapContent: Equatable {
     var places: [WorldMapMarker] = []
     /// The saved walk and run lines that cross the picture, each simplified.
     var trails: [[GeoPoint]] = []
-    /// The worn paths and frequent roads in the picture.
+    /// The worn paths, frequent roads, railways and ferry wakes in the picture.
     var worn: [WorldWidgetWornLine] = []
 
     /// Nothing to draw (a decoy, or nothing marked nearby).
@@ -27,8 +27,8 @@ struct WorldWidgetMapContent: Equatable {
     /// The most worn lines one picture draws (the most worn first).
     static let maxWornLines = 300
 
-    /// `drawing`'s pieces whose box meets `viewport` (grown by a tenth each way), most worn first, roads before paths
-    /// at a level, at most ``maxWornLines``.
+    /// `drawing`'s pieces whose box meets `viewport` (grown by a tenth each way), most worn first, roads, then
+    /// railways, then wakes, then paths at a level, at most ``maxWornLines``.
     static func wornLines(_ drawing: WornWaysDrawing, in viewport: MapViewport) -> [WorldWidgetWornLine] {
         guard viewport.isUsable, !drawing.isEmpty else { return [] }
         let padX = viewport.width * 0.1, padY = viewport.height * 0.1
@@ -36,13 +36,14 @@ struct WorldWidgetMapContent: Equatable {
             line.maxX >= viewport.minX - padX && line.minX <= viewport.minX + viewport.width + padX
                 && line.maxY >= viewport.minY - padY && line.minY <= viewport.minY + viewport.height + padY
         }
-        let tagged = drawing.roads.map { ($0, true) } + drawing.footpaths.map { ($0, false) }
+        let tagged = drawing.roads.map { ($0, WorldWidgetWornLine.Kind.road) } + drawing.rails.map { ($0, .rail) }
+            + drawing.ferries.map { ($0, .ferry) } + drawing.footpaths.map { ($0, .footpath) }
         // Bounded: the drawing's pieces (WornWaysDrawing.maxPieces of each kind), then maxWornLines.
         return tagged.filter { meets($0.0.line) }
-            .sorted { ($0.0.level, $0.1 ? 1 : 0) > ($1.0.level, $1.1 ? 1 : 0) }
+            .sorted { ($0.0.level, $0.1.rawValue) > ($1.0.level, $1.1.rawValue) }
             .prefix(maxWornLines)
-            .map { piece, isRoad in
-                WorldWidgetWornLine(level: piece.level, isRoad: isRoad,
+            .map { piece, kind in
+                WorldWidgetWornLine(level: piece.level, kind: kind,
                                     points: zip(piece.line.xs, piece.line.ys).map { WebMercator.geo(x: $0, y: $1) })
             }
     }
@@ -86,14 +87,22 @@ struct WorldWidgetMapContent: Equatable {
     }
 }
 
-/// One worn path or frequent road in the map widget's picture.
+/// One worn path, frequent road, railway or ferry wake in the map widget's picture.
 struct WorldWidgetWornLine: Equatable {
+    /// What kind of way a line is, its raw value the order the picture keeps them in at one level (highest first).
+    enum Kind: Int, Equatable {
+        case footpath = 0, ferry = 1, rail = 2, road = 3
+    }
+
     /// How worn.
     let level: WornLevel
-    /// A road (else a footpath).
-    let isRoad: Bool
+    /// What kind of way.
+    let kind: Kind
     /// Its points.
     let points: [GeoPoint]
+
+    /// Whether it is a road.
+    var isRoad: Bool { kind == .road }
 }
 
 /// The map widget's picture for one appearance: Apple's muted map, the worn paths and roads, Fernlet's saved trails, a decorative
@@ -153,16 +162,23 @@ struct WorldWidgetMapCanvas: View {
         .frame(width: size.width, height: size.height)
     }
 
-    /// The worn ways as Home draws them, at a fixed art pixel: the roads, then the footpaths.
+    /// The worn ways as Home draws them, at a fixed art pixel: the wakes, the roads, the railways, then the footpaths.
     private func drawWorn(in context: inout GraphicsContext, size: CGSize) {
-        // Bounded: maxWornLines lines.
-        for road in [true, false] {
-            for line in content.worn where line.isRoad == road {
+        // Bounded: four kinds of maxWornLines lines.
+        for kind in [WorldWidgetWornLine.Kind.ferry, .road, .rail, .footpath] {
+            for line in content.worn where line.kind == kind {
                 let path = Self.path(line.points, viewport: viewport, size: size)
-                if road {
+                switch kind {
+                case .ferry:
+                    WornWaysPainter.strokeWake(path, level: line.level, unit: Self.wornUnit, reduced: false, dark: dark,
+                                               highContrast: false, in: &context)
+                case .road:
                     WornWaysPainter.strokeRoad(path, level: line.level, unit: Self.wornUnit, reduced: false, dark: dark,
                                                highContrast: false, in: &context)
-                } else {
+                case .rail:
+                    WornWaysPainter.strokeRail(path, level: line.level, unit: Self.wornUnit, reduced: false, dark: dark,
+                                               highContrast: false, in: &context)
+                case .footpath:
                     WornWaysPainter.strokeFootpath(path, level: line.level, width: Self.wornUnit * 2, dark: dark,
                                                    highContrast: false, in: &context)
                 }

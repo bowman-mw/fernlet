@@ -195,12 +195,18 @@ struct WorldWidgetMonoCanvas: View {
             if let outlines = painter.outlines(in: canvasSize) {
                 lines.stroke(outlines, with: .color(.white.opacity(WorldWidgetMonoInk.hexOutline)), lineWidth: 1)
             }
-            // The worn ways in full tint: a road 3 pt, a path 2 pt, an abandoned one broken.
+            // The worn ways in full tint: a road 3 pt, a railway 2 pt with 5-pt ticks, a wake 2 pt dashed, a path 2 pt,
+            // an abandoned one broken.
             for worn in content.worn {
-                let width: CGFloat = worn.isRoad ? 3 : 2
-                lines.stroke(trailPath(worn.points, in: canvasSize), with: .color(.white),
-                             style: StrokeStyle(lineWidth: width, lineCap: .butt, lineJoin: .round,
-                                                dash: worn.level == .abandoned ? [width * 1.5, width] : []))
+                let path = trailPath(worn.points, in: canvasSize), abandoned = worn.level == .abandoned
+                let width: CGFloat = worn.kind == .road ? 3 : 2
+                let dash: [CGFloat] = worn.kind == .ferry ? (abandoned ? [2, 6] : [4, 3]) : (abandoned ? [width * 1.5, width] : [])
+                lines.stroke(path, with: .color(.white),
+                             style: StrokeStyle(lineWidth: worn.kind == .rail ? 1.5 : width, lineCap: .butt, lineJoin: .round, dash: dash))
+                if worn.kind == .rail {
+                    lines.stroke(path, with: .color(.white),
+                                 style: StrokeStyle(lineWidth: 5, lineCap: .butt, lineJoin: .bevel, dash: abandoned ? [1, 6] : [1, 3]))
+                }
             }
             for trail in content.trails {
                 lines.stroke(trailPath(trail, in: canvasSize), with: .color(.white),

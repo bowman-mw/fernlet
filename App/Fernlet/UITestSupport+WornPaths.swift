@@ -2,8 +2,8 @@ import Foundation
 import WorldMapStore
 
 /// DEBUG screenshots of worn paths and frequent roads (`FERNLET_UI_TEST_WORLD_HOME=worn`): around the person, a
-/// footpath at each level (well worn, worn, trodden, abandoned) and a road at each level, with their ground drawn
-/// clear. Display only: nothing is written, and release builds never ask (`UITestSupport.worldHomeScenes` is empty).
+/// footpath at each level (well worn, worn, trodden, abandoned), and a road, a railway and a ferry wake at each level,
+/// with their ground drawn clear. Display only: nothing is written, and release builds never ask (`UITestSupport.worldHomeScenes` is empty).
 enum WornWaysTestScenes {
     /// Whether the scene shows (asked for, and not a decoy).
     static func isOn(decoy: Bool) -> Bool { UITestSupport.worldHomeScenes.contains("worn") && !decoy }
@@ -17,15 +17,19 @@ enum WornWaysTestScenes {
          (line([here, here.offset(east: 30, north: -150), here.offset(east: -40, north: -250)]), 3, 75)]
     }
 
-    /// The scene's roads: four runs of cells south of the person, one per level.
+    /// The scene's roads: four runs of cells south of the person, one per level; then the same four of railway north
+    /// of the person, and four of ferry wake farther north.
     static func roads(around here: GeoPoint, today: UInt16) -> [WornWayKey: WornTally] {
         var ways: [WornWayKey: WornTally] = [:]
         let levels: [(count: UInt16, daysAgo: UInt16)] = [(4, 100), (4, 0), (12, 0), (40, 0)]
-        // Bounded: four roads of 300 m.
-        for (index, level) in levels.enumerated() {
-            let start = here.offset(east: -330 + Double(index) * 220, north: -320)
-            for cell in WornFootpaths.cells(along: line([start, start.offset(east: 180, north: -60)])) {
-                ways[WornWayKey(cell: cell, kind: .road)] = WornTally(count: level.count, lastDay: today &- level.daysAgo)
+        let rows: [(kind: WornWayKind, north: Double)] = [(.road, -320), (.rail, 330), (.ferry, 450)]
+        // Bounded: three rows of four ways of 300 m.
+        for row in rows {
+            for (index, level) in levels.enumerated() {
+                let start = here.offset(east: -330 + Double(index) * 220, north: row.north)
+                for cell in WornFootpaths.cells(along: line([start, start.offset(east: 180, north: -60)])) {
+                    ways[WornWayKey(cell: cell, kind: row.kind)] = WornTally(count: level.count, lastDay: today &- level.daysAgo)
+                }
             }
         }
         return ways

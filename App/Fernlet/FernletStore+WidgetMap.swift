@@ -7,8 +7,8 @@ import WorldMapStore
 ///
 /// - **What the picture draws** (``worldWidgetMapContent(in:now:worn:)``): the homes and the hotel of a stay,
 ///   the kept places to eat and train, the saved walk and run lines of the last
-///   ``worldSavedLineDays`` days that cross the picture, and Home's worn paths and frequent roads that do
-///   (owner 2026-11-15, call 6). Never a visit count, a day, a photo or Where you've been, and nothing at all in a
+///   ``worldSavedLineDays`` days that cross the picture, and Home's worn paths, frequent roads, railways and ferry
+///   wakes that do (owner 2026-11-15, call 6 and S3). Never a visit count, a day, a photo or Where you've been, and nothing at all in a
 ///   decoy.
 /// - **When it changes** (``worldWidgetMapStamp(now:worn:)``): a stamp over those marked places, saved lines
 ///   and worn ways wherever they are, so the writer redraws when one is added, removed or changes level, not
