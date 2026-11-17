@@ -238,6 +238,48 @@ struct WorldDrivenTilesTests {
         outside.atAirport = false
         #expect(!WorldFogKeeper.ridesThroughAirport(outside), "outside the grounds a drive lifts as ever")
     }
+
+    /// Walking about on a moving ferry's deck or down a train's aisle (2026-11-15, transit investigation X1): Motion's
+    /// confident walking ends the drive and, while it says walking, speed alone starts none, yet the readings still go by
+    /// at 30 km/h. The stretch replays through the real ride watch into the keeper, as the app hands readings on (the
+    /// watch first, then the fog with its answer): no walked cell clears out on the water.
+    @Test func walkingOnAMovingFerryClearsNoWalkedFog() throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = try Self.keeper(vault, unlocked: LockFlag(true))
+        var watch = WorldRideWatch()
+        watch.usesMotion = true
+        let speed = 30.0 / 3.6
+        func at(_ second: Double) -> Date { Self.now.addingTimeInterval(second) }
+        func read(_ second: Double) {
+            let fix = WorldFix(point: Self.here.offset(east: speed * second, north: 0), accuracy: 10, at: at(second),
+                               isPrecise: true, speed: speed)
+            _ = watch.observe(fix)
+            keeper.handle(fix, thinLine: watch.isDriving)
+        }
+        // Under way: the coprocessor says automotive, and the drive starts.
+        _ = watch.observe([WorldMotionSample(kind: .automotive, isConfident: true, at: at(0))], through: at(5))
+        for second in stride(from: 0.0, through: 290, by: 5) {
+            read(second)
+            if second.truncatingRemainder(dividingBy: 30) == 0 { _ = watch.observe([], through: at(second)) }
+        }
+        #expect(watch.isDriving, "the ferry under way reads as a drive")
+        // The person gets up and walks the deck for ten minutes: confident walking, the boat still at 30 km/h.
+        _ = watch.observe([WorldMotionSample(kind: .walking, isConfident: true, at: at(300))])
+        for second in stride(from: 300.0, through: 900, by: 5) { read(second) }
+        let deck = Self.here.offset(east: speed * 600, north: 0)
+        let walked = keeper.visibleCells.subtracting(keeper.drivenCells)
+        let deckCircle = Set(MercatorHexGrid.cells(around: deck, within: WorldFogKeeper.liftRadius))
+        #expect(!watch.isDriving, "Motion's walking ended the drive (the defect's first half)")
+        #expect(walked.isDisjoint(with: deckCircle), "no walked fog clears over the water at 30 km/h")
+        #expect(walked.isEmpty, "nothing on the crossing is walked: \(walked.count) walked cells")
+        #expect(keeper.drivenCells.contains(MercatorHexGrid.cell(containing: deck)), "the crossing shows as driven")
+        // Ashore, a run below a car's speed still clears the walked circle.
+        let shore = Self.here.offset(east: 0, north: 2_000)
+        let run = WorldFix(point: shore, accuracy: 8, at: at(1_000), isPrecise: true, speed: 4)
+        #expect(!WorldFogKeeper.ridesOffADrive(run) && keeper.handle(run) > 0)
+        #expect(!keeper.drivenCells.contains(MercatorHexGrid.cell(containing: shore)), "a run is walked")
+    }
 }
 
 /// Whether the test's phone is unlocked, which the test turns.
