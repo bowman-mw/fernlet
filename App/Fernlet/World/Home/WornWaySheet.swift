@@ -212,7 +212,7 @@ struct WornWayDetail: View {
     /// "This was a road": every kept ride of this kind through the spot changes, and the way moves with them.
     private func changePath(to kind: WornWayKind) {
         // Bounded: the rides kept through one cell.
-        for trip in tripsOfKind { book.changeTrip(trip.id, to: kind) }
+        for trip in tripsOfKind { book.changeTrip(trip.id, kind) }
         FernletFeedback.system.play(.done)
         FernletAnnouncer.system.announce(.success, resolved: String(localized: WornTransitAskCopy.kept(kind)))
         onClose()
@@ -220,7 +220,7 @@ struct WornWayDetail: View {
 
     /// One ride changes.
     private func change(_ id: UUID, to kind: WornWayKind) {
-        book.changeTrip(id, to: kind)
+        book.changeTrip(id, kind)
         FernletFeedback.system.play(.done)
         FernletAnnouncer.system.announce(.success, resolved: String(localized: WornTransitAskCopy.kept(kind)))
         reload()
