@@ -45,6 +45,7 @@ nonisolated enum WorldMapPreferences {
         static let uncoverAsYouGo = "fernlet.worldMap.uncoverAsYouGo"
         static let alwaysLowPower = "fernlet.worldMap.alwaysLowPower"
         static let saveNewRoutes = "fernlet.worldMap.saveNewRoutes"
+        static let showWornPaths = "fernlet.worldMap.showWornPaths"
         static let rememberSpaces = "fernlet.worldMap.rememberSpaces"
         static let remembersPlaces = "fernlet.worldMap.rememberPlaces"
         static let remembersEatingOut = "fernlet.worldMap.rememberEatingOut"
@@ -245,6 +246,18 @@ nonisolated enum WorldMapPreferences {
         defaults.set(on, forKey: Key.saveNewRoutes)
     }
 
+    /// Whether the map draws worn paths and frequent roads (default on; owner 2026-11-15, call 5). Display only: off
+    /// hides them on Home, Your world and the map widget, and the saved trails draw whole again; nothing is deleted.
+    static func showWornPaths(in defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: Key.showWornPaths) != nil else { return true }
+        return defaults.bool(forKey: Key.showWornPaths)
+    }
+
+    /// Sets "Show worn paths".
+    static func setShowWornPaths(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.showWornPaths)
+    }
+
     /// The answer to "Remember where your workout spaces are?": nil until it has been asked.
     static func rememberSpaces(in defaults: UserDefaults = .standard) -> Bool? {
         guard defaults.object(forKey: Key.rememberSpaces) != nil else { return nil }
@@ -261,6 +274,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.uncoverAsYouGo)
         defaults.removeObject(forKey: Key.alwaysLowPower)
         defaults.removeObject(forKey: Key.saveNewRoutes)
+        defaults.removeObject(forKey: Key.showWornPaths)
         defaults.removeObject(forKey: Key.rememberSpaces)
         defaults.removeObject(forKey: Key.remembersPlaces)
         defaults.removeObject(forKey: Key.remembersEatingOut)

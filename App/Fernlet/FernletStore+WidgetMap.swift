@@ -5,12 +5,14 @@ import WorldMapStore
 
 /// The store's side of the map widget (owner's Q36, `b4-new-map`, round 6b) and of its status plate.
 ///
-/// - **What the picture draws** (``worldWidgetMapContent(in:now:)``): the homes and the hotel of a stay,
-///   the kept places to eat and train, and the saved walk and run lines of the last
-///   ``worldSavedLineDays`` days that cross the picture. Never a visit count, a day, a photo or Where
-///   you've been, and nothing at all in a decoy.
-/// - **When it changes** (``worldWidgetMapStamp()``): a stamp over those marked places and saved lines
-///   wherever they are, so the writer redraws when one is added or removed, not when the person moves.
+/// - **What the picture draws** (``worldWidgetMapContent(in:now:worn:)``): the homes and the hotel of a stay,
+///   the kept places to eat and train, the saved walk and run lines of the last
+///   ``worldSavedLineDays`` days that cross the picture, and Home's worn paths and frequent roads that do
+///   (owner 2026-11-15, call 6). Never a visit count, a day, a photo or Where you've been, and nothing at all in a
+///   decoy.
+/// - **When it changes** (``worldWidgetMapStamp(now:worn:)``): a stamp over those marked places, saved lines
+///   and worn ways wherever they are, so the writer redraws when one is added, removed or changes level, not
+///   when the person moves.
 /// - **The plate's macro bars** (``widgetMacroTargets()``): the day's protein, carbs and fat targets,
 ///   benign numbers the snapshot carries beside the day's grams.
 extension FernletStore {
@@ -22,15 +24,16 @@ extension FernletStore {
                                            fat: Double(max(targets.fat, 0)))
     }
 
-    /// What the map widget's picture of `viewport` draws. Empty in a decoy.
-    func worldWidgetMapContent(in viewport: MapViewport, now: Date = Date()) -> WorldWidgetMapContent {
+    /// What the map widget's picture of `viewport` draws, with `worn`'s paths and roads. Empty in a decoy.
+    func worldWidgetMapContent(in viewport: MapViewport, now: Date = Date(), worn: WornWaysDrawing = .none) -> WorldWidgetMapContent {
         guard !duressSessionActive, viewport.isUsable else { return .empty }
         let homes = worldHomes.bases.filter { WorldWidgetMapContent.contains(viewport, $0.point) }
         let places = worldPlaceMarkers(near: nil).markers
             .filter { WorldWidgetMapContent.contains(viewport, $0.point) }
             .prefix(WorldWidgetMapContent.maxPlaces)
             .map { WorldMapMarker(id: $0.id, kind: $0.kind, name: "", point: $0.point) }
-        return WorldWidgetMapContent(homes: homes, places: Array(places), trails: worldWidgetTrails(in: viewport, now: now))
+        return WorldWidgetMapContent(homes: homes, places: Array(places), trails: worldWidgetTrails(in: viewport, now: now),
+                                     worn: WorldWidgetMapContent.wornLines(worn, in: viewport))
     }
 
     /// The saved walk and run lines that cross `viewport`, newest first: the last ``worldSavedLineDays``
@@ -53,8 +56,9 @@ extension FernletStore {
     }
 
     /// A stamp over everything the picture could draw, wherever it is: the homes and hotel, the kept
-    /// places and the saved lines' workouts. It moves when one is added, moved or removed. Zero in a decoy.
-    func worldWidgetMapStamp(now: Date = Date()) -> Int {
+    /// places, the saved lines' workouts and `worn`'s cells and levels. It moves when one is added, moved or
+    /// removed, or a worn way changes level. Zero in a decoy.
+    func worldWidgetMapStamp(now: Date = Date(), worn: WornWaysDrawing = .none) -> Int {
         guard !duressSessionActive else { return 0 }
         var hasher = Hasher()
         for base in worldHomes.bases {
@@ -76,6 +80,7 @@ extension FernletStore {
         for workoutID in worldWidgetSavedLineIDs(now: now) where stored.contains(workoutID) {
             hasher.combine(workoutID)
         }
+        if !worn.isEmpty { hasher.combine(worn.contentHash) }
         if UITestSupport.worldHomeScenes.contains("trails") { hasher.combine("trails") }
         return hasher.finalize()
     }

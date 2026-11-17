@@ -64,6 +64,10 @@ import WorldMapStore
 /// follows the decoy (``setDecoy(_:)``), writes with ``flush()`` and goes with every wipe through ``clearAll()``. The
 /// road friends hand over at a catch-up (PR 2) lifts as driven cells through ``liftReceivedRoad(_:)``.
 ///
+/// **Frequent roads** (option B, owner 2026-11-15). Each drive trip counts the cells under its centre line once
+/// (``centreLine(from:to:)``) in a sealed ``WornWayStore`` with the day; a walk, an airport ride, a decoy or 10 minutes
+/// without a drive reading ends the trip, which saves and publishes ``wornWays``. A road friends hand over never counts.
+///
 /// **A locked phone.** The store's key works only while the phone is unlocked, so readings that
 /// arrive while it is locked (a walk with the screen off, Always mode's visits) go into the
 /// locked-phone buffer and are merged on the next ``load()``.
@@ -86,6 +90,15 @@ final class WorldFogKeeper {
     static let maxAccuracy = 65.0
     /// New cells between saves while the app is open (saves also happen on ``flush()``).
     static let saveEvery = 40
+    /// How far apart a drive's centre line is sampled when counting worn roads, in metres: under a hex's 17.5 m
+    /// radius, so no cell the line crosses is skipped (``WornFootpaths/sampleStep``).
+    static let wornStep = WornFootpaths.sampleStep
+    /// The most samples between two drive readings on the centre line (``maxJoin`` ÷ ``wornStep`` is fewer).
+    static let maxWornSteps = 64
+    /// Drive readings further apart in time than this start a new trip for the worn-road count, in seconds.
+    static let tripGap: TimeInterval = 10 * 60
+    /// The most cells one trip counts (a bound on the trip's memory; a 1,500 km day is about 43,000).
+    static let maxTripCells = 50_000
 
     /// The cells the map draws: the whole lifted history, or in a decoy session only the decoy's own.
     private(set) var visibleCells: Set<HexCell> = []
@@ -94,6 +107,10 @@ final class WorldFogKeeper {
     private(set) var drivenCells: Set<HexCell> = []
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
+    /// The frequent roads the map draws: each way's trip count and last day (option B, owner 2026-11-15), published
+    /// when a drive's trip ends, on ``flush()`` and after the unlock merge (not on every reading, to keep redraws rare).
+    /// Empty in a decoy session.
+    private(set) var wornWays: [WornWayKey: WornTally] = [:]
     /// The drive's last lifted reading, which the next joins; nil off a drive.
     @ObservationIgnored private var laneFrom: GeoPoint?
 
@@ -107,6 +124,14 @@ final class WorldFogKeeper {
     @ObservationIgnored private let store: FogCellStore
     /// The cells only driven past (owner 2026-11-09), beside the fog store, which still holds every lifted cell.
     @ObservationIgnored private let driven: DrivenFogStore
+    /// The frequent-roads counter (option B), beside the fog: one count per cell per drive trip, with its last day.
+    @ObservationIgnored private let worn: WornWayStore
+    /// The cells under this drive's centre line already counted, so a trip counts each cell once.
+    @ObservationIgnored private var tripCells: Set<HexCell> = []
+    /// When this trip's last accepted drive reading was taken; nil off a drive.
+    @ObservationIgnored private var lastDriveAt: Date?
+    /// Whether ``worn`` holds counts ``wornWays`` doesn't show yet.
+    @ObservationIgnored private var wornUnpublished = false
     @ObservationIgnored private let vault: WorldMapVault
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let isProtectedDataAvailable: @MainActor () -> Bool
@@ -133,6 +158,7 @@ final class WorldFogKeeper {
         self.vault = vault
         self.store = FogCellStore(vault: vault)
         self.driven = DrivenFogStore(vault: vault)
+        self.worn = WornWayStore(vault: vault)
         self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) },
                                       openAtlasOffMain: WorldAtlasKeeper.bundledPackOffMain { try WorldAtlas(data: $0) },
                                       openLandmarks: WorldAtlasKeeper.bundledLandmarks(),
@@ -174,12 +200,15 @@ final class WorldFogKeeper {
             try store.load()
             try driven.load()
             try mergeDriven()
+            try worn.load()
+            try mergeWorn()
         } catch {
             FernletAuditLog.log("worldMap.fog.loadDeferred")
             return
         }
         visibleCells = store.cells
         drivenCells = driven.cells
+        publishWorn()
         atlas.load()
     }
 
@@ -199,6 +228,26 @@ final class WorldFogKeeper {
         try driven.save()
     }
 
+    /// Counts the ways a drive passed while the phone was locked (each with its day, oldest first), then saves.
+    private func mergeWorn() throws {
+        guard worn.isLoaded else { return }
+        let pending = try worn.takePending()
+        guard !pending.isEmpty else { return }
+        var byDayAndKind: [UInt16: [WornWayKind: [HexCell]]] = [:]
+        // Bounded: the buffer holds at most FogCellStore.maxPendingCells records.
+        for (key, day) in pending.prefix(FogCellStore.maxPendingCells) {
+            byDayAndKind[day, default: [:]][key.kind, default: []].append(key.cell)
+        }
+        // Bounded: one group per (day, kind) in the buffer.
+        for day in byDayAndKind.keys.sorted() {
+            for kind in WornWayKind.allCases {
+                if let cells = byDayAndKind[day]?[kind] { worn.record(cells, kind: kind, on: day) }
+            }
+        }
+        wornUnpublished = true
+        try worn.save()
+    }
+
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
     /// (a reading delivered while the app isn't active: background mapping, a walk with Maps in front) new
     /// cells are written at once rather than at the next 40, since iOS may end a suspended app first (W-09 B2).
@@ -213,12 +262,19 @@ final class WorldFogKeeper {
         if Self.ridesThroughAirport(fix) {
             // The plane train, a people mover, a car on the airport's roads: nothing lifts, and no lane joins across.
             laneFrom = nil
+            endTrip()
             added = 0
         } else if thinLine || Self.ridesOffADrive(fix) {
-            added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point), driving: true)
-            if accepted { laneFrom = fix.point }
+            if let lastDriveAt, fix.at.timeIntervalSince(lastDriveAt) > Self.tripGap { endTrip() }
+            added = lift(fix, cells: Self.lane(from: laneFrom, to: fix.point), driving: true,
+                         centre: Self.centreLine(from: laneFrom, to: fix.point))
+            if accepted {
+                laneFrom = fix.point
+                lastDriveAt = fix.at
+            }
         } else {
             laneFrom = nil
+            endTrip()
             added = lift(fix, cells: MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius), driving: false)
         }
         if accepted { roadTrip.record(fix, saveNow: saveNow) }
@@ -253,6 +309,19 @@ final class WorldFogKeeper {
         return cells.sorted()
     }
 
+    /// The cells under a drive's centre line from `from` (the drive's last reading) to `point`: the cell containing
+    /// `point`, and those containing the points every ``wornStep`` back to `from` when that is within ``maxJoin``. A
+    /// trip counts these for the frequent roads, not the 25 m lane either side.
+    static func centreLine(from: GeoPoint?, to point: GeoPoint) -> [HexCell] {
+        guard let from, from.distance(to: point) <= maxJoin else { return [MercatorHexGrid.cell(containing: point)] }
+        let steps = max(1, min(maxWornSteps, Int((from.distance(to: point) / wornStep).rounded(.up))))
+        var cells = Set<HexCell>()
+        for step in 1...steps {
+            cells.insert(MercatorHexGrid.cell(containing: from.lerp(to: point, Double(step) / Double(steps))))
+        }
+        return cells.sorted()
+    }
+
     /// Whether the rules let `fix` lift the fog: "Uncover the map as you go" on, precise, accurate enough.
     private func accepts(_ fix: WorldFix) -> Bool {
         WorldMapPreferences.uncoverAsYouGo(in: defaults) && fix.isPrecise && fix.accuracy <= Self.maxAccuracy
@@ -261,15 +330,19 @@ final class WorldFogKeeper {
 
     /// Lifts `cells` (around `fix`) when the rules allow `fix`; returns how many cells were new. `driving`: the cells
     /// it newly uncovers are only driven past (see-through fog, owner 2026-11-09), and the week's corner isn't walked
-    /// into; otherwise every cell it reaches is walked, driven no more.
-    private func lift(_ fix: WorldFix, cells: [HexCell], driving: Bool) -> Int {
+    /// into; otherwise every cell it reaches is walked, driven no more. `centre`: a drive's centre-line cells, each
+    /// counted once per trip toward the frequent roads (never in a decoy; buffered with the phone locked).
+    private func lift(_ fix: WorldFix, cells: [HexCell], driving: Bool, centre: [HexCell] = []) -> Int {
         guard accepts(fix) else { return 0 }
         guard !isDecoy else { return liftDecoy(cells, driving: driving) }
+        let tripNew = newTripCells(centre)
         guard isProtectedDataAvailable(), store.isLoaded else {
             if driving, store.isLoaded { countLockedFresh(cells) }
             bufferWhileLocked(cells, driving: driving)
+            bufferWornWhileLocked(tripNew, at: fix.at)
             return 0
         }
+        if !tripNew.isEmpty, worn.record(tripNew, kind: .road, on: WornDay.number(for: fix.at)) > 0 { wornUnpublished = true }
         let fresh = cells.filter { !store.cells.contains($0) }
         let lifted = store.lift(cells)
         let gaps = FogGapCloser.closing(around: cells, in: store.cells)
@@ -338,10 +411,39 @@ final class WorldFogKeeper {
         do {
             try store.save()
             try driven.save()
+            try worn.save()
             sinceSave = 0
         } catch {
             FernletAuditLog.log("worldMap.fog.saveDeferred")
         }
+        publishWorn()
+    }
+
+    /// Ends the drive's trip for the worn-road count: the next drive reading starts a new trip, and when this one
+    /// counted anything it is saved and shown.
+    private func endTrip() {
+        lastDriveAt = nil
+        guard !tripCells.isEmpty else { return }
+        tripCells = []
+        flush()
+    }
+
+    /// The cells of `centre` this trip hasn't counted yet, now marked counted (at most ``maxTripCells`` a trip).
+    private func newTripCells(_ centre: [HexCell]) -> [HexCell] {
+        guard !centre.isEmpty else { return [] }
+        var fresh: [HexCell] = []
+        // Bounded: a centre line holds at most maxWornSteps + 1 cells.
+        for cell in centre.prefix(Self.maxWornSteps + 1) where tripCells.count < Self.maxTripCells {
+            if tripCells.insert(cell).inserted { fresh.append(cell) }
+        }
+        return fresh
+    }
+
+    /// Shows the counter's tallies on the map when they changed since last shown (never in a decoy).
+    private func publishWorn() {
+        guard !isDecoy, wornUnpublished || wornWays.count != worn.tallies.count else { return }
+        wornWays = worn.tallies
+        wornUnpublished = false
     }
 
     /// Enters or leaves a decoy session. Entering hides the history; leaving drops the decoy's own
@@ -361,8 +463,12 @@ final class WorldFogKeeper {
         roadTrip.setDecoy(on)
         decoyCells = []
         decoyDriven = []
+        tripCells = []
+        lastDriveAt = nil
         visibleCells = on ? [] : store.cells
         drivenCells = on ? [] : driven.cells
+        wornWays = on ? [:] : worn.tallies
+        wornUnpublished = false
     }
 
     /// The wipe: forgets the cells and the road trips and deletes every World map file and key, and the map widget's
@@ -370,11 +476,16 @@ final class WorldFogKeeper {
     func clearAll() -> Bool {
         store.forget()
         driven.forget()
+        worn.forget()
         roadTrip.forget()
         decoyCells = []
         decoyDriven = []
         visibleCells = []
         drivenCells = []
+        wornWays = [:]
+        wornUnpublished = false
+        tripCells = []
+        lastDriveAt = nil
         sinceSave = 0
         let pictureGone = removeWidgetMap()
         let driveGone = driveWidget.clear()
@@ -410,8 +521,11 @@ final class WorldFogKeeper {
             try store.drainPending()
             if !driven.isLoaded { try driven.load() }
             try mergeDriven()
+            if !worn.isLoaded { try worn.load() }
+            try mergeWorn()
             visibleCells = store.cells
             drivenCells = driven.cells
+            publishWorn()
         } catch {
             FernletAuditLog.log("worldMap.fog.loadDeferred")
         }
@@ -431,6 +545,17 @@ final class WorldFogKeeper {
     private func bufferWhileLocked(_ cells: [HexCell], driving: Bool) {
         do {
             if driving { try driven.appendPending(cells) } else { try store.appendPending(cells) }
+        } catch {
+            FernletAuditLog.log("worldMap.fog.bufferUnavailable")
+        }
+    }
+
+    /// Puts a drive's newly counted centre cells into the worn-road counter's buffer with the reading's day, for the
+    /// next unlock.
+    private func bufferWornWhileLocked(_ cells: [HexCell], at date: Date) {
+        guard !cells.isEmpty else { return }
+        do {
+            try worn.appendPending(cells, kind: .road, on: WornDay.number(for: date))
         } catch {
             FernletAuditLog.log("worldMap.fog.bufferUnavailable")
         }

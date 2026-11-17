@@ -4,8 +4,8 @@ import WorldMapStore
 
 /// What the map widget's picture draws over Apple's map (owner's Q36: "Places + trails, not history"):
 /// the person's marked places — their homes and the hotel of a stay, and the places they keep to eat and
-/// train — and their saved trails. Never a visit count, a day, a photo or Where you've been: those stay
-/// sealed in Private.
+/// train — their saved trails, and the paths and roads they use most (owner 2026-11-15, call 6; none while "Show
+/// worn paths" is off). Never a visit count, a day, a photo or Where you've been: those stay sealed in Private.
 struct WorldWidgetMapContent: Equatable {
     /// The homes and the current hotel in the picture.
     var homes: [HomePlace] = []
@@ -13,6 +13,8 @@ struct WorldWidgetMapContent: Equatable {
     var places: [WorldMapMarker] = []
     /// The saved walk and run lines that cross the picture, each simplified.
     var trails: [[GeoPoint]] = []
+    /// The worn paths and frequent roads in the picture.
+    var worn: [WorldWidgetWornLine] = []
 
     /// Nothing to draw (a decoy, or nothing marked nearby).
     static let empty = WorldWidgetMapContent()
@@ -22,6 +24,28 @@ struct WorldWidgetMapContent: Equatable {
     static let maxTrails = 40
     /// The most points one drawn trail keeps.
     static let maxTrailPoints = 400
+    /// The most worn lines one picture draws (the most worn first).
+    static let maxWornLines = 300
+
+    /// `drawing`'s pieces whose box meets `viewport` (grown by a tenth each way), most worn first, roads before paths
+    /// at a level, at most ``maxWornLines``.
+    static func wornLines(_ drawing: WornWaysDrawing, in viewport: MapViewport) -> [WorldWidgetWornLine] {
+        guard viewport.isUsable, !drawing.isEmpty else { return [] }
+        let padX = viewport.width * 0.1, padY = viewport.height * 0.1
+        let meets = { (line: WorldRoadPiece) in
+            line.maxX >= viewport.minX - padX && line.minX <= viewport.minX + viewport.width + padX
+                && line.maxY >= viewport.minY - padY && line.minY <= viewport.minY + viewport.height + padY
+        }
+        let tagged = drawing.roads.map { ($0, true) } + drawing.footpaths.map { ($0, false) }
+        // Bounded: the drawing's pieces (WornWaysDrawing.maxPieces of each kind), then maxWornLines.
+        return tagged.filter { meets($0.0.line) }
+            .sorted { ($0.0.level, $0.1 ? 1 : 0) > ($1.0.level, $1.1 ? 1 : 0) }
+            .prefix(maxWornLines)
+            .map { piece, isRoad in
+                WorldWidgetWornLine(level: piece.level, isRoad: isRoad,
+                                    points: zip(piece.line.xs, piece.line.ys).map { WebMercator.geo(x: $0, y: $1) })
+            }
+    }
 
     /// Whether `point` falls in `viewport`, or within `margin` of it (a share of its size).
     static func contains(_ viewport: MapViewport, _ point: GeoPoint, margin: Double = 0.1) -> Bool {
@@ -62,7 +86,17 @@ struct WorldWidgetMapContent: Equatable {
     }
 }
 
-/// The map widget's picture for one appearance: Apple's muted map, Fernlet's saved trails, a decorative
+/// One worn path or frequent road in the map widget's picture.
+struct WorldWidgetWornLine: Equatable {
+    /// How worn.
+    let level: WornLevel
+    /// A road (else a footpath).
+    let isRoad: Bool
+    /// Its points.
+    let points: [GeoPoint]
+}
+
+/// The map widget's picture for one appearance: Apple's muted map, the worn paths and roads, Fernlet's saved trails, a decorative
 /// nature-fog ring at the edges (Home's look, in its reduced detail and still; never the fog of where you've been, which stays sealed), and the
 /// homes, hotel and kept places as the map draws them. Sprout, the hearts and "Map from 9:40" are the
 /// widget's own, drawn over it live.
@@ -98,10 +132,11 @@ struct WorldWidgetMapCanvas: View {
         .environment(\.colorScheme, dark ? .dark : .light)
     }
 
-    /// The trails, then the fog ring: lifted in a disc round the person (the picture's middle) and round
-    /// each home and kept place, as the map uncovers them.
+    /// The worn ways, the trails, then the fog ring: lifted in a disc round the person (the picture's middle) and
+    /// round each home and kept place, as the map uncovers them.
     private var ground: some View {
         Canvas { context, canvasSize in
+            drawWorn(in: &context, size: canvasSize)
             let trailColor = dark ? WorldPalette.nightTrail : WorldPalette.trail
             for trail in content.trails {
                 var path = Path()
@@ -116,6 +151,36 @@ struct WorldWidgetMapCanvas: View {
                 .paint(&context, size: canvasSize)
         }
         .frame(width: size.width, height: size.height)
+    }
+
+    /// The worn ways as Home draws them, at a fixed art pixel: the roads, then the footpaths.
+    private func drawWorn(in context: inout GraphicsContext, size: CGSize) {
+        // Bounded: maxWornLines lines.
+        for road in [true, false] {
+            for line in content.worn where line.isRoad == road {
+                let path = Self.path(line.points, viewport: viewport, size: size)
+                if road {
+                    WornWaysPainter.strokeRoad(path, level: line.level, unit: Self.wornUnit, reduced: false, dark: dark,
+                                               highContrast: false, in: &context)
+                } else {
+                    WornWaysPainter.strokeFootpath(path, level: line.level, width: Self.wornUnit * 2, dark: dark,
+                                                   highContrast: false, in: &context)
+                }
+            }
+        }
+    }
+
+    /// The art pixel the picture draws worn ways at, in points (a road 3.6 pt, a path 1.8 pt, under the 4-pt trails).
+    static let wornUnit: CGFloat = 0.9
+
+    /// A line through `points` in the picture's points.
+    static func path(_ points: [GeoPoint], viewport: MapViewport, size: CGSize) -> Path {
+        var path = Path()
+        for (index, point) in points.enumerated() {
+            let screen = viewport.screenPoint(for: point, in: size)
+            if index == 0 { path.move(to: screen) } else { path.addLine(to: screen) }
+        }
+        return path
     }
 
     /// The fog ring's clearing, shared with the one-colour picture (``WorldWidgetMonoCanvas``): the clear

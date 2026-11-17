@@ -183,7 +183,7 @@ struct WorldAtlasMapView: View {
     /// What the map's drawing depends on beyond the camera: the uncovered hexes, the raster, the places.
     private var generation: Int {
         model.placeGeneration &+ (model.raster == nil ? 0 : 1) &+ (model.found.isEmpty ? 0 : 2) &+ (model.roads.roadCount > 0 ? 4 : 0)
-            &+ (model.airportCells.isEmpty ? 0 : 8)
+            &+ (model.airportCells.isEmpty ? 0 : 8) &+ (model.wornRoads.pieces.isEmpty ? 0 : 16)
     }
 
     /// The zoom level's spoken value.

@@ -45313,6 +45313,22 @@
         }
       }
     },
+    "Show worn paths" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar caminos trillados"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar caminos trillados"
+          }
+        }
+      }
+    },
     "Shower Concerts" : {
       "comment" : "Silly stat title",
       "localizations" : {
@@ -50048,6 +50064,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ahora no se puede abrir el pasaporte. Desbloquea el iPhone y vuelve a intentarlo."
+          }
+        }
+      }
+    },
+    "The paths and roads you use most." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los caminos y las carreteras que más usas."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los caminos y las calles que más usas."
           }
         }
       }
@@ -91275,6 +91307,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sonidos del entrenamiento"
+          }
+        }
+      }
+    },
+    "settings.search.title.wornPaths" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show worn paths"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar caminos trillados"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar caminos trillados"
           }
         }
       }

@@ -63,8 +63,9 @@ final class WorldWidgetMapWriter {
         self.isInstalled = isInstalled ?? { await Self.mapWidgetIsInstalled() }
     }
 
-    /// Draws and writes a new picture when ``WorldWidgetMapSchedule`` says so.
-    func refresh(store: FernletStore, now: Date = Date()) async {
+    /// Draws and writes a new picture when ``WorldWidgetMapSchedule`` says so, with `worn`'s paths and roads on it
+    /// (owner 2026-11-15, call 6; none while "Show worn paths" is off).
+    func refresh(store: FernletStore, worn: WornWaysDrawing = .none, now: Date = Date()) async {
         guard !isWriting else { return }
         isWriting = true
         defer { isWriting = false }
@@ -73,10 +74,10 @@ final class WorldWidgetMapWriter {
             return
         }
         guard let center = Self.eligibleCenter(store, now: now) else { return }
-        let stamp = store.worldWidgetMapStamp(now: now)
+        let stamp = store.worldWidgetMapStamp(now: now, worn: worn)
         guard WorldWidgetMapSchedule.shouldWrite(last: last, pictureExists: file.exists, center: center, stamp: stamp, now: now) else { return }
         let generation = store.worldFog.widgetMapGeneration
-        guard let picture = await Self.render(store: store, center: center, now: now) else { return }
+        guard let picture = await Self.render(store: store, center: center, worn: worn, now: now) else { return }
         // A wipe, "Delete map history" or a decoy may have begun while the map was drawn: then this picture
         // is of what was deleted, and is never written.
         guard store.worldFog.widgetMapGeneration == generation, Self.eligibleCenter(store, now: now) != nil else { return }
@@ -101,10 +102,10 @@ final class WorldWidgetMapWriter {
 
     /// Both pictures of the area round `center` and the one-colour drawing, or nil when Apple's map can't be
     /// had (offline).
-    private static func render(store: FernletStore, center: GeoPoint, now: Date) async -> WorldWidgetMapPicture? {
+    private static func render(store: FernletStore, center: GeoPoint, worn: WornWaysDrawing, now: Date) async -> WorldWidgetMapPicture? {
         let size = WorldWidgetMap.pictureSize, scale = WorldWidgetMap.pictureScale
         let viewport = MapViewport.around(center, heightMetres: Double(size.height) * WorldWidgetMap.metresPerPoint, size: size)
-        let content = store.worldWidgetMapContent(in: viewport, now: now)
+        let content = store.worldWidgetMapContent(in: viewport, now: now, worn: worn)
         guard let lightBase = await AppleMapSnapshot.image(of: viewport, size: size, scale: scale, dark: false),
               let darkBase = await AppleMapSnapshot.image(of: viewport, size: size, scale: scale, dark: true),
               let light = WorldWidgetMapCanvas.png(base: lightBase, viewport: viewport, content: content, dark: false, size: size, scale: scale),
@@ -141,6 +142,8 @@ struct WorldWidgetMapRefresh: ViewModifier {
     var store: FernletStore
     /// Whether the map is on screen, the app active, Apple's map under it and following the person.
     let isActive: Bool
+    /// Home's worn paths and roads, read at each beat (the model, so a long stretch in front draws its newest).
+    var worn: WornWaysModel?
     @State private var writer = WorldWidgetMapWriter()
 
     /// The most beats one stretch in front runs (a day of five-minute beats).
@@ -168,7 +171,7 @@ struct WorldWidgetMapRefresh: ViewModifier {
     private func keepFresh() async {
         guard isActive else { return }
         for _ in 0..<Self.maxBeats {
-            await writer.refresh(store: store)
+            await writer.refresh(store: store, worn: worn?.drawing ?? .none)
             do {
                 try await Task.sleep(for: .seconds(WorldWidgetMapSchedule.minimumGap))
             } catch {
@@ -179,8 +182,8 @@ struct WorldWidgetMapRefresh: ViewModifier {
 }
 
 extension View {
-    /// Keeps the map widget's picture fresh while `isActive` (``WorldWidgetMapRefresh``).
-    func worldWidgetMap(store: FernletStore, isActive: Bool) -> some View {
-        modifier(WorldWidgetMapRefresh(store: store, isActive: isActive))
+    /// Keeps the map widget's picture fresh while `isActive` (``WorldWidgetMapRefresh``), with `worn`'s paths and roads.
+    func worldWidgetMap(store: FernletStore, isActive: Bool, worn: WornWaysModel? = nil) -> some View {
+        modifier(WorldWidgetMapRefresh(store: store, isActive: isActive, worn: worn))
     }
 }
