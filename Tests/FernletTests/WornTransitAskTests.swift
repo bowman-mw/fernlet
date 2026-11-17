@@ -110,10 +110,10 @@ struct WornTransitAskTests {
         #expect(line == "Train path · used 12 times · last used 3 days ago")
         let ferry = WornWayCopy.header(kind: .ferry, tally: WornTally(count: 1, lastDay: Self.today), today: Self.today,
                                        locale: Self.english)
-        #expect(ferry == "Ferry path · used 1 time · last today")
+        #expect(ferry == "Ferry path · used 1 time · last used today")
         let road = WornWayCopy.header(kind: .road, tally: WornTally(count: 40, lastDay: Self.today - 1), today: Self.today,
                                       locale: Self.english)
-        #expect(road == "Frequent road · used 40 times · last yesterday")
+        #expect(road == "Frequent road · used 40 times · last used yesterday")
     }
 
     @Test func longAgoReadsInWeeksMonthsAndYears() {
