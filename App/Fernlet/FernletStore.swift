@@ -7643,6 +7643,12 @@ final class FernletStore {
         LaunchPreparationService.clearDaySummaryRunMarker()
         pastDayJournalScrubDefaults.removeObject(forKey: Self.pastDayJournalScrubFlagKey)
         pastDayJournalScrubDefaults.removeObject(forKey: Self.pastDayJournalScrubAttemptsKey)
+        // The recovery code's one-time offer flag (G9-2): a trace that a sealed backup was turned on
+        // here. Post-wipe the offer may show once more, and only when no code exists.
+        RecoveryCodePresenter.clearOfferedFlag(in: .standard)
+        // The recipe book's pending "Your recipe parts are now their own recipes" note: the recipes it
+        // speaks of are gone with the wipe.
+        webImageAttemptDefaults.removeObject(forKey: Self.recipePartsMigratedNoteKey)
     }
 
     /// The guided-workout leg of ``resetAll()``, split out of it for the 60-line rule (R4) when

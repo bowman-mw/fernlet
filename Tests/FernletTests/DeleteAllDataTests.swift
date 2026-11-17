@@ -1293,6 +1293,24 @@ struct DeleteAllDataTests {
         #expect(scrubDefaults.object(forKey: FernletStore.pastDayJournalScrubAttemptsKey) == nil, "the journal scrub's retry counter survived the wipe")
     }
 
+    /// The recovery code's one-time offer flag (G9-2) and the recipe book's pending parts note
+    /// (recipes as building blocks): device-local bits about a backup and recipes the wipe removes.
+    @Test func deleteAllClearsTheRecoveryOfferFlagAndRecipePartsNote() async throws {
+        let store = makeStore("delete-all-recovery-offer-parts-note")
+        let recipeDefaults = try #require(UserDefaults(suiteName: "test.delete-all.parts-note.\(UUID().uuidString)"))
+        store.webImageAttemptDefaults = recipeDefaults
+        recipeDefaults.set(true, forKey: "recipeBook.partsMigratedNotePending")
+        #expect(store.showsRecipePartsMigratedNote, "precondition: the parts note was not seeded")
+        let offerKey = RecoveryCodePresenter.offeredDefaultsKey
+        UserDefaults.standard.set(true, forKey: offerKey)
+        defer { UserDefaults.standard.removeObject(forKey: offerKey) }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(UserDefaults.standard.object(forKey: offerKey) == nil, "the recovery code offer flag survived the wipe")
+        #expect(!store.showsRecipePartsMigratedNote, "the recipe parts note survived the wipe")
+    }
+
     /// The pre-Core-Data `SavedRecipes.json`: plaintext recipe names, ingredients, notes and source
     /// URLs. The migration latch survives the wipe by design, so nothing re-reads the file — but
     /// until this round nothing deleted it either.

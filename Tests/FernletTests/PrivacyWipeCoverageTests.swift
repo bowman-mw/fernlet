@@ -198,6 +198,9 @@ struct PrivacyWipeCoverageTests {
         "AmbientReminderMemory.clearAll",
         "LaunchPreparationService.clearDaySummaryRunMarker",
         "pastDayJournalScrubDefaults.removeObject",
+        // G9-2's recovery-code offer flag and the recipe book's pending parts note (2026-11-16).
+        "RecoveryCodePresenter.clearOfferedFlag",
+        "webImageAttemptDefaults.removeObject",
         // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of
         // 2026-10-20). The heart-rate switches stored beside it are kept; this is about their body.
         "WorkoutZonePreferences.clearMaxHeartRate",

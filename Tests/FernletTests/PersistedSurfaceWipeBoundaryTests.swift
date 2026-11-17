@@ -333,6 +333,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         // G9-1: this install's random day-row device key (no content; never synced). The purge's
         // `dayRecordRepository.deleteAll()` removes it after the rows, so the next write mints a new one.
         "fernlet.sync.dayRowDeviceKey": .cleared(token: "repository.purgeAllPersistedData"),
+        // G9-2 (2026-11-15): the recovery code's one-time offer flag — a trace that a sealed backup was
+        // turned on here. Cleared, so a wiped install may be offered once more (only when no code exists).
+        "fernlet.recoveryCode.offeredOnce": .cleared(token: "RecoveryCodePresenter.clearOfferedFlag"),
+        // Recipes as building blocks (pick P07a): the recipe book's pending "parts are now their own
+        // recipes" note. The recipes it describes go with the wipe, so the note does too.
+        "recipeBook.partsMigratedNotePending": .cleared(token: "webImageAttemptDefaults.removeObject"),
 
         // ── Survives by design ───────────────────────────────────────────────────────────────────
         "com.fernlet.launch.priorUseRecorded": .kept(
