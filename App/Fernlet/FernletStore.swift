@@ -7637,6 +7637,12 @@ final class FernletStore {
         // G8: the gentle reminders' record — breathing and grounding finish dates and which cards
         // showed or were put off when.
         AmbientReminderMemory.clearAll()
+        // G9-2 and recipe blocks (2026-11-16): two device-local flags. The recovery code's "offered
+        // once" mark goes, since the wipe deletes the code's escrow and the next backup turned on
+        // should offer a new code; and the recipe book's pending "parts are now their own recipes"
+        // note goes with the recipes it describes.
+        RecoveryCodePresenter.clearOfferedFlag()
+        webImageAttemptDefaults.removeObject(forKey: Self.recipePartsMigratedNoteKey)
         // Three traces of use nobody decided should survive (the former "Open gaps"): the
         // day-summary backfill's last-run day, and the past-day journal scrub's latch and retry
         // counter. Post-wipe both jobs simply run once more over an empty store.

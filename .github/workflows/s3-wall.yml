@@ -1343,9 +1343,21 @@ jobs:
         # 5, and ten runs of it on its own green), 0 failed, 0 skipped, no `Restarting after unexpected
         # exit` line, the suite census silent. Re-run AT 318: passed, and shown red once at 319. 313 + 5 =
         # 318 is the ARITHMETIC CHECK, never the source.
+        # RAISED 318 -> 326, MEASURED on a Mac, 2026-11-16 (iPhone 17 simulator, iOS 26.5):
+        # `RecoveryCodeGoldenTests` (G9-2, #176) JOINS this line. It pins the recovery code's at-rest
+        # chain, entropy -> words -> recovery key pair -> HPKE-sealed escrow key, byte for byte: a code
+        # written on paper today must open records sealed today on every later build, and a drift
+        # compiles clean. It merged on no line, so CIGateSelectorBoundaryTests'
+        # `everyWireGoldenSuiteIsGated` named it ungated; the NAME count moves 8 -> 9 in its
+        # `measuredSuiteNameCounts`, and `wallLines` pins it here, in this same commit. This exact
+        # nine-name list run at floor 1 through Fernlet.xcworkspace after the strict build-for-testing
+        # (WALL CHECK PASSED), read off its own result bundle: totalTestCount 326 ("Test run with 326
+        # tests in 9 suites passed after 3.769 seconds"), 0 failed, 0 skipped, no `Restarting after
+        # unexpected exit` line, the suite census silent. Re-run AT 326: passed, and shown red once at
+        # 327. 318 + 8 = 326 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 318 \
+          Scripts/run-gated-suites.sh crypto-goldens 326 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
@@ -1353,7 +1365,8 @@ jobs:
             ProximityVocabularyGoldenTests \
             ProximityNamespaceGateTests \
             FernletFeatureGoldenTests \
-            CryptographicEscapeHatchCensusTests
+            CryptographicEscapeHatchCensusTests \
+            RecoveryCodeGoldenTests
 
       # The five walls below have no compiler half and ran on NO workflow until 2026-09-24 — each
       # was green only when somebody remembered to run it locally, which is the gap the mesh

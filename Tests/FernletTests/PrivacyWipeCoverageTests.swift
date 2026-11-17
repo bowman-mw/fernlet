@@ -196,6 +196,10 @@ struct PrivacyWipeCoverageTests {
         "CompanionEmotionPreferences.clearAll",
         // G8 (2026-11-15): the gentle reminders' device-local record (calm finish dates, card schedule).
         "AmbientReminderMemory.clearAll",
+        // 2026-11-16: the recovery code's one-time offer flag (G9-2, #176) and the recipe book's
+        // pending converted-parts note (recipe blocks, #178).
+        "RecoveryCodePresenter.clearOfferedFlag",
+        "webImageAttemptDefaults.removeObject",
         "LaunchPreparationService.clearDaySummaryRunMarker",
         "pastDayJournalScrubDefaults.removeObject",
         // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of

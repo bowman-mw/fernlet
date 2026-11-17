@@ -58,6 +58,15 @@ final class RecoveryCodePresenter {
     /// nagged). Device-local on purpose: a new iPhone that turns a backup on is offered again.
     nonisolated static let offeredDefaultsKey = "fernlet.recoveryCode.offeredOnce"
 
+    /// Forgets that the one-time offer was made, so the next backup turned on offers a code again.
+    /// Delete everything calls it: the wipe also deletes the code's escrow from iCloud, so the
+    /// person has no code left and the flag would otherwise hide the offer from them for good.
+    ///
+    /// - Parameter defaults: Where the offered flag lives.
+    nonisolated static func clearOfferedFlag(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: offeredDefaultsKey)
+    }
+
     /// A presenter over `service`.
     init(service: RecoveryCodeService) {
         self.service = service

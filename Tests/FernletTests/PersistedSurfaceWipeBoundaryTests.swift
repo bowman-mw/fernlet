@@ -197,6 +197,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         // G8 (2026-11-15): the gentle reminders' calm finish dates and card schedule.
         "fernlet.ambientReminders.calmFinishes": .cleared(token: "AmbientReminderMemory.clearAll"),
         "fernlet.ambientReminders.schedule": .cleared(token: "AmbientReminderMemory.clearAll"),
+        // G9-2 (#176): the recovery code's one-time offer flag. The wipe deletes the code's escrow,
+        // so a surviving flag would hide the offer from someone who no longer has a code.
+        "fernlet.recoveryCode.offeredOnce": .cleared(token: "RecoveryCodePresenter.clearOfferedFlag"),
+        // Recipe blocks (#178): the pending "parts are now their own recipes" note, a trace of
+        // recipes the wipe deletes.
+        "recipeBook.partsMigratedNotePending": .cleared(token: "webImageAttemptDefaults.removeObject"),
         "fernlet.companionFeelings.bedtimeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "fernlet.companionFeelings.wakeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),

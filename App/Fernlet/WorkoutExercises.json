@@ -5831,7 +5831,7 @@
     "equipment": "bodyweight",
     "movementPattern": "isolation",
     "inputKind": "strength",
-    "difficulty": 1,
+    "difficulty": 2,
     "variation": true,
     "areaLoads": {
       "ankleFoot": "light"

@@ -409,13 +409,19 @@ import Testing
     /// hatches the purpose wall beside it lets through. A hook read outside DEBUG and a new hatch both
     /// compile clean. `s3-grep`'s floor stays the shared `1`. Both are pinned by name in ``wallLines``
     /// too. Counted off the lines.
+    ///
+    /// RE-MEASURED 2026-11-16: `crypto-goldens` 8 → 9, for `RecoveryCodeGoldenTests` (G9-2, #176),
+    /// which merged on no line, so ``everyWireGoldenSuiteIsGated()`` named it ungated and main went
+    /// red. Its eight cells pin the recovery code's chain byte for byte, entropy → words → recovery
+    /// key pair → HPKE-sealed escrow key; a drift there compiles clean and strands every code
+    /// already written on paper. Pinned by name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 12,
         "no-tracking": 2,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
-        "crypto-goldens": 8,
+        "crypto-goldens": 9,
         "privacy-wipe": 4,
         "accessibility": 1,
         "memory-lifecycle": 1,
@@ -453,7 +459,8 @@ import Testing
         "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
                            "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests",
                            "ProximityVocabularyGoldenTests", "ProximityNamespaceGateTests",
-                           "FernletFeatureGoldenTests", "CryptographicEscapeHatchCensusTests"],
+                           "FernletFeatureGoldenTests", "CryptographicEscapeHatchCensusTests",
+                           "RecoveryCodeGoldenTests"],
         "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
                          "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
         "accessibility": ["AccessibilityBoundaryTests"],
@@ -1342,7 +1349,8 @@ import Testing
     /// stay: the 11 `mesh-batteries` gates, the four store suites and `IdentityServiceTests`.
     /// 607 → 608 on 2026-10-17 for `IntimacyHealthWriteTests` (on no line), the anomaly re-triage's fix
     /// that tells a failed Apple Health sample from a failed link mark after an intimacy save.
-    static let measuredInventoryRows = 608
+    /// 608 → 609 on 2026-11-16 for `RecoveryCodeGoldenTests`, which joined `crypto-goldens`.
+    static let measuredInventoryRows = 609
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has three
