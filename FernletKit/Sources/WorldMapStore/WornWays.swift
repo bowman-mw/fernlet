@@ -121,7 +121,7 @@ public nonisolated struct WornTally: Sendable, Equatable, Hashable {
             case .abandoned?:
                 count = thresholds.minimumCount(for: .one) - 1
             case let faded?:
-                count = min(count, thresholds.minimumCount(for: faded))
+                if fadedSteps(today: day) >= 1 { count = min(count, thresholds.minimumCount(for: faded)) }
             }
             lastDay = day
         }

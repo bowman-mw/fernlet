@@ -215,10 +215,8 @@ struct WornPathsDrawingTests {
     @Test func aTallyClimbsAcrossDays() {
         var tally = WornTally.first(on: 100)
         for day in UInt16(101)...UInt16(115) { tally.pass(on: day, thresholds: .footpath) }
-        withKnownIssue("WornTally.pass resets the count to its level's minimum on each new day without fading") {
-            #expect(tally.count == 16)
-            #expect(tally.level(today: 115, thresholds: .footpath) == .three)
-        }
+        #expect(tally.count == 16)
+        #expect(tally.level(today: 115, thresholds: .footpath) == .three)
     }
 
     // MARK: Bounds and cost
