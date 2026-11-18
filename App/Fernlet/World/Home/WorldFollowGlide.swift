@@ -283,6 +283,27 @@ final class WorldFollowGlide {
         path?.isSettled(at: now) ?? true
     }
 
+    /// Whether the last reading went faster than a car's speed (``WorldRideWatch/carSpeed``), by CoreLocation's own
+    /// speed: the camera then follows at ``carFrameRate`` (location power, owner 2026-11-17).
+    var isCarPace: Bool { Self.isCarPace(lastFix?.speed) }
+
+    /// How often the following camera moves on foot: up to 60 frames a second.
+    static let footFrameRate = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+    /// How often it moves at a car's speed (``isCarPace``): 30 frames a second, which roughly halves the map's drawing
+    /// on a drive, where nearly all of the open map's power goes (owner's pick 2026-11-17, location-power report, option A).
+    static let carFrameRate = CAFrameRateRange(minimum: 30, maximum: 30, preferred: 30)
+
+    /// The rate the following camera moves at: ``carFrameRate`` at a car's speed, ``footFrameRate`` otherwise.
+    static func frameRate(carPace: Bool) -> CAFrameRateRange {
+        carPace ? carFrameRate : footFrameRate
+    }
+
+    /// Whether `speed` (metres a second, nil when unknown) is faster than a car's speed; unknown never is.
+    nonisolated static func isCarPace(_ speed: Double?) -> Bool {
+        guard let speed, speed.isFinite else { return false }
+        return speed > WorldRideWatch.carSpeed
+    }
+
     /// Where the following camera looks at `distance` metres up, to keep Sprout on its spot (``WorldMapHome/lookAt(_:distance:)``).
     func cameraCentre(distance: Double) -> GeoPoint? {
         shown.map { WorldMapHome.lookAt($0, distance: distance) }

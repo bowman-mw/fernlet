@@ -90,6 +90,11 @@ final class WorldFogKeeper {
     static let maxAccuracy = 65.0
     /// New cells between saves while the app is open (saves also happen on ``flush()``).
     static let saveEvery = 40
+    /// On a drive, the least time between two of those saves, in seconds (location power, owner 2026-11-17, option F):
+    /// a drive reaches ``saveEvery`` every few readings, and each save reseals the whole history on the main thread.
+    /// Leaving the front, a walk, a trip's end and a locked phone still write at once, so an app killed mid-drive
+    /// loses at most this long of driven cells.
+    static let driveSaveGap: TimeInterval = 60
     /// How far apart a drive's centre line is sampled when counting worn roads, in metres: under a hex's 17.5 m
     /// radius, so no cell the line crosses is skipped (``WornFootpaths/sampleStep``).
     static let wornStep = WornFootpaths.sampleStep
@@ -138,6 +143,8 @@ final class WorldFogKeeper {
     @ObservationIgnored private var decoyCells: Set<HexCell> = []
     @ObservationIgnored private var decoyDriven: Set<HexCell> = []
     @ObservationIgnored private var sinceSave = 0
+    /// When the last save a drive reading made was taken (``driveSaveGap``); nil before one.
+    @ObservationIgnored private var lastDriveSave: Date?
     /// The map widget's picture in the app group (tests point it at their own folder).
     @ObservationIgnored var widgetMap: WorldWidgetMapFile
     /// Reloads the map widget once its picture is gone (tests count the calls).
@@ -352,11 +359,24 @@ final class WorldFogKeeper {
         // Inside the grounds just landed at, the passport waits for the person to leave (the flight gate).
         if !fix.atLandedAirport { atlas.observe(point: fix.point, at: fix.at) }
         if !driving { cornerNudge.noteRevealed(cells + gaps) }
-        visibleCells = store.cells
-        drivenCells = driven.cells
+        // Published only when they changed (option F): each publish re-runs Home's body, and a copy shared with the
+        // fog's tiles makes the next lift copy the whole history.
+        if added > 0 { visibleCells = store.cells }
+        if driven.cells.count != drivenCells.count { drivenCells = driven.cells }
         sinceSave += added
-        if sinceSave >= Self.saveEvery { flush() }
+        if Self.savesNow(unsaved: sinceSave, driving: driving, at: fix.at, lastDriveSave: lastDriveSave) {
+            if driving { lastDriveSave = fix.at }
+            flush()
+        }
         return added
+    }
+
+    /// Whether `unsaved` new cells are written now: at ``saveEvery`` on foot; on a drive (`driving`, a reading taken
+    /// `at`) also only once ``driveSaveGap`` has passed since `lastDriveSave`.
+    static func savesNow(unsaved: Int, driving: Bool, at: Date, lastDriveSave: Date?) -> Bool {
+        guard unsaved >= saveEvery else { return false }
+        guard driving, let lastDriveSave else { return true }
+        return at.timeIntervalSince(lastDriveSave) >= driveSaveGap || at < lastDriveSave
     }
 
     /// A road trip's road received at a catch-up (World-RoadTrip-Spec §2.6: "Every phone's fog lifts along its stretch
@@ -487,6 +507,7 @@ final class WorldFogKeeper {
         tripCells = []
         lastDriveAt = nil
         sinceSave = 0
+        lastDriveSave = nil
         let pictureGone = removeWidgetMap()
         let driveGone = driveWidget.clear()
         lockedFresh = []
