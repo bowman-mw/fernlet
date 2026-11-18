@@ -136,7 +136,7 @@ final class WorldWidgetMapWriter {
 }
 
 /// Keeps the map widget's picture fresh while the World Home's map is in front (round 6b): every time the
-/// map comes to the front, each time the person crosses into a new ~50 m square, and every five minutes
+/// map comes to the front, each time the person crosses into a new ~100 m square, and every five minutes
 /// meanwhile, it asks ``WorldWidgetMapWriter`` (which decides, and usually does nothing).
 struct WorldWidgetMapRefresh: ViewModifier {
     var store: FernletStore
@@ -161,11 +161,18 @@ struct WorldWidgetMapRefresh: ViewModifier {
         let square: Int
     }
 
-    /// The ~50 m square `point` falls in, as one number (0 without a reading).
+    /// The ~100 m square `point` falls in, as one number (0 without a reading). Its widest span (~141 m) is under the
+    /// writer's ``WorldWidgetMapSchedule/moveMetres`` (200 m), so a move far enough for a new picture always crosses
+    /// into a new square; it was ~50 m, which restarted the beat every two seconds on a highway (option F, owner
+    /// 2026-11-17).
     static func square(of point: GeoPoint?) -> Int {
         guard let point, point.isValid else { return 0 }
-        return Int((point.latitude * 2_000).rounded()) &* 1_000_003 &+ Int((point.longitude * 2_000).rounded())
+        return Int((point.latitude * squaresPerDegree).rounded()) &* 1_000_003
+            &+ Int((point.longitude * squaresPerDegree).rounded())
     }
+
+    /// Squares per degree of latitude or longitude (a thousandth of a degree: ~111 m north–south, less east–west).
+    static let squaresPerDegree = 1_000.0
 
     /// Asks the writer now and every few minutes while the map stays in front.
     private func keepFresh() async {

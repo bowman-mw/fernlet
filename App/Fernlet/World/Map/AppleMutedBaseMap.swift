@@ -477,6 +477,8 @@ private final class AppleMapFollowDriver {
     private(set) var isSettingCamera = false
     private weak var map: MKMapView?
     private var link: CADisplayLink?
+    /// Whether the link was last set to ``WorldFollowGlide/carFrameRate``.
+    private var linkAtCarPace = false
     /// The camera's start when easing in: its centre, its height and when the ease began.
     private var ease: (centre: GeoPoint, distance: Double, began: CFTimeInterval)?
     /// Whether a finger held the camera last frame (it eases back once the finger lifts).
@@ -495,9 +497,19 @@ private final class AppleMapFollowDriver {
         guard link == nil else { return }
         beginEase(from: map, now: now)
         let link = CADisplayLink(target: AppleMapFrameTarget(driver: self), selector: #selector(AppleMapFrameTarget.frame(_:)))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+        let carPace = glide?.isCarPace ?? false
+        link.preferredFrameRateRange = WorldFollowGlide.frameRate(carPace: carPace)
         link.add(to: .main, forMode: .common)
         self.link = link
+        linkAtCarPace = carPace
+    }
+
+    /// Moves the link to ``WorldFollowGlide/frameRate(carPace:)`` when the glide's pace crossed a car's speed since it was last set.
+    private func matchFrameRate(to glide: WorldFollowGlide) {
+        let carPace = glide.isCarPace
+        guard carPace != linkAtCarPace, let link else { return }
+        link.preferredFrameRateRange = WorldFollowGlide.frameRate(carPace: carPace)
+        linkAtCarPace = carPace
     }
 
     /// Stops the display link (nothing left to move, or the map no longer follows).
@@ -524,6 +536,7 @@ private final class AppleMapFollowDriver {
             heldByTouch = false
             beginEase(from: map, now: now)
         }
+        matchFrameRate(to: glide)
         glide.advance(to: now)
         guard let goal = glide.cameraCentre(distance: camera.distance) else {
             stop()

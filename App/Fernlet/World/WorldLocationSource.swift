@@ -208,6 +208,19 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var listening: Task<Void, Never>?
     /// Listens in a row that found no drive or ride (each widens the next fence), at most ``maxQuietListens``.
     @ObservationIgnored private var quietListens = 0
+    /// When a reading last read the audio route (``readsRoute(at:lastRead:)``); nil before one.
+    @ObservationIgnored private var lastRouteRead: Date?
+
+    /// The least time between two audio-route reads a reading makes, in seconds (location power, owner 2026-11-17,
+    /// option F): a drive delivers about one reading a second, and the route-change notification covers a running app.
+    nonisolated static let routeReadGap: TimeInterval = 10
+
+    /// Whether a reading taken `at` reads the audio route again: the first one, one ``routeReadGap`` after `lastRead`,
+    /// or one dated before it (a clock change).
+    nonisolated static func readsRoute(at: Date, lastRead: Date?) -> Bool {
+        guard let lastRead else { return true }
+        return at.timeIntervalSince(lastRead) >= routeReadGap || at < lastRead
+    }
 
     /// Whether a listen is running: continuous updates after the person left the leaving fence.
     var isListening: Bool { listening != nil }
@@ -725,8 +738,12 @@ final class WorldLocationSource: NSObject {
             return
         }
         let lowPower = !isUpdating && !isWalking && trace == nil && listening == nil
-        // The route with every reading: a suspended app hears no route change, and a car may have connected since.
-        cars.refresh()
+        // The route again from a reading: a suspended app hears no route change, and a car may have connected since.
+        // At most every ``routeReadGap`` (option F, owner 2026-11-17); route changes while running still arrive at once.
+        if Self.readsRoute(at: fix.at, lastRead: lastRouteRead) {
+            lastRouteRead = fix.at
+            cars.refresh()
+        }
         rides.handle(fix)
         if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
         var stamped = fix
