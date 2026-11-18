@@ -20,7 +20,7 @@ public nonisolated struct WornRideSegment: Sendable, Equatable {
 /// **Ferry** (owner's F1 draft rules, F4 any boat): a run of samples over water (``WornTransitGeography/isWater(_:)``)
 /// covering at least ``ferryMinWaterMetres`` (1 km), whose median speed is between ``ferryMinSpeed`` and
 /// ``ferryMaxSpeed`` (8–70 km/h), with fewer than ``bridgeMaxRoadShare`` (20 %) of its samples within
-/// ``bridgeRoadMetres`` (150 m) of a major road (more is a bridge). Up to ``ferryLandGap`` land samples inside a run
+/// ``bridgeRoadMetres`` (1 km) of a major road (more is a bridge). Up to ``ferryLandGap`` land samples inside a run
 /// (a pier, a shore-pack sliver) don't break it. A car connected on the water is still a ferry: the car is on it.
 /// It is sure when the run starts and ends slowly (docking: a sample at or under ``dockingSpeed`` within
 /// ``dockingReach`` samples of each end) or when at least ``ferryRouteShare`` (half) of it lies within
@@ -57,8 +57,10 @@ public nonisolated enum WornRideClassifier {
     public static let ferryMinSpeed = 2.2
     /// The fastest median speed of a ferry's run, in m/s (70 km/h): faster is a bridge crossed at road speed.
     public static let ferryMaxSpeed = 19.4
-    /// How near a major road a sample over water must be to count as on a bridge, in metres.
-    public static let bridgeRoadMetres = 150.0
+    /// How near a major road a sample over water must be to count as on a bridge, in metres. Natural Earth's roads sit
+    /// up to several hundred metres off the real road in cities (Interstate 5's line is 729 m from the Marquam Bridge in
+    /// the source), so the doc's 150 m would miss real bridges; a short ferry that hugs a road counts as a drive instead.
+    public static let bridgeRoadMetres = 1_000.0
     /// The share of a run's samples on a bridge at which it is a bridge, not a boat.
     public static let bridgeMaxRoadShare = 0.2
     /// Land samples a run over water may hold in a row and go on (a pier, a sliver of the shore pack).

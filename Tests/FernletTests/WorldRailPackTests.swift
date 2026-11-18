@@ -105,13 +105,14 @@ struct WorldRailPackTests {
         #expect(elapsed / 2_000 < .milliseconds(1), "\(elapsed / 2_000) per query")
     }
 
-    /// The atlas's major-road query finds Interstate 5 by Portland's Marquam Bridge and nothing mid-Pacific, and the
+    /// The atlas's major-road query finds Interstate 5 by Portland's Marquam Bridge (Natural Earth's line is 729 m off
+    /// there in the source) and nothing mid-Pacific, and the
     /// app's geography joins the packs (the atlas's land where there is no shore mask).
     @Test func theGeographyJoinsThePacks() throws {
         let rail = try #require(Self.rail)
         let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
         let atlas = try WorldAtlas(data: Data(contentsOf: url))
-        #expect(atlas.isNearMajorRoad(GeoPoint(45.5098, -122.6693), within: 500))
+        #expect(atlas.isNearMajorRoad(GeoPoint(45.5098, -122.6693), within: 1_000))
         #expect(!atlas.isNearMajorRoad(GeoPoint(0, -140), within: 5_000))
         #expect(!atlas.isNearMajorRoad(GeoPoint(45.5098, -122.6693), within: 0))
         let geography = WorldTransitGeography(atlas: atlas, shore: nil, rail: rail)
@@ -119,6 +120,6 @@ struct WorldRailPackTests {
         #expect(!geography.isWater(GeoPoint(45.5289, -122.6767)))
         #expect(geography.isNearRail(GeoPoint(45.54478, -122.64), within: 1_000))
         #expect(geography.isNearFerryRoute(GeoPoint(51.05, 1.58), within: 1_000))
-        #expect(geography.isNearMajorRoad(GeoPoint(45.5098, -122.6693), within: 500))
+        #expect(geography.isNearMajorRoad(GeoPoint(45.5098, -122.6693), within: 1_000))
     }
 }
