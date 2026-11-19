@@ -235,6 +235,21 @@ struct PersistedSurfaceWipeBoundaryTests {
         // of the person's cars and of the one device waiting to be asked about) and the salt its tags are made with.
         "fernlet.worldMap.carBook": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.carTagSalt": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Live planes nearby (owner 2026-11-19): the switch, whether its disclosure was seen, and this iPhone's own
+        // tally of adsb.lol fetches for the day (a day, a count, a rest after a 429; nothing about where the map looked).
+        "fernlet.worldMap.livePlanes": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.livePlanesDisclosed": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.livePlanesDay": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.livePlanesUsed": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.livePlanesRestUntil": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.livePlanesStrikes": .cleared(token: "WorldMapPreferences.clearAll"),
+        // The live planes switch read through @AppStorage(WorldMapPreferences.Key.livePlanes): onboarding's card and
+        // Settings' switch write it; Home, its credit, the planes layer and the airport fly-over read it.
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/OnboardingPermissionsView.swift": .cleared(token: "WorldMapPreferences.clearAll"),
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Home/WorldMapHome.swift": .cleared(token: "WorldMapPreferences.clearAll"),
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Map/LiveAircraft/LiveAircraftLayer.swift": .cleared(token: "WorldMapPreferences.clearAll"),
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Map/WorldAirportLayer.swift": .cleared(token: "WorldMapPreferences.clearAll"),
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Settings/LivePlanesSwitch.swift": .cleared(token: "WorldMapPreferences.clearAll"),
         // The boarding hop (2026-11-18): which Home this iPhone last showed, the map or the plane (display only).
         "fernlet.worldMap.lastHomeSky": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
@@ -582,6 +597,11 @@ struct PersistedSurfaceWipeBoundaryTests {
     /// half. Growth fails, shrinkage does not — a deleted call site is not a privacy problem, and
     /// `noDispositionRowIsStale` already catches a seam that disappears entirely.
     static let expectedSeamSites: [String: Int] = [
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/OnboardingPermissionsView.swift": 1,
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Home/WorldMapHome.swift": 1,
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Map/LiveAircraft/LiveAircraftLayer.swift": 1,
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Map/WorldAirportLayer.swift": 1,
+        "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Settings/LivePlanesSwitch.swift": 1,
         "unresolved:$0@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift": 3,
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/CompanionFeelingsSettingsCard.swift": 1,
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": 1,

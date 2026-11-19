@@ -8,7 +8,9 @@ import FernletUI
 /// first use, and offers the one permission with no natural in-app trigger — notifications — inline.
 ///
 /// The notifications row requests authorization through `NotificationService` and schedules the
-/// daily check-in on grant; every other row is informational only. "Start Fernlet" runs
+/// daily check-in on grant. The live planes row (owner 2026-11-19: the opt-in is asked during onboarding)
+/// shows the approved disclosure and turns "Live planes nearby" on with one tap; left alone it stays off,
+/// and Settings → Home map has the same switch. Every other row is informational only. "Start Fernlet" runs
 /// `finishAction`, which is the coordinator model's `complete()`.
 struct OnboardingPermissionsView: View {
     var stepText: String
@@ -22,6 +24,8 @@ struct OnboardingPermissionsView: View {
     private enum OptIn { case undecided, on, off }
     @State private var notifications: OptIn = .undecided
     @State private var requestingNotifications = false
+    /// "Live planes nearby", as the switch stands (off by default).
+    @AppStorage(WorldMapPreferences.Key.livePlanes) private var livePlanesOn = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +41,7 @@ struct OnboardingPermissionsView: View {
                                   verbatimBody: HealthCapability.workoutLogging.summary)
                     permissionRow(WorldSprites.photo, title: "Camera", body: "Asked when you first scan a nutrition label.")
                     notificationsRow
+                    livePlanesRow
                     // Today's location card, kept as it is: the map's own location ask is step 5c.
                     permissionRow(WorldSprites.pin, title: "Coarse location", body: "Asked only if you turn on weather-aware recovery prompts.")
                 }
@@ -52,6 +57,33 @@ struct OnboardingPermissionsView: View {
         OnboardingCard(sprite: OnboardingArt.bell, title: Text("Notifications"),
                        detail: Text("A gentle daily check-in reminder, only if you want one."),
                        accessory: AnyView(notificationsControl))
+    }
+
+    /// Live planes nearby: the approved disclosure, verbatim, and a button that turns it on.
+    private var livePlanesRow: some View {
+        OnboardingCard(sprite: LiveAircraftSprites.icon,
+                       title: Text(LiveAircraftCopy.title),
+                       detail: Text(LiveAircraftCopy.disclosure),
+                       accessory: AnyView(livePlanesControl))
+    }
+
+    @ViewBuilder
+    private var livePlanesControl: some View {
+        if livePlanesOn {
+            Label("On", systemImage: "checkmark.circle.fill")
+                .labelStyle(.titleAndIcon)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.mossInk)
+        } else {
+            Button {
+                WorldMapPreferences.setShowsLivePlanes(true)
+                FernletAnnouncer.system.announce(.status, LiveAircraftCopy.onAnnouncement)
+            } label: {
+                Text(LiveAircraftCopy.turnOn)
+            }
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+            .accessibilityIdentifier("onboarding.permissions.livePlanes")
+        }
     }
 
     @ViewBuilder

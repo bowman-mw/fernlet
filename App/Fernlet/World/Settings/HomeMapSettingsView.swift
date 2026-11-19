@@ -126,6 +126,7 @@ struct HomeMapSettingsView: View {
             }
             .onChange(of: showsWornPaths) { _, on in WorldMapPreferences.setShowWornPaths(on) }
             .accessibilityIdentifier("settings.homeMap.wornPaths")
+            LivePlanesSwitch()
             Toggle(isOn: bikeRidesBinding) {
                 bikeRidesLabel.padding(.vertical, 7)
             }

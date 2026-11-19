@@ -243,8 +243,8 @@ struct FlightyImportLine: View {
     }
 }
 
-/// What Fernlet reads from a Flighty file (World-Airports-Spec §9.2, screen 24, approved with 24 A): the five
-/// things read and what for, what's dropped as it's read, how times without a zone are read, and why a newer
+/// What Fernlet reads from a Flighty file (World-Airports-Spec §9.2, screen 24, approved with 24 A; the aircraft
+/// type and tail number joined the kept rows on the owner's 2026-11-19 reversal): the six things read and what for, what's dropped as it's read, how times without a zone are read, and why a newer
 /// Flighty file still imports. Pushed inside the summary sheet, so it keeps the system bar and its Back (the
 /// sheet frame's rule for pages pushed in a sheet).
 struct FlightyImportReadsPage: View {

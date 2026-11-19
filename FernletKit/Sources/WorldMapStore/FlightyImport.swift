@@ -57,10 +57,12 @@ public nonisolated struct FlightyImportSummary: Equatable, Sendable {
 
 /// A Flighty CSV export, read once on this iPhone and not kept (spec §9).
 ///
-/// Only the date, From, To, Canceled, Diverted To, the four gate times and Flighty's flight ID are ever turned
-/// into text; every other field (the airline, flight number, aircraft, PNR, seat, cabin, reason, notes, tail,
-/// terminals and gates) is stepped over by its byte length and never decoded. Columns are found by name, so
-/// a Flighty update that adds or reorders columns still imports.
+/// Only the date, From, To, Canceled, Diverted To, the four gate times, Flighty's flight ID, the aircraft type
+/// name and the tail number are ever turned into text (the last two kept with the flight since the owner's
+/// 2026-11-19 reversal of 24 A and 27 A for them); every other field (the airline, flight number, PNR, seat,
+/// seat type, cabin, reason, notes, terminals, gates and Flighty's other IDs) is stepped over by its byte length
+/// and never decoded. Columns are found by name, so a Flighty update that adds or reorders columns still
+/// imports, and an older export without the aircraft or tail column imports with neither.
 public nonisolated struct FlightyImport: Sendable {
     /// The largest file read (5 MiB; the owner's years of flights are a few hundred KB).
     public static let maxFileBytes = 5_242_880
@@ -87,6 +89,8 @@ public nonisolated struct FlightyImport: Sendable {
         case arrivalScheduled = "gate arrival (scheduled)"
         case arrivalActual = "gate arrival (actual)"
         case flightID = "flight flighty id"
+        case aircraftType = "aircraft type name"
+        case tailNumber = "tail number"
     }
 
     /// Reads `data`, or throws why the whole file is refused. A row that can't be used is skipped and counted.
@@ -115,7 +119,7 @@ public nonisolated struct FlightyImport: Sendable {
             guard row - 1 <= Self.maxRows else { throw .tooManyRows }
             if record.count == 1, record[0].isEmpty { continue }
             var values: [Column: String] = [:]
-            // Bounded: Column has ten cases; every other field is never decoded.
+            // Bounded: Column has twelve cases; every other field is never decoded.
             for (column, index) in columns where index < record.count {
                 values[column] = scanner.text(record[index])?.trimmingCharacters(in: .whitespaces) ?? ""
             }
@@ -154,14 +158,18 @@ public nonisolated struct FlightyImport: Sendable {
         // A diverted flight's scheduled arrival is at the airport it never reached, so only an actual one counts.
         let arrivalText = diverted != nil ? field(.arrivalActual)
             : (field(.arrivalActual).isEmpty ? field(.arrivalScheduled) : field(.arrivalActual))
+        // An empty, over-long or garbled type or tail is dropped, never a reason to skip the row.
+        let aircraftType = PassportFlight.cleanAircraftType(field(.aircraftType))
+        let tailNumber = PassportFlight.cleanTailNumber(field(.tailNumber))
         guard let departure = localTime(departureText, in: fromZone) else {
-            return FlightRecord(from: from, to: to, day: day, departure: nil, arrival: nil, timesUnsure: false)
+            return FlightRecord(from: from, to: to, day: day, departure: nil, arrival: nil, timesUnsure: false,
+                                aircraftType: aircraftType, tailNumber: tailNumber)
         }
         let arrival = localTime(arrivalText, in: toZone)
         let checked = FlightClock.checked(departure: departure, arrival: arrival)
         let unsure = checked.unsure || (diverted != nil && arrival == nil)
         return FlightRecord(from: from, to: to, day: day, departure: departure, arrival: checked.arrival,
-                            timesUnsure: unsure)
+                            timesUnsure: unsure, aircraftType: aircraftType, tailNumber: tailNumber)
     }
 
     /// Three capital ASCII letters, else nil.

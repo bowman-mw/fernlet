@@ -8503,19 +8503,36 @@
         }
       }
     },
-    "Airline, flight number, aircraft, booking code, seat, seat type, cabin, reason, notes, tail number, terminals and gates." : {
+    "Aircraft type, Tail number" : {
+      "comment" : "Airports: fields read from a Flighty file and kept with the flight",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tipo de avión, Matrícula"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tipo de avión, Matrícula"
+          }
+        }
+      }
+    },
+    "Airline, flight number, booking code, seat, seat type, cabin, reason, notes, terminals and gates." : {
       "comment" : "Airports: what a Flighty file holds that is never kept",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aerolínea, número de vuelo, avión, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, matrícula, terminales y puertas."
+            "value" : "Aerolínea, número de vuelo, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, terminales y puertas."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aerolínea, número de vuelo, avión, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, matrícula, terminales y puertas."
+            "value" : "Aerolínea, número de vuelo, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, terminales y puertas."
           }
         }
       }
@@ -28023,6 +28040,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Solo escucha con el Inicio en pantalla, y solo un teléfono a pocos centímetros. No envía tu nombre ni nada que te siga."
+          }
+        }
+      }
+    },
+    "Live planes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviones en directo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviones en vivo"
           }
         }
       }
@@ -51957,6 +51990,23 @@
         }
       }
     },
+    "To know the planes you've flown on" : {
+      "comment" : "Airports: why a Flighty file's aircraft type and tail number are read and kept",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para saber en qué aviones has volado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para saber en qué aviones volaste"
+          }
+        }
+      }
+    },
     "To make sure your copy is right, type these words from it." : {
       "localizations" : {
         "es" : {
@@ -55446,6 +55496,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ruedas y olas"
+          }
+        }
+      }
+    },
+    "When Live planes nearby is on, the planes on the World map come from adsb.lol, a community flight tracker fed by volunteers, under the Open Database License (ODbL). Fernlet draws them and keeps nothing about them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando Aviones en directo cerca está activado, los aviones del mapa del Mundo vienen de adsb.lol, un rastreador de vuelos comunitario alimentado por voluntarios, bajo la Open Database License (ODbL). Fernlet los dibuja y no guarda nada sobre ellos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando Aviones en vivo cerca está activado, los aviones del mapa del Mundo vienen de adsb.lol, un rastreador de vuelos comunitario alimentado por voluntarios, bajo la Open Database License (ODbL). Fernlet los dibuja y no guarda nada sobre ellos."
           }
         }
       }
@@ -76238,6 +76304,474 @@
         }
       }
     },
+    "livePlanes.card.altitude" : {
+      "comment" : "Live plane card: the altitude row's label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Altitude"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altitud"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altitud"
+          }
+        }
+      }
+    },
+    "livePlanes.card.close" : {
+      "comment" : "Live plane card: close it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar"
+          }
+        }
+      }
+    },
+    "livePlanes.card.noCallsign" : {
+      "comment" : "Live plane card: the title when the plane sends no callsign",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A plane"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un avión"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un avión"
+          }
+        }
+      }
+    },
+    "livePlanes.card.nothingSaved" : {
+      "comment" : "Live plane card: the small line at the bottom",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live from adsb.lol. Nothing is saved."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En directo desde adsb.lol. No se guarda nada."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En vivo desde adsb.lol. No se guarda nada."
+          }
+        }
+      }
+    },
+    "livePlanes.card.speed" : {
+      "comment" : "Live plane card: the ground speed row's label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Speed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidad"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidad"
+          }
+        }
+      }
+    },
+    "livePlanes.card.type" : {
+      "comment" : "Live plane card: the aircraft type row's label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aircraft"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aeronave"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aeronave"
+          }
+        }
+      }
+    },
+    "livePlanes.card.unknownType" : {
+      "comment" : "Live plane card: the aircraft row when the type isn't sent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not known"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desconocido"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desconocido"
+          }
+        }
+      }
+    },
+    "livePlanes.confirm.title" : {
+      "comment" : "Live planes: the one-time confirmation when the switch is first turned on",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show live planes nearby?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Mostrar aviones en directo cerca?"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Mostrar aviones en vivo cerca?"
+          }
+        }
+      }
+    },
+    "livePlanes.credit.spoken" : {
+      "comment" : "VoiceOver label of the small map credit for live planes; it opens adsb.lol's licence page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live plane data from adsb.lol contributors"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos de aviones en directo de los colaboradores de adsb.lol"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos de aviones en vivo de los colaboradores de adsb.lol"
+          }
+        }
+      }
+    },
+    "livePlanes.disclosure" : {
+      "comment" : "Live planes: what the switch sends and to whom (owner-approved wording; keep 'adsb.lol' as written)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "While the map is open, Fernlet asks adsb.lol, a community flight tracker, for planes in the area the map shows (about 55 km around). adsb.lol sees that area and your internet address. Nothing about the planes is saved."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mientras el mapa está abierto, Fernlet pide a adsb.lol, un rastreador de vuelos comunitario, los aviones de la zona que muestra el mapa (unos 55 km a la redonda). adsb.lol ve esa zona y tu dirección de internet. No se guarda nada sobre los aviones."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mientras el mapa está abierto, Fernlet le pide a adsb.lol, un rastreador de vuelos comunitario, los aviones de la zona que muestra el mapa (unos 55 km a la redonda). adsb.lol ve esa zona y tu dirección de internet. No se guarda nada sobre los aviones."
+          }
+        }
+      }
+    },
+    "livePlanes.flown.plane" : {
+      "comment" : "Live planes: the label on a plane with the same tail number as one of your flights",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You flew on this plane"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has volado en este avión"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volaste en este avión"
+          }
+        }
+      }
+    },
+    "livePlanes.flown.type" : {
+      "comment" : "Live planes: the light label on a plane of a type you've flown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've flown this type"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has volado en este modelo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya volaste en este modelo"
+          }
+        }
+      }
+    },
+    "livePlanes.notNow" : {
+      "comment" : "Live planes: leave them off",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "livePlanes.on.announcement" : {
+      "comment" : "VoiceOver, onboarding: said after the live planes button turns them on",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live planes are on."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los aviones en directo están activados."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los aviones en vivo están activados."
+          }
+        }
+      }
+    },
+    "livePlanes.resting" : {
+      "comment" : "Settings, under the live planes switch: today's 400 lookups are used up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live planes are resting until tomorrow."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los aviones en directo descansan hasta mañana."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los aviones en vivo descansan hasta mañana."
+          }
+        }
+      }
+    },
+    "livePlanes.spoken.count" : {
+      "comment" : "VoiceOver: the planes on the map as one element; its actions open each plane's card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld live plane on the map"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld live planes on the map"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avión en directo en el mapa"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld aviones en directo en el mapa"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avión en vivo en el mapa"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld aviones en vivo en el mapa"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "livePlanes.title" : {
+      "comment" : "Live planes: the Settings switch and the onboarding question's heading",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live planes nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviones en directo cerca"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviones en vivo cerca"
+          }
+        }
+      }
+    },
+    "livePlanes.turnOn" : {
+      "comment" : "Live planes: the button that turns them on (onboarding and the first-time confirmation)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show live planes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar aviones en directo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar aviones en vivo"
+          }
+        }
+      }
+    },
     "logPeriod.error.bufferFull.v2" : {
       "comment" : "Shown above Save on the period log sheet when the entries Fernlet holds until Private next opens have reached their limit. Opening the Private tab files them and makes room. 'Private' is the tab's name.",
       "extractionState" : "extracted_with_value",
@@ -80835,6 +81369,204 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Abiertas · quedan %lld min"
+          }
+        }
+      }
+    },
+    "passport.hangar.first" : {
+      "comment" : "Sprout's passport Hangar: the month and year of your first flight on that type",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero: %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primero: %@"
+          }
+        }
+      }
+    },
+    "passport.hangar.spoken" : {
+      "comment" : "VoiceOver, a plane in the Hangar: the aircraft type, how many flights, and the month of the first",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %#@flights@, first %3$@"
+          },
+          "substitutions" : {
+            "flights" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg flight"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg flights"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %#@flights@, el primero en %3$@"
+          },
+          "substitutions" : {
+            "flights" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg vuelo"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg vuelos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %#@flights@, el primero en %3$@"
+          },
+          "substitutions" : {
+            "flights" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg vuelo"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg vuelos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "passport.hangar.title" : {
+      "comment" : "Sprout's passport: the Hangar page's name and header, the aircraft types you've flown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hangar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hangar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hangar"
+          }
+        }
+      }
+    },
+    "passport.hangar.types" : {
+      "comment" : "Sprout's passport Hangar page header: how many aircraft types you've flown",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld type"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld types"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modelo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modelos"
+                }
+              }
+            }
+          }
+        },
+        "es-MX" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modelo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modelos"
+                }
+              }
+            }
           }
         }
       }
@@ -90239,6 +90971,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fondo del modo claro"
+          }
+        }
+      }
+    },
+    "settings.search.title.livePlanes" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live planes nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviones en directo cerca"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviones en vivo cerca"
           }
         }
       }

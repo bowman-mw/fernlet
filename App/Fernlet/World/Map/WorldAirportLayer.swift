@@ -15,7 +15,8 @@ import WorldMapStore
 ///   while its fence shows, about
 ///   every two minutes, one taking off or landing on a runway; parked only with Reduce Motion.
 /// - **A plane flying over** now and then while the person is within two miles of an airport, found or not
-///   (``WorldAirportFlyOver``).
+///   (``WorldAirportFlyOver``). Hidden while live planes are on (owner 2026-11-19, call 9): real planes fill the sky
+///   then; the runway planes and parked jets stay.
 ///
 /// The fence and the planes are decoration, hidden from VoiceOver. The tower is one element: "Airport, not found
 /// yet", or "Portland International, PDX, airport, found", a button that opens Sprout's boarding pass (``onOpenPass``,
@@ -32,6 +33,7 @@ struct WorldAirportLayer: View {
     @State private var memo = WorldAirportMemo()
     @State private var flyOverMemo = WorldAirportFlyOverMemo()
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(WorldMapPreferences.Key.livePlanes) private var livePlanesOn = false
 
     var body: some View {
         if !store.duressSessionActive, let pack = store.worldLocation.flights.airportsShelf.pack() {
@@ -47,7 +49,7 @@ struct WorldAirportLayer: View {
                                        dark: colorScheme == .dark, showsParked: street)
                 }
                 ForEach(placed.filter(\.isOnScreen)) { airport in tower(airport) }
-                if let person = store.worldLocation.latest?.point,
+                if !livePlanesOn, let person = store.worldLocation.latest?.point,
                    let near = flyOverMemo.airport(near: person, in: pack), let runway = memo.runways(of: near).first {
                     WorldAirportFlyOver(token: near.token, runway: runway, viewport: viewport, size: size)
                 }

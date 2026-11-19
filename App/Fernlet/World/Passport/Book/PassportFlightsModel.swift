@@ -75,6 +75,8 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
     /// The stops flown with a known length, and their total.
     let layoverCount: Int
     let layoverSeconds: TimeInterval
+    /// Every aircraft type flown, for the Hangar page, from the flights' own records (owner 2026-11-19).
+    let hangar: [PassportHangarPlane]
 
     /// The most trips the page shows as stubs itself; past this it lists the years.
     static let tripsOnOnePage = 6
@@ -99,6 +101,7 @@ nonisolated struct PassportFlightsModel: Equatable, Sendable {
         let stops = flown.flatMap { $0.stops.compactMap(\.seconds) }
         layoverCount = stops.count
         layoverSeconds = stops.reduce(0, +)
+        hangar = PassportHangarPlane.planes(from: sorted, now: now)
     }
 
     /// No flights at all.
