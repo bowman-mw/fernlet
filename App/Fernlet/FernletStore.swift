@@ -5899,7 +5899,7 @@ final class FernletStore {
 
     /// Brings every recipe food up to date with the recipe book and the saved recipes: run after every
     /// recipe change here and after every sync, so an edit made on another device (an older build
-    /// refreshes nothing) is caught up too. See `RecipeFoodSync.synced(foodItems:recipes:)`.
+    /// refreshes nothing) is caught up too. See `RecipeFoodSync.synced(foodItems:recipes:referenceFoods:)`.
     func syncRecipeFoods() {
         diary.syncRecipeFoods(alsoConsidering: savedRecipeService.savedRecipes)
     }
@@ -5960,6 +5960,12 @@ final class FernletStore {
     func prepareRecipeFood(for recipe: RecipeDefinition) -> FoodItem? {
         diary.ensureRecipeFoods(for: [recipe.id], alsoConsidering: savedRecipeService.savedRecipes)
         return foodCatalog.items(ids: [recipe.id]).first
+    }
+
+    /// Why ``prepareRecipeFood(for:)`` returned nil for `recipe`: the reason a recipe pick shows
+    /// instead of doing nothing (`RecipeFoodRefusalAlert`).
+    func recipeFoodGap(for recipe: RecipeDefinition) -> RecipeFoodGap? {
+        RecipeFood.gap(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     /// Saves a book recipe's "Makes" amount (owner pick P02a): see `DiaryStore.setRecipeMakes`.
@@ -6320,6 +6326,15 @@ final class FernletStore {
     func sharingDefinition(for recipe: RecipeDefinition) -> RecipeDefinition {
         let all = allRecipesForNesting
         return recipe.flattenedForSharing(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all))
+    }
+
+    /// How many steps a share of `recipe` would carry with its steps included (its own plus every
+    /// sub-recipe's, as ``sharingDefinition(for:)`` flattens them), when that is more than any share
+    /// can carry (`SharedRecipeLimits.maxSteps`; the wire refuses more). Nil within the limit. The
+    /// Share screen refuses such a recipe up front and names the limit (release review 2026-11-18, F3).
+    func shareStepOverflow(for recipe: RecipeDefinition) -> Int? {
+        let count = sharingDefinition(for: recipe).steps?.count ?? 0
+        return count > SharedRecipeLimits.maxSteps ? count : nil
     }
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {

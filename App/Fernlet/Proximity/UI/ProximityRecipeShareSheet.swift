@@ -118,7 +118,11 @@ struct ProximityRecipeShareSheet: View {
     private var pickerContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                recipientCard
+                if let steps = stepOverflow {
+                    RecipeShareStepLimitNotice(steps: steps)
+                } else {
+                    recipientCard
+                }
 
                 if let statusText {
                     statusText
@@ -152,6 +156,13 @@ struct ProximityRecipeShareSheet: View {
     /// Whether the sender's notes (and, for a recipe they made, their steps) ride every route the
     /// sheet shares by: Settings › Sharing's choice, on by default.
     private var includeNotes: Bool { store.settings.recipeShareIncludesNotes }
+
+    /// The steps this recipe would send when they are more than a share can carry: with steps included
+    /// (notes on), it and its sub-recipes' steps together. Nil when it fits, or when notes are off and
+    /// no steps are sent. While set, the nearby card gives way to ``RecipeShareStepLimitNotice``.
+    private var stepOverflow: Int? {
+        includeNotes ? store.shareStepOverflow(for: draft.recipe) : nil
+    }
 
     /// Whether the nearby send carries the recipe's picture: Settings › Sharing's choice. The picture
     /// can be the sender's own kitchen shot, so it has its own switch beside the notes'.
@@ -464,5 +475,19 @@ struct ProximityRecipeShareSheet: View {
         case .failed(let message):
             Text(verbatim: message)
         }
+    }
+}
+
+/// What the Share screen shows in place of the nearby card when a recipe and the recipes it uses have
+/// more steps than a share can carry (release review 2026-11-18, F3): the count, the limit, and what
+/// still works. Nothing is sent that the other phone would refuse.
+struct RecipeShareStepLimitNotice: View {
+    let steps: Int
+
+    var body: some View {
+        FernletNotice(text: Text("This recipe and the recipes it uses have \(steps) steps. A share can carry at most \(SharedRecipeLimits.maxSteps), so it can't go to a nearby Fernlet or in Messages. Share it as text, or turn off notes in Settings › Sharing to send it without steps.")) {
+            WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
+        }
+        .accessibilityIdentifier("recipeShare.stepLimit")
     }
 }
