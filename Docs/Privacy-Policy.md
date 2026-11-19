@@ -126,8 +126,9 @@
      each part of the map and when you last did, so the roads you use most show and fade, encrypted on
      this iPhone with the rest of the map and deleted with it; the map widget's sentence adds the paths
      and roads you use most. Nothing new is sent to the developer and no promise is weakened under §13.
-     DRAFT 2026-11-16, awaiting the owner's approval of the final words (ferry and train paths, direction
-     approved as P1 on 2026-11-15): §6's motion sentence adds riding on a train, bus or boat; the
+     And 2026-11-16 (ferry and train paths, direction approved as P1 on 2026-11-15; published as a draft
+     with PR #194, and the wording approved by the owner as written on 2026-11-19, "wording is good",
+     release review finding F7): §6's motion sentence adds riding on a train, bus or boat; the
      frequent-roads sentence counts passes by road, rail or water and names railways and ferry crossings;
      a new sentence says Fernlet keeps each ride (the day, its start and end, the way it went) until the
      person forgets it or clears the map, so one ride can be changed or forgotten. All of it stays on
@@ -143,6 +144,17 @@
      the effective date moves to November 19, 2026. Nothing goes to the developer and no promise is weakened
      under §13: the switch is the fresh, affirmative consent, and the App Store label adds Coarse Location (App
      Functionality, not linked, not tracking).
+     DRAFT 2026-11-19, awaiting the owner's approval of the words (the release review's policy pass, findings
+     F7, F8 and F10; no app behaviour changed, both sentences describe what the code already does):
+     (1) driven-past ground, the sentence the owner asked for on 2026-11-13: §6's map record "also marks, more
+     lightly, the ground you only drove or rode past, and Delete map history removes it with the rest of your
+     map" (`DrivenFogStore`, `fog-driven.bin` in the map's own encrypted folder, cell ids only, since PR #142);
+     (2) calendar flights, the wording PR #202 proposed with its last clause made exact: a flight found in the
+     calendar "counts as yours only once Fernlet sees you take it or you add it yourself", and one that is only
+     in the calendar "stays planned and is let go a couple of days after it leaves". The old clause, "the
+     flights it finds draw your routes and fill the passport's Flights page", stopped being true with PR #202.
+     Both are clarifications of processing that stays on the iPhone; nothing new is sent anywhere and no promise
+     is weakened under §13. The effective date stays November 19, 2026, the day these sentences were published.
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -470,7 +482,8 @@ place your companion on the map and to uncover the map as you go, and, as before
 weather-based prompts and, if you choose, to tag an in-person group activity. What Fernlet keeps is
 a coarse record of the parts of the map you have uncovered (cells about 35 m across) and, while
 "Save new routes" is on, the line of each walk you record yourself, plus where your workout spaces
-are if you ask it to remember them. All of it is encrypted on this iPhone only: never synced, backed
+are if you ask it to remember them. The record also marks, more lightly, the ground you only drove or rode past, and Delete map history removes it with the rest of your map.
+All of it is encrypted on this iPhone only: never synced, backed
 up, exported, shared with friends (apart from a road trip's road, below), given to the AI or sent to us,
 and you can delete it at any time
 in Settings → Home map.
@@ -521,7 +534,7 @@ When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can of
 **Airports and flights.** With Airports and flights on, Fernlet notes the airports you visit and the flights you take from your location, and keeps them in your passport, encrypted on this iPhone and carried only in the passport's own sealed backup if you use it.
 If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports, gate times, aircraft type and tail number; it doesn't keep the file and never contacts Flighty. The aircraft type and tail number stay in your passport, encrypted on this iPhone, so the map can point out a plane you've flown on and the passport can stamp each type you've flown.
 If you turn on Flights from Calendar (iOS asks for full access to your calendar), Fernlet reads your calendar's events on this iPhone to find flights, keeping only each flight's date, airports and times, plus a scrambled tag so it won't add an event twice, and dropping booking codes, links and notes as it reads; it never opens a link or changes your calendar.
-It looks from two days back to 60 days ahead each time you open Fernlet, and once further back when you turn it on; the flights it finds draw your routes and fill the passport's Flights page, but never stamp an airport or uncover the map.
+It looks from two days back to 60 days ahead each time you open Fernlet, and once further back when you turn it on. A flight it finds counts as yours only once Fernlet sees you take it or you add it yourself; then it draws your routes and fills the passport's Flights page, but never stamps an airport or uncovers the map. A flight that's only in your calendar, like a friend's you're picking up, stays planned and is let go a couple of days after it leaves.
 Sprout's memory can note which city you travelled to, so the AI on your iPhone can mention it; only the city, never the airport, times or where you were.
 
 **Live planes nearby (off by default).** If you turn on Live planes nearby, then while the map is open Fernlet asks adsb.lol, a community flight tracker, for the planes in the area the map shows. adsb.lol receives that area, rounded to a fixed grid about 55 km across, and your internet address, under its own privacy policy; nothing else about you is sent. Fernlet asks at most once every 30 seconds and 400 times a day, only while the map is in front, keeps nothing about the planes, and never adds them to your passport.
