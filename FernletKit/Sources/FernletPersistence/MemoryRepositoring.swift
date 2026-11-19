@@ -22,6 +22,11 @@ import FernletDomainModel
 public protocol MemoryRepositoring {
     /// Every live memory, ordered by `sourceDate` (oldest first).
     func load() -> [MemoryNote]
+    /// ``load()``, or nil when the rows could not be read (a locked or unavailable store). "Could not
+    /// read" and "there are none" must stay apart: a caller that took a failed read for an empty list
+    /// would soft-delete every memory it had served. The default answers ``load()``, for a store whose
+    /// reads cannot fail.
+    func loadIfReadable() -> [MemoryNote]?
     /// Inserts or replaces each memory by id; tombstoned ids are skipped. Other rows are untouched.
     func upsert(_ memories: [MemoryNote]) -> Bool
     /// Writes the memories that have no row and no tombstone yet; every other one is left as it is.
@@ -30,4 +35,9 @@ public protocol MemoryRepositoring {
     func delete(ids: [UUID]) -> Bool
     /// Removes every row, tombstones included (only for a full reset).
     func deleteAll() -> Bool
+}
+
+extension MemoryRepositoring {
+    /// The default: a store whose reads cannot fail is always readable.
+    public func loadIfReadable() -> [MemoryNote]? { load() }
 }

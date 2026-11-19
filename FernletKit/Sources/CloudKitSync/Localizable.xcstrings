@@ -73,6 +73,30 @@
         }
       }
     },
+    "multiDevice.iCloudRefusedChanges" : {
+      "comment" : "Privacy & Data, multiple-devices note: iCloud sync is on and signed in, but iCloud refused to save this device's recent changes and will keep refusing until something changes on Apple's side or in the account.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "iCloud did not accept the latest changes from this iPhone, so for now they are only on this iPhone. Nothing is lost here, and Fernlet keeps trying."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud no ha aceptado los últimos cambios de este iPhone, así que por ahora solo están en este iPhone. Aquí no se ha perdido nada, y Fernlet lo sigue intentando."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud no aceptó los últimos cambios de este iPhone, así que por ahora solo están en este iPhone. Aquí no se perdió nada, y Fernlet lo sigue intentando."
+          }
+        }
+      }
+    },
     "multiDevice.syncOnWithoutAccount" : {
       "comment" : "Privacy & Data, multiple-devices note: the user chose iCloud sync but no iCloud account is signed in on this device.",
       "extractionState" : "extracted_with_value",

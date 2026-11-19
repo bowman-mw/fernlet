@@ -76,6 +76,18 @@ struct AppendOnlyRowStore<Entry: Codable> {
     }
 
     private func loadRecords() -> [Entry] {
+        // Environmental, not a programmer error: a locked (complete-protection) or unavailable store
+        // fails the fetch (audited below). Serve the empty list the caller already handles.
+        loadRecordsIfReadable() ?? []
+    }
+
+    /// ``load()``, or nil when the fetch itself failed, for a caller that must tell "could not read"
+    /// from "no rows" (``MemoryRecordRepository/loadIfReadable()``).
+    func loadIfReadable() -> [Entry]? {
+        StartupTiming.timed(loadTimingLabel) { loadRecordsIfReadable() }
+    }
+
+    private func loadRecordsIfReadable() -> [Entry]? {
         let context = controller.container.viewContext
         let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
         request.sortDescriptors = [NSSortDescriptor(key: dateKey, ascending: true)]
@@ -84,10 +96,8 @@ struct AppendOnlyRowStore<Entry: Codable> {
         do {
             records = try context.fetch(request)
         } catch {
-            // Environmental, not a programmer error: a locked (complete-protection) or unavailable
-            // store fails the fetch. Audit and serve the empty list the caller already handles.
             PersistenceFailureAudit.record("rowStore.fetch.failed", error: error, context: auditContext)
-            return []
+            return nil
         }
         return records.compactMap { entry(from: $0) }
     }

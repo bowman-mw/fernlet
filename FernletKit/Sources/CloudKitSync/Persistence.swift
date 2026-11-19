@@ -115,6 +115,12 @@ nonisolated public final class PersistenceController {
     /// Fires when iCloud pushes a remote change to the local store, and once after each
     /// successful `reload(with:)` so subscribers re-read from the new container.
     @ObservationIgnored public let remoteChangePublisher: AnyPublisher<Notification, Never>
+    /// Whether iCloud is taking the mirror's changes, folded from the container's finished setup,
+    /// import and export events (``MirrorSyncHealth``). Observable: Privacy & Data shows a standing
+    /// ``MirrorSyncHealth/lastingIssue`` as "iCloud did not take your changes" where it otherwise
+    /// says nothing. Starts clean on every launch and every `reload(with:)`; a refusal that still
+    /// stands is reported again by the mirror's next attempt.
+    public private(set) var mirrorSyncHealth = MirrorSyncHealth()
     /// The device-local, NEVER-synced key/value surface this store keeps its own bookkeeping in —
     /// the ledgers' pending reset boundaries (``StoreLocalDefaults``, tracker §3.6).
     /// `UserDefaults.standard` for the default on-disk store, the one the app runs on; a private
@@ -160,6 +166,7 @@ nonisolated public final class PersistenceController {
     private let iCloudAvailabilityOverride: Bool?
     @ObservationIgnored private let remoteChangeSubject = PassthroughSubject<Notification, Never>()
     @ObservationIgnored private var remoteChangeCancellable: AnyCancellable?
+    @ObservationIgnored private var mirrorEventCancellable: AnyCancellable?
 
     /// Builds and synchronously loads the stack.
     ///
@@ -191,6 +198,7 @@ nonisolated public final class PersistenceController {
         )
         configureViewContext(for: configuration.container)
         bindRemoteChanges(to: configuration.container)
+        bindMirrorEvents(to: configuration.container)
         #if DEBUG
         // DEBUG-only, launch-argument-gated CloudKit schema deploy (see
         // Docs/CloudKit-Schema-Deploy.md). Compiled out of Release builds entirely.
@@ -265,6 +273,8 @@ nonisolated public final class PersistenceController {
             container = configuration.container
             didFailToLoad = false
             bindRemoteChanges(to: configuration.container)
+            mirrorSyncHealth = MirrorSyncHealth()
+            bindMirrorEvents(to: configuration.container)
             do {
                 try removePersistentStores(from: oldContainer.persistentStoreCoordinator)
             } catch {
@@ -722,6 +732,61 @@ nonisolated public final class PersistenceController {
             .sink { [remoteChangeSubject] notification in
                 remoteChangeSubject.send(notification)
             }
+    }
+
+    /// Listens for the mirror's finished events on `container` (release review 2026-11-18, F2).
+    ///
+    /// `NSPersistentCloudKitContainer` reports a refused export nowhere else: the save that queued it
+    /// succeeded long before. An event is posted when it starts and again when it ends; only the
+    /// ending one (it has an `endDate`) says how it went. Posted on a background queue, so the fold
+    /// into ``mirrorSyncHealth`` hops to the main queue, where the state is read. A plain in-memory
+    /// container posts nothing.
+    private func bindMirrorEvents(to container: NSPersistentContainer) {
+        mirrorEventCancellable = NotificationCenter.default
+            .publisher(for: NSPersistentCloudKitContainer.eventChangedNotification, object: container)
+            .compactMap { notification -> (MirrorSyncActivity, (any Error)?, Date)? in
+                let key = NSPersistentCloudKitContainer.eventNotificationUserInfoKey
+                guard let event = notification.userInfo?[key] as? NSPersistentCloudKitContainer.Event,
+                      let endDate = event.endDate else { return nil }
+                return (Self.mirrorActivity(for: event.type), event.error, endDate)
+            }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] activity, error, endDate in
+                self?.noteMirrorEvent(activity, error: error, at: endDate)
+            }
+    }
+
+    private static func mirrorActivity(for type: NSPersistentCloudKitContainer.EventType) -> MirrorSyncActivity {
+        switch type {
+        case .setup: .setup
+        case .import: .importing
+        case .export: .exporting
+        @unknown default: .setup
+        }
+    }
+
+    /// Folds one finished mirror event into ``mirrorSyncHealth`` and audits a failure or a recovery
+    /// (codes only: a CloudKit error's text can name records). Internal so tests can drive it; an
+    /// `NSPersistentCloudKitContainer.Event` cannot be built outside the framework.
+    func noteMirrorEvent(_ activity: MirrorSyncActivity, error: (any Error)?, at date: Date) {
+        var health = mirrorSyncHealth
+        let change = health.record(activity, error: error, at: date)
+        switch change {
+        case .healthy:
+            return
+        case .recovered:
+            FernletAuditLog.log("cloudkit.mirror.recovered", context: ["activity": activity.rawValue])
+        case .transientFailure(let code):
+            FernletAuditLog.log("cloudkit.mirror.failed", context: [
+                "activity": activity.rawValue, "kind": MirrorSyncFailureKind.transient.rawValue, "code": code
+            ])
+        case .lastingFailure(let code):
+            FernletAuditLog.log("cloudkit.mirror.failed", context: [
+                "activity": activity.rawValue, "kind": MirrorSyncFailureKind.lasting.rawValue, "code": code
+            ])
+        }
+        // Assigned only when it changed, so an unchanged state does not redraw its observers.
+        if health != mirrorSyncHealth { mirrorSyncHealth = health }
     }
 
     @MainActor

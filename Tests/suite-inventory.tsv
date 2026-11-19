@@ -44,6 +44,7 @@ CatalogTypeaheadResultSetTests	Tests/FernletTests/CatalogTypeaheadResultSetTests
 ClosenessTests	Tests/FernletTests/ClosenessTests.swift	-
 ClothingShareCodecTests	Tests/FernletTests/ClothingShareCodecTests.swift	mesh-features
 CloudKitDataServiceTests	Tests/FernletTests/CloudKitDataServiceTests.swift	-
+CloudKitExpectedSchemaTests	Tests/FernletTests/CloudKitExpectedSchemaTests.swift	-
 CloudKitSchemaDeployTests	Tests/FernletTests/CloudKitSchemaDeployTests.swift	-
 CoachPlanExchangeTests	Tests/FernletTests/CoachPlanExchangeTests.swift	-
 CoachSessionHardeningTests	Tests/FernletTests/CoachSessionHardeningTests.swift	-
@@ -431,6 +432,7 @@ MilestoneLedgerWipeTests	Tests/FernletTests/MilestoneLedgerWipeTests.swift	-
 MilestoneResetBoundaryDurabilityTests	Tests/FernletTests/LedgerResetBoundaryDurabilityTests.swift	-
 MilestoneResetBoundaryTests	Tests/FernletTests/MilestoneResetBoundaryTests.swift	-
 MindfulSessionSaveTests	Tests/FernletTests/GentleOffersTests.swift	-
+MirrorSyncHealthTests	Tests/FernletTests/MirrorSyncHealthTests.swift	-
 ModerationBanRecoveryAdversarialTests	Tests/FernletTests/ModerationBanRecoveryTests.swift	-
 ModerationBanRecoveryLiftTests	Tests/FernletTests/ModerationBanRecoveryTests.swift	-
 ModerationBanRecoveryRuleTests	Tests/FernletTests/ModerationBanRecoveryTests.swift	-

@@ -1,0 +1,402 @@
+{
+  "about": "The CloudKit schema the app at this commit needs in the Production environment of its container. Read by Scripts/cloudkit-schema-check.py (compares it with a `cktool export-schema` file) and pinned to the code by CloudKitExpectedSchemaTests. Any change that adds a record type or field updates this file in the same commit; see Docs/CloudKit-Schema-Deploy.md. Additive only: nothing listed here may ever be removed or retyped.",
+  "container": "iCloud.MBO.Fernlet",
+  "teamID": "3RTUPF8FFH",
+  "fieldRules": {
+    "mirror": "NSPersistentCloudKitContainer writes one `CD_<Entity>` type per Core Data entity: `CD_entityName` (STRING), one `CD_<attribute>` per attribute, and a `CD_<attribute>_ckAsset` (ASSET) twin for every String and Binary Data attribute (used when a value passes 1 MB).",
+    "recordNameQueryable": "True where the app lists every record of the type with a TRUEPREDICATE query (existing-data detection and every delete sweep in CloudKitDataService). That query needs a QUERYABLE index on the system field recordName, written `\"___recordID\" REFERENCE QUERYABLE` in an exported schema. initializeCloudKitSchema does not add it; it is added by hand in the CloudKit Console.",
+    "types": "STRING, BYTES, INT64, TIMESTAMP, ASSET as the CloudKit Schema Language spells them. A field a Debug save created on the fly may export as NUMBER or NUMBER PREFERRED AS INT64; the check accepts that for INT64."
+  },
+  "recordTypes": {
+    "CD_FernletDatabaseRecord": {
+      "source": "mirror",
+      "entity": "FernletDatabaseRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_recordID": {
+          "type": "STRING"
+        },
+        "CD_recordID_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_updatedAt": {
+          "type": "TIMESTAMP"
+        }
+      }
+    },
+    "CD_SavedRecipeRecord": {
+      "source": "mirror",
+      "entity": "SavedRecipeRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_idString": {
+          "type": "STRING"
+        },
+        "CD_idString_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_sourceURLString": {
+          "type": "STRING"
+        },
+        "CD_sourceURLString_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_name": {
+          "type": "STRING"
+        },
+        "CD_name_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_ingredientsText": {
+          "type": "STRING"
+        },
+        "CD_ingredientsText_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_summary": {
+          "type": "STRING"
+        },
+        "CD_summary_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_servings": {
+          "type": "INT64"
+        },
+        "CD_protein": {
+          "type": "INT64"
+        },
+        "CD_carbs": {
+          "type": "INT64"
+        },
+        "CD_fat": {
+          "type": "INT64"
+        },
+        "CD_micronutrientsJSON": {
+          "type": "STRING"
+        },
+        "CD_micronutrientsJSON_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_savedAt": {
+          "type": "TIMESTAMP"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        }
+      }
+    },
+    "CD_CustomItemRecord": {
+      "source": "mirror",
+      "entity": "CustomItemRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_idString": {
+          "type": "STRING"
+        },
+        "CD_idString_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_createdAt": {
+          "type": "TIMESTAMP"
+        }
+      }
+    },
+    "CD_CoinLedgerRecord": {
+      "source": "mirror",
+      "entity": "CoinLedgerRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_idString": {
+          "type": "STRING"
+        },
+        "CD_idString_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_createdAt": {
+          "type": "TIMESTAMP"
+        }
+      }
+    },
+    "CD_MilestoneLedgerRecord": {
+      "source": "mirror",
+      "entity": "MilestoneLedgerRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_idString": {
+          "type": "STRING"
+        },
+        "CD_idString_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_createdAt": {
+          "type": "TIMESTAMP"
+        }
+      }
+    },
+    "CD_DayRecord": {
+      "source": "mirror",
+      "entity": "DayRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_dateKey": {
+          "type": "STRING"
+        },
+        "CD_dateKey_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_updatedAt": {
+          "type": "TIMESTAMP"
+        },
+        "CD_deviceKey": {
+          "type": "STRING",
+          "added": "PR #172, after build 460"
+        },
+        "CD_deviceKey_ckAsset": {
+          "type": "ASSET",
+          "added": "PR #172, after build 460"
+        }
+      }
+    },
+    "CD_MemoryRecord": {
+      "source": "mirror",
+      "entity": "MemoryRecord",
+      "database": "private",
+      "recordNameQueryable": true,
+      "added": "PR #186, after build 460",
+      "fields": {
+        "CD_entityName": {
+          "type": "STRING"
+        },
+        "CD_idString": {
+          "type": "STRING"
+        },
+        "CD_idString_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_payloadData": {
+          "type": "BYTES"
+        },
+        "CD_payloadData_ckAsset": {
+          "type": "ASSET"
+        },
+        "CD_updatedAt": {
+          "type": "TIMESTAMP"
+        }
+      }
+    },
+    "SealedBackupRecord": {
+      "source": "handBuilt",
+      "database": "private",
+      "recordNameQueryable": true,
+      "fields": {
+        "payloadType": {
+          "type": "STRING"
+        },
+        "signingPublicKey": {
+          "type": "BYTES"
+        },
+        "keyAgreementPublicKey": {
+          "type": "BYTES"
+        },
+        "nonce": {
+          "type": "BYTES"
+        },
+        "tag": {
+          "type": "BYTES"
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP"
+        },
+        "chunkIndex": {
+          "type": "INT64"
+        },
+        "chunkCount": {
+          "type": "INT64"
+        },
+        "generation": {
+          "type": "INT64"
+        },
+        "formatVersion": {
+          "type": "INT64"
+        },
+        "keySalt": {
+          "type": "BYTES"
+        },
+        "encryptedBlob": {
+          "type": "ASSET"
+        }
+      }
+    },
+    "SealedPhotoRecord": {
+      "source": "handBuilt",
+      "database": "private",
+      "recordNameQueryable": true,
+      "added": "2026-08-11, in build 460's code but never confirmed in Production",
+      "fields": {
+        "corpus": {
+          "type": "STRING"
+        },
+        "slot": {
+          "type": "STRING"
+        },
+        "signingPublicKey": {
+          "type": "BYTES"
+        },
+        "keyAgreementPublicKey": {
+          "type": "BYTES"
+        },
+        "nonce": {
+          "type": "BYTES"
+        },
+        "tag": {
+          "type": "BYTES"
+        },
+        "updatedAt": {
+          "type": "TIMESTAMP"
+        },
+        "generation": {
+          "type": "INT64"
+        },
+        "formatVersion": {
+          "type": "INT64"
+        },
+        "keySalt": {
+          "type": "BYTES"
+        },
+        "encryptedBlob": {
+          "type": "ASSET"
+        }
+      }
+    },
+    "RecoveryEscrowRecord": {
+      "source": "handBuilt",
+      "database": "private",
+      "recordNameQueryable": true,
+      "added": "PR #176, after build 460",
+      "fields": {
+        "recoveryPublicKey": {
+          "type": "BYTES"
+        },
+        "escrowPublicKeyHash": {
+          "type": "BYTES"
+        },
+        "encapsulatedKey": {
+          "type": "BYTES"
+        },
+        "ciphertext": {
+          "type": "BYTES"
+        },
+        "codeMadeAt": {
+          "type": "TIMESTAMP"
+        },
+        "formatVersion": {
+          "type": "INT64"
+        }
+      }
+    },
+    "HeartDrop": {
+      "source": "handBuilt",
+      "database": "public",
+      "recordNameQueryable": false,
+      "note": "Public database: read by a `tag IN [...]` query, so `tag` must be QUERYABLE; never swept by type, so recordName need not be.",
+      "grants": {
+        "_creator": [
+          "WRITE"
+        ],
+        "_icloud": [
+          "CREATE"
+        ],
+        "_world": [
+          "READ"
+        ]
+      },
+      "fields": {
+        "tag": {
+          "type": "STRING",
+          "indexes": [
+            "QUERYABLE"
+          ]
+        },
+        "payload": {
+          "type": "BYTES"
+        }
+      }
+    }
+  },
+  "legacyRecordTypes": {
+    "about": "Swept by delete-everything and counted by detection, but written by no build at head (pre-mirror direct-CloudKit types, bare spellings of mirrored types, and the never-mirrored sealed narrative). They need not exist; a missing type is skipped. If one does exist, its recordName must be QUERYABLE or the sweep throws.",
+    "names": [
+      "FernletDatabaseRecord",
+      "MealLogRecord",
+      "JournalLogRecord",
+      "WorkoutLogRecord",
+      "HygieneLogRecord",
+      "HydrationLogRecord",
+      "SleepRecord",
+      "SavedRecipeRecord",
+      "CustomItemRecord",
+      "CoinLedgerRecord",
+      "MilestoneLedgerRecord",
+      "DayRecord",
+      "CD_MenstrualNarrative",
+      "MenstrualNarrative"
+    ]
+  }
+}
