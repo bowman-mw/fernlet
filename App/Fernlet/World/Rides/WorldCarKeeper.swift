@@ -1,6 +1,7 @@
 import CryptoKit
 import FernletFoundation
 import Foundation
+import UIKit
 import WorldMapStore
 
 /// Car detection's connected devices (owner 2026-11-09, car signals): what the phone's audio is connected to now, and
@@ -19,6 +20,10 @@ import WorldMapStore
 /// - **Kept on this iPhone only** (``WorldMapPreferences``' car book, cleared by Delete everything): a device's own
 ///   identifier never leaves this type; it is scrambled with the per-install salt into a tag first, and a name is kept
 ///   only for a car or the one device waiting to be asked about. Nothing is learned in a decoy.
+/// - **The salt is never replaced** (release review 2026-11-18, F15): it is read, and made only while the phone's
+///   protected data can be read (`WorldMapPreferences.mintCarTagSalt(in:protectedData:)`). On a launch before the
+///   phone's first unlock the defaults read as empty, so a Bluetooth device gets no tag (``untagged``), matches no
+///   car and is never learned or saved, until ``reload()`` reads the salt and the book again.
 @MainActor
 @Observable
 final class WorldCarKeeper {
@@ -33,6 +38,11 @@ final class WorldCarKeeper {
     @ObservationIgnored var onLinkChanged: ((Bool) -> Void)?
     @ObservationIgnored private let audio: any WorldAudioReading
     @ObservationIgnored private let defaults: UserDefaults
+    /// Whether the phone's protected data can be read now (the app's own answer by default; tests answer for it).
+    @ObservationIgnored private let protectedData: @MainActor () -> Bool
+    /// Whether this keeper ever found the protected data unreadable: from then on it makes no salt (a process that
+    /// started before the first unlock is reported to go on reading empty defaults after it).
+    @ObservationIgnored private var sawLocked = false
     /// The reading a walk with Bluetooth connected is measured from, and the tags connected then.
     @ObservationIgnored private var walkFrom: (fix: WorldFix, tags: [String])?
     /// Whether a car was connected when ``onLinkChanged`` was last told (or at init): every change of the route or the
@@ -47,10 +57,17 @@ final class WorldCarKeeper {
     /// The worst accuracy a reading may have to measure a walk, in metres.
     static let walkAccuracy = 65.0
 
-    /// A keeper reading `audio` (the phone's route by default; tests pass a scripted one) and saving in `defaults`.
-    init(audio: (any WorldAudioReading)? = nil, defaults: UserDefaults = .standard) {
+    /// The tag of a device read while no salt could be: it matches nothing in the book and is never kept.
+    static let untagged = ""
+
+    /// A keeper reading `audio` (the phone's route by default; tests pass a scripted one) and saving in `defaults`;
+    /// `protectedData` says whether the phone's protected data can be read (the app's own answer when nil).
+    init(audio: (any WorldAudioReading)? = nil, defaults: UserDefaults = .standard,
+         protectedData: (@MainActor () -> Bool)? = nil) {
         self.audio = audio ?? WorldCarAudio()
         self.defaults = defaults
+        self.protectedData = protectedData ?? { UIApplication.shared.isProtectedDataAvailable }
+        sawLocked = !self.protectedData()
         book = Self.loadBook(from: defaults)
         self.audio.onChange = { [weak self] in self?.refresh() }
         connected = self.audio.outputs().map(device(for:))
@@ -72,7 +89,9 @@ final class WorldCarKeeper {
     /// A connected Bluetooth device Settings can offer as "Use … as my car": not a car, not headphones; none in a decoy.
     var offerable: WorldAudioDevice? {
         guard !isDecoy else { return nil }
-        return connected.first { $0.kind == .bluetooth && !book.isCar($0) && !book.isHeadphones($0) }
+        return connected.first {
+            $0.kind == .bluetooth && $0.tag != Self.untagged && !book.isCar($0) && !book.isHeadphones($0)
+        }
     }
 
     /// Reads the route again, telling ``onLinkChanged`` when a car connected or went.
@@ -97,7 +116,7 @@ final class WorldCarKeeper {
         case .driving(let since):
             walkFrom = nil
             var next = book
-            for device in connected { next.sawDuringDrive(device, driveStart: since) }
+            for device in connected where device.tag != Self.untagged { next.sawDuringDrive(device, driveStart: since) }
             save(next)
         case .cycling:
             walkFrom = nil
@@ -115,6 +134,7 @@ final class WorldCarKeeper {
 
     /// Settings' "Use … as my car".
     func mark(_ device: WorldAudioDevice) {
+        guard device.tag != Self.untagged else { return }
         var next = book
         next.mark(device, learned: false)
         save(next)
@@ -128,9 +148,11 @@ final class WorldCarKeeper {
     }
 
     /// Reads the book from disk again (the store adopting the source a locked launch started, which learned nothing
-    /// and may have read nothing while the phone was locked).
+    /// and may have read nothing while the phone was locked), and the route with it, so devices read without a salt
+    /// get their tags.
     func reload() {
         book = Self.loadBook(from: defaults)
+        connected = audio.outputs().map(device(for:))
         tellLink()
     }
 
@@ -145,7 +167,7 @@ final class WorldCarKeeper {
 
     /// Measures a walk on foot with Bluetooth connected, marking those devices as headphones once it is long enough.
     private func noteWalk(_ fix: WorldFix) {
-        let tags = connected.filter { $0.kind == .bluetooth }.map(\.tag)
+        let tags = connected.filter { $0.kind == .bluetooth && $0.tag != Self.untagged }.map(\.tag)
         guard !tags.isEmpty, fix.isPrecise, fix.accuracy <= Self.walkAccuracy,
               (fix.speed ?? 0) <= WorldRideWatch.walkingSpeed else {
             walkFrom = nil
@@ -158,7 +180,7 @@ final class WorldCarKeeper {
         let moved = walkFrom.fix.point.distance(to: fix.point) - walkFrom.fix.accuracy - fix.accuracy
         guard moved >= Self.walkDistance, fix.at.timeIntervalSince(walkFrom.fix.at) >= Self.walkTime else { return }
         var next = book
-        for device in connected where device.kind == .bluetooth { next.walkedWith(device) }
+        for device in connected where device.kind == .bluetooth && device.tag != Self.untagged { next.walkedWith(device) }
         save(next)
         self.walkFrom = nil
     }
@@ -187,9 +209,14 @@ final class WorldCarKeeper {
         }
     }
 
-    /// `output` as car detection keeps it: its identifier scrambled with this iPhone's salt into a tag.
+    /// `output` as car detection keeps it: its identifier scrambled with this iPhone's salt into a tag, or
+    /// ``untagged`` while no salt reads and none may be made (the phone locked: the saved one is never replaced).
     private func device(for output: WorldAudioOutput) -> WorldAudioDevice {
-        let salted = Data((WorldMapPreferences.carTagSalt(in: defaults) + "|" + output.identifier).utf8)
+        if !protectedData() { sawLocked = true }
+        guard let salt = WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: !sawLocked) else {
+            return WorldAudioDevice(tag: Self.untagged, name: output.name, kind: output.kind)
+        }
+        let salted = Data((salt + "|" + output.identifier).utf8)
         let tag = SHA256.hash(data: salted).prefix(16).map { String(format: "%02x", $0) }.joined()
         return WorldAudioDevice(tag: tag, name: output.name, kind: output.kind)
     }

@@ -75,6 +75,102 @@ struct WorldTripTrackingTests {
         #expect(stream.watch.lastDriveEnd == .parked)
     }
 
+    // MARK: A parked car while Motion says car (release review 2026-11-18, F15)
+
+    /// The phone left in a parked car: Motion goes on saying car (CoreMotion reports automotive and stationary
+    /// together, and the watch takes automotive first), the readings stop (iOS's ten-metre filter) or drift inside
+    /// their accuracy. The drive ends parked at the park time all the same; before the fix it never ended.
+    @Test func parkedWhileMotionSaysCarEndsWithinTheParkTime() {
+        for drifting in [false, true] {
+            var stream = Stream(usesMotion: true)
+            stream.motion(.automotive, 0)
+            var (second, east) = Self.drive(&stream)
+            #expect(stream.watch.isDriving)
+            let parkedAt = second
+            for step in 0..<9 {
+                second += 30
+                if drifting { stream.read(east + Double((step * 5) % 9) - 4, second, speed: 0) }
+                stream.motion(.automotive, second - 1, through: second)
+                stream.tick(second)
+            }
+            #expect(stream.watch.isDriving, "drifting \(drifting): five minutes are not up")
+            stream.tick(parkedAt + WorldRideWatch.parkTime + 31)
+            #expect(!stream.watch.isDriving && stream.drivesEnded == 1, "drifting \(drifting): \(stream.events)")
+            #expect(stream.watch.lastDriveEnd == .parked)
+            // Motion still says car, from before the end: nothing starts again in the parked car.
+            stream.motion(.automotive, second + 400, through: second + 900)
+            stream.tick(second + 900)
+            #expect(stream.drivesStarted == 1)
+        }
+    }
+
+    /// With the car connected the same parked car ends at the longer, connected park time.
+    @Test func parkedWithTheCarConnectedEndsAtTheLinkedParkTime() {
+        var stream = Stream(usesMotion: true)
+        stream.watch.carLinked = true
+        stream.motion(.automotive, 0)
+        let (second, _) = Self.drive(&stream)
+        stream.tick(second + WorldRideWatch.parkTime + 31)
+        #expect(stream.watch.isDriving)
+        stream.tick(second + WorldRideWatch.linkedParkTime + 1)
+        #expect(!stream.watch.isDriving && stream.watch.lastDriveEnd == .parked)
+    }
+
+    /// A three-minute red light, standing quite still with Motion saying car, is one drive (the park time is the
+    /// guard), and so is one a second under the park time.
+    @Test func aLongRedLightWhileMotionSaysCarIsOneDrive() {
+        for light in [180.0, WorldRideWatch.parkTime - 1] {
+            var stream = Stream(usesMotion: true)
+            stream.motion(.automotive, 0)
+            var (second, east) = Self.drive(&stream)
+            let stopped = second
+            for step in 1...Int(light / 30) { stream.tick(stopped + Double(step) * 30) }
+            stream.tick(stopped + light)
+            second = stopped + light
+            (second, east) = Self.drive(&stream, from: second, east: east)
+            #expect(stream.drivesStarted == 1 && stream.drivesEnded == 0, "light \(light): \(stream.events)")
+        }
+    }
+
+    /// A jam creeping forward ten metres a minute for twenty minutes, never at walking pace and never a hundred metres
+    /// in five: Motion's car holds it, since each five minutes the readings get further than
+    /// ``WorldRideWatch/stillRadius`` beyond their accuracy. Without Motion the same queue is parked (as before).
+    @Test func aCreepingJamWhileMotionSaysCarIsStillTheDrive() {
+        for usesMotion in [true, false] {
+            var stream = Stream(usesMotion: usesMotion)
+            if usesMotion { stream.motion(.automotive, 0) }
+            var (second, east) = Self.drive(&stream)
+            for _ in 0..<20 {
+                second += 60
+                east += 10
+                stream.read(east, second, speed: 0.3, accuracy: 5)
+                stream.tick(second)
+            }
+            #expect(stream.watch.isDriving == usesMotion, "motion \(usesMotion): \(stream.events)")
+        }
+    }
+
+    /// The backstop: a queue that creeps on and on with Motion saying car, never faster than walking nor a hundred
+    /// metres from where the car last moved, ends at ``WorldRideWatch/maxQuietTime`` whatever crept.
+    @Test func theBackstopEndsADriveThatOnlyCreeps() {
+        var stream = Stream(usesMotion: true)
+        stream.motion(.automotive, 0)
+        var (second, east) = Self.drive(&stream)
+        let quietFrom = second
+        var north = 0.0
+        // Back and forth round one spot, 40 m at a time (GPS wander in a garage): each step is a creep, none goes far.
+        for step in 0..<70 where second + 30 < quietFrom + WorldRideWatch.maxQuietTime {
+            second += 30
+            north = step.isMultiple(of: 2) ? 40 : 0
+            stream.read(east, second, speed: 0.2, accuracy: 5, north: north)
+            stream.tick(second)
+        }
+        #expect(stream.watch.isDriving, "\(stream.events)")
+        stream.tick(quietFrom + WorldRideWatch.maxQuietTime)
+        #expect(!stream.watch.isDriving && stream.watch.lastDriveEnd == .parked)
+        #expect(WorldRideWatch.maxQuietTime == 30 * 60 && WorldRideKeeper.tickInterval * Double(WorldRideKeeper.maxTicks) > WorldRideWatch.maxQuietTime)
+    }
+
     /// Still a walk: parked, then a minute or so at 1.4 m/s away from the car ends the drive on foot, as before.
     @Test func walkingAwayFromTheCarStillEndsTheDrive() {
         var stream = Stream()

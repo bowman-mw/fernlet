@@ -224,6 +224,87 @@ struct WorldCarSignalTests {
         #expect(!expired.watch.isDriving, "a run-out hint is the usual half minute")
     }
 
+    // MARK: The salt on a locked launch (release review 2026-11-18, F15)
+
+    /// The salt is read, never written, by its reader; one is made only with the protected data readable, no salt
+    /// and no book saved, and never over a value already there.
+    @Test func theSaltIsOnlyMadeUnlockedAndNeverReplaced() throws {
+        let name = "WorldCarSalt-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        #expect(WorldMapPreferences.carTagSalt(in: defaults) == nil)
+        #expect(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: false) == nil)
+        #expect(WorldMapPreferences.carTagSalt(in: defaults) == nil, "nothing is made locked")
+        let salt = try #require(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: true))
+        #expect(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: true) == salt)
+        #expect(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: false) == salt, "a salt that reads is used locked")
+
+        let orphan = "WorldCarSalt-\(UUID().uuidString)"
+        let bookOnly = try #require(UserDefaults(suiteName: orphan))
+        defer { bookOnly.removePersistentDomain(forName: orphan) }
+        WorldMapPreferences.setCarBookData(Data("{}".utf8), in: bookOnly)
+        #expect(WorldMapPreferences.mintCarTagSalt(in: bookOnly, protectedData: true) == nil, "a saved book never gets a new salt")
+    }
+
+    /// A launch before the first unlock with the car's Bluetooth connected: the defaults read as empty. The keeper
+    /// writes nothing (before the fix it wrote a new salt over the real one), gives the device no tag and learns
+    /// nothing from a drive; once the phone unlocks and the real defaults read, the learned car links again.
+    @Test func aLockedLaunchNeverReplacesTheSaltAndTheCarLinksAfterUnlock() throws {
+        let realName = "WorldCarReal-\(UUID().uuidString)", lockedName = "WorldCarLocked-\(UUID().uuidString)"
+        let real = try #require(UserDefaults(suiteName: realName)), locked = try #require(UserDefaults(suiteName: lockedName))
+        defer {
+            real.removePersistentDomain(forName: realName)
+            locked.removePersistentDomain(forName: lockedName)
+        }
+        let camry = WorldAudioOutput(identifier: "AA:BB:CC", name: "Camry", kind: .bluetooth)
+        let audio = ScriptedAudio()
+        audio.list = [camry]
+        let learner = WorldCarKeeper(audio: audio, defaults: real, protectedData: { true })
+        learner.mark(try #require(learner.offerable))
+        let salt = try #require(WorldMapPreferences.carTagSalt(in: real))
+        #expect(learner.isLinked)
+
+        // Locked: the same disk reads as empty, here a suite with nothing in it.
+        let phone = ScriptedLock()
+        let early = WorldCarKeeper(audio: audio, defaults: locked, protectedData: { phone.isOpen })
+        #expect(locked.dictionaryRepresentation()["fernlet.worldMap.carTagSalt"] == nil, "no salt was written locked")
+        #expect(early.connected.first?.tag == WorldCarKeeper.untagged && !early.isLinked && early.offerable == nil)
+        early.noteReading(WorldFix(point: Stream.here, accuracy: 8, at: Stream.start, isPrecise: true, speed: 12),
+                          mode: .driving(since: Stream.start))
+        early.mark(try #require(early.connected.first))
+        #expect(WorldMapPreferences.carBookData(in: locked) == nil && early.book == WorldCarBook(), "nothing learned without a tag")
+        // Unlocked in the same process: this keeper still makes no salt (its empty read may be a stale one).
+        phone.isOpen = true
+        early.refresh()
+        #expect(WorldMapPreferences.carTagSalt(in: locked) == nil)
+
+        // The real defaults after the unlock: the salt is the one saved, and the car links.
+        phone.isOpen = false
+        let adopted = WorldCarKeeper(audio: audio, defaults: real, protectedData: { phone.isOpen })
+        #expect(adopted.isLinked, "a salt that reads is used whatever the lock")
+        phone.isOpen = true
+        adopted.reload()
+        #expect(adopted.isLinked && WorldMapPreferences.carTagSalt(in: real) == salt)
+    }
+
+    /// A Focus turning off runs the filter with its defaults, which says on: after a drive that ended parked that
+    /// starts nothing for ten minutes. The Start a drive action, an off, and an on at any other time pass.
+    @Test func aFocusFilterRunJustAfterParkingStartsNothing() {
+        let parked = Stream.start, soon = parked.addingTimeInterval(120), later = parked.addingTimeInterval(WorldDriveSignal.focusOffWindow + 1)
+        #expect(!WorldDriveSignal.passes(true, fromFocus: true, lastEnd: .parked, endedAt: parked, now: soon))
+        #expect(WorldDriveSignal.passes(true, fromFocus: false, lastEnd: .parked, endedAt: parked, now: soon), "Start a drive")
+        #expect(WorldDriveSignal.passes(false, fromFocus: true, lastEnd: .parked, endedAt: parked, now: soon))
+        #expect(WorldDriveSignal.passes(true, fromFocus: true, lastEnd: .parked, endedAt: parked, now: later))
+        #expect(WorldDriveSignal.passes(true, fromFocus: true, lastEnd: .onFoot, endedAt: parked, now: soon))
+        #expect(WorldDriveSignal.passes(true, fromFocus: true, lastEnd: nil, endedAt: nil, now: soon))
+
+        var stream = Stream()
+        stream.read(0, 0, speed: 15)
+        stream.read(600, 40, speed: 15)
+        stream.tick(40 + WorldRideWatch.parkTime)
+        #expect(stream.watch.lastDriveEnd == .parked && stream.watch.lastDriveEndedAt == Stream.start.addingTimeInterval(40 + WorldRideWatch.parkTime))
+    }
+
     // MARK: The location source and the actions
 
     /// Without Always (the test host has none) a hint primes the start but starts no listen, and an action says
@@ -250,6 +331,12 @@ struct WorldCarSignalTests {
         #expect(MapMyDriveFocusFilter().mapsDrive)
         #expect(WorldDriveIntentError.backgroundMappingOff.localizedStringResource.key == "worldDrive.intent.backgroundMappingOff")
     }
+}
+
+/// Whether the phone's protected data can be read, as a test says.
+@MainActor
+private final class ScriptedLock {
+    var isOpen = false
 }
 
 /// Audio outputs a test sets, telling the keeper when they change.

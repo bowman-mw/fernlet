@@ -21,7 +21,12 @@ import WorldMapStore
 ///   ``footTime`` after the last fast one that also carried the person ``footDistance`` beyond their accuracy at
 ///   ``footPace`` or more, while Motion says nothing of a car), or parked (``parkTime`` with nothing faster than walking pace, no
 ///   reading ``parkRadius`` beyond its accuracy from where the car last moved and, with Motion, no automotive
-///   activity in that time; ``tick(at:)`` ends it when the readings stop). Owner 2026-11-09 ("really long stop
+///   activity in that time; ``tick(at:)`` ends it when the readings stop). **Motion never holds a car that stands
+///   still** (release review 2026-11-18, F15): CoreMotion reports automotive and stationary together at a light and
+///   may go on saying automotive for a phone left in a parked car, so while it says car the drive still ends once no
+///   reading has gone ``stillRadius`` beyond its accuracy for the park time, and whatever it says after
+///   ``maxQuietTime`` with nothing faster than walking pace nor ``parkRadius`` away. What Motion's car still holds
+///   is a queue that creeps. Owner 2026-11-09 ("really long stop
 ///   lights … make it think I'm walking"): creeping up in the queue at a light, and GPS drift while stopped, read
 ///   at walking pace but go nowhere, and a crawl through a jam moves the car further than a parked one goes.
 /// - **A drive that ended on foot resumes quickly:** within ``resumeWindow`` of that end, readings at a car's
@@ -80,6 +85,13 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     /// How far beyond both readings' accuracy from where the car last moved a reading must be to count as moving,
     /// in metres: a crawl through a jam at walking pace gets this far within ``parkTime``, a parked car never.
     static let parkRadius = 100.0
+    /// How far beyond both readings' accuracy from where the car last crept a reading must be to count as creeping,
+    /// in metres: while Motion says car, a queue that gets this far within the park time is still a drive, and a
+    /// phone lying in a parked car (GPS drift stays inside its accuracy) is not.
+    static let stillRadius = 15.0
+    /// The longest a drive lasts with nothing faster than walking pace nor ``parkRadius`` from where the car last
+    /// moved, whatever Motion says (the backstop: a trace never runs on without movement).
+    static let maxQuietTime: TimeInterval = 30 * 60
     /// How soon after a drive ended on foot a run at a car's speed resumes it after only ``resumeHold``.
     static let resumeWindow: TimeInterval = 5 * 60
     /// How long readings at a car's speed must span to resume a drive that ended on foot within ``resumeWindow``.
@@ -194,6 +206,10 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     private var movingAt: Date?
     /// While driving: where the car last moved, the good reading ``parkRadius`` is measured from.
     private var movingFrom: PaceAnchor?
+    /// While driving: the last reading that moved at all (``movingAt``, or one ``stillRadius`` from the one before),
+    /// and where it was; nil until the drive's first slow reading.
+    private var stillAt: Date?
+    private var stillFrom: PaceAnchor?
     /// While driving: the first and latest walking-pace readings since ``movingAt``, and where the first was.
     private var footSince: Date?
     private var footAt: Date?
@@ -205,6 +221,8 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
 
     /// Why the last drive ended; nil before the first.
     var lastDriveEnd: WorldDriveEnd? { lastDrive?.end }
+    /// When the last drive ended; nil before the first.
+    var lastDriveEndedAt: Date? { lastDrive?.at }
 
     // Motion.
     private var motionKind: WorldMotionKind?
@@ -399,6 +417,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
             return []
         }
         if let movingFrom, Self.metres(from: movingFrom, to: fix) > Self.parkRadius { noteMoving(fix) }
+        noteCreep(fix)
         guard speed >= Self.footSpeed else { return [] }
         if footSince == nil {
             footSince = fix.at
@@ -423,6 +442,20 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     private mutating func noteMoving(_ fix: WorldFix) {
         movingAt = fix.at
         movingFrom = Self.anchor(fix)
+        stillAt = fix.at
+        stillFrom = movingFrom
+    }
+
+    /// A slow reading of a drive: the still clock starts again at one ``stillRadius`` beyond both readings' accuracy
+    /// from where the car last moved at all (a queue creeping up), and is first placed at the drive's first one.
+    private mutating func noteCreep(_ fix: WorldFix) {
+        guard let stillFrom else {
+            self.stillFrom = Self.anchor(fix)
+            return
+        }
+        guard Self.metres(from: stillFrom, to: fix) > Self.stillRadius else { return }
+        stillAt = fix.at
+        self.stillFrom = Self.anchor(fix)
     }
 
     /// `fix` as the point a distance is measured from, with its accuracy.
@@ -439,6 +472,8 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         mode = .driving(since: date)
         movingAt = date
         movingFrom = nil
+        stillAt = date
+        stillFrom = nil
         footSince = nil
         footAt = nil
         footFrom = nil
@@ -454,6 +489,8 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         lastDrive = DriveEnded(end: end, at: date)
         movingAt = nil
         movingFrom = nil
+        stillAt = nil
+        stillFrom = nil
         footSince = nil
         footAt = nil
         footFrom = nil
@@ -464,10 +501,15 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
 
     /// Whether, as of `date`, the car has been parked long enough: nothing faster than walking, nor ``parkRadius``
     /// from where it last moved, for ``parkTime`` (``linkedParkTime`` with a car connected) and, with Motion, no
-    /// automotive activity in that time.
+    /// automotive activity in that time. While Motion says car (it does at a light, and may for as long as the phone
+    /// lies in a parked car), the readings decide: parked once none has gone ``stillRadius`` from where the car last
+    /// moved at all for that same time, or after ``maxQuietTime`` whatever crept.
     private func isParked(at date: Date) -> Bool {
-        guard let movingAt, date.timeIntervalSince(movingAt) >= (carLinked ? Self.linkedParkTime : Self.parkTime) else { return false }
-        return !(usesMotion && automotive(since: date.addingTimeInterval(-Self.parkTime)))
+        let wait = carLinked ? Self.linkedParkTime : Self.parkTime
+        guard let movingAt, date.timeIntervalSince(movingAt) >= wait else { return false }
+        guard usesMotion, automotive(since: date.addingTimeInterval(-Self.parkTime)) else { return true }
+        if date.timeIntervalSince(movingAt) >= Self.maxQuietTime { return true }
+        return date.timeIntervalSince(stillAt ?? movingAt) >= wait
     }
 
     /// Whether Motion's automotive activity held at any moment since `start`.
