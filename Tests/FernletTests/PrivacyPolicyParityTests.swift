@@ -231,8 +231,9 @@ struct PrivacyPolicyParityTests {
         // recipe radio shows a name only to kept friends unless the person turns on the opt-in.
         "nearby phones see your name only if they belong to friends you added",
         "(Nearby friends, off by default)",
-        // Release review policy pass (2026-11-19; both sentences await the owner's approval, so an edit of his
-        // moves these): the map record marks ground only driven past, and a calendar flight needs a confirmed trip.
+        // Release review policy pass (2026-11-19): the map record marks ground only driven past (owner-approved
+        // word for word that day), and a calendar flight needs a confirmed trip (awaits the owner's approval, so
+        // an edit of his moves that marker).
         "the ground you only drove or rode past",
         "counts as yours only once Fernlet sees you take it or you add it yourself"
     ]

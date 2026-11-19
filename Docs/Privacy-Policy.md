@@ -144,12 +144,13 @@
      the effective date moves to November 19, 2026. Nothing goes to the developer and no promise is weakened
      under §13: the switch is the fresh, affirmative consent, and the App Store label adds Coarse Location (App
      Functionality, not linked, not tracking).
-     DRAFT 2026-11-19, awaiting the owner's approval of the words (the release review's policy pass, findings
-     F7, F8 and F10; no app behaviour changed, both sentences describe what the code already does):
-     (1) driven-past ground, the sentence the owner asked for on 2026-11-13: §6's map record "also marks, more
+     And 2026-11-19 (the release review's policy pass, findings F7, F8 and F10; no app behaviour changed, both
+     sentences describe what the code already does):
+     (1) driven-past ground, the sentence the owner asked for on 2026-11-13, approved by the owner word for
+     word on 2026-11-19 ("Wording 1 as applied", PR #212): §6's map record "also marks, more
      lightly, the ground you only drove or rode past, and Delete map history removes it with the rest of your
      map" (`DrivenFogStore`, `fog-driven.bin` in the map's own encrypted folder, cell ids only, since PR #142);
-     (2) calendar flights, the wording PR #202 proposed with its last clause made exact: a flight found in the
+     (2) DRAFT, awaiting the owner's approval of the words: calendar flights, the wording PR #202 proposed with its last clause made exact: a flight found in the
      calendar "counts as yours only once Fernlet sees you take it or you add it yourself", and one that is only
      in the calendar "stays planned and is let go a couple of days after it leaves". The old clause, "the
      flights it finds draw your routes and fill the passport's Flights page", stopped being true with PR #202.
