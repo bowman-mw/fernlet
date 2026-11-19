@@ -6,7 +6,7 @@ import WorldMapStore
 
 /// Page 1 of Sprout's passport (World-Passport-Spec §4, `ps-sprout`, `ps-sprout-home`, `ps-parity`, §9 decoy):
 /// every action the close-up, Customize and the shop offered is reachable from the page, the two machine lines,
-/// the decoy's fresh passport, the care and feeling words, and the slot summaries Customize and page 1 share.
+/// the decoy's fresh passport, the care and feeling words, and the slot summaries the Wardrobe shows.
 @MainActor
 struct PassportSproutPageTests {
     /// A Portland reading, away from any home.
@@ -22,9 +22,9 @@ struct PassportSproutPageTests {
     nonisolated static let dressed = CompanionAppearance(bodyStyle: .pear, accessory: .flower, clothing: .scarf, sideItem: .mug)
 
     static func model(place: WorldCloseUpPlace = .away(point), minutes: Int? = 52, decoy: Bool = false,
-                      appearance: CompanionAppearance = dressed, equipped: [CustomizationItem] = []) -> PassportSproutModel {
+                      appearance: CompanionAppearance = dressed) -> PassportSproutModel {
         PassportSproutModel.make(name: "Sprout", feeling: "Thriving · happy", state: .thriving, appearance: appearance,
-                                 equipped: equipped, status: status(), listed: 3, coins: 25, friendShopMinutes: minutes,
+                                 status: status(), listed: 3, coins: 25, friendShopMinutes: minutes,
                                  place: place, counts: PassportSproutCounts(countries: 6, continents: 3, oceans: 2, seas: 2),
                                  isDecoy: decoy)
     }
@@ -91,14 +91,36 @@ struct PassportSproutPageTests {
     @Test func aDecoyShowsAFreshPassport() {
         let decoy = Self.model(place: .home(name: "Home"), decoy: true)
         #expect(decoy.appearance == .standard)
-        #expect(decoy.slots.map(\.value) == [CompanionBodyStyle.circle.label, CompanionHairStyle.none.label, CompanionEyes.round.label,
-                                             CompanionPattern.plain.label, CompanionAccessory.sprout.label, CompanionClothing.none.label,
-                                             CompanionSideItem.none.label, CompanionBackground.none.label])
-        #expect(decoy.slots.map(\.isEmpty) == [false, true, false, true, false, true, true, true])
         #expect(decoy.listed == 0 && decoy.coins == 0 && decoy.counts == .zero)
         #expect(decoy.friendShopMinutes == nil && decoy.place == .unknown)
         #expect(decoy.machineLines[1].hasPrefix("FRN<C000<K00<O00<S00<"))
         #expect(PassportSproutCopy.listed(decoy.listed, of: 6) == "Nothing listed")
+    }
+
+    /// A decoy's Wardrobe shows the fresh passport's look (§9): the standard companion, nothing equipped.
+    @Test func aDecoyWardrobeShowsTheFreshLook() {
+        let hat = CustomizationItem(name: "My hat", slot: .hat, texture: ItemGridTexture(cols: 1, rows: 1, palette: ["#000000"], pixels: [0]),
+                                    designer: ItemDesigner(id: UUID()))
+        let decoy = CustomizeSlotSummary.all(appearance: Self.dressed, equipped: [hat], isDecoy: true)
+        #expect(decoy.map(\.value) == [CompanionBodyStyle.circle.label, CompanionHairStyle.none.label, CompanionEyes.round.label,
+                                       CompanionPattern.plain.label, CompanionAccessory.sprout.label, CompanionClothing.none.label,
+                                       CompanionSideItem.none.label, CompanionBackground.none.label])
+        #expect(decoy.map(\.isEmpty) == [false, true, false, true, false, true, true, true])
+    }
+
+    /// Page 1 holds less (owner 2026-11-18): the slot buttons live in the Wardrobe, so page 1 offers none of them.
+    @Test func page1LeavesTheSlotsToTheWardrobe() {
+        #expect(Array(Self.model().actions.prefix(4)) == [.pet, .wardrobe, .creationStudio, .yourShop])
+    }
+
+    /// The thought bubble keeps the room of every pet reaction, so a reaction never moves the page (owner 2026-11-18).
+    @Test func theBubbleReservesEveryReactionLine() {
+        let lines = WorldCloseUpReaction.lines(name: "Sprout")
+        for response in [PetInteractionGovernor.Response.bounce, .settling, .calmIdle(showsSettledLine: true)] {
+            let line = WorldCloseUpReaction.make(for: response, name: "Sprout").line
+            #expect(line.map { lines.contains($0) } == true, "\(response) says a line the bubble does not reserve")
+        }
+        #expect(PassportSproutLine.reservedLines >= 2)
     }
 
     // MARK: Words
@@ -131,9 +153,9 @@ struct PassportSproutPageTests {
 
     // MARK: The shared slot summaries
 
-    /// Page 1 and Customize show the same value per slot: the built-in, or an equipped design folded into the slot.
+    /// The Wardrobe's What Sprout's wearing shows each slot's value: the built-in, or an equipped design folded in.
     @Test func slotSummariesNameWhatIsWorn() {
-        let dressed = Self.model().slots
+        let dressed = CustomizeSlotSummary.all(appearance: Self.dressed, equipped: [], isDecoy: false)
         #expect(dressed.map(\.slot) == CustomizeSlot.allCases)
         #expect(dressed.map(\.value) == [CompanionBodyStyle.pear.label, CompanionHairStyle.none.label, CompanionEyes.round.label,
                                          CompanionPattern.plain.label, CompanionAccessory.flower.label, CompanionClothing.scarf.label,

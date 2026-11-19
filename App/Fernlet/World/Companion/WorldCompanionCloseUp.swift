@@ -34,6 +34,12 @@ struct WorldCloseUpReaction: Equatable {
     /// No reaction showing.
     static let none = WorldCloseUpReaction(squishes: false, blushes: false, hearts: 0, line: nil)
 
+    /// Every line a pet's reaction can say, for `name`: page 1's bubble keeps the room of each
+    /// (``PassportSproutLine``).
+    static func lines(name: String) -> [String] {
+        [WorldCloseUpCopy.tickles, HomeCopy.settledThought(name: name), HomeCopy.settledAgainLine(name: name)]
+    }
+
     /// The reaction for the governor's answer; `name` is the companion's, for the settled lines.
     static func make(for response: PetInteractionGovernor.Response, name: String) -> WorldCloseUpReaction {
         switch response {

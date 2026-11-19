@@ -128,6 +128,14 @@ nonisolated struct CustomizeSlotSummary: Equatable, Sendable {
     static func current(store: FernletStore) -> [CustomizeSlotSummary] {
         CustomizeSlot.allCases.map { make($0, appearance: store.settings.companionAppearance, equipped: store.equippedCustomItems) }
     }
+
+    /// Every slot's summary as the Wardrobe's What Sprout's wearing shows it: a decoy (World-Passport-Spec §9)
+    /// shows the fresh passport's look, the standard companion with nothing equipped.
+    static func all(appearance: CompanionAppearance, equipped: [CustomizationItem], isDecoy: Bool) -> [CustomizeSlotSummary] {
+        let look = isDecoy ? CompanionAppearance.standard : appearance
+        let worn = isDecoy ? [] : equipped
+        return CustomizeSlot.allCases.map { make($0, appearance: look, equipped: worn) }
+    }
 }
 
 /// A slot's piece in its framed tile: the body as a dot in its colour, the others their pixel piece (or symbol).
