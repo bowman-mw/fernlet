@@ -186,7 +186,9 @@ history and the reasons; `Docs/CloudKit-Expected-Schema.json` is the complete li
 around 2026-11-19 (owner: "not sure if it included everything"), so the four PENDING rows below stay
 PENDING until that check prints `nothing missing` for Production.
 
-**Production as exported on 2026-11-19** (owner's export, checked with the script; 24 findings):
+**Production as exported on 2026-11-19** (owner's export, checked with the script; 24 findings).
+Development's export that day was the same schema, so the deploy carried everything Development had,
+and every gap below is missing from Development too:
 
 - **Present and complete:** `SealedBackupRecord`, `RecoveryEscrowRecord` (both with `recordName`
   queryable), and the field `CD_DayRecord.CD_deviceKey`.
