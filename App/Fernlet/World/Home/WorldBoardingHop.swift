@@ -7,6 +7,7 @@ import SwiftUI
 struct WorldBoardingHopPlay: Equatable, Identifiable {
     let id: UUID
     let direction: WorldBoardingHopDirection
+    /// When it starts moving (until then it holds its first frame).
     let start: Date
     /// The line VoiceOver hears, with the companion's name in it.
     let line: String
@@ -26,6 +27,10 @@ final class WorldBoardingHopState {
     var flightSceneFrame: CGRect?
     /// DEBUG `FERNLET_UI_TEST_WORLD_HOME=hopBoarding|hopLanding`: the staged scene has played.
     @ObservationIgnored private var playedTestScene = false
+
+    /// How long a scene holds its first frame before it moves: it covers the new Home at once, while a cold launch
+    /// fades Home in from the launch screen and the map draws, so none of it is missed.
+    static let lead: TimeInterval = 0.8
 
     /// Whether a scene is on screen (Home's banners wait for it).
     var isPlaying: Bool { play != nil }
@@ -60,7 +65,7 @@ final class WorldBoardingHopState {
     /// Starts `direction`'s scene and says its line once.
     private func begin(_ direction: WorldBoardingHopDirection, companion: String) {
         let line = WorldBoardingHopCopy.line(direction, companion: companion)
-        play = WorldBoardingHopPlay(id: UUID(), direction: direction, start: Date(), line: line)
+        play = WorldBoardingHopPlay(id: UUID(), direction: direction, start: Date().addingTimeInterval(Self.lead), line: line)
         AccessibilityNotification.Announcement(line).post()
     }
 

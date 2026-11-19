@@ -37,7 +37,7 @@ struct WorldBoardingHopScene: View {
         let now = WorldCompanionLook.current(store: store, at: play.start, night: .map, bodySignal: bodySignal, mapNight: isNight)
         let tint = WorldBoardingHopArt.tint(of: now)
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
-            let frame = WorldBoardingHopTimeline.frame(play.direction, at: Self.heldAt ?? timeline.date.timeIntervalSince(play.start),
+            let frame = WorldBoardingHopTimeline.frame(play.direction, at: Self.heldAt ?? max(0, timeline.date.timeIntervalSince(play.start)),
                                                        reduceMotion: reduceMotion)
             let fade = play.skippedAt.map { 1 - WorldBoardingHopTimeline.ramp(timeline.date.timeIntervalSince($0), 0, Self.skipFade) } ?? 1
             GeometryReader { proxy in
@@ -50,7 +50,7 @@ struct WorldBoardingHopScene: View {
                     if frame.flightView > 0 { flightView.opacity(frame.flightView) }
                 }
             }
-            .mask { Self.softEdges }
+            .mask { Self.edges(softTop: play.direction == .landing) }
             .opacity(frame.opacity * fade)
         }
         .clipped()
@@ -63,9 +63,10 @@ struct WorldBoardingHopScene: View {
         .task(id: play.skippedAt) { await waitOut() }
     }
 
-    /// The scene's soft top and bottom edges, so it settles over the map rather than cutting across it.
-    private static var softEdges: LinearGradient {
-        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
+    /// The scene's soft bottom edge, and a soft top too when it lands on the map (it settles over the map rather than
+    /// cutting across it); boarding's top stays solid over the plane Home's bubble.
+    private static func edges(softTop: Bool) -> LinearGradient {
+        LinearGradient(stops: [.init(color: softTop ? .clear : .black, location: 0), .init(color: .black, location: 0.06),
                                .init(color: .black, location: 0.94), .init(color: .clear, location: 1)],
                        startPoint: .top, endPoint: .bottom)
     }
