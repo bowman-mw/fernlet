@@ -3,8 +3,9 @@
 //
 // The recovery code's screens (G9-2, plan Part 2 "UI"): the Recovery code row in Privacy & data,
 // the one-time offer when a backup is first turned on, making a code (explain → passcode/Face ID →
-// 12 numbered words → type 3 back → done), "Check my code", and "Use a recovery code" from the
-// restore banner. Hidden in a duress session; the words are capture-protected and covered while
+// 12 numbered words → type 3 back → saved and the old code revoked → done), "Check my code", and
+// "Use a recovery code" from the restore banner. A new code is saved only at that confirmation, so
+// closing the sheet before it leaves the code made earlier working and the row's date unchanged. Hidden in a duress session; the words are capture-protected and covered while
 // the app is not frontmost (the app-switcher snapshot).
 
 import CloudKitSync
@@ -251,7 +252,9 @@ private enum RecoveryCodeStep: Equatable {
 /// The recovery-code sheet: every step of making, checking and using a code.
 ///
 /// Holds the code only while the words are on screen and while they are typed back; it is dropped
-/// (best-effort) as soon as the person is done, and never written anywhere.
+/// (best-effort) as soon as the person is done, and never written anywhere. This `@State` is the only
+/// place an unconfirmed code exists: iCloud learns of it when the three words are typed back
+/// (``RecoveryCodeService/confirmNewCode(_:)``), so a sheet closed before then leaves nothing behind.
 private struct RecoveryCodeSheet: View {
     let presenter: RecoveryCodePresenter
     let mode: RecoveryCodePresenter.Sheet
@@ -319,10 +322,7 @@ private struct RecoveryCodeSheet: View {
 
     @ViewBuilder private var confirmStep: some View {
         if let code {
-            RecoveryCodeConfirm(words: code.words, back: { go(.showing) }) {
-                self.code = nil
-                go(.done)
-            }
+            RecoveryCodeConfirm(words: code.words, isWorking: isWorking, back: { go(.showing) }) { confirm(code) }
         }
     }
 
@@ -348,10 +348,30 @@ private struct RecoveryCodeSheet: View {
                 return
             }
             do {
-                code = try await presenter.service.makeNewCode()
+                code = try await presenter.service.beginNewCode()
                 go(.showing)
             } catch {
                 message = RecoveryCodeCopy.failure(error)
+            }
+        }
+    }
+
+    /// The three words were typed back: saves the code and revokes the older one. A failed save keeps
+    /// the step and the code, so Done can be tapped again; the older code still works meanwhile.
+    private func confirm(_ confirmed: RecoveryCode) {
+        guard !isWorking else { return }
+        isWorking = true
+        message = nil
+        Task {
+            defer { isWorking = false }
+            do {
+                try await presenter.service.confirmNewCode(confirmed)
+                code = nil
+                FernletFeedback.system.play(.done)
+                go(.done)
+            } catch {
+                FernletFeedback.system.play(.failed)
+                message = RecoveryCodeCopy.confirmFailure(error)
             }
         }
     }
@@ -476,9 +496,11 @@ private struct RecoveryCodeWords: View {
 }
 
 /// Typing 3 words back (owner call R6 = A): three positions chosen at random, each checked against
-/// the code (a word's first four letters are enough, as when recovering).
+/// the code (a word's first four letters are enough, as when recovering). Done is what saves the
+/// code and stops the older one working; nothing is in iCloud before it.
 private struct RecoveryCodeConfirm: View {
     let words: [String]
+    let isWorking: Bool
     let back: () -> Void
     let confirmed: () -> Void
 
@@ -507,10 +529,11 @@ private struct RecoveryCodeConfirm: View {
             }
             Button(action: confirmed) { Text("Done").frame(maxWidth: .infinity) }
                 .buttonStyle(ActionPillButtonStyle(.primary))
-                .disabled(!allMatch)
+                .disabled(!allMatch || isWorking)
                 .accessibilityIdentifier("recoveryCode.confirm.done")
             Button(action: back) { Text("Show the words again").frame(maxWidth: .infinity) }
                 .buttonStyle(ActionPillButtonStyle(.secondary))
+                .disabled(isWorking)
         }
         .onAppear { if positions.isEmpty { positions = Self.pickPositions(count: words.count) } }
     }
@@ -646,6 +669,12 @@ private enum RecoveryCodeCopy {
         }
     }
 
+    /// The save at the confirmation step failed: the new code opens nothing yet, an older one still does.
+    static func confirmFailure(_ error: any Error) -> LocalizedStringKey {
+        if error is RecoveryCodeFailure { return failure(error) }
+        return "Couldn't save this code to iCloud, so it doesn't open your backups yet. Check that you're signed in and online, then tap Done again. If you made a code before, that one still works."
+    }
+
     /// What "Check my code" found.
     static func checkLine(_ result: RecoveryCodeCheck) -> LocalizedStringKey {
         switch result {
@@ -687,9 +716,13 @@ final class InMemoryRecoveryEscrowStore: RecoveryEscrowStoring {
     private(set) var recordsByName: [String: RecoveryEscrowRecord] = [:]
     /// When set, every call throws it (a simulated iCloud failure).
     var failure: (any Error)?
+    /// When set, saves throw it (a refused save; reads and deletes still work).
+    var saveFailure: (any Error)?
+    /// When set, deletes throw it (a revoke that did not land).
+    var deleteFailure: (any Error)?
 
     func saveRecoveryEscrowRecords(_ records: [RecoveryEscrowRecord]) async throws {
-        if let failure { throw failure }
+        if let failure = failure ?? saveFailure { throw failure }
         for record in records { recordsByName[record.recordName] = record }  // R2: bounded by records.
     }
 
@@ -699,7 +732,7 @@ final class InMemoryRecoveryEscrowStore: RecoveryEscrowStoring {
     }
 
     func deleteRecoveryEscrowRecords(keeping: Data?) async throws -> Int {
-        if let failure { throw failure }
+        if let failure = failure ?? deleteFailure { throw failure }
         let prefix = keeping.map { RecoveryEscrowRecord.recordNamePrefix(recoveryPublicKey: $0) }
         let doomed = recordsByName.keys.filter { name in prefix.map { !name.hasPrefix($0) } ?? true }
         for name in doomed { recordsByName[name] = nil }  // R2: bounded by records.
