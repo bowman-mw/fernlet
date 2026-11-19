@@ -146,6 +146,8 @@ struct WorldMapHome: View {
     @State private var lastMapTap: Date?
     /// DEBUG `transitAsk`: a staged "Was that a train?" (display only); nil in release builds.
     @State private var testTransitQuestion: WornTransitQuestion?
+    /// The scene between the map and the plane (owner 2026-11-18): the one playing, and where the in-flight view stands.
+    @State private var boardingHop = WorldBoardingHopState()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -156,16 +158,9 @@ struct WorldMapHome: View {
     @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
 
     var body: some View {
-        TimelineView(.everyMinute) { timeline in
-            if WorldFlyingHome.shows(store, at: timeline.date) {
-                // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
-                WorldFlyingHome(store: store, date: timeline.date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
-                                isActive: isCompanionActive, isNight: phase(at: timeline.date) == .night)
-            } else if presence == .off {
-                offHome(date: timeline.date)
-            } else {
-                mapHome(date: timeline.date)
-            }
+        TimelineView(.everyMinute) { timeline in shownHome(date: timeline.date) }
+        .overlay {
+            WorldBoardingHopLayer(store: store, hop: boardingHop, bodySignal: bodySignal, isNight: phase(at: Date()) == .night)
         }
         .accessibilityElement(children: .contain)
         // Round 7: Sprout's passport's new stamps and the world view's city tap (World-Passport-Spec §1, §6).
@@ -191,7 +186,8 @@ struct WorldMapHome: View {
         .modifier(WorldDiscoveryLinesDriver(store: store, router: discoveries, isSaying: isFrontmost && !isBubbleQuiet))
         // Airports (World-Airports-Spec §3, §6.3): the found and landing banners, Sprout's landing line.
         .modifier(WorldAirportHomeDriver(store: store, router: discoveries, state: airportHome, passport: passport,
-                                         holdsBanner: !isFrontmost || holdsRootBanners || stampBannerShowing))
+                                         holdsBanner: !isFrontmost || holdsRootBanners || stampBannerShowing
+                                             || boardingHop.isPlaying))
         // Take a trip (World-Airports-Spec §5, §7, §10.7): the ticket, the boarding pass, the quick action, on the day.
         .modifier(WorldTripHomeDriver(store: store, trip: trip, greeting: $homeGreeting, isFrontmost: isFrontmost,
                                       openCard: { openCard(spaceID: hereSpaceID) }))
@@ -236,6 +232,28 @@ struct WorldMapHome: View {
         .onChange(of: store.worldLocation.rides.loggedRide?.id) { if isFrontmost { readSavedLines() } }
         // A permission given (or taken back) in iOS's prompt or in Settings: start or stop following.
         .onChange(of: store.worldLocation.permission) { updateLocation() }
+    }
+
+    /// Home at `date`: the plane's window in the air, the open scene with location off, else the map; and the
+    /// boarding hop's gate asked about it (owner 2026-11-18: once per switch between the map and the plane, while
+    /// Home is in front).
+    private func shownHome(date: Date) -> some View {
+        let flying = WorldFlyingHome.shows(store, at: date)
+        return Group {
+            if flying {
+                // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
+                WorldFlyingHome(store: store, date: date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
+                                isActive: isCompanionActive, isNight: phase(at: date) == .night,
+                                onSceneFrame: { boardingHop.flightSceneFrame = $0 })
+            } else if presence == .off {
+                offHome(date: date)
+            } else {
+                mapHome(date: date)
+            }
+        }
+        .modifier(WorldBoardingHopTrigger(hop: boardingHop, sky: flying ? .air : .ground,
+                                          canPlay: isFrontmost && scenePhase == .active,
+                                          isDecoy: store.duressSessionActive, companion: store.worldCompanionName))
     }
 
     // MARK: Location off
