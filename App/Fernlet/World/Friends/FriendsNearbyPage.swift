@@ -62,7 +62,10 @@ struct FriendsNearbyPage: View {
             FriendsNearbyDemoCards()
         } else if manager.isInSession {
             FriendsNearbyNote(sprite: FriendsSprites.people, text: Text(sessionLine))
-        } else if manager.isSearching, let discoveryError = manager.discoveryError {
+        } else if manager.isSearching, let discoveryError = manager.discoveryError,
+                  FriendsDiscoveryFailure.isRadioFailure(discoveryError) {
+            // Only the radio itself failing replaces the cards: a tunnel one phone refused (a stranger's
+            // Fernlet, or a friend on an older build) says nothing about Local Network or other friends.
             FriendsDiscoveryFailureCard(message: discoveryError, showsDetail: store.proximityDebugToolsEnabled)
         } else if manager.isSearching, !manager.slots.isEmpty {
             VStack(spacing: 12) {
@@ -171,7 +174,34 @@ struct FriendsNearbyNote: View {
     }
 }
 
+/// Which of the mesh radio's `discoveryError` lines mean discovery itself is down.
+///
+/// ProximityKit 0.2.0 hands every transport failure to one `String?` (`MeshNetworkManager.discoveryError`,
+/// fed by `NetworkMeshSession.report(_:)`), whether the Bonjour browser failed (a declined Local Network
+/// prompt) or one phone's tunnel was refused. A refusal is per phone: a stranger with Fernlet nearby is
+/// refused `noDialProof`, and a build-460 phone (protocol 1) fails the introduction with a decode or
+/// stream-closed error. ProximityKit exposes nothing that tells a version mismatch from a stranger, so
+/// neither earns a card; only the radio's own start/run failures do. Matched on ProximityKit's frozen
+/// English prefixes (developer text, never localized); a refusal line names none of them.
+enum FriendsDiscoveryFailure {
+    /// The opening words of every radio-level failure `NetworkMeshSession` and the transport selection
+    /// report in 0.2.0: the listener, the browser, and the radio not starting at all.
+    static let radioFailurePrefixes = [
+        "The Bonjour browser ",
+        "The QUIC listener ",
+        "The QUIC mesh radio could not start"
+    ]
+
+    /// Whether `message` says the radio could not look at all (the Local Network card's case), rather
+    /// than that one phone's tunnel was refused or gave up.
+    static func isRadioFailure(_ message: String) -> Bool {
+        radioFailurePrefixes.contains { message.hasPrefix($0) }
+    }
+}
+
 /// Shown in place of the looking line when the radios failed to start.
+///
+/// Only for ``FriendsDiscoveryFailure/isRadioFailure(_:)`` lines: a refused tunnel leaves the cards.
 ///
 /// The transport detects this (`NetworkMeshSession`'s `onTransportError`) and routes it to
 /// `manager.discoveryError`. A discovery failure happens before any session, so without this card the

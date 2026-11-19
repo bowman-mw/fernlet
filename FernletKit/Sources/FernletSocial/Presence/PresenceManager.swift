@@ -178,6 +178,14 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// never begins with. `nonisolated`: inert `Sendable` value data.
     @ObservationIgnored nonisolated let namespace: ProximityNamespace
     @ObservationIgnored private let identity: IdentityService
+    /// The identity this manager derives its pairwise tags under, provisioned at `init` (a failed
+    /// provisioning is logged there as `presence.identity.provisionFailed`).
+    ///
+    /// The recipe radio's friend tags (SEC-L29) are derived under this same instance rather than a
+    /// new one: an `IdentityService` derives nothing until it is provisioned, and this one already
+    /// is. It is also the instance ``wipeIdentityForDeleteAll()`` clears, so a delete-all leaves no
+    /// copy of the old key in RAM for those tags to keep using.
+    public var tagDerivationIdentity: IdentityService { identity }
     /// Whether ``identity`` is of ``namespace``, decided once at `init`. False only when the identity
     /// this manager holds, handed in through the `identity:` parameter or answered by the host's
     /// `makeProximityIdentity()`, is of another namespace: the manager still constructs, and

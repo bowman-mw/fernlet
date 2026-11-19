@@ -95,6 +95,60 @@ struct RecipeNameDisclosureTests {
         #expect(manager.advertisesNameToEveryone, "the opt-in did not reach the radio")
     }
 
+    /// **The store's own wiring names a kept friend (release review since build 460).**
+    ///
+    /// The cell above hands the manager an identity this file provisioned, so it could not see that the
+    /// store's identity never was: the store built a fourth `makeProximityIdentity()` instance that
+    /// nothing provisioned, every friend tag threw `notProvisioned`, and the picker named nobody. This
+    /// cell goes through the real store (`makeTestStore()`, `recipeShareManager`, its
+    /// `nameDisclosureInputs` closure) and checks the derivation from the friend's side, under the
+    /// app's real key-agreement key, read by a fresh instance on the same keychain rows.
+    @Test func theStoresOwnWiringNamesAKeptFriend() throws {
+        let (sam, idSam) = try makeProvisionedService()
+        defer { KeychainItem.deleteAll(service: idSam) }
+        let store = makeTestStore()
+        store.proximityTrustVault.trust(peerIdentity(named: "Sam", for: sam), mode: .friend)
+        let audit = TagFailureAudit()
+        defer { audit.stop() }
+        let now = Date()
+        let epoch = IdentityService.presenceEpoch(at: now)
+
+        store.recipeShareManager.refreshNameDisclosure(at: now)
+
+        let inputs = store.recipeNameDisclosureInputs()
+        #expect(!inputs.identity.localKeyAgreementPublicKey.isEmpty,
+                "the store derives friend tags under an identity nothing provisioned")
+        let app = store.makeProximityIdentity()
+        try app.ensureProvisioned()
+        #expect(inputs.identity.localKeyAgreementPublicKey == app.localKeyAgreementPublicKey,
+                "the tags derive under a key other than the app's own")
+        let samsTag = try sam.recipeFriendTag(for: app.localKeyAgreementPublicKey, epoch: epoch)
+            .base64EncodedString()
+        #expect(store.recipeShareManager.friendName(matching: [samsTag]) == "Sam",
+                "a kept friend's recipe record is not named through the store's wiring")
+        #expect(audit.failures.isEmpty, "the store's tag derivation failed: \(audit.failures)")
+    }
+
+    /// **A tag that cannot be derived is logged, not swallowed (R7).**
+    @Test func anUnprovisionedIdentityIsLoggedNotSwallowed() throws {
+        let (sam, idSam) = try makeProvisionedService()
+        defer { KeychainItem.deleteAll(service: idSam) }
+        let serviceID = "com.fernlet.identity.test.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let unprovisioned = IdentityService(keychainService: serviceID)
+        let manager = ProximityRecipeShareManager(store: NameDisclosureTestHost(), makeSession: nil)
+        let audit = TagFailureAudit()
+        defer { audit.stop() }
+
+        manager.applyNameDisclosure(toEveryone: false, friends: [record(named: "Sam", for: sam)],
+                                    identity: unprovisioned, at: Date(timeIntervalSince1970: 1_800_000_000))
+
+        let failures = audit.failures
+        #expect(failures.count == 1, "a failed pass logged \(failures.count) lines, not one")
+        #expect(failures.first?["failures"] == "4", "one advertised tag and three matched epochs should fail")
+        #expect(failures.first?["error"] == "notProvisioned", "the line does not name the cause")
+    }
+
     /// **Settings search finds the switch, in English and in Spanish.**
     @Test func settingsSearchFindsTheSwitch() {
         let english = SettingsSearchIndex.results(for: "my name").map(\.title)
@@ -112,6 +166,19 @@ struct RecipeNameDisclosureTests {
         return (service, serviceID)
     }
 
+    private func peerIdentity(named name: String, for identity: IdentityService) -> ProximityCoordinator.PeerIdentity {
+        ProximityCoordinator.PeerIdentity(
+            id: UUID(),
+            displayName: name,
+            signingPublicKey: identity.localSigningPublicKey,
+            keyAgreementPublicKey: identity.localKeyAgreementPublicKey,
+            fingerprint: identity.localFingerprint,
+            rangingMode: .rssi,
+            firstSeenAt: Date(),
+            capabilities: ProximityCapability.allCases.map(\.rawValue)
+        )
+    }
+
     private func record(named name: String, for identity: IdentityService) -> ProximityTrustedPeerRecord {
         ProximityTrustedPeerRecord(
             id: UUID(),
@@ -123,6 +190,33 @@ struct RecipeNameDisclosureTests {
             firstAcceptedAt: Date(timeIntervalSince1970: 1_700_000_000),
             lastSeenAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
+    }
+}
+
+/// The `recipe.nameDisclosure.tagDerivationFailed` lines the audit log captured while it was installed.
+/// Locked: capture handlers run on whichever thread logs.
+private final class TagFailureAudit: @unchecked Sendable {
+    private let lock = NSLock()
+    private var captured: [[String: String]] = []
+    private var token: UUID?
+
+    init() {
+        token = FernletAuditLog.addCaptureHandler { [weak self] event, context in
+            guard let self, event == "recipe.nameDisclosure.tagDerivationFailed" else { return }
+            self.lock.lock()
+            self.captured.append(context)
+            self.lock.unlock()
+        }
+    }
+
+    var failures: [[String: String]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return captured
+    }
+
+    func stop() {
+        if let token { FernletAuditLog.removeCaptureHandler(token) }
     }
 }
 
