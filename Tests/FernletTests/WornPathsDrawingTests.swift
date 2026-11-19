@@ -66,9 +66,9 @@ struct WornPathsDrawingTests {
         #expect(points.allSatisfy { abs($0 - y) < 2 * metre })
     }
 
-    /// A road shows from its third drive, brightens at 10 and 30, drawn hex centre to hex centre, and fades to
-    /// abandoned; a lone cell draws nothing.
-    @Test func roadsDrawTheirLevelHexCentreToHexCentre() throws {
+    /// A road shows from its third drive, brightens at 10 and 30, drawn along the smoothed spine of its cells (close
+    /// to the drive, not a staircase of hex centres), and fades to abandoned; a lone cell draws nothing.
+    @Test func roadsDrawTheirLevelAlongTheDrive() throws {
         let drive = Self.line(east: 400)
         #expect(Self.drawing(ways: Self.roads(drive, count: 2)).roads.isEmpty, "two drives: nothing")
         for (count, level) in [(UInt16(3), WornLevel.one), (10, .two), (30, .three)] {
@@ -78,8 +78,8 @@ struct WornPathsDrawingTests {
         }
         #expect(Self.drawing(ways: Self.roads(drive, count: 3, daysAgo: 95)).roads.allSatisfy { $0.level == .abandoned })
         let piece = try #require(Self.drawing(ways: Self.roads(drive, count: 30)).roads.first)
-        let centres = Set(WornFootpaths.cells(along: drive).map { MercatorHexGrid.centre(of: $0) }.map { "\($0.x),\($0.y)" })
-        #expect(zip(piece.line.xs, piece.line.ys).allSatisfy { centres.contains("\($0),\($1)") }, "every point a cell's centre")
+        let y = WebMercator.unit(Self.here).y, metre = WebMercator.unitsPerMetre(at: Self.here.latitude)
+        #expect(piece.line.ys.allSatisfy { abs($0 - y) < 12 * metre }, "every point within 12 m of the drive")
         let lone = [WornWayKey(cell: MercatorHexGrid.cell(containing: Self.here), kind: .road): WornTally(count: 40, lastDay: Self.today)]
         #expect(Self.drawing(ways: lone).roads.isEmpty)
         let rail = Dictionary(uniqueKeysWithValues: Self.roads(drive, count: 30).map { (WornWayKey(cell: $0.key.cell, kind: .rail), $0.value) })
@@ -90,7 +90,8 @@ struct WornPathsDrawingTests {
     @Test func roadLinesJoinPerLevel() {
         let east = Self.roads(Self.line(east: 300), count: 30)
         let north = Self.roads(Self.line(from: Self.here.offset(east: 300, north: 0), east: 0, north: 300), count: 3)
-        let lines = WornWaysBuilder.roadLines(WornWaysBuilder.roadLevels(east.merging(north) { first, _ in first }, today: Self.today))
+        let ways = east.merging(north) { first, _ in first }
+        let lines = WornWaysSmoothing.smoothedLines(WornWaysSmoothing.pooledLevels(ways, kind: .road, today: Self.today))
         #expect(Set(lines.map(\.level)) == [.one, .three])
         #expect(lines.count <= 6, "joined, not one per joint: \(lines.count)")
     }
