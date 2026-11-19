@@ -258,7 +258,8 @@ struct PassportAirportsTests {
         #expect(book.removeSource(.calendar) == 0)
     }
 
-    /// Upcoming flights are kept for their day and join the flights once flown, once (spec §10.6).
+    /// Upcoming flights are kept for their day and join the flights only once confirmed: Fernlet's own flight takes
+    /// the calendar's (spec §10.6, owner 2026-11-19), once.
     @Test func upcomingFlightsJoinOnceTheyveFlown() {
         var book = PassportBook()
         let honolulu = Self.flight("PDX", "HNL", Self.at(1), arrives: Self.at(1.25), .calendar, hash: Self.hash)
@@ -268,11 +269,18 @@ struct PassportAirportsTests {
         #expect(book.upcomingFlights == [honolulu, mexico], "one flight once, earliest first")
         let same = book.setUpcomingFlights([honolulu, mexico])
         #expect(!same, "the same list changes nothing")
+        #expect(book.keepCalendarFlights([honolulu, mexico]) == false, "a passed calendar flight stays upcoming")
+        #expect(book.flights.isEmpty)
         book.addFlights([Self.flight("PDX", "HNL", Self.at(1).addingTimeInterval(1_200), arrives: Self.at(1.26), .fernlet)])
-        #expect(book.promoteUpcomingFlights(asOf: Self.at(0.5)) == 0)
-        #expect(book.promoteUpcomingFlights(asOf: Self.at(2)) == 1)
         #expect(book.flights.count == 1 && book.flights.first?.sources == [.fernlet, .calendar], "Fernlet saw it")
+        #expect(book.flights.first?.eventHash == Self.hash)
         #expect(book.upcomingFlights == [mexico])
+        #expect(book.keepCalendarFlights([honolulu, mexico]) == false, "a later look's same flight changes nothing")
+        #expect(book.flights.count == 1 && book.upcomingFlights == [mexico])
+        var upgraded = PassportBook()
+        upgraded.addFlights([honolulu, Self.flight("PDX", "MEX", Self.at(0.5), .flighty)])
+        #expect(upgraded.demoteCalendarOnlyFlights(since: Self.at(0)) == [honolulu])
+        #expect(upgraded.flights.map(\.route) == ["PDX>MEX"] && upgraded.upcomingFlights == [honolulu])
         let many = (0...PassportBook.maxUpcomingFlights).map { Self.flight("PDX", "SFO", Self.at(Double($0)), .calendar) }
         var full = PassportBook()
         full.setUpcomingFlights(many)

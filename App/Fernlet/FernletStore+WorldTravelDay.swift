@@ -10,8 +10,10 @@ import WorldMapStore
 ///
 /// - **Today** (``workoutTravelDay(now:)``): the flights Fernlet knows of are read here, and only two yes/no
 ///   values leave (travel day, long flight), with which kind of day it is for the Move card's line. A flight is
-///   known from a ticket (a trip started today), a calendar flight for today (the passport's upcoming flights),
-///   or a flight found by its speed (the passport's flights, or one under way), §13.1.
+///   known from a ticket (a trip started today), or a flight found by its speed (one under way, or a flight flown
+///   that Fernlet saw or a Flighty file holds), §13.1. A flight from the calendar alone never makes a travel day,
+///   upcoming or flown (owner 2026-11-19: it may be a friend's, kept to pick them up); its trip counts once
+///   Fernlet's own landing confirms it.
 /// - **Past days** (``workoutTravelDayKeys``): the travel days of the plateau's lookback, as day keys only, for
 ///   the planner's forgiveness (`WorkoutLoadContextBuilder` turns each into a session flag's yes/no). They are
 ///   remembered in the map's vault (``travelDaysFile``, sealed under the buffer key like the flight gate's
@@ -110,11 +112,12 @@ extension FernletStore {
     }
 
     /// The English cities of the passport's flown flights in Tier-2's lookback, by the flight's own date (its
-    /// departure's date at the departure airport). An airport the bundled list doesn't name gives no city.
+    /// departure's date at the departure airport), leaving out any from the calendar alone (owner 2026-11-19). An
+    /// airport the bundled list doesn't name gives no city.
     private func tierTwoTravelCities(now: Date) -> [String: TierTwoTravelDay] {
         guard let pack = worldLocation.flights.airportsShelf.pack() else { return [:] }
         let from = now.addingTimeInterval(-Double(Self.tierTwoTravelLookbackDays + 1) * 86_400)
-        let flown = worldFog.atlas.book.flights.filter { $0.departure >= from && $0.departure <= now }
+        let flown = worldFog.atlas.book.flights.filter { !$0.isCalendarOnly && $0.departure >= from && $0.departure <= now }
         var cities: [String: TierTwoTravelDay] = [:]
         // Bounded: at most `TierTwoTravel.maxDays` flights, the newest.
         for flight in flown.suffix(TierTwoTravel.maxDays) {
@@ -155,9 +158,10 @@ extension FernletStore {
         return Set(inside.suffix(maxRememberedTravelDays))
     }
 
-    /// The flights the rule reads (§13.1): the passport's flights and upcoming calendar flights leaving inside the
-    /// lookback (or up to two days ahead), a flight under way, and a trip under way by its start. The airports'
-    /// zones come from the bundled list, this iPhone's zone where it has none.
+    /// The flights the rule reads (§13.1): the passport's flights leaving inside the lookback (or up to two days
+    /// ahead), never one from the calendar alone (owner 2026-11-19: needs confirmation of the trip), a flight under
+    /// way, and a trip under way by its start. The airports' zones come from the bundled list, this iPhone's zone
+    /// where it has none.
     func worldTravelDayFlights(now: Date) -> [TravelDayFlight] {
         let pack = worldLocation.flights.airportsShelf.pack()
         let local = TimeZone.current
@@ -165,11 +169,8 @@ extension FernletStore {
         let from = now.addingTimeInterval(-Double(Self.travelDayLookbackDays + 2) * 86_400)
         let to = now.addingTimeInterval(2 * 86_400)
         let book = worldFog.atlas.book
-        let recent = (book.flights + book.upcomingFlights).filter { $0.departure >= from && $0.departure <= to }
-        var flights = recent.suffix(WorldTravelDayRule.maxFlights - 2).map { flight in
-            TravelDayFlight(departure: flight.departure, arrival: flight.arrival,
-                            originZone: zone(flight.from), destinationZone: zone(flight.to))
-        }
+        let recent = book.flights.filter { !$0.isCalendarOnly && $0.departure >= from && $0.departure <= to }
+        var flights = Self.travelDayFlights(Array(recent.suffix(WorldTravelDayRule.maxFlights - 2)), zone: zone)
         // DEBUG `FERNLET_UI_TEST_TRIP=today`: the scene's made-up flight to Honolulu makes today a travel day, so the
         // Move card and sheet can be shot (a release build's hook is nil).
         if let staged = UITestSupport.tripSceneToday(now: now) {
@@ -184,6 +185,33 @@ extension FernletStore {
             flights.append(TravelDayFlight(departure: started, arrival: nil, originZone: local, destinationZone: local))
         }
         return flights
+    }
+
+    /// `flights` as the rule reads them, each airport's zone from `zone`.
+    nonisolated static func travelDayFlights(_ flights: [PassportFlight], zone: (String) -> TimeZone) -> [TravelDayFlight] {
+        flights.map { flight in
+            TravelDayFlight(departure: flight.departure, arrival: flight.arrival,
+                            originZone: zone(flight.from), destinationZone: zone(flight.to))
+        }
+    }
+
+    /// Forgets the remembered travel days that `flights` (calendar flights now known to be unconfirmed) made, except
+    /// a day the confirmed flights and a trip under way still make (the upgrade's, owner 2026-11-19). Nothing in a
+    /// decoy or with "Airports and flights" off; a list that can't be read or written now is left as it is.
+    func forgetTravelDays(madeBy flights: [PassportFlight], now: Date) {
+        guard mayKeepWorkoutTravelDays(), !flights.isEmpty else { return }
+        let pack = worldLocation.flights.airportsShelf.pack()
+        let zone: (String) -> TimeZone = { pack?.timeZone(iata: $0) ?? .current }
+        let unconfirmed = Set(WorldTravelDayRule.days(of: Self.travelDayFlights(
+            Array(flights.suffix(WorldTravelDayRule.maxFlights)), zone: zone)).keys)
+        let remembered = rememberedTravelDays()
+        let kept = remembered.subtracting(unconfirmed.subtracting(travelDaysFromFlights(now: now)))
+        guard kept != remembered else { return }
+        do {
+            try worldMapVault.write(JSONEncoder().encode(kept.sorted()), to: Self.travelDaysFile)
+        } catch {
+            FernletAuditLog.log("workout.travelDays.saveDeferred")
+        }
     }
 
     // MARK: Today's plan

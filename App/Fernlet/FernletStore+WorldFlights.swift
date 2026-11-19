@@ -8,7 +8,9 @@ import WorldMapStore
 /// - **Airports found** (ten minutes inside a large airport's approved outline, a trip's first reading there, a
 ///   take-off or a landing) are recorded in the passport, which stamps a new one and a landing's new trip.
 /// - **A landing** keeps the flight as its two airports' IATA codes and times, nothing else; a layover flown on
-///   from marks the airport's stamp TRANSIT. The country and continent come later, when the person leaves the
+///   from marks the airport's stamp TRANSIT. It is also what confirms a calendar flight (owner 2026-11-19): the
+///   same flight leaves the upcoming list and joins it, and a landing whose take-off the gate didn't see takes the
+///   calendar flight's departure airport. The country and continent come later, when the person leaves the
 ///   grounds (``WorldFix/atLandedAirport``).
 /// - **Never lost to a locked phone:** an airport the gate counts as found (landed at, or inside on a trip) and the
 ///   passport doesn't have is handed again with each reading until the passport takes it.
@@ -53,7 +55,10 @@ extension FernletStore {
         case .airportFound(let token, let how, let at):
             return atlas.recordAirport(token: token, at: at, by: passportFind(how))
         case .landed(let token, let from, let departed, let at):
-            guard let flight = flights.flight(from: from, to: token, departed: departed, arrived: at) else { return true }
+            // A landing confirms the calendar's flight it is (owner 2026-11-19), and lends it the take-off airport
+            // the gate didn't see.
+            guard let flight = flights.flight(from: from, to: token, departed: departed, arrived: at)
+                ?? flights.flight(plannedIn: atlas.book.upcomingFlights, to: token, arrived: at) else { return true }
             return atlas.recordFlight(flight)
         case .layoverBecameTransit(let token, _):
             return atlas.markTransit(atAirport: token)
