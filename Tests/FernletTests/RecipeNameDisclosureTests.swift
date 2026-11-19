@@ -136,7 +136,9 @@ struct RecipeNameDisclosureTests {
         let serviceID = "com.fernlet.identity.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
         let unprovisioned = IdentityService(keychainService: serviceID)
-        let manager = ProximityRecipeShareManager(store: NameDisclosureTestHost(), makeSession: nil)
+        // Held in its own `let`: the manager's host is unowned (the memory wall's ML5).
+        let host = NameDisclosureTestHost()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: nil)
         let audit = TagFailureAudit()
         defer { audit.stop() }
 

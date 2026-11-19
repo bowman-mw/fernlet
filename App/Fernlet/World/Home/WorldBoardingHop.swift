@@ -66,7 +66,7 @@ final class WorldBoardingHopState {
     private func begin(_ direction: WorldBoardingHopDirection, companion: String) {
         let line = WorldBoardingHopCopy.line(direction, companion: companion)
         play = WorldBoardingHopPlay(id: UUID(), direction: direction, start: Date().addingTimeInterval(Self.lead), line: line)
-        AccessibilityNotification.Announcement(line).post()
+        FernletAnnouncer.system.announce(.status, resolved: line)
     }
 
     /// The scene `FERNLET_UI_TEST_WORLD_HOME` stages, once (DEBUG builds; the scene list is empty in release).

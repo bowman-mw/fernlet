@@ -240,6 +240,12 @@ final class WorldFogKeeper {
         roadTrip.uncoveredCount = { [weak self] in self?.uncoveredCellCount }
     }
 
+    /// The rides still being classified end with the keeper (the memory wall's ML1). Each captures it weakly and
+    /// keeps nothing once it is gone, so this only stops a finished classification waking for no one.
+    isolated deinit {
+        tripTasks.values.forEach { $0.cancel() }
+    }
+
     /// How many tiles the history holds now (a road trip's summary counts its new tiles from it, PR 4); nil in a
     /// decoy and before the history is read.
     var uncoveredCellCount: Int? {
