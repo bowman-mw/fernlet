@@ -312,16 +312,25 @@ struct FernletCompanionWidgetView: View {
         case .systemMedium:
             if entry.snapshot == nil {
                 PlaceholderView(mono: mono)
+            } else if scene != nil {
+                CompanionThoughtSceneView(entry: entry).privacySensitive()
             } else {
                 CompanionThoughtView(entry: entry, mono: mono).privacySensitive()
             }
         default:
             if entry.snapshot == nil {
                 PlaceholderView(mono: mono)
+            } else if scene != nil {
+                CompanionSmallSceneView(entry: entry).privacySensitive()
             } else {
                 CompanionSmallView(entry: entry, mono: mono).privacySensitive()
             }
         }
+    }
+
+    /// The person's background filling a colour Home Screen card (owner's pick A), or nil for paper.
+    private var scene: [UInt32]? {
+        entry.cardScene(dark: scheme == .dark, mono: renderingMode.drawsInOneColour)
     }
 
     @ViewBuilder private var containerBackground: some View {
@@ -329,7 +338,7 @@ struct FernletCompanionWidgetView: View {
         case .accessoryCircular, .accessoryRectangular:
             Color.clear                 // the Lock Screen draws its own material
         default:
-            WidgetTheme.current(scheme).paper
+            WidgetCardGround(scene: scene, paper: WidgetTheme.current(scheme).paper)
         }
     }
 }
