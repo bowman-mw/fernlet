@@ -23,6 +23,9 @@ struct WorldOffMapHome<Companion: View>: View {
     /// In the air: the open scene's frame on screen (global coordinates) each time it changes, so the boarding hop
     /// plays exactly where the in-flight view stands (``WorldBoardingHopLayer``).
     var onSceneFrame: ((CGRect) -> Void)? = nil
+    /// The boarding hop's glide (``WorldHomeGlide``): the status plate and the prints move to and from their places on
+    /// the map Home; nil keeps them still (Reduce Motion, and anywhere there is no switch).
+    var glide: Namespace.ID? = nil
     @ViewBuilder let companion: () -> Companion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Sprout's passport: while it is open only the scene shows behind it, as the map Home shows only the map
@@ -37,11 +40,13 @@ struct WorldOffMapHome<Companion: View>: View {
                 .padding(.horizontal, 18)
                 .opacity(plates)
             WorldPhotoPrints(store: store, arrangement: .row(compact: large), onOpen: onOpenPrint)
+                .worldHomeGlide(.prints, in: glide)
                 .padding(.leading, 14)
                 .padding(.top, 8)
                 .opacity(plates)
             scene(large: large)
             WorldStatusPlate(status: status) { onOpen(.today) }
+                .worldHomeGlide(.plate, in: glide)
                 .scaleEffect(large ? 1 : 1.22, anchor: .top)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 8)

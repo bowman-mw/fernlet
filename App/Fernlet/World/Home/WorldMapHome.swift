@@ -148,6 +148,8 @@ struct WorldMapHome: View {
     @State private var testTransitQuestion: WornTransitQuestion?
     /// The scene between the map and the plane (owner 2026-11-18): the one playing, and where the in-flight view stands.
     @State private var boardingHop = WorldBoardingHopState()
+    /// The status plate's and the prints' glide between the map and the plane Homes (owner 2026-11-18).
+    @Namespace private var homeGlide
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -246,13 +248,19 @@ struct WorldMapHome: View {
                 // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
                 WorldFlyingHome(store: store, date: date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
                                 isActive: isCompanionActive, isNight: phase(at: date) == .night,
-                                onSceneFrame: { boardingHop.flightSceneFrame = $0 })
+                                onSceneFrame: { boardingHop.flightSceneFrame = $0 }, glide: homeGlideSpace)
+                    .transition(.opacity)
             } else if presence == .off {
                 offHome(date: date)
+                    .transition(.opacity)
             } else {
                 mapHome(date: date)
+                    .transition(.opacity)
             }
         }
+        // The switch between the map and the plane eases: the old Home fades as the new one comes, the plate and the
+        // prints gliding between their places; with Reduce Motion, a short cross-fade only.
+        .animation(reduceMotion ? .easeInOut(duration: 0.3) : .easeInOut(duration: WorldHomeGlide.duration), value: flying)
         .modifier(WorldBoardingHopTrigger(hop: boardingHop, sky: flying ? .air : .ground,
                                           canPlay: isFrontmost && scenePhase == .active,
                                           isDecoy: store.duressSessionActive, companion: store.worldCompanionName))
@@ -273,12 +281,17 @@ struct WorldMapHome: View {
         }
     }
 
+    /// The glide's namespace, or nil under Reduce Motion (the switch is a cross-fade only).
+    private var homeGlideSpace: Namespace.ID? {
+        reduceMotion ? nil : homeGlide
+    }
+
     // MARK: Location off
 
     /// The open scene with location off (`b1-home-denied`, draft 4).
     private func offHome(date: Date) -> some View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen,
-                        onOpenPrint: openPrint) {
+                        onOpenPrint: openPrint, glide: homeGlideSpace) {
             WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive,
                               mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
                               isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint,
@@ -395,9 +408,11 @@ struct WorldMapHome: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 8) {
                 WorldStatusPlate(status: WorldStatus.current(store: store, date: date)) { onOpen(.today) }
+                    .worldHomeGlide(.plate, in: homeGlideSpace)
                 Spacer(minLength: 0)
                 if showsPrints {
                     WorldPhotoPrints(store: store, onOpen: openPrint)
+                        .worldHomeGlide(.prints, in: homeGlideSpace)
                         .padding(.trailing, -2)
                 }
             }

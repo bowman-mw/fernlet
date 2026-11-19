@@ -159,3 +159,27 @@ nonisolated enum WorldBoardingHopCopy {
     /// VoiceOver's action that skips the scene.
     static var skip: LocalizedStringKey { "Skip" }
 }
+
+/// The pieces of Home that glide between the map Home and the plane Home as one switches to the other (owner
+/// 2026-11-18): the status plate (top left on the map, under the scene in the air) and the prints (the corner grid
+/// on the map, the row under the name in the air). Everything else cross-fades.
+nonisolated enum WorldHomeGlide: String, Hashable, Sendable {
+    case plate
+    case prints
+
+    /// How long the switch eases.
+    static let duration = 0.9
+}
+
+extension View {
+    /// Glides this piece of Home to and from its place on the other Home in `namespace` (by position only, as the
+    /// two places differ in shape); nil leaves it where it is.
+    @ViewBuilder
+    func worldHomeGlide(_ piece: WorldHomeGlide, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            matchedGeometryEffect(id: piece, in: namespace, properties: .position, isSource: true)
+        } else {
+            self
+        }
+    }
+}
