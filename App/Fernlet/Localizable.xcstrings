@@ -50137,18 +50137,18 @@
         }
       }
     },
-    "The paths and roads you use most." : {
+    "The paths and roads you use most. To stop counting drives, turn off background mapping." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los caminos y las carreteras que más usas."
+            "value" : "Los caminos y las carreteras que más usas. Para dejar de contar los trayectos en coche, desactiva el mapeo en segundo plano."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los caminos y las calles que más usas."
+            "value" : "Los caminos y las calles que más usas. Para dejar de contar los viajes en auto, desactiva el mapeo en segundo plano."
           }
         }
       }

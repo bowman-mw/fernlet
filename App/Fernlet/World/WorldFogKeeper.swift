@@ -65,11 +65,13 @@ import WorldMapStore
 /// road friends hand over at a catch-up (PR 2) lifts as driven cells through ``liftReceivedRoad(_:)``.
 ///
 /// **Frequent roads** (option B, owner 2026-11-15). A walk, an airport ride, a decoy or 10 minutes without a drive
-/// reading ends a drive trip, which saves and publishes ``wornWays``. A road friends hand over never counts.
+/// reading ends a drive trip, which saves and publishes ``wornWays``. A road friends hand over never counts. Rides are
+/// followed, kept and counted only while background mapping is on (``countsRides``, F13 1A, owner 2026-11-19: the
+/// approved privacy policy says counting follows background mapping); with it off a drive still lifts its lane.
 ///
 /// **Ferry and train paths** (owner 2026-11-15, World-Transit-Paths-Exploration §9). A drive trip keeps its readings
 /// in memory, thinned to ``rideSpacing`` (`WorldFogKeeper+WornTrips.swift`), and counts nothing until it ends. Then
-/// `WornRideClassifier` (off the main actor, over ``transitGeography``; none means a road) splits it into road, rail
+/// `WornRideClassifier` (off the main actor, over ``transitGeography``; none yet: it waits unsorted) splits it into road, rail
 /// and ferry stretches; each is kept as a `WornTrip` in the sealed `WornTripStore` (forever, until forgotten or the
 /// map is cleared) and the cells of its thinned line count once under its kind in the ``WornWayStore`` (its locked
 /// buffer while the phone is locked). A ride in progress is checkpointed every ``rideCheckpointEvery`` so a suspended
@@ -117,6 +119,10 @@ final class WorldFogKeeper {
     static let rideCheckpointEvery: TimeInterval = 3 * 60
     /// How many days back an unsure ride may still be asked about (today and yesterday).
     static let questionDays: UInt16 = 1
+    /// How far back each load looks for kept rides a late-syncing cycling workout overlaps (F13 2B), in seconds.
+    static let cyclingRecheck: TimeInterval = 3 * 24 * 60 * 60
+    /// The most kept rides one load looks at for that (the newest).
+    static let maxRecheckedTrips = 200
 
     /// The cells the map draws: the whole lifted history, or in a decoy session only the decoy's own.
     private(set) var visibleCells: Set<HexCell> = []
@@ -130,8 +136,17 @@ final class WorldFogKeeper {
     /// The trip Home asks about ("Was that a train?", owner's C1: at most once a day), or nil.
     var transitQuestion: WornTrip?
     /// The ground under a trip (shore pack, atlas roads, rail pack) for telling a ferry or a train from a drive; set
-    /// once the packs load. Nil classifies every trip as a road.
-    @ObservationIgnored var transitGeography: (any WornTransitGeography)?
+    /// once the packs load. Until then a finished ride waits unsorted (F13 4B), and is sorted when it is set.
+    @ObservationIgnored var transitGeography: (any WornTransitGeography)? {
+        didSet { if transitGeography != nil { sortQueuedRides() } }
+    }
+    /// Whether rides are followed, kept and counted: background mapping on (F13 1A). The switch by default; the locked
+    /// launch's keeper reads its marker, and the store adds that Always is still allowed.
+    @ObservationIgnored var countsRides: @MainActor () -> Bool
+    /// The cycling workouts in the log that overlap an interval, as their own intervals (F13 2B): the store answers from
+    /// its workout log, which holds Fernlet's own bike rides and Health's workouts from any app when they are read in.
+    /// None by default.
+    @ObservationIgnored var cyclingWorkouts: @MainActor (DateInterval) -> [DateInterval] = { _ in [] }
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
     /// The frequent roads the map draws: each way's trip count and last day (option B, owner 2026-11-15), published
@@ -159,6 +174,10 @@ final class WorldFogKeeper {
     @ObservationIgnored var rideSamples: [WornRideSample] = []
     /// The ride's newest reading, kept or not (the ride's end).
     @ObservationIgnored var rideLast: WornRideSample?
+    /// Whether the ride watch called this ride a drive at any reading (F13 2B).
+    @ObservationIgnored var rideSawDrive = false
+    /// The person's own rail cells, read from the Train-marked rides once until a trip changes (F13 3B).
+    @ObservationIgnored var learnedRail: Set<HexCell>?
     /// The spacing the ride's readings are kept at now.
     @ObservationIgnored var rideSpacingNow = WorldFogKeeper.rideSpacing
     /// The ride time the checkpoint was last written at.
@@ -169,8 +188,8 @@ final class WorldFogKeeper {
     @ObservationIgnored var tripGeneration = 0
     /// Rides being classified off the main actor (tests await them through ``settleTrips()``).
     @ObservationIgnored var tripTasks: [UUID: Task<Void, Never>] = [:]
-    /// Those rides' samples, so a decoy starting can keep them at once (``setDecoy(_:)``).
-    @ObservationIgnored var tripRides: [UUID: [WornRideSample]] = [:]
+    /// Those rides, so a decoy starting can keep them at once (``setDecoy(_:)``).
+    @ObservationIgnored var tripRides: [UUID: WornRideCheckpoint] = [:]
     /// Today's date (tests set a clock).
     @ObservationIgnored var now: @MainActor () -> Date = { Date() }
     /// When this trip's last accepted drive reading was taken; nil off a drive.
@@ -214,6 +233,7 @@ final class WorldFogKeeper {
         self.cornerNudge = WorldCornerNudgeKeeper(vault: vault)
         self.roadTrip = RoadTripKeeper(vault: vault)
         self.defaults = defaults
+        self.countsRides = { WorldMapPreferences.alwaysLowPower(in: defaults) }
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
         self.widgetMap = WorldWidgetMapFile()
         self.widgetMapReload = { WorldWidgetMap.reload() }
@@ -243,6 +263,7 @@ final class WorldFogKeeper {
         guard !isDecoy, isProtectedDataAvailable() else { return }
         guard !store.isLoaded else {
             mergeWhileLoaded()
+            forgetRidesOverlappingCycling()
             atlas.load()
             return
         }
@@ -260,6 +281,7 @@ final class WorldFogKeeper {
         drivenCells = driven.cells
         publishWorn()
         refreshTransitQuestion()
+        forgetRidesOverlappingCycling()
         atlas.load()
     }
 
@@ -321,7 +343,7 @@ final class WorldFogKeeper {
             if accepted {
                 laneFrom = fix.point
                 lastDriveAt = fix.at
-                if !isDecoy { noteRide(fix) }
+                if !isDecoy { followRide(fix, onDrive: thinLine) }
             }
         } else {
             laneFrom = nil

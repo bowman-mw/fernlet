@@ -241,6 +241,12 @@ public final class WorldMapVault {
         /// "trips:ride"; removed once the ride is kept.
         public static let wornTripRide = File(name: "worn-trip-ride.bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
                                               role: .buffer, context: Data("trips:ride".utf8))
+
+        /// The finished rides waiting to be sorted into road, rail and ferry (``WornRideQueueCodec``, F13 4B): a ride
+        /// that ended before the ground under it was known (a locked launch). The pieces' purpose and key under the
+        /// context "trips:queue"; removed once its rides are sorted and kept.
+        public static let wornTripQueue = File(name: "worn-trip-queue.bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
+                                               role: .buffer, context: Data("trips:queue".utf8))
     }
 
     /// The folder the files live in.

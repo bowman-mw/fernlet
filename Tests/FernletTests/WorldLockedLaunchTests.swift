@@ -65,6 +65,27 @@ struct WorldLockedLaunchTests {
         #expect(later.visibleCells.contains(MercatorHexGrid.cell(containing: Self.here)))
     }
 
+    /// A ride under way when the early source hands over is checkpointed, and the store's keeper resumes it (F13 4B).
+    @Test func theHandOverCheckpointsTheRide() throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let holder = WorldLockedMappingHolder(isMarked: { true }, vault: { vault })
+        let source = try #require(holder.start())
+        let start = Date().addingTimeInterval(-120)
+        for index in 0..<30 {
+            source.deliver(WorldFix(point: Self.here.offset(east: Double(index) * 50, north: 0), accuracy: 8,
+                                    at: start.addingTimeInterval(Double(index) * 2), isPrecise: true, speed: 25))
+        }
+        #expect(try vault.read(.wornTripRide) == nil, "under the checkpoint interval")
+        _ = holder.handOver()
+        #expect(try vault.read(.wornTripRide) != nil)
+        let defaults = try #require(UserDefaults(suiteName: "WorldLockedLaunchTests.\(UUID().uuidString)"))
+        defaults.set(true, forKey: WorldMapPreferences.Key.alwaysLowPower)
+        let later = WorldFogKeeper(vault: vault, defaults: defaults, isProtectedDataAvailable: { true })
+        later.load()
+        #expect(later.rideSamples.count > 10, "the store's keeper resumes the ride")
+    }
+
     /// The store takes the early source as its own instead of building a second location manager, and only once.
     @Test func theStoreAdoptsTheEarlySource() throws {
         let marker = try #require(WorldMapPreferences.backgroundMarkerURL())

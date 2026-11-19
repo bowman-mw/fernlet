@@ -26,23 +26,29 @@ public nonisolated struct WornRideSegment: Sendable, Equatable {
 /// ``dockingReach`` samples of each end) or when at least ``ferryRouteShare`` (half) of it lies within
 /// ``ferryRouteMetres`` (2 km) of a bundled ferry route; otherwise unsure.
 ///
-/// **Train** (needs a car never connected: any sample with `inCar == true` is a road). Three strong signals:
-/// - at least ``railShare`` (80 %) of the samples within ``railMetres`` (1 km) of a rail line;
-/// - at least ``learnedShare`` (60 %) of the samples on cells learned as rail (the person's own lines, T2; a sample's
-///   cell or one of its six neighbours, for GPS drift);
-/// - at least ``fastSeconds`` (3 minutes) above ``fastSpeed`` (36 m/s, 130 km/h).
+/// **Train** (needs a car never connected: any sample with `inCar == true` is a road; F13 3B, owner 2026-11-19). Two
+/// signs:
+/// - **a rail line**: at least ``railShare`` (80 %) of the samples within ``railMetres`` (1 km) of a mapped rail line,
+///   or at least ``learnedShare`` (60 %) of them on learned rail (the person's own lines; a sample's cell or one of its
+///   six neighbours, for GPS drift). The two count as one sign, since learned rail mostly lies on mapped rail;
+/// - **speed**: at least ``fastSeconds`` (3 minutes) above ``fastSpeed`` (36 m/s, 130 km/h; owner kept it: "Not all
+///   trains go that fast", so slower trains are found by the line and asked about).
 ///
-/// And two supporting ones: few, long-spaced stops (at least one stop, on average ``trainStopSpacing`` (2 km) or more
-/// apart), and a stretch of ``awayStretchMetres`` (2 km) with every sample more than ``awayFromRoadMetres`` (300 m)
-/// from any major road. A stop is a gap of at least ``stopSeconds`` (20 s) between samples crossed at under
-/// ``stopSpeed`` (1.5 m/s). Bus-like stopping (at least ``busMinStops`` (4) stops, on average under
-/// ``busStopSpacing`` (800 m) apart) caps the verdict at unsure. Rides shorter than ``minTrainMetres`` (2 km) are never
-/// trains.
+/// Learned rail comes only from rides the person marked Train, on at least ``learnedDays`` (2) different days
+/// (``learnedRailCells(from:)``); "Not sure" and the classifier's own guesses never teach. A stop is a gap of at least
+/// ``stopSeconds`` (20 s) between samples crossed at under ``stopSpeed`` (1.5 m/s). Bus-like stopping (at least
+/// ``busMinStops`` (4) stops, on average under ``busStopSpacing`` (800 m) apart) caps the verdict at unsure. Stops and
+/// distance from roads no longer make a guess sure. Rides shorter than ``minTrainMetres`` (2 km) are never trains.
 ///
-/// - two strong signals, or one strong and both supporting, and not bus-like: a train, **sure**;
-/// - otherwise one strong signal: a train, **unsure** (Home may ask, at most once a day);
-/// - no strong signal: a **road**, sure. Supporting signals alone never make a train: a car on a country road is far
-///   from the atlas's roads and stops rarely too.
+/// - both signs, and not bus-like: a train, **sure**;
+/// - on learned rail, not bus-like, and not within ``besideRoadMetres`` (300 m) of a mapped major road the whole way: a
+///   train, **sure** (the person's own line). All the way beside a major road it asks instead (light rail in a
+///   motorway's median, where the person also drives);
+/// - otherwise one sign: a train, **unsure** (Home may ask, at most once a day);
+/// - no sign: a **road**, sure.
+///
+/// **Too small to keep** (F13 2B): a ride under ``minRideSeconds`` (60 s) or ``minRideMetres`` (500 m) is not kept at
+/// all (``isLongEnough(_:)``): bike bursts and GPS spikes.
 ///
 /// **Anything else** is a road, sure. Conservative on purpose: a bus or a car must not become rail on weak evidence.
 public nonisolated enum WornRideClassifier {
@@ -86,6 +92,16 @@ public nonisolated enum WornRideClassifier {
     public static let fastSpeed = 36.0
     /// How long above ``fastSpeed`` is a strong signal, in seconds.
     public static let fastSeconds = 180.0
+    /// The fewest different days of Train-marked rides a cell needs to be learned rail.
+    public static let learnedDays = 2
+    /// The most Train-marked rides learned rail is built from (the newest; a bound).
+    public static let maxLearningTrips = 200
+    /// How near a mapped major road a ride on learned rail may stay the whole way and still be asked about, in metres.
+    public static let besideRoadMetres = 300.0
+    /// The shortest ride kept, in seconds.
+    public static let minRideSeconds: TimeInterval = 60
+    /// The shortest ride kept, in metres along its readings.
+    public static let minRideMetres = 500.0
     /// Under this speed across a gap between samples is a stop, in m/s.
     public static let stopSpeed = 1.5
     /// The shortest gap that is a stop, in seconds.
@@ -94,12 +110,6 @@ public nonisolated enum WornRideClassifier {
     public static let busStopSpacing = 800.0
     /// The fewest stops that can look like a bus.
     public static let busMinStops = 4
-    /// Stops on average at least this far apart are a train's, in metres.
-    public static let trainStopSpacing = 2_000.0
-    /// How far from any major road a sample must be to be away from roads, in metres.
-    public static let awayFromRoadMetres = 300.0
-    /// The stretch away from roads that is a supporting signal, in metres.
-    public static let awayStretchMetres = 2_000.0
     /// The shortest ride that can be a train, in metres.
     public static let minTrainMetres = 2_000.0
     /// The shortest stretch of land beside a ferry that is its own segment, in metres (shorter joins the ferry).
@@ -249,16 +259,14 @@ public nonisolated enum WornRideClassifier {
         let count = Double(samples.count)
         let nearRail = samples.filter { geography.isNearRail($0.point, within: railMetres) }.count
         let learned = samples.filter { onLearnedRail($0.point, learnedRail) }.count
-        var strong = 0
-        if Double(nearRail) >= railShare * count { strong += 1 }
-        if Double(learned) >= learnedShare * count { strong += 1 }
-        if fastTime(samples) >= fastSeconds { strong += 1 }
-        guard strong > 0 else { return .road }
+        let onLearnedLine = Double(learned) >= learnedShare * count
+        let lineSign = Double(nearRail) >= railShare * count || onLearnedLine
+        let speedSign = fastTime(samples) >= fastSeconds
+        guard lineSign || speedSign else { return .road }
         let stops = stopCount(samples)
         let busLike = stops >= busMinStops && total / Double(stops) < busStopSpacing
-        let spacedStops = stops >= 1 && total / Double(stops) >= trainStopSpacing
-        let awayFromRoads = longestAwayStretch(samples, geography: geography) >= awayStretchMetres
-        let sure = !busLike && (strong >= 2 || (spacedStops && awayFromRoads))
+        let ownLine = onLearnedLine && !samples.allSatisfy { geography.isNearMajorRoad($0.point, within: besideRoadMetres) }
+        let sure = !busLike && ((lineSign && speedSign) || ownLine)
         return WornRideVerdict(kind: .rail, confidence: sure ? .sure : .unsure)
     }
 
@@ -299,22 +307,30 @@ public nonisolated enum WornRideClassifier {
         return stops
     }
 
-    /// The longest stretch, in metres, whose samples are all more than ``awayFromRoadMetres`` from a major road.
-    private static func longestAwayStretch(_ samples: ArraySlice<WornRideSample>, geography: some WornTransitGeography) -> Double {
-        var longest = 0.0, current = 0.0
-        var previous: GeoPoint?
-        // Bounded: one pass.
-        for sample in samples {
-            if geography.isNearMajorRoad(sample.point, within: awayFromRoadMetres) {
-                current = 0
-                previous = nil
-                continue
-            }
-            if let previous { current += previous.distance(to: sample.point) }
-            longest = max(longest, current)
-            previous = sample.point
+    // MARK: Keeping and learning
+
+    /// Whether `samples` (one ride, oldest first) are big enough to keep: at least ``minRideSeconds`` from first to last
+    /// and ``minRideMetres`` along them.
+    public static func isLongEnough(_ samples: [WornRideSample]) -> Bool {
+        guard let first = samples.first, let last = samples.last else { return false }
+        return last.at.timeIntervalSince(first.at) >= minRideSeconds && length(samples[...]) >= minRideMetres
+    }
+
+    /// The person's own rail cells from the rides they marked Train (`trips`, newest first): the cells on those rides'
+    /// lines that rides on at least ``learnedDays`` different days pass (a cell or one beside it, for GPS drift).
+    public static func learnedRailCells(from trips: [WornTrip]) -> Set<HexCell> {
+        // Each cell's different days, up to learnedDays of them.
+        var seen: [HexCell: Set<UInt16>] = [:]
+        var onLines = Set<HexCell>()
+        // Bounded: at most maxLearningTrips trips of at most WornTrip.maxLinePoints points each.
+        for trip in trips.prefix(maxLearningTrips) where trip.kind == .rail && trip.markedTrain {
+            let cells = WornFootpaths.cells(along: trip.line)
+            onLines.formUnion(cells)
+            var near = cells
+            for cell in cells { near.formUnion(MercatorHexGrid.neighbours(of: cell)) }
+            for cell in near where (seen[cell]?.count ?? 0) < learnedDays { seen[cell, default: []].insert(trip.day) }
         }
-        return longest
+        return onLines.filter { (seen[$0]?.count ?? 0) >= learnedDays }
     }
 
     // MARK: Shared

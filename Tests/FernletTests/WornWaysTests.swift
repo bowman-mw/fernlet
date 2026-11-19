@@ -17,13 +17,24 @@ struct WornWaysTests {
         WorldFix(point: point, accuracy: 8, at: now.addingTimeInterval(minutes * 60), isPrecise: true)
     }
 
-    /// A fog keeper over `vault`, its own settings, and a lock the test turns.
+    /// Ground with no water, rail or roads: every ride is a road.
+    private struct BareGround: WornTransitGeography {
+        func isWater(_ point: GeoPoint) -> Bool { false }
+        func isNearMajorRoad(_ point: GeoPoint, within metres: Double) -> Bool { false }
+        func isNearRail(_ point: GeoPoint, within metres: Double) -> Bool { false }
+        func isNearFerryRoute(_ point: GeoPoint, within metres: Double) -> Bool { false }
+    }
+
+    /// A fog keeper over `vault`, its own settings (background mapping on, so rides count: F13 1A), bare ground, and a
+    /// lock the test turns.
     private static func keeper(_ vault: WorldMapVault, unlocked: WornLockFlag? = nil,
                                defaults: UserDefaults? = nil) throws -> WorldFogKeeper {
         let unlocked = unlocked ?? WornLockFlag(true)
         let fresh = try #require(UserDefaults(suiteName: "WornWaysTests.\(UUID().uuidString)"))
         let defaults = defaults ?? fresh
+        defaults.set(true, forKey: WorldMapPreferences.Key.alwaysLowPower)
         let keeper = WorldFogKeeper(vault: vault, defaults: defaults, isProtectedDataAvailable: { unlocked.isOn })
+        keeper.transitGeography = BareGround()
         keeper.load()
         return keeper
     }
@@ -42,12 +53,19 @@ struct WornWaysTests {
         return cells
     }
 
-    /// Drives ``road`` (out, and back when `andBack`), starting `minutes` after ``now``.
+    /// Drives ``road`` (out, and back when `andBack`), starting `minutes` after ``now``: 800 m in 72 s each way, over
+    /// the 60 s and 500 m a kept ride needs (F13 2B).
     private static func drive(_ keeper: WorldFogKeeper, minutes: Double = 0, andBack: Bool = false) {
         let readings = andBack ? road + road.reversed() : road
         for (index, point) in readings.enumerated() {
-            keeper.handle(fix(point, minutes: minutes + Double(index) * 0.1), thinLine: true)
+            keeper.handle(fix(point, minutes: minutes + Double(index) * 0.15), thinLine: true)
         }
+    }
+
+    /// Ends the trip with a walk `minutes` after ``now`` and waits for its ride to be sorted and kept.
+    private static func walk(_ keeper: WorldFogKeeper, minutes: Double) async {
+        keeper.handle(fix(here.offset(east: 3_000, north: 0), minutes: minutes))
+        await keeper.settleTrips()
     }
 
     // MARK: The tally
@@ -205,14 +223,14 @@ struct WornWaysTests {
 
     /// A drive counts the cells under its centre line once per trip, even driven out and back; the map sees them
     /// when the trip ends, and a second trip (after a walk or ten quiet minutes) counts them again.
-    @Test func aDriveCountsItsCentreOncePerTrip() throws {
+    @Test func aDriveCountsItsCentreOncePerTrip() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
         let keeper = try Self.keeper(vault)
         Self.drive(keeper, andBack: true)
         let centre = Self.roadCentre
         #expect(centre.count > 20)
-        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 5))
+        await Self.walk(keeper, minutes: 5)
         #expect(Set(keeper.wornWays.keys) == Set(centre.map { WornWayKey(cell: $0, kind: .road) }))
         #expect(keeper.wornWays.values.allSatisfy { $0.count == 1 }, "out and back is one trip")
         let lane = Set(WorldFogKeeper.lane(from: Self.road[0], to: Self.road[1]))
@@ -220,16 +238,17 @@ struct WornWaysTests {
         Self.drive(keeper, minutes: 10)
         #expect(keeper.wornWays.values.allSatisfy { $0.count == 1 }, "a trip over known road shows nothing until it ends")
         Self.drive(keeper, minutes: 30)
+        await keeper.settleTrips()
         keeper.flush()
         #expect(keeper.wornWays.values.allSatisfy { $0.count == 2 }, "ten quiet minutes end a trip; the next counts at its end")
-        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 35))
+        await Self.walk(keeper, minutes: 35)
         #expect(keeper.wornWays.values.allSatisfy { $0.count == 3 }, "a walk and ten quiet minutes each end a trip")
         let reopened = try Self.keeper(vault)
         #expect(reopened.wornWays == keeper.wornWays, "the counter is saved")
     }
 
     /// Walking, a decoy and a road friends handed over count nothing.
-    @Test func walksDecoysAndReceivedRoadsCountNothing() throws {
+    @Test func walksDecoysAndReceivedRoadsCountNothing() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
         let keeper = try Self.keeper(vault)
@@ -241,7 +260,7 @@ struct WornWaysTests {
         #expect(keeper.wornWays.isEmpty, "a friend's road is not this person's trip")
         keeper.setDecoy(true)
         Self.drive(keeper)
-        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 5))
+        await Self.walk(keeper, minutes: 5)
         keeper.flush()
         #expect(keeper.wornWays.isEmpty)
         keeper.setDecoy(false)
@@ -250,26 +269,53 @@ struct WornWaysTests {
     }
 
     /// With "Uncover the map as you go" off, a drive counts nothing.
-    @Test func uncoverOffCountsNothing() throws {
+    @Test func uncoverOffCountsNothing() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
         let defaults = try #require(UserDefaults(suiteName: "WornWaysTests.\(UUID().uuidString)"))
         defaults.set(false, forKey: WorldMapPreferences.Key.uncoverAsYouGo)
         let keeper = try Self.keeper(vault, defaults: defaults)
         Self.drive(keeper)
+        await Self.walk(keeper, minutes: 5)
         keeper.flush()
         #expect(keeper.wornWays.isEmpty)
     }
 
+    /// With background mapping off, a drive lifts its lane but counts and keeps nothing; turning it off mid-ride drops
+    /// the ride and its checkpoint (F13 1A, owner 2026-11-19).
+    @Test func backgroundMappingOffCountsNothing() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let defaults = try #require(UserDefaults(suiteName: "WornWaysTests.\(UUID().uuidString)"))
+        let keeper = try Self.keeper(vault, defaults: defaults)
+        defaults.set(false, forKey: WorldMapPreferences.Key.alwaysLowPower)
+        Self.drive(keeper, andBack: true)
+        #expect(!keeper.visibleCells.isEmpty, "the fog still lifts")
+        await Self.walk(keeper, minutes: 5)
+        keeper.flush()
+        #expect(keeper.wornWays.isEmpty && keeper.wornTrips.isEmpty)
+        defaults.set(true, forKey: WorldMapPreferences.Key.alwaysLowPower)
+        for (index, east) in stride(from: 0.0, through: 6_000, by: 50).enumerated() {
+            keeper.handle(Self.fix(Self.here.offset(east: east, north: 500), minutes: 10 + Double(index) / 30), thinLine: true)
+        }
+        #expect(try vault.read(.wornTripRide) != nil, "a long ride is checkpointed")
+        defaults.set(false, forKey: WorldMapPreferences.Key.alwaysLowPower)
+        keeper.handle(Self.fix(Self.here.offset(east: 6_050, north: 500), minutes: 15), thinLine: true)
+        #expect(try vault.read(.wornTripRide) == nil, "turning mapping off drops the ride in progress")
+        defaults.set(true, forKey: WorldMapPreferences.Key.alwaysLowPower)
+        await Self.walk(keeper, minutes: 16)
+        #expect(keeper.wornWays.isEmpty && keeper.wornTrips.isEmpty)
+    }
+
     /// A drive with the phone locked waits in the counter's buffer and counts at the unlock.
-    @Test func aLockedDriveCountsAtTheUnlock() throws {
+    @Test func aLockedDriveCountsAtTheUnlock() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
         let lock = WornLockFlag(true)
         let keeper = try Self.keeper(vault, unlocked: lock)
         lock.isOn = false
         Self.drive(keeper, andBack: true)
-        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 5))
+        await Self.walk(keeper, minutes: 5)
         #expect(keeper.wornWays.isEmpty)
         lock.isOn = true
         keeper.load()
@@ -278,12 +324,12 @@ struct WornWaysTests {
     }
 
     /// The wipe forgets the counter and its file.
-    @Test func clearAllEmptiesTheCounter() throws {
+    @Test func clearAllEmptiesTheCounter() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
         let keeper = try Self.keeper(vault)
         Self.drive(keeper)
-        keeper.handle(Self.fix(Self.here.offset(east: 3_000, north: 0), minutes: 5))
+        await Self.walk(keeper, minutes: 5)
         #expect(!keeper.wornWays.isEmpty)
         _ = keeper.clearAll()
         #expect(keeper.wornWays.isEmpty)

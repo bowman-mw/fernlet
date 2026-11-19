@@ -189,6 +189,30 @@ extension FernletStore {
         return nil
     }
 
+    /// The outdoor cycling workouts in the log that overlap `interval`, each from its end less its minutes to its end
+    /// (F13 2B, the owner's idea): Fernlet's own logged bike rides, and the cycling workouts Health's sync brings in from
+    /// any app (Apple Watch, Strava) when Fernlet reads workouts from Health. A workout is filed on its end's day, so the
+    /// days from the interval's start to one past its end are read, at most ``worldCyclingDays``. None in a decoy.
+    func worldCyclingWorkouts(during interval: DateInterval) -> [DateInterval] {
+        guard !duressSessionActive else { return [] }
+        let day: TimeInterval = 24 * 60 * 60
+        var found: [DateInterval] = []
+        // Bounded: at most worldCyclingDays days.
+        for offset in 0..<Self.worldCyclingDays {
+            let date = interval.start.addingTimeInterval(Double(offset) * day)
+            guard date <= interval.end.addingTimeInterval(day) else { break }
+            for workout in loadDay(for: FernletDate.dayKey(for: date)).workouts where workout.activityType == .cycling {
+                let start = workout.completedAt.addingTimeInterval(-Double(max(0, workout.duration ?? 0)) * 60)
+                let ride = DateInterval(start: min(start, workout.completedAt), end: workout.completedAt)
+                if ride.start < interval.end, ride.end > interval.start { found.append(ride) }
+            }
+        }
+        return found
+    }
+
+    /// The most days one look reads (a few days of rides and the day after).
+    static let worldCyclingDays = 6
+
     /// A finished bike ride as Move logs one: a moderate outdoor cycling activity under the activity's frozen
     /// default name (drawn in the person's language), with its minutes and, when known, its distance in miles,
     /// ending when it ended.

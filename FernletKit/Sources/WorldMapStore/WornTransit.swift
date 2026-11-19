@@ -74,6 +74,10 @@ public nonisolated struct WornTrip: Sendable, Equatable, Identifiable {
     public var kind: WornWayKind
     /// Whether the person said so (an answer or a correction): never asked about again.
     public var confirmed: Bool
+    /// Whether the person said it was a train (Home's "Train" answer, or Train picked on the path's sheet). Only these
+    /// rides teach the person's own rail lines (F13 3B, owner 2026-11-19); "Not sure" and the classifier's own sure
+    /// guesses never do.
+    public var markedTrain: Bool
     /// The ``WornDay`` it counts on (its start).
     public let day: UInt16
     /// When it started and ended.
@@ -86,10 +90,12 @@ public nonisolated struct WornTrip: Sendable, Equatable, Identifiable {
     public static let maxLinePoints = 2_000
 
     /// A trip.
-    public init(id: UUID = UUID(), kind: WornWayKind, confirmed: Bool, day: UInt16, start: Date, end: Date, line: [GeoPoint]) {
+    public init(id: UUID = UUID(), kind: WornWayKind, confirmed: Bool, markedTrain: Bool = false, day: UInt16, start: Date,
+                end: Date, line: [GeoPoint]) {
         self.id = id
         self.kind = kind
         self.confirmed = confirmed
+        self.markedTrain = markedTrain
         self.day = day
         self.start = start
         self.end = end

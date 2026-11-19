@@ -15,7 +15,8 @@ import WorldMapStore
 /// - **Your car** (``HomeMapCarSection``, owner 2026-11-09): the cars Fernlet knows from their Bluetooth, and how
 ///   Driving Focus and Shortcuts start a drive.
 /// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), "Show worn paths" (on by
-///   default; display only, owner 2026-11-15: the paths and roads used most, hidden everywhere when off), "Log my bike
+///   default; display only, owner 2026-11-15: the paths and roads used most, hidden everywhere when off; its line says
+///   counting drives stops with background mapping, F13 owner 2026-11-19), "Log my bike
 ///   rides" (off by default; round 7), how many routes are stored on this iPhone, and Delete all stored
 ///   routes (the walks and runs stay in Move).
 /// - **Log my bike rides** asks for Motion & Fitness only when it is turned on (decided 2026-10-22) and
@@ -122,7 +123,8 @@ struct HomeMapSettingsView: View {
             .onChange(of: savesRoutes) { _, on in WorldMapPreferences.setSaveNewRoutes(on) }
             .accessibilityIdentifier("settings.homeMap.saveRoutes")
             Toggle(isOn: $showsWornPaths) {
-                FernletRowLabel("Show worn paths", detail: "The paths and roads you use most.").padding(.vertical, 7)
+                FernletRowLabel("Show worn paths",
+                                detail: "The paths and roads you use most. To stop counting drives, turn off background mapping.").padding(.vertical, 7)
             }
             .onChange(of: showsWornPaths) { _, on in WorldMapPreferences.setShowWornPaths(on) }
             .accessibilityIdentifier("settings.homeMap.wornPaths")
