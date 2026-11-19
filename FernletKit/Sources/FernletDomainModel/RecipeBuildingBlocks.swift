@@ -87,11 +87,34 @@ public nonisolated enum RecipeFood {
         return (Macros(protein: protein, carbs: carbs, fat: fat), micronutrients)
     }
 
+    /// Why ``make(for:foodItems:)`` returns nil for `recipe`, or nil when it does not: what a recipe
+    /// pick tells the person instead of doing nothing (release review 2026-11-18, F1). `foodItems`
+    /// must hold every food the recipe's lines may point at, built-in rows included.
+    public static func gap(in recipe: RecipeDefinition, foodItems: [FoodItem]) -> RecipeFoodGap? {
+        guard recipe.webImport == nil else { return nil }
+        guard !recipe.ingredients.isEmpty else { return .noIngredients }
+        let byID = Dictionary(foodItems.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for line in recipe.ingredients {
+            guard let food = byID[line.foodItemId] else { return .unresolvedLine(foodName: nil) }
+            guard line.servingConversion(using: food) != nil else { return .unresolvedLine(foodName: food.name) }
+        }
+        return nil
+    }
+
     /// The line that uses `servings` servings of `recipe`: always counted in servings (see the file
     /// note), so it converts identically on every build.
     public static func line(using recipe: RecipeDefinition, servings: Double, id: UUID = UUID()) -> RecipeIngredient {
         RecipeIngredient(id: id, foodItemId: recipe.id, quantity: servings, unit: RecipeUnit.serving.rawValue)
     }
+}
+
+/// Why a recipe has no recipe food (``RecipeFood/gap(in:foodItems:)``).
+public nonisolated enum RecipeFoodGap: Equatable, Sendable {
+    /// The recipe has no ingredient lines and no web import, so there is nothing to add up.
+    case noIngredients
+    /// A line cannot be added up: its food is missing (`foodName` nil), or its amount does not
+    /// convert for that food (`foodName` is the food's name).
+    case unresolvedLine(foodName: String?)
 }
 
 /// The "uses" graph over a set of saved recipes: which recipe lines point at which other recipes.

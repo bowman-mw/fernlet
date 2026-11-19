@@ -20,6 +20,8 @@ struct RecipeIngredientRecipeSource {
     let choices: [RecipeDefinition]
     let recipesByID: [UUID: RecipeDefinition]
     let prepare: (RecipeDefinition) -> FoodItem?
+    /// Why `prepare` returned nil for a recipe, for the alert a refused pick shows.
+    var gap: (RecipeDefinition) -> RecipeFoodGap? = { _ in nil }
 
     static let none = RecipeIngredientRecipeSource(choices: [], recipesByID: [:], prepare: { _ in nil })
 
@@ -30,7 +32,8 @@ struct RecipeIngredientRecipeSource {
         return RecipeIngredientRecipeSource(
             choices: store.recipeIngredientChoices(editing: editing),
             recipesByID: Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
-            prepare: { store.prepareRecipeFood(for: $0) }
+            prepare: { store.prepareRecipeFood(for: $0) },
+            gap: { store.recipeFoodGap(for: $0) }
         )
     }
 }
@@ -227,9 +230,14 @@ struct RecipeUsedInNote: View {
 /// "From your recipes": every saved recipe this recipe may use, with a search field (owner pick P10a).
 struct RecipeChoicesSheet: View {
     let choices: [RecipeDefinition]
-    let onPick: (RecipeDefinition) -> Void
+    /// Binds the picked recipe; false when it cannot stand in as an ingredient, which keeps the sheet
+    /// open and shows why (`gap`).
+    let onPick: (RecipeDefinition) -> Bool
+    /// Why a refused pick's recipe has no recipe food.
+    let gap: (RecipeDefinition) -> RecipeFoodGap?
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var refused: RecipeDefinition?
 
     private var shown: [RecipeDefinition] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -261,8 +269,7 @@ struct RecipeChoicesSheet: View {
                     }
                     ForEach(shown) { recipe in
                         RecipeChoiceRow(recipe: recipe) {
-                            onPick(recipe)
-                            dismiss()
+                            if onPick(recipe) { dismiss() } else { refused = recipe }
                         }
                     }
                 }
@@ -270,6 +277,41 @@ struct RecipeChoicesSheet: View {
             }
             .background(WorldPalette.paper.ignoresSafeArea())
             .fernletDraftGuard(isDirty: false, title: "From your recipes") { dismiss() }
+            .modifier(RecipeFoodRefusalAlert(refused: $refused, gap: gap))
+        }
+    }
+}
+
+/// The alert a recipe pick shows when that recipe cannot stand in as an ingredient (release review
+/// 2026-11-18, F1): the reason, from `RecipeFood.gap(in:foodItems:)`, where the pick used to do
+/// nothing at all. The recipe's name is the person's own text, shown inside the localized sentence.
+struct RecipeFoodRefusalAlert: ViewModifier {
+    @Binding var refused: RecipeDefinition?
+    let gap: (RecipeDefinition) -> RecipeFoodGap?
+
+    func body(content: Content) -> some View {
+        content.alert(
+            "This recipe can't be an ingredient yet",
+            isPresented: Binding(get: { refused != nil }, set: { if !$0 { refused = nil } }),
+            presenting: refused
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { recipe in
+            Self.message(name: recipe.name, gap: gap(recipe))
+        }
+    }
+
+    /// The alert's sentence for `gap`.
+    static func message(name: String, gap: RecipeFoodGap?) -> Text {
+        switch gap {
+        case .noIngredients:
+            Text("“\(name)” has no ingredients to add up. Add its ingredients, then pick it again.")
+        case .unresolvedLine(let foodName?):
+            Text("In “\(name)”, the amount of \(foodName) can't be added up. Open that recipe, check the amount and unit, then pick it again.")
+        case .unresolvedLine(nil):
+            Text("One of the ingredients in “\(name)” is missing. Open that recipe, check its ingredients, then pick it again.")
+        case nil:
+            Text("Fernlet couldn't add up “\(name)”. Open that recipe, check its ingredients, then pick it again.")
         }
     }
 }

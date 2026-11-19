@@ -1761,10 +1761,13 @@ struct RecipeSheet: View {
             }
         }
         .sheet(isPresented: $showingRecipeChoices) {
-            RecipeChoicesSheet(choices: store.recipeIngredientChoices(editing: editingRecipe?.id)) { recipe in
-                guard let food = store.prepareRecipeFood(for: recipe) else { return }
-                appendIngredient(for: food)
-            }
+            RecipeChoicesSheet(choices: store.recipeIngredientChoices(editing: editingRecipe?.id),
+                               onPick: { recipe in
+                                   guard let food = store.prepareRecipeFood(for: recipe) else { return false }
+                                   appendIngredient(for: food)
+                                   return true
+                               },
+                               gap: { store.recipeFoodGap(for: $0) })
         }
     }
 
@@ -2504,6 +2507,8 @@ struct RecipeIngredientEditor: View {
     /// True after "Use manual nutrition" on an amount the food could not weigh: the grams start empty
     /// for the person to fill in for the amount on the line (roadmap G1, owner decision 2026-11-13).
     @State private var manualAmountUnweighed = false
+    /// A "Your recipes" pick that could not stand in as an ingredient: its alert says why.
+    @State private var refusedRecipe: RecipeDefinition?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2518,6 +2523,7 @@ struct RecipeIngredientEditor: View {
             removeIngredientButton
         }
         .padding(.vertical, 6)
+        .modifier(RecipeFoodRefusalAlert(refused: $refusedRecipe, gap: recipeSource.gap))
         .onChange(of: ingredient.name) { _, newValue in
             typeaheadResults.clear()
             syncSelection(for: newValue)
@@ -2603,7 +2609,10 @@ struct RecipeIngredientEditor: View {
 
     /// A tap on a "Your recipes" row: prepares the recipe's food, then binds it like a food pick.
     private func pickRecipe(_ recipe: RecipeDefinition) {
-        guard let food = recipeSource.prepare(recipe) else { return }
+        guard let food = recipeSource.prepare(recipe) else {
+            refusedRecipe = recipe
+            return
+        }
         FernletFeedback.system.play(.tick)
         select(food)
     }
