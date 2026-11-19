@@ -17,13 +17,19 @@ import WorldMapStore
 /// - **Home's question** (``askable``): the book's question, only while its device is connected and never in a decoy;
 ///   Home asks it only while the person is stopped. **Settings** reads ``visibleCars`` and ``offerable``, which a decoy
 ///   empties, and changes the book through ``answer(isCar:)``, ``mark(_:)`` and ``forget(tag:)``.
-/// - **Kept on this iPhone only** (``WorldMapPreferences``' car book, cleared by Delete everything): a device's own
+/// - **Kept on this iPhone only** (the car file, ``WorldCarFile``, removed by Delete everything): a device's own
 ///   identifier never leaves this type; it is scrambled with the per-install salt into a tag first, and a name is kept
 ///   only for a car or the one device waiting to be asked about. Nothing is learned in a decoy.
-/// - **The salt is never replaced** (release review 2026-11-18, F15): it is read, and made only while the phone's
-///   protected data can be read (`WorldMapPreferences.mintCarTagSalt(in:protectedData:)`). On a launch before the
-///   phone's first unlock the defaults read as empty, so a Bluetooth device gets no tag (``untagged``), matches no
-///   car and is never learned or saved, until ``reload()`` reads the salt and the book again.
+/// - **The salt is never replaced** (release review 2026-11-18, F15; the car file, 2026-11-19): the salt and the book
+///   are one file, and a new salt is made only when that file is truly not there, the phone's protected data can be
+///   read, and this keeper never saw the phone locked. A file that is there but can't be read (a launch before the
+///   phone's first unlock) is an error, never an empty answer: a Bluetooth device then gets no tag (``untagged``),
+///   matches no car, is never learned and nothing is written, until ``reload()`` or the next ``refresh()`` reads the
+///   file. A new salt lives in memory until the book is first saved with it.
+/// - **Moved once from `UserDefaults`** (``adoptLegacy(over:)``): builds before the car file kept the book and the
+///   salt under two keys. They are moved only when the file is not there (or holds no car yet), the protected data
+///   can be read and a salt is actually present in the defaults (an empty read proves nothing), and the keys are
+///   removed only once the file is written.
 @MainActor
 @Observable
 final class WorldCarKeeper {
@@ -37,7 +43,16 @@ final class WorldCarKeeper {
     /// Called when a car connects (true) or goes (false).
     @ObservationIgnored var onLinkChanged: ((Bool) -> Void)?
     @ObservationIgnored private let audio: any WorldAudioReading
+    /// Where builds before the car file kept the book and the salt: read once to move them, then cleared.
     @ObservationIgnored private let defaults: UserDefaults
+    /// The salt and the book on disk.
+    @ObservationIgnored private let file: WorldCarFile
+    /// The salt tags are made with now: the file's, or one made in memory that the book's first save writes. Nil
+    /// while none reads and none may be made.
+    @ObservationIgnored private var salt: String?
+    /// Whether the file's answer is known (read, or truly not there). False while it is there but unreadable: then
+    /// no salt is made and nothing is written.
+    @ObservationIgnored private var fileAnswered = false
     /// Whether the phone's protected data can be read now (the app's own answer by default; tests answer for it).
     @ObservationIgnored private let protectedData: @MainActor () -> Bool
     /// Whether this keeper ever found the protected data unreadable: from then on it makes no salt (a process that
@@ -60,15 +75,18 @@ final class WorldCarKeeper {
     /// The tag of a device read while no salt could be: it matches nothing in the book and is never kept.
     static let untagged = ""
 
-    /// A keeper reading `audio` (the phone's route by default; tests pass a scripted one) and saving in `defaults`;
-    /// `protectedData` says whether the phone's protected data can be read (the app's own answer when nil).
-    init(audio: (any WorldAudioReading)? = nil, defaults: UserDefaults = .standard,
+    /// A keeper reading `audio` (the phone's route by default; tests pass a scripted one) and saving in `file` (the
+    /// app's car file by default); `defaults` is where older builds saved, read once to move it; `protectedData`
+    /// says whether the phone's protected data can be read (the app's own answer when nil).
+    init(audio: (any WorldAudioReading)? = nil, file: WorldCarFile? = nil, defaults: UserDefaults = .standard,
          protectedData: (@MainActor () -> Bool)? = nil) {
         self.audio = audio ?? WorldCarAudio()
+        self.file = file ?? .production()
         self.defaults = defaults
         self.protectedData = protectedData ?? { UIApplication.shared.isProtectedDataAvailable }
         sawLocked = !self.protectedData()
-        book = Self.loadBook(from: defaults)
+        book = WorldCarBook()
+        load()
         self.audio.onChange = { [weak self] in self?.refresh() }
         connected = self.audio.outputs().map(device(for:))
         toldLinked = isLinked
@@ -94,8 +112,10 @@ final class WorldCarKeeper {
         }
     }
 
-    /// Reads the route again, telling ``onLinkChanged`` when a car connected or went.
+    /// Reads the route again, telling ``onLinkChanged`` when a car connected or went. A file that couldn't be read
+    /// before is tried again first.
     func refresh() {
+        if !fileAnswered { load() }
         connected = audio.outputs().map(device(for:))
         tellLink()
     }
@@ -109,8 +129,11 @@ final class WorldCarKeeper {
     }
 
     /// A reading while the person moves as `mode` says: during a drive the connected Bluetooth devices count for it; on
-    /// foot a long enough walk with one connected marks it as headphones. Nothing in a decoy.
+    /// foot a long enough walk with one connected marks it as headphones. Nothing is learned in a decoy.
     func noteReading(_ fix: WorldFix, mode: WorldRideMode) {
+        // A file that couldn't be read at a locked launch is read as soon as the phone allows, so a drive that
+        // began before the first unlock links its car without waiting for the route to change.
+        if !fileAnswered, protectedData() { reload() }
         guard !isDecoy else { return }
         switch mode {
         case .driving(let since):
@@ -147,19 +170,23 @@ final class WorldCarKeeper {
         save(next)
     }
 
-    /// Reads the book from disk again (the store adopting the source a locked launch started, which learned nothing
-    /// and may have read nothing while the phone was locked), and the route with it, so devices read without a salt
-    /// get their tags.
+    /// Reads the file again (the store adopting the source a locked launch started, which learned nothing and may
+    /// have read nothing while the phone was locked), and the route with it, so devices read without a salt get
+    /// their tags.
     func reload() {
-        book = Self.loadBook(from: defaults)
+        load()
         connected = audio.outputs().map(device(for:))
         tellLink()
     }
 
-    /// Delete everything: the book goes from memory (the funnel's `WorldMapPreferences.clearAll` removes it and the
-    /// salt from disk).
+    /// Delete everything: the book and the salt go from memory and the car file from disk, with the keys older builds
+    /// used (the funnel's `WorldMapPreferences.clearAll` removes the app's own file and keys again). The next salt
+    /// is a new one.
     func forgetAll() {
         book = WorldCarBook()
+        salt = nil
+        fileAnswered = file.remove()
+        WorldMapPreferences.removeLegacyCarKeys(in: defaults)
         walkFrom = nil
         connected = audio.outputs().map(device(for:))
         tellLink()
@@ -185,35 +212,78 @@ final class WorldCarKeeper {
         self.walkFrom = nil
     }
 
-    /// Keeps `next` as the book, writing it when it changed, and tells ``onLinkChanged`` when that linked or unlinked
-    /// the car connected now.
+    /// Keeps `next` as the book, writing it with its salt when it changed, and tells ``onLinkChanged`` when that
+    /// linked or unlinked the car connected now. Nothing is written while the file can't be read or no salt is held.
     private func save(_ next: WorldCarBook) {
         guard next != book else { return }
         book = next
-        do {
-            WorldMapPreferences.setCarBookData(try JSONEncoder().encode(next), in: defaults)
-        } catch {
-            FernletAuditLog.log("worldMap.cars.saveFailed")
-        }
+        if fileAnswered, let salt { file.write(WorldCarRecord(salt: salt, book: next)) }
         tellLink()
     }
 
-    /// The book saved in `defaults`, or an empty one (nothing saved, or bytes from another version).
-    private static func loadBook(from defaults: UserDefaults) -> WorldCarBook {
-        guard let data = WorldMapPreferences.carBookData(in: defaults) else { return WorldCarBook() }
-        do {
-            return try JSONDecoder().decode(WorldCarBook.self, from: data)
-        } catch {
-            FernletAuditLog.log("worldMap.cars.loadFailed")
-            return WorldCarBook()
+    /// Reads the salt and the book from the car file, moving them from the defaults when an older build left them
+    /// there. An unreadable file leaves no salt and an empty book in memory, and nothing on disk is touched.
+    private func load() {
+        switch file.read() {
+        case .unreadable:
+            fileAnswered = false
+            salt = nil
+            book = WorldCarBook()
+        case .record(let record):
+            fileAnswered = true
+            salt = record.salt
+            book = record.book
+            adoptLegacy(over: record)
+        case .absent:
+            fileAnswered = true
+            salt = nil
+            book = WorldCarBook()
+            adoptLegacy(over: nil)
         }
     }
 
+    /// The one-time move from `UserDefaults` (builds before the car file). Only with the protected data readable and
+    /// a salt actually present there: an empty read may be a locked phone's, and proves nothing.
+    ///
+    /// - No file yet (`held` nil): the old salt and book become the file, and the keys go once it is written.
+    /// - A file with no car in it, and old keys holding cars: the old ones win. That file was made by a process that
+    ///   started before the first unlock and read the defaults as empty; the person's cars are in the keys.
+    /// - Any other file: the file wins and the old keys go.
+    /// - A book with no salt can match nothing, so it goes and nothing is moved.
+    private func adoptLegacy(over held: WorldCarRecord?) {
+        guard protectedData() else { return }
+        let oldBook = WorldMapPreferences.legacyCarBookData(in: defaults)
+        guard let oldSalt = WorldMapPreferences.legacyCarTagSalt(in: defaults) else {
+            if oldBook != nil { WorldMapPreferences.removeLegacyCarKeys(in: defaults) }
+            return
+        }
+        var moved = WorldCarRecord(salt: oldSalt, book: WorldCarBook())
+        if let oldBook {
+            do {
+                moved.book = try JSONDecoder().decode(WorldCarBook.self, from: oldBook)
+            } catch {
+                FernletAuditLog.log("worldMap.cars.loadFailed")
+            }
+        }
+        if let held, !held.book.cars.isEmpty || moved.book.cars.isEmpty {
+            WorldMapPreferences.removeLegacyCarKeys(in: defaults)
+            return
+        }
+        salt = moved.salt
+        book = moved.book
+        guard file.write(moved) else { return }
+        WorldMapPreferences.removeLegacyCarKeys(in: defaults)
+        FernletAuditLog.log("worldMap.cars.movedToFile")
+    }
+
     /// `output` as car detection keeps it: its identifier scrambled with this iPhone's salt into a tag, or
-    /// ``untagged`` while no salt reads and none may be made (the phone locked: the saved one is never replaced).
+    /// ``untagged`` while no salt reads and none may be made (the phone locked, or the car file unreadable: the
+    /// saved one is never replaced). A new salt is made, in memory, only when the file is truly not there, the
+    /// protected data can be read and this keeper never saw the phone locked.
     private func device(for output: WorldAudioOutput) -> WorldAudioDevice {
         if !protectedData() { sawLocked = true }
-        guard let salt = WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: !sawLocked) else {
+        if salt == nil, fileAnswered, !sawLocked { salt = UUID().uuidString }
+        guard let salt else {
             return WorldAudioDevice(tag: Self.untagged, name: output.name, kind: output.kind)
         }
         let salted = Data((salt + "|" + output.identifier).utf8)
