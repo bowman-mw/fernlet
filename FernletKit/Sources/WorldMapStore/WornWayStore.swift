@@ -116,7 +116,7 @@ public nonisolated enum WornWayCodec {
 ///
 /// - **One trip** counts a cell once (``record(_:kind:on:)``); the fog keeper decides what a trip is.
 /// - **While the phone is locked** a trip's cells go into this store's own locked-phone buffer
-///   (``appendPending(_:kind:on:)``) with their day, and ``takePending()`` hands them over at the next unlock.
+///   (``appendPending(_:kind:on:)``) with their day, and ``pending()`` hands them over at the next unlock (``clearPending()`` empties the buffer once they are saved).
 ///
 /// Sealed in the ``WorldMapVault`` (`fog-ways.bin`, the fog's purpose and key under its own context; the buffer
 /// `fog-pending-ways.bin` under the buffer's): device-only, excluded from backup, never synced, exported, given to the
@@ -139,15 +139,15 @@ public final class WornWayStore {
         self.vault = vault
     }
 
-    /// Reads the counter (the buffer waits for ``takePending()``). A file that can't be opened is removed, and the
+    /// Reads the counter (the buffer waits for ``pending()``). A file that can't be opened is removed, and the
     /// counting starts again. Throws only while the phone is locked.
     public func load() throws {
         do {
             if let data = try vault.read(.wornWays) {
                 tallies = WornWayCodec.decode(data, limit: FogCellStore.maxCells) ?? [:]
             }
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.wornWays)
             tallies = [:]
@@ -242,11 +242,16 @@ public final class WornWayStore {
         try vault.write(WornWayCodec.encodePending(pending), to: .pendingWornWays)
     }
 
-    /// The ways passed while the phone was locked, each with its day, oldest day first; empties the buffer.
-    public func takePending() throws -> [(WornWayKey, UInt16)] {
-        let pending = try readPending()
+    /// The ways passed while the phone was locked, each with its day, oldest day first. The buffer stays until
+    /// ``clearPending()``, which the caller calls only once the counts are saved, so a failed save loses nothing.
+    public func pending() throws -> [(WornWayKey, UInt16)] {
+        try readPending().sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }
+    }
+
+    /// Empties the locked-phone buffer (after its ways are counted and saved); whether it is gone.
+    @discardableResult
+    public func clearPending() -> Bool {
         vault.remove(.pendingWornWays)
-        return pending.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }
     }
 
     /// Forgets the tallies in memory (the vault's ``WorldMapVault/clearAll()`` removes the files).
@@ -260,8 +265,8 @@ public final class WornWayStore {
         do {
             guard let data = try vault.read(.pendingWornWays) else { return [] }
             return WornWayCodec.decodePending(data, limit: FogCellStore.maxPendingCells) ?? []
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.pendingWornWays)
             return []

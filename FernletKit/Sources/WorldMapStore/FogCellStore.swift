@@ -91,8 +91,8 @@ public final class FogCellStore {
             if let data = try vault.read(.fog) {
                 cells = FogCellCodec.decode(data, limit: Self.maxCells) ?? []
             }
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.fog)
             cells = []
@@ -169,8 +169,8 @@ public final class FogCellStore {
         do {
             guard let data = try vault.read(.pendingFog) else { return [] }
             return FogCellCodec.decode(data, limit: Self.maxPendingCells) ?? []
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.pendingFog)
             return []

@@ -40,7 +40,10 @@ struct WorldDrivenTilesTests {
         try reopened.load()
         #expect(reopened.cells == Set(lane.dropFirst()))
         try reopened.appendPending([HexCell(q: 7, r: 7)])
-        #expect(try reopened.takePending() == [HexCell(q: 7, r: 7)] && (try reopened.takePending()).isEmpty)
+        #expect(try reopened.pending() == [HexCell(q: 7, r: 7)])
+        #expect(try reopened.pending() == [HexCell(q: 7, r: 7)], "reading the buffer leaves it until it is cleared")
+        #expect(reopened.clearPending())
+        #expect(try reopened.pending().isEmpty)
     }
 
     /// A drive's new cells are driven; walking part of the lane clears that part; driving over walked ground keeps

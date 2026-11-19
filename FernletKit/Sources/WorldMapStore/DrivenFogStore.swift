@@ -9,7 +9,7 @@ import Foundation
 /// - **A walk** (or a bike ride) takes the cells it reaches out (``remove(_:)``): walked is walked for good.
 /// - **The history from before** has no driven cells: everything uncovered so far stays clear (owner's pick).
 /// - **While the phone is locked** a drive's cells go into this store's own locked-phone buffer
-///   (``appendPending(_:)``), and ``takePending()`` hands them over at the next unlock, when the fog keeper merges
+///   (``appendPending(_:)``), and ``pending()`` hands them over at the next unlock (and ``clearPending()`` empties the buffer once they are saved), when the fog keeper merges
 ///   them knowing what was walked meanwhile.
 ///
 /// Sealed in the ``WorldMapVault`` (`fog-driven.bin`, the fog's purpose and key under its own context; the buffer
@@ -31,15 +31,15 @@ public final class DrivenFogStore {
         self.vault = vault
     }
 
-    /// Reads the store (the buffer waits for ``takePending()``). A file that can't be opened is removed, and the
+    /// Reads the store (the buffer waits for ``pending()``). A file that can't be opened is removed, and the
     /// driven cells simply show as walked. Throws only while the phone is locked.
     public func load() throws {
         do {
             if let data = try vault.read(.drivenFog) {
                 cells = FogCellCodec.decode(data, limit: FogCellStore.maxCells) ?? []
             }
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.drivenFog)
             cells = []
@@ -96,11 +96,16 @@ public final class DrivenFogStore {
         try vault.write(FogCellCodec.encode(pending), to: .pendingDriven)
     }
 
-    /// The cells driven past while the phone was locked, emptying the buffer.
-    public func takePending() throws -> Set<HexCell> {
-        let pending = try readPending()
+    /// The cells driven past while the phone was locked. The buffer stays until ``clearPending()``, which the caller
+    /// calls only once what it merged them into is saved, so a failed save loses nothing.
+    public func pending() throws -> Set<HexCell> {
+        try readPending()
+    }
+
+    /// Empties the locked-phone buffer (after its cells are saved elsewhere); whether it is gone.
+    @discardableResult
+    public func clearPending() -> Bool {
         vault.remove(.pendingDriven)
-        return pending
     }
 
     /// Forgets the cells in memory (the vault's ``WorldMapVault/clearAll()`` removes the files).
@@ -114,8 +119,8 @@ public final class DrivenFogStore {
         do {
             guard let data = try vault.read(.pendingDriven) else { return [] }
             return FogCellCodec.decode(data, limit: FogCellStore.maxPendingCells) ?? []
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.pendingDriven)
             return []

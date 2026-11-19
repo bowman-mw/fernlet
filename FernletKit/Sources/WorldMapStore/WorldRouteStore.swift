@@ -54,8 +54,8 @@ public final class WorldRouteStore {
                 return nil
             }
             return points
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(Self.file(for: id))
             return nil

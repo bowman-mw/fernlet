@@ -296,7 +296,8 @@ extension WorldFogKeeper {
                 return
             }
             saved = WornRideCheckpointCodec.decode(data, limit: WornRideClassifier.maxSamples + 1) ?? []
-        } catch WorldMapVault.VaultError.keyUnavailable {
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            FernletAuditLog.log("worldMap.trips.rideDeferred", context: ["error": "\(error)"])
             return
         } catch {
             vault.remove(.wornTripRide)
