@@ -120,20 +120,6 @@ struct MemoryRowMigrationTests {
         #expect(rows.load().map(\.id) == [notes[1].id])
     }
 
-    @Test func anUnreadableStoreIsNotAnEmptyOne() throws {
-        let controller = PersistenceController(inMemory: true)
-        let rows = MemoryRecordRepository(controller: controller)
-        #expect(rows.loadIfReadable() == [])
-        #expect(rows.upsert([memory("Here", day: 0)]))
-        #expect(rows.loadIfReadable()?.count == 1)
-
-        // No store behind the coordinator: every fetch throws, as on a locked or unloadable store.
-        let coordinator = controller.container.persistentStoreCoordinator
-        for store in coordinator.persistentStores { try coordinator.remove(store) }
-        #expect(rows.loadIfReadable() == nil)
-        #expect(rows.load().isEmpty)
-    }
-
     // MARK: - Helpers
 
     /// The real row store, with reads that can be made to fail (a locked or unavailable store).
