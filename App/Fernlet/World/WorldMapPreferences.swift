@@ -36,7 +36,9 @@ import Foundation
 ///   plays once per switch, even one that happened while the app was closed.
 /// - **The car book and its salt** (owner 2026-11-09, car signals): which Bluetooth devices are the person's cars
 ///   (``WorldCarBook``, kept by ``WorldCarKeeper``), and the random salt their scrambled tags are made with, so a wipe
-///   makes every old tag meaningless as well as deleting it.
+///   makes every old tag meaningless as well as deleting it. Since 2026-11-19 both live in the car file
+///   (``WorldCarFile``), not here: the two keys are read once to move them and then removed, and ``clearAll(in:)``
+///   removes the file with the keys.
 /// - **Live planes nearby** (off by default; owner 2026-11-19): whether Home's map asks adsb.lol for the planes in the
 ///   0.5° cell it shows (``LiveAircraftWatch``); whether its one-time disclosure has been shown (the onboarding question
 ///   counts); and this iPhone's own tally of fetches for the day (``LiveAircraftBudget``): a day, a number and a rest
@@ -115,34 +117,24 @@ nonisolated enum WorldMapPreferences {
         defaults.set(rest, forKey: Key.livePlanesRestUntil)
     }
 
-    /// The car book's saved bytes (``WorldCarKeeper``); nil before the first car or sighting.
-    static func carBookData(in defaults: UserDefaults = .standard) -> Data? {
+    /// The car book's bytes as builds before the car file saved them (``WorldCarFile``, 2026-11-19); nil when none
+    /// reads. **Read-only, and only for the one-time move**: before the phone's first unlock the defaults read as
+    /// empty with no error, so nil may mean "can't be read"; only bytes that are present can be trusted.
+    static func legacyCarBookData(in defaults: UserDefaults = .standard) -> Data? {
         defaults.data(forKey: Key.carBook)
     }
 
-    /// Saves the car book's bytes.
-    static func setCarBookData(_ data: Data, in defaults: UserDefaults = .standard) {
-        defaults.set(data, forKey: Key.carBook)
-    }
-
-    /// The salt the car book's tags are made with, as saved; nil when none reads. **Read-only** (release review
-    /// 2026-11-18, F15): before the phone's first unlock the defaults read as empty with no error, so a missing salt
-    /// may be an unreadable one, and nothing here ever writes. ``mintCarTagSalt(in:protectedData:)`` makes one.
-    static func carTagSalt(in defaults: UserDefaults = .standard) -> String? {
+    /// The car book's salt as builds before the car file saved it; nil when none reads (see
+    /// ``legacyCarBookData(in:)``: nil is never proof there was none).
+    static func legacyCarTagSalt(in defaults: UserDefaults = .standard) -> String? {
         guard let salt = defaults.string(forKey: Key.carTagSalt), !salt.isEmpty else { return nil }
         return salt
     }
 
-    /// Makes this iPhone's salt, once (a wipe removes it, so the next one is new), and returns the salt in use. Only
-    /// while the phone's protected data can be read (`protectedData`), so an empty read is a true one, only when no
-    /// salt and no car book is saved (a book without its salt is never given a new one its tags can't match), and
-    /// never over a value already there. Nil when it made none and none reads.
-    static func mintCarTagSalt(in defaults: UserDefaults = .standard, protectedData: Bool) -> String? {
-        if let salt = carTagSalt(in: defaults) { return salt }
-        guard protectedData, defaults.object(forKey: Key.carTagSalt) == nil, carBookData(in: defaults) == nil else { return nil }
-        let salt = UUID().uuidString
-        defaults.set(salt, forKey: Key.carTagSalt)
-        return salt
+    /// Removes the two keys the car book and its salt lived under, once ``WorldCarKeeper`` has them in the car file.
+    static func removeLegacyCarKeys(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: Key.carBook)
+        defaults.removeObject(forKey: Key.carTagSalt)
     }
 
     /// Whether "Airports and flights" is on (default on).
@@ -384,6 +376,8 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.livePlanesRestUntil)
         defaults.removeObject(forKey: Key.livePlanesStrikes)
         defaults.removeObject(forKey: Key.lastHomeSky)
-        if defaults === UserDefaults.standard { setBackgroundMarker(false) }
+        guard defaults === UserDefaults.standard else { return }
+        setBackgroundMarker(false)
+        WorldCarFile.production().remove()
     }
 }

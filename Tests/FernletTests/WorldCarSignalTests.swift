@@ -1,4 +1,5 @@
 import AppIntents
+import CryptoKit
 import Foundation
 import Testing
 import WorldMapStore
@@ -81,10 +82,10 @@ struct WorldCarSignalTests {
 
     // MARK: The keeper
 
-    /// A keeper over scripted outputs and its own defaults.
-    private static func keeper(_ audio: ScriptedAudio) throws -> (WorldCarKeeper, UserDefaults) {
-        let defaults = try #require(UserDefaults(suiteName: "WorldCarSignalTests.\(UUID().uuidString)"))
-        return (WorldCarKeeper(audio: audio, defaults: defaults), defaults)
+    /// A keeper over scripted outputs, its own car file and its own (empty) defaults, with the phone unlocked.
+    private static func keeper(_ audio: ScriptedAudio) throws -> (WorldCarKeeper, CarDisk) {
+        let disk = try CarDisk()
+        return (disk.keeper(audio), disk)
     }
 
     /// The device's identifier never reaches the book: its tag is a salted hash, steady on this iPhone, new after a
@@ -92,24 +93,28 @@ struct WorldCarSignalTests {
     @Test func tagsAreScrambledAndALinkIsTold() throws {
         let audio = ScriptedAudio()
         audio.list = [WorldAudioOutput(identifier: "00:11:22:33:44:55-tacl", name: "Camry", kind: .bluetooth)]
-        let (keeper, defaults) = try Self.keeper(audio)
+        let (keeper, disk) = try Self.keeper(audio)
+        defer { disk.cleanUp() }
         let tag = try #require(keeper.connected.first?.tag)
         #expect(!tag.contains("00:11") && tag.count == 32)
+        #expect(disk.raw == nil, "a new salt is written with the book's first save, not before")
         // A second reader for the second keeper: a reader tells one keeper of its changes, as the app's one does.
         let again = ScriptedAudio()
         again.list = audio.list
-        #expect(WorldCarKeeper(audio: again, defaults: defaults).connected.first?.tag == tag, "steady on this iPhone")
         var links: [Bool] = []
         keeper.onLinkChanged = { links.append($0) }
         #expect(!keeper.isLinked && keeper.offerable?.name == "Camry")
         keeper.mark(try #require(keeper.offerable))
         #expect(keeper.isLinked && links == [true] && keeper.offerable == nil)
+        #expect(disk.keeper(again).connected.first?.tag == tag, "steady on this iPhone")
         audio.change(to: [])
         #expect(!keeper.isLinked && links == [true, false])
         audio.change(to: [WorldAudioOutput(identifier: "carplay", name: "CarPlay", kind: .carPlay)])
         #expect(keeper.isLinked && links == [true, false, true])
-        WorldMapPreferences.clearAll(in: defaults)
-        #expect(WorldCarKeeper(audio: again, defaults: defaults).connected.first?.tag != tag, "a new salt after a wipe")
+        keeper.forgetAll()
+        #expect(disk.raw == nil, "the wipe removes the file")
+        let after = try #require(disk.keeper(again).connected.first?.tag)
+        #expect(after != tag && after != WorldCarKeeper.untagged, "a new salt after a wipe")
     }
 
     /// Readings during three drives learn the connected device, saved for the next launch; Home asks only while it is
@@ -117,11 +122,12 @@ struct WorldCarSignalTests {
     @Test func drivesTeachTheKeeperAndADecoyLearnsNothing() throws {
         let audio = ScriptedAudio()
         audio.list = [WorldAudioOutput(identifier: "camry", name: "Camry", kind: .bluetooth)]
-        let (keeper, defaults) = try Self.keeper(audio)
+        let (keeper, disk) = try Self.keeper(audio)
+        defer { disk.cleanUp() }
         let fix = WorldFix(point: Stream.here, accuracy: 8, at: Self.start, isPrecise: true, speed: 15)
         keeper.isDecoy = true
         keeper.noteReading(fix, mode: .driving(since: Self.drive(0)))
-        #expect(keeper.book == WorldCarBook() && keeper.askable == nil)
+        #expect(keeper.book == WorldCarBook() && keeper.askable == nil && disk.raw == nil, "a decoy learns and writes nothing")
         keeper.isDecoy = false
         keeper.noteReading(fix, mode: .driving(since: Self.drive(0)))
         #expect(keeper.askable?.name == "Camry")
@@ -136,7 +142,7 @@ struct WorldCarSignalTests {
         #expect(links == [true], "a car learned on a drive links at once")
         keeper.isDecoy = true
         #expect(keeper.visibleCars.isEmpty && keeper.offerable == nil, "a decoy shows no car")
-        let reopened = WorldCarKeeper(audio: audio, defaults: defaults)
+        let reopened = disk.keeper(audio)
         #expect(reopened.isLinked, "the book was saved")
         reopened.forgetAll()
         #expect(reopened.book == WorldCarBook())
@@ -224,67 +230,190 @@ struct WorldCarSignalTests {
         #expect(!expired.watch.isDriving, "a run-out hint is the usual half minute")
     }
 
-    // MARK: The salt on a locked launch (release review 2026-11-18, F15)
+    // MARK: The car file (2026-11-19; the salt on a locked launch, release review F15)
 
-    /// The salt is read, never written, by its reader; one is made only with the protected data readable, no salt
-    /// and no book saved, and never over a value already there.
-    @Test func theSaltIsOnlyMadeUnlockedAndNeverReplaced() throws {
-        let name = "WorldCarSalt-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defer { defaults.removePersistentDomain(forName: name) }
-        #expect(WorldMapPreferences.carTagSalt(in: defaults) == nil)
-        #expect(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: false) == nil)
-        #expect(WorldMapPreferences.carTagSalt(in: defaults) == nil, "nothing is made locked")
-        let salt = try #require(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: true))
-        #expect(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: true) == salt)
-        #expect(WorldMapPreferences.mintCarTagSalt(in: defaults, protectedData: false) == salt, "a salt that reads is used locked")
+    private static let camry = WorldAudioOutput(identifier: "AA:BB:CC", name: "Camry", kind: .bluetooth)
+    private static let driving = WorldFix(point: Stream.here, accuracy: 8, at: Stream.start, isPrecise: true, speed: 12)
 
-        let orphan = "WorldCarSalt-\(UUID().uuidString)"
-        let bookOnly = try #require(UserDefaults(suiteName: orphan))
-        defer { bookOnly.removePersistentDomain(forName: orphan) }
-        WorldMapPreferences.setCarBookData(Data("{}".utf8), in: bookOnly)
-        #expect(WorldMapPreferences.mintCarTagSalt(in: bookOnly, protectedData: true) == nil, "a saved book never gets a new salt")
+    /// The file gives three answers: not there, the record it was given, and unreadable while its bytes can't be
+    /// read. An unreadable file is left exactly as it was; bytes that are not a record are removed.
+    @Test func theFileTellsAbsentFromUnreadable() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        #expect(disk.file.read() == .absent)
+        var book = WorldCarBook()
+        book.mark(Self.device("a"), learned: false)
+        let record = WorldCarRecord(salt: "salt", book: book)
+        #expect(disk.file.write(record) && disk.file.read() == .record(record))
+        #expect(disk.file.url.lastPathComponent == "car-book.json" && WorldCarFile.folderName == "WorldCars")
+        let folder = URL(fileURLWithPath: disk.folder.path, isDirectory: true)
+        #expect(try folder.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+        let saved = try #require(disk.raw)
+        disk.box.locked = true
+        #expect(disk.file.read() == .unreadable && disk.raw == saved, "a locked file is neither removed nor changed")
+        disk.box.locked = false
+        try Data("not a record".utf8).write(to: disk.file.url)
+        #expect(disk.file.read() == .absent && disk.raw == nil, "bytes that can never be a record are removed")
+        #expect(disk.file.write(WorldCarRecord(salt: "", book: book)) && disk.file.read() == .absent, "an empty salt is no salt")
     }
 
-    /// A launch before the first unlock with the car's Bluetooth connected: the defaults read as empty. The keeper
-    /// writes nothing (before the fix it wrote a new salt over the real one), gives the device no tag and learns
-    /// nothing from a drive; once the phone unlocks and the real defaults read, the learned car links again.
-    @Test func aLockedLaunchNeverReplacesTheSaltAndTheCarLinksAfterUnlock() throws {
-        let realName = "WorldCarReal-\(UUID().uuidString)", lockedName = "WorldCarLocked-\(UUID().uuidString)"
-        let real = try #require(UserDefaults(suiteName: realName)), locked = try #require(UserDefaults(suiteName: lockedName))
-        defer {
-            real.removePersistentDomain(forName: realName)
-            locked.removePersistentDomain(forName: lockedName)
-        }
-        let camry = WorldAudioOutput(identifier: "AA:BB:CC", name: "Camry", kind: .bluetooth)
+    /// An older build's book and salt move into the file once, with the tags still matching, and the two keys go.
+    /// The next launch reads the file alone.
+    @Test func theOldKeysMoveIntoTheFileOnce() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        var book = WorldCarBook()
+        book.mark(Self.device(Self.tag("old-salt", Self.camry.identifier)), learned: false)
+        disk.setLegacy(salt: "old-salt", book: book)
         let audio = ScriptedAudio()
-        audio.list = [camry]
-        let learner = WorldCarKeeper(audio: audio, defaults: real, protectedData: { true })
+        audio.list = [Self.camry]
+        let keeper = disk.keeper(audio)
+        #expect(keeper.isLinked && keeper.book == book, "the car learned before the move still links")
+        #expect(disk.file.read() == .record(WorldCarRecord(salt: "old-salt", book: book)))
+        #expect(disk.legacySalt == nil && disk.legacyBook == nil, "the old keys go once the file is written")
+        #expect(disk.keeper(audio).isLinked, "the next launch reads the file")
+    }
+
+    /// Nothing moves while the phone's protected data can't be read, and an empty read of the defaults moves
+    /// nothing and makes no file: the keys stay for a launch that can trust them.
+    @Test func nothingMovesLockedOrFromAnEmptyRead() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        var book = WorldCarBook()
+        book.mark(Self.device(Self.tag("old-salt", Self.camry.identifier)), learned: false)
+        disk.setLegacy(salt: "old-salt", book: book)
+        let audio = ScriptedAudio()
+        audio.list = [Self.camry]
+        let phone = ScriptedLock()
+        let early = disk.keeper(audio, lock: phone)
+        #expect(disk.raw == nil && disk.legacySalt == "old-salt" && disk.legacyBook != nil, "nothing moved locked")
+        #expect(early.connected.first?.tag == WorldCarKeeper.untagged && !early.isLinked)
+        phone.isOpen = true
+        early.reload()
+        #expect(early.isLinked && disk.legacySalt == nil && disk.raw != nil, "moved once the phone allows")
+
+        let empty = try CarDisk()
+        defer { empty.cleanUp() }
+        let fresh = empty.keeper(audio)
+        #expect(fresh.connected.first?.tag != WorldCarKeeper.untagged && empty.raw == nil, "a first launch makes a salt in memory only")
+    }
+
+    /// A file a process made while it read the defaults as empty holds a new salt and no car; the person's cars are
+    /// still in the old keys, and they win. A file that holds a car wins over the old keys.
+    @Test func oldKeysWithCarsWinOverAFileWithNone() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        var book = WorldCarBook()
+        book.mark(Self.device(Self.tag("old-salt", Self.camry.identifier)), learned: false)
+        disk.setLegacy(salt: "old-salt", book: book)
+        #expect(disk.file.write(WorldCarRecord(salt: "stray", book: WorldCarBook())))
+        let audio = ScriptedAudio()
+        audio.list = [Self.camry]
+        #expect(disk.keeper(audio).isLinked && disk.file.read() == .record(WorldCarRecord(salt: "old-salt", book: book)))
+        #expect(disk.legacySalt == nil && disk.legacyBook == nil)
+
+        var other = WorldCarBook()
+        other.mark(Self.device("someone-else", "Civic"), learned: false)
+        disk.setLegacy(salt: "older", book: other)
+        _ = disk.keeper(audio)
+        #expect(disk.file.read() == .record(WorldCarRecord(salt: "old-salt", book: book)), "a file with a car is kept")
+        #expect(disk.legacySalt == nil && disk.legacyBook == nil)
+
+        let orphan = try CarDisk()
+        defer { orphan.cleanUp() }
+        orphan.setLegacy(salt: nil, book: other)
+        #expect(orphan.keeper(audio).book == WorldCarBook() && orphan.legacyBook == nil && orphan.raw == nil,
+                "a book with no salt can match nothing: it goes and nothing is moved")
+    }
+
+    /// A launch before the first unlock with the car's Bluetooth connected: the file is there but can't be read.
+    /// The keeper makes no salt, gives the device no tag, learns nothing from a drive and writes nothing, so the
+    /// file is byte for byte what it was. Once the phone unlocks the same keeper reads it and the learned car links.
+    @Test func anUnreadableFileIsNeverReplacedAndTheCarLinksAfterUnlock() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        let audio = ScriptedAudio()
+        audio.list = [Self.camry]
+        let learner = disk.keeper(audio)
         learner.mark(try #require(learner.offerable))
-        let salt = try #require(WorldMapPreferences.carTagSalt(in: real))
+        let saved = try #require(disk.raw)
         #expect(learner.isLinked)
 
-        // Locked: the same disk reads as empty, here a suite with nothing in it.
         let phone = ScriptedLock()
-        let early = WorldCarKeeper(audio: audio, defaults: locked, protectedData: { phone.isOpen })
-        #expect(locked.dictionaryRepresentation()["fernlet.worldMap.carTagSalt"] == nil, "no salt was written locked")
+        disk.box.locked = true
+        let early = disk.keeper(audio, lock: phone)
         #expect(early.connected.first?.tag == WorldCarKeeper.untagged && !early.isLinked && early.offerable == nil)
-        early.noteReading(WorldFix(point: Stream.here, accuracy: 8, at: Stream.start, isPrecise: true, speed: 12),
-                          mode: .driving(since: Stream.start))
+        early.noteReading(Self.driving, mode: .driving(since: Stream.start))
         early.mark(try #require(early.connected.first))
-        #expect(WorldMapPreferences.carBookData(in: locked) == nil && early.book == WorldCarBook(), "nothing learned without a tag")
-        // Unlocked in the same process: this keeper still makes no salt (its empty read may be a stale one).
+        early.answer(isCar: true)
+        early.refresh()
+        #expect(early.book == WorldCarBook() && disk.raw == saved, "nothing learned, nothing written over")
+
+        // Unlocked, but the file still refuses (a read that fails for any other reason): still no salt, no write.
+        phone.isOpen = true
+        early.noteReading(Self.driving, mode: .driving(since: Stream.start))
+        early.refresh()
+        #expect(early.connected.first?.tag == WorldCarKeeper.untagged && disk.raw == saved)
+
+        // The file reads: the next reading of a drive links the car, with no hand-over needed.
+        disk.box.locked = false
+        var links: [Bool] = []
+        early.onLinkChanged = { links.append($0) }
+        early.noteReading(Self.driving, mode: .driving(since: Stream.start))
+        #expect(early.isLinked && links == [true] && early.visibleCars.map(\.name) == ["Camry"])
+        // The store's hand-over reads it again and changes nothing.
+        early.reload()
+        #expect(early.isLinked && links == [true])
+    }
+
+    /// A keeper that saw the phone locked never makes a salt, even with no file (its empty read of the old keys may
+    /// be a locked phone's); one that reads a salt uses it whatever the lock.
+    @Test func aKeeperThatSawThePhoneLockedMakesNoSalt() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        let audio = ScriptedAudio()
+        audio.list = [Self.camry]
+        let phone = ScriptedLock()
+        let early = disk.keeper(audio, lock: phone)
         phone.isOpen = true
         early.refresh()
-        #expect(WorldMapPreferences.carTagSalt(in: locked) == nil)
+        early.mark(try #require(early.connected.first))
+        #expect(early.connected.first?.tag == WorldCarKeeper.untagged && disk.raw == nil)
 
-        // The real defaults after the unlock: the salt is the one saved, and the car links.
+        let learner = disk.keeper(audio)
+        learner.mark(try #require(learner.offerable))
         phone.isOpen = false
-        let adopted = WorldCarKeeper(audio: audio, defaults: real, protectedData: { phone.isOpen })
-        #expect(adopted.isLinked, "a salt that reads is used whatever the lock")
-        phone.isOpen = true
-        adopted.reload()
-        #expect(adopted.isLinked && WorldMapPreferences.carTagSalt(in: real) == salt)
+        #expect(disk.keeper(audio, lock: phone).isLinked, "a salt that reads is used whatever the lock")
+    }
+
+    /// Delete everything: the keeper's wipe removes the file, the old keys and the salt in memory, even while the
+    /// file can't be read, and the settings' wipe removes the old keys.
+    @Test func theWipeRemovesTheFileAndTheOldKeys() throws {
+        let disk = try CarDisk()
+        defer { disk.cleanUp() }
+        let audio = ScriptedAudio()
+        audio.list = [Self.camry]
+        let keeper = disk.keeper(audio)
+        keeper.mark(try #require(keeper.offerable))
+        let tag = try #require(keeper.connected.first?.tag)
+        disk.setLegacy(salt: "left-over", book: WorldCarBook())
+        disk.box.locked = true
+        keeper.forgetAll()
+        #expect(disk.raw == nil && disk.legacySalt == nil && disk.legacyBook == nil)
+        #expect(keeper.book == WorldCarBook() && !keeper.isLinked)
+        disk.box.locked = false
+        let after = try #require(keeper.connected.first?.tag)
+        #expect(after != tag && after != WorldCarKeeper.untagged, "the next salt is a new one")
+
+        disk.setLegacy(salt: "left-over", book: WorldCarBook())
+        WorldMapPreferences.clearAll(in: disk.defaults)
+        #expect(disk.legacySalt == nil && disk.legacyBook == nil)
+    }
+
+    /// The tag the keeper makes for `identifier` under `salt` (its documented recipe: the first 16 bytes of
+    /// SHA-256 over "salt|identifier", in hex).
+    private static func tag(_ salt: String, _ identifier: String) -> String {
+        SHA256.hash(data: Data((salt + "|" + identifier).utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     /// A Focus turning off runs the filter with its defaults, which says on: after a drive that ended parked that
@@ -330,6 +459,66 @@ struct WorldCarSignalTests {
         #expect(StartDriveIntent.supportedModes == [.background] && EndDriveIntent.supportedModes == [.background])
         #expect(MapMyDriveFocusFilter().mapsDrive)
         #expect(WorldDriveIntentError.backgroundMappingOff.localizedStringResource.key == "worldDrive.intent.backgroundMappingOff")
+    }
+}
+
+/// Whether a test's car file refuses to be read, as a locked phone's does.
+private final class CarLockBox: @unchecked Sendable {
+    private let guardLock = NSLock()
+    private var value = false
+    var locked: Bool {
+        get { guardLock.withLock { value } }
+        set { guardLock.withLock { value = newValue } }
+    }
+}
+
+/// A car file in its own temporary folder that a test can lock, with its own defaults for the old keys.
+@MainActor
+private struct CarDisk {
+    let folder: URL
+    let box = CarLockBox()
+    let defaults: UserDefaults
+    private let suite: String
+
+    init() throws {
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("WorldCars-\(UUID().uuidString)", isDirectory: true)
+        suite = "WorldCarSignalTests.\(UUID().uuidString)"
+        defaults = try #require(UserDefaults(suiteName: suite))
+    }
+
+    /// The file, failing its reads while the box is locked.
+    var file: WorldCarFile {
+        WorldCarFile(folder: folder) { [box] url in
+            if box.locked { throw CocoaError(.fileReadNoPermission) }
+            return try Data(contentsOf: url)
+        }
+    }
+
+    /// The file's bytes on disk, whatever the lock.
+    var raw: Data? { FileManager.default.contents(atPath: file.url.path) }
+    var legacySalt: String? { WorldMapPreferences.legacyCarTagSalt(in: defaults) }
+    var legacyBook: Data? { WorldMapPreferences.legacyCarBookData(in: defaults) }
+
+    /// A keeper over this disk; the phone is unlocked unless `lock` says otherwise.
+    func keeper(_ audio: ScriptedAudio, lock: ScriptedLock? = nil) -> WorldCarKeeper {
+        WorldCarKeeper(audio: audio, file: file, defaults: defaults, protectedData: { lock?.isOpen ?? true })
+    }
+
+    /// Saves a salt and a book the way builds before the car file did.
+    func setLegacy(salt: String?, book: WorldCarBook) {
+        if let salt { defaults.set(salt, forKey: "fernlet.worldMap.carTagSalt") }
+        do {
+            defaults.set(try JSONEncoder().encode(book), forKey: "fernlet.worldMap.carBook")
+        } catch {
+            Issue.record("the book did not encode: \(error)")
+        }
+    }
+
+    func cleanUp() {
+        defaults.removePersistentDomain(forName: suite)
+        if FileManager.default.fileExists(atPath: folder.path) {
+            do { try FileManager.default.removeItem(at: folder) } catch { Issue.record("clean-up failed: \(error)") }
+        }
     }
 }
 

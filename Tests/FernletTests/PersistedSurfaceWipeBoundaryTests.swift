@@ -235,6 +235,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.worldMap.calendarFlightsUpgraded": .cleared(token: "WorldMapPreferences.clearAll"),
         // Car signals (2026-11-09): the car book (scrambled tags of the Bluetooth devices seen on drives, the names
         // of the person's cars and of the one device waiting to be asked about) and the salt its tags are made with.
+        // Since 2026-11-19 both live in the car file (`WorldCars/car-book.json`, removed by the same token); these
+        // two keys are only what an older build left, read once to move them, and still cleared here.
         "fernlet.worldMap.carBook": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.carTagSalt": .cleared(token: "WorldMapPreferences.clearAll"),
         // Live planes nearby (owner 2026-11-19): the switch, whether its disclosure was seen, and this iPhone's own
