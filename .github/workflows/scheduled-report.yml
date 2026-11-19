@@ -17,6 +17,13 @@
 #     run-gated-suites.sh's own restart guard, since a restart re-runs suites and makes every count
 #     unreadable. MEASURED locally on 2026-10-17 (a private iPhone 17 simulator): 6832 tests (6670 in
 #     614 Swift Testing suites), 0 failed, 3 skipped (HealthKitWorkoutTests' simulator skips), 788 s.
+#     It runs in three passes over the one build (2026-11-19). On the hosted runner the single pass
+#     stretched one test to 25 to 47 minutes of wall time, because thousands of main-actor tests
+#     interleave at every `await`, and two families of suites hold a real-time deadline the product
+#     is right to keep short: a mesh envelope's five minutes (ProximityKit 0.2.0) and a guided-run
+#     cue's two seconds (a third suite sleeps 100 ms for a SwiftUI `onAppear`). Scripts/wall-clock-suites.py names them and says why; they run in passes of
+#     their own with parallel testing off, and the big pass skips them. Every suite still runs once
+#     a night. The step is red if any pass is red, restarted, or ran no tests.
 #   * release-build: every other build in CI is Debug. Release compiles the `#else` halves of every
 #     `#if DEBUG` (the test hooks TestHookBoundaryTests holds to DEBUG, the UITestSupport no-ops),
 #     optimizes whole-module, and runs the Release-only "Ensure branded catalog ODR source" phase.
@@ -123,36 +130,61 @@ jobs:
           fi
           echo "FERNLET_DESTINATION=platform=iOS Simulator,name=$name" >> "$GITHUB_ENV"
 
+      # The map's land and water (30 MB, gitignored; Docs/World-Shore-Pack.md). A Debug build goes on
+      # without it, so the build stayed green while WorldShoreShippedPackTests,
+      # WorldPassportShoreShippedTests and WorldShoreDrawingTests, which read the pack from the app's
+      # bundle, failed here every night. Fetched before the build, checksum-verified, exactly as
+      # release-build below and Xcode Cloud's post-clone hook do. S3 Wall names none of those suites,
+      # so it needs no pack.
+      - name: Fetch the World shore pack (Scripts/fetch-world-shore.sh)
+        run: |
+          set -euo pipefail
+          Scripts/fetch-world-shore.sh
+
       # The strict build-for-testing every S3 Wall line reads (warnings are errors, the S3 flag on).
       - name: Strict build-for-testing (Scripts/spm-wall-check.sh)
         run: |
           set -euo pipefail
           Scripts/spm-wall-check.sh
 
+      # Three passes, every one run to the end so one red pass never hides another's result.
+      #   main   everything but the wall-clock suites, in parallel as before
+      #   mesh   the mesh batteries, parallel testing off
+      #   timers the guided-run cue suites and the lock gate's, parallel testing off
       - name: Run all of FernletTests
         run: |
           set -euo pipefail
-          bundle="$RUNNER_TEMP/fernlet-full-suite.xcresult"
-          log="$RUNNER_TEMP/fernlet-full-suite.log"
           status=0
-          xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet \
-            -destination "$FERNLET_DESTINATION" -only-testing:FernletTests \
-            -resultBundlePath "$bundle" 2>&1 | tee "$log" || status=$?
-          # The floor script's restart guard, at its log seam: one grep, one marker, one wording.
-          Scripts/run-gated-suites.sh --check-log "$log" || status=1
-          if [ ! -d "$bundle" ]; then
-            echo "::error::xcodebuild wrote no result bundle (status $status)"
-            exit 1
-          fi
-          xcrun xcresulttool get test-results summary --path "$bundle" --compact > "$RUNNER_TEMP/summary.json"
-          xcrun xcresulttool get test-results tests --path "$bundle" --compact > "$RUNNER_TEMP/tests.json"
-          python3 - "$RUNNER_TEMP/summary.json" "$RUNNER_TEMP/tests.json" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          run_pass() {
+            local label="$1"; shift
+            local bundle="$RUNNER_TEMP/fernlet-full-suite-$label.xcresult"
+            local log="$RUNNER_TEMP/fernlet-full-suite-$label.log"
+            local pass=0
+            echo "::group::FernletTests, the $label pass"
+            xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet \
+              -destination "$FERNLET_DESTINATION" "$@" \
+              -resultBundlePath "$bundle" 2>&1 | tee "$log" || pass=$?
+            echo "::endgroup::"
+            # The floor script's restart guard, at its log seam: one grep, one marker, one wording.
+            Scripts/run-gated-suites.sh --check-log "$log" || pass=1
+            if [ ! -d "$bundle" ]; then
+              echo "::error::xcodebuild wrote no result bundle for the $label pass (status $pass)"
+              status=1
+              return 0
+            fi
+            xcrun xcresulttool get test-results summary --path "$bundle" --compact > "$RUNNER_TEMP/summary-$label.json"
+            xcrun xcresulttool get test-results tests --path "$bundle" --compact > "$RUNNER_TEMP/tests-$label.json"
+            # Prints the pass's section and exits 1 on a pass that ran no tests: a selector list that
+            # matches nothing ends "TEST EXECUTE SUCCEEDED" (Scripts/run-gated-suites.sh says how).
+            python3 - "$label" "$RUNNER_TEMP/summary-$label.json" "$RUNNER_TEMP/tests-$label.json" <<'PY' >> "$GITHUB_STEP_SUMMARY" || pass=1
           import json, sys
-          summary = json.load(open(sys.argv[1], encoding="utf-8"))
-          tree = json.load(open(sys.argv[2], encoding="utf-8"))
-          print("### Full FernletTests")
+          label = sys.argv[1]
+          summary = json.load(open(sys.argv[2], encoding="utf-8"))
+          tree = json.load(open(sys.argv[3], encoding="utf-8"))
+          total = summary.get("totalTestCount", 0)
+          print(f"### Full FernletTests: the {label} pass")
           print(f"- result: {summary.get('result', 'unknown')}")
-          print(f"- tests: {summary.get('totalTestCount', 0)}, failed {summary.get('failedTests', 0)}, "
+          print(f"- tests: {total}, failed {summary.get('failedTests', 0)}, "
                 f"skipped {summary.get('skippedTests', 0)}")
           # Bounded: every node of the finite tree is pushed once; at most 50 names are printed.
           failed, stack = [], list(tree.get("testNodes", []))
@@ -165,7 +197,27 @@ jobs:
               print(f"  - failed: `{name}`")
           if len(failed) > 50:
               print(f"  - … and {len(failed) - 50} more")
+          if total == 0:
+              print("  - **ran no tests**: the pass's selectors matched nothing")
+              sys.exit(1)
           PY
+            if [ "$pass" -ne 0 ]; then
+              echo "::error::the $label pass of FernletTests is red (status $pass)"
+              status=1
+            fi
+          }
+          skip=(); mesh=(); timers=()
+          while IFS= read -r word; do skip+=("$word"); done < <(Scripts/wall-clock-suites.py --skip all)
+          while IFS= read -r word; do mesh+=("$word"); done < <(Scripts/wall-clock-suites.py --only mesh)
+          while IFS= read -r word; do timers+=("$word"); done < <(Scripts/wall-clock-suites.py --only timers)
+          if [ "${#skip[@]}" -eq 0 ] || [ "${#mesh[@]}" -eq 0 ] || [ "${#timers[@]}" -eq 0 ]; then
+            echo "::error::Scripts/wall-clock-suites.py named no suites"
+            exit 1
+          fi
+          echo "wall-clock suites: ${#mesh[@]} mesh, ${#timers[@]} timers, ${#skip[@]} skipped in the main pass"
+          run_pass main -only-testing:FernletTests "${skip[@]}"
+          run_pass mesh -parallel-testing-enabled NO "${mesh[@]}"
+          run_pass timers -parallel-testing-enabled NO "${timers[@]}"
           exit "$status"
 
       - name: Keep the result bundle of a red run
@@ -173,7 +225,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: full-suite-xcresult
-          path: ${{ runner.temp }}/fernlet-full-suite.xcresult
+          path: ${{ runner.temp }}/fernlet-full-suite-*.xcresult
           retention-days: 7
 
   release-build:

@@ -57,26 +57,36 @@ final class DataExportTests: XCTestCase {
 
     /// A day whose Apple Health context carries cycle + intimate data (plus a non-sensitive step
     /// count) exports the steps but strips every cycle/intimate signal.
+    ///
+    /// Seeded the way a device holds it: HealthKit's readings never reach the day's stored row (a day
+    /// of nothing else writes no row at all), so they arrive through `updateHealthContext` and come
+    /// back after a relaunch from the device-local residue cache both stores share. The export is read
+    /// from the store that ingested them, whose day in memory still holds the cycle and intimate
+    /// readings, and from the relaunched one.
     func testExportStripsCycleAndIntimateHealthContext() throws {
-        let (seedStore, repository, narratives) = makeTestStoreWithRepositories()
-        let dayKey = seedStore.todayKey
-
-        var day = FernletDay(date: dayKey)
-        day.healthContext = HealthDailyContext(
+        let cache = InMemoryDeviceHealthResidueStore()
+        let first = makeTestStoreWithRepositories(deviceHealthResidueStore: cache)
+        let dayKey = first.store.todayKey
+        first.store.updateHealthContext(HealthDailyContext(
             activity: HealthActivitySummary(steps: 6000),
             cycle: HealthCycleContext(menstrualFlowEventCount: 3),
-            intimate: HealthIntimateContext(eventCount: 1))
-        repository.updateDay(day, for: dayKey, todayKey: dayKey)
+            intimate: HealthIntimateContext(eventCount: 1)))
+        XCTAssertTrue(first.store.flushPendingSnapshotSave(), "precondition: the ingest saved")
+        XCTAssertNotNil(first.store.day.healthContext?.cycle, "precondition: the strip has cycle data to remove")
+        XCTAssertNotNil(first.store.day.healthContext?.intimate, "precondition: the strip has intimate data to remove")
 
-        let store = makeStoreSharingStores(repository: repository, narratives: narratives)
-        let export = store.buildDataExport()
+        let relaunched = makeStoreSharingStores(
+            repository: first.repository, narratives: first.narratives, deviceHealthResidueStore: cache)
 
-        let exportedDay = export.days.first { $0.day == dayKey }
-        XCTAssertEqual(exportedDay?.health?.steps, 6000, "non-sensitive activity should be exported")
+        for (name, store) in [("the ingesting store", first.store), ("the relaunched store", relaunched)] {
+            let export = store.buildDataExport()
+            let exportedDay = export.days.first { $0.day == dayKey }
+            XCTAssertEqual(exportedDay?.health?.steps, 6000, "non-sensitive activity should be exported by \(name)")
 
-        let json = try dataJSON(export)
-        for token in ["cycle", "intimate", "menstrual", "ovulation", "eventcount", "flow"] {
-            XCTAssertFalse(json.contains(token), "export leaked cycle/intimate token: \(token)")
+            let json = try dataJSON(export)
+            for token in ["cycle", "intimate", "menstrual", "ovulation", "eventcount", "flow"] {
+                XCTAssertFalse(json.contains(token), "\(name)'s export leaked cycle/intimate token: \(token)")
+            }
         }
     }
 
