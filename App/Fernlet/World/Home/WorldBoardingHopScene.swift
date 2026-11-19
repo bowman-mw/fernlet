@@ -24,22 +24,33 @@ struct WorldBoardingHopScene: View {
     /// How long a skip's fade takes.
     static let skipFade = 0.25
 
+    /// DEBUG `FERNLET_UI_TEST_HOP_AT=<seconds>`: the scene holds still at that moment, for screenshots; nil in release.
+    static var heldAt: Double? {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["FERNLET_UI_TEST_HOP_AT"].flatMap(Double.init)
+        #else
+        nil
+        #endif
+    }
+
     var body: some View {
         let now = WorldCompanionLook.current(store: store, at: play.start, night: .map, bodySignal: bodySignal, mapNight: isNight)
         let tint = WorldBoardingHopArt.tint(of: now)
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
-            let frame = WorldBoardingHopTimeline.frame(play.direction, at: timeline.date.timeIntervalSince(play.start),
+            let frame = WorldBoardingHopTimeline.frame(play.direction, at: Self.heldAt ?? timeline.date.timeIntervalSince(play.start),
                                                        reduceMotion: reduceMotion)
             let fade = play.skippedAt.map { 1 - WorldBoardingHopTimeline.ramp(timeline.date.timeIntervalSince($0), 0, Self.skipFade) } ?? 1
             GeometryReader { proxy in
                 let stage = WorldBoardingHopStage(size: proxy.size, layout: layout)
                 ZStack(alignment: .topLeading) {
+                    WorldPalette.page
                     WorldOffScenePalette.skyGradient
                     Canvas { context, _ in WorldBoardingHopPainter.paint(frame, stage: stage, tint: tint, in: context) }
                     if let feet = frame.sprout { sprout(now, feet: stage.parked.offsetBy(feet)) }
                     if frame.flightView > 0 { flightView.opacity(frame.flightView) }
                 }
             }
+            .mask { Self.softEdges }
             .opacity(frame.opacity * fade)
         }
         .clipped()
@@ -50,6 +61,13 @@ struct WorldBoardingHopScene: View {
         .accessibilityAddTraits(.isImage)
         .accessibilityAction(named: Text(WorldBoardingHopCopy.skip), onSkip)
         .task(id: play.skippedAt) { await waitOut() }
+    }
+
+    /// The scene's soft top and bottom edges, so it settles over the map rather than cutting across it.
+    private static var softEdges: LinearGradient {
+        LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06),
+                               .init(color: .black, location: 0.94), .init(color: .clear, location: 1)],
+                       startPoint: .top, endPoint: .bottom)
     }
 
     /// Sprout at its pixel size here, its feet on `feet`, its suitcase trailing behind it.
@@ -76,6 +94,7 @@ struct WorldBoardingHopScene: View {
 
     /// Waits out the scene (or a skip's fade), then says it has finished.
     private func waitOut() async {
+        guard Self.heldAt == nil else { return }
         let left: Double
         if let skipped = play.skippedAt {
             left = Self.skipFade - Date().timeIntervalSince(skipped)
