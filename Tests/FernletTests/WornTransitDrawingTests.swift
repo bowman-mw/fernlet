@@ -34,7 +34,7 @@ struct WornTransitDrawingTests {
     // MARK: Pieces by level
 
     /// A railway and a ferry crossing each show from the third trip, rise at 10 and 30, fade to abandoned and stay,
-    /// drawn hex centre to hex centre in their own lists, never as roads.
+    /// drawn along the smoothed spine of their cells in their own lists, never as roads.
     @Test(arguments: [WornWayKind.rail, .ferry])
     func transitDrawsItsLevelFromTheTallies(kind: WornWayKind) throws {
         let ride = Self.line(east: 400)
@@ -50,8 +50,8 @@ struct WornTransitDrawingTests {
         let abandoned = pieces(Self.drawing(Self.ways(kind, ride, count: 3, daysAgo: 95)))
         #expect(!abandoned.isEmpty && abandoned.allSatisfy { $0.level == .abandoned }, "faded: abandoned, kept")
         let piece = try #require(pieces(Self.drawing(Self.ways(kind, ride, count: 30))).first)
-        let centres = Set(WornFootpaths.cells(along: ride).map { MercatorHexGrid.centre(of: $0) }.map { "\($0.x),\($0.y)" })
-        #expect(zip(piece.line.xs, piece.line.ys).allSatisfy { centres.contains("\($0),\($1)") }, "every point a cell's centre")
+        let y = WebMercator.unit(Self.here).y, metre = WebMercator.unitsPerMetre(at: Self.here.latitude)
+        #expect(piece.line.ys.allSatisfy { abs($0 - y) < 12 * metre }, "every point within 12 m of the ride")
         let drawing = Self.drawing(Self.ways(kind, ride, count: 10))
         let byLevel = kind == .rail ? drawing.railsByLevel : drawing.ferriesByLevel
         #expect(byLevel[WornLevel.two.rawValue].count == pieces(drawing).count)

@@ -20,8 +20,8 @@ nonisolated struct WornPiece: Sendable {
 
 /// What the map draws of the worn paths and frequent roads (Docs/World-Frequent-Paths-Exploration-2026-11-15.md §3,
 /// §8): the footpaths along the person's own lines, each stretch at its cell's level; the roads, the railways and the
-/// ferry wakes (Docs/World-Transit-Paths-Exploration-2026-11-15.md §2, §3) hex centre to hex centre between
-/// neighbouring frequent cells of their kind; and Home's saved trails with the stretches over worn footpaths
+/// ferry wakes (Docs/World-Transit-Paths-Exploration-2026-11-15.md §2, §3) along the smoothed spine of their kind's
+/// pooled cells (``WornWaysSmoothing``); and Home's saved trails with the stretches over worn footpaths
 /// taken out, so the map shows one line, not two. Compares by ``generation`` alone, so a view that holds it redraws
 /// only when it was worked out again. Nothing here is stored.
 nonisolated struct WornWaysDrawing: Equatable, Sendable {
@@ -96,15 +96,19 @@ nonisolated struct WornWaysDrawing: Equatable, Sendable {
 
 /// Works out a ``WornWaysDrawing`` (off the main actor; pure, so the rules are tested directly).
 nonisolated enum WornWaysBuilder {
-    /// The drawing of `index`'s footpaths and `ways`' roads, railways and ferry wakes on `today`, with `trails` cut
-    /// where they run on a worn footpath.
+    /// The drawing of `index`'s footpaths and `ways`' roads, railways and ferry wakes on `today` (each kind's cells
+    /// pooled and its spine smoothed, ``WornWaysSmoothing``), with `trails` cut where they run on a worn footpath.
     static func make(index: WornFootpathIndex, ways: [WornWayKey: WornTally], today: UInt16, trails: [[GeoPoint]],
                      trailStamp: Int, generation: Int) -> WornWaysDrawing {
-        let paths = footpathLevels(index.tallies, today: today), roads = roadLevels(ways, today: today)
-        let rails = wayLevels(ways, kind: .rail, today: today), ferries = wayLevels(ways, kind: .ferry, today: today)
+        let paths = footpathLevels(index.tallies, today: today)
+        let roads = WornWaysSmoothing.pooledLevels(ways, kind: .road, today: today)
+        let rails = WornWaysSmoothing.pooledLevels(ways, kind: .rail, today: today)
+        let ferries = WornWaysSmoothing.pooledLevels(ways, kind: .ferry, today: today)
         let worn = Set(paths.compactMap { $0.value >= .one ? $0.key : nil })
         return WornWaysDrawing(generation: generation, footpaths: footpathPieces(index, levels: paths),
-                               roads: roadPieces(roads), rails: roadPieces(rails), ferries: roadPieces(ferries),
+                               roads: WornWaysSmoothing.smoothedPieces(roads, weights: WornWaysSmoothing.weights(ways, kind: .road)),
+                               rails: WornWaysSmoothing.smoothedPieces(rails, weights: WornWaysSmoothing.weights(ways, kind: .rail)),
+                               ferries: WornWaysSmoothing.smoothedPieces(ferries, weights: WornWaysSmoothing.weights(ways, kind: .ferry)),
                                trails: split(trails, over: worn), trailStamp: trailStamp,
                                contentHash: hash(paths, salt: 1) &+ hash(roads, salt: 2) &+ hash(rails, salt: 3) &+ hash(ferries, salt: 4))
     }
@@ -174,76 +178,12 @@ nonisolated enum WornWaysBuilder {
         }
     }
 
-    // MARK: Roads
-
-    /// The road pieces (and the railways' and wakes', drawn the same way): hex centre to hex centre between
-    /// neighbouring frequent cells, each joint at the lower of its
-    /// two cells' levels, joined into lines per level. Bounded: ``WornWaysDrawing/maxPieces``.
-    static func roadPieces(_ levels: [HexCell: WornLevel]) -> [WornPiece] {
-        var pieces: [WornPiece] = []
-        for line in roadLines(levels) where pieces.count < WornWaysDrawing.maxPieces {
-            pieces += chunks(line.cells.map { MercatorHexGrid.centre(of: $0) }, level: line.level)
-        }
-        return Array(pieces.prefix(WornWaysDrawing.maxPieces))
-    }
-
-    /// One joined road line: its cells in order, at one level.
-    struct RoadLine: Equatable {
-        let level: WornLevel
-        let cells: [HexCell]
-    }
+    // MARK: Roads, railways and wakes
 
     /// An edge between two neighbouring cells, smaller cell first.
     struct Edge: Hashable {
         let a: HexCell, b: HexCell
         init(_ one: HexCell, _ two: HexCell) { (a, b) = one < two ? (one, two) : (two, one) }
-    }
-
-    /// The frequent road cells joined into lines. A drive wears a band one or two cells wide whose cells all touch
-    /// (triangles everywhere), so joining every pair of neighbours would draw a braid: the road is the band's spine
-    /// instead (``spine(_:)``), each joint at the lower of its two cells' levels, joined into lines while the next
-    /// joint carries on at the same level. A cell with no frequent neighbour draws nothing. Bounded: each joint is
-    /// walked once, the cells looked at are at most ``WornWayRuns/maxCells``.
-    static func roadLines(_ levels: [HexCell: WornLevel]) -> [RoadLine] {
-        let joints = spine(levels)
-        var next: [HexCell: [HexCell]] = [:]
-        for joint in joints {
-            next[joint.a, default: []].append(joint.b)
-            next[joint.b, default: []].append(joint.a)
-        }
-        var used = Set<Edge>()
-        var lines: [RoadLine] = []
-        // Ends first, so a line starts where its road does.
-        let starts = next.keys.sorted { (next[$0]?.count ?? 0, $0) < (next[$1]?.count ?? 0, $1) }
-        for cell in starts {
-            for other in next[cell] ?? [] {
-                guard let mine = levels[cell], let theirs = levels[other], used.insert(Edge(cell, other)).inserted else { continue }
-                let level = min(mine, theirs)
-                let forward = extend(from: other, level: level, levels: levels, next: next, used: &used)
-                let backward = extend(from: cell, level: level, levels: levels, next: next, used: &used)
-                lines.append(RoadLine(level: level, cells: backward.reversed() + [cell, other] + forward))
-            }
-        }
-        return lines
-    }
-
-    /// The cells a line at `level` runs on past `cell`, each over an unwalked joint whose cells' lower level is
-    /// `level`. Bounded: at most ``WornWayRuns/maxCells`` steps (each walks a new joint).
-    private static func extend(from cell: HexCell, level: WornLevel, levels: [HexCell: WornLevel], next: [HexCell: [HexCell]],
-                               used: inout Set<Edge>) -> [HexCell] {
-        var cells: [HexCell] = []
-        var tip = cell
-        for _ in 0..<WornWayRuns.maxCells {
-            guard let tipLevel = levels[tip],
-                  let step = next[tip]?.first(where: { candidate in
-                      guard let theirs = levels[candidate] else { return false }
-                      return min(tipLevel, theirs) == level && !used.contains(Edge(tip, candidate))
-                  }) else { break }
-            used.insert(Edge(tip, step))
-            cells.append(step)
-            tip = step
-        }
-        return cells
     }
 
     /// The joints of the cells' spine: a spanning forest grown depth first from each band's end, preferring to carry
@@ -327,22 +267,23 @@ nonisolated enum WornWaysBuilder {
 
     // MARK: Your world
 
-    /// The passport's Your world roads (owner's call 4): the runs of road cells at level 1 or more on `today` at least
-    /// ``WornWayRuns/minimumRunMetres`` long, joined into lines, as crossed-road pieces in Mercator units.
+    /// The passport's Your world roads (owner's call 4): the runs of pooled road cells at level 1 or more on `today` at
+    /// least ``WornWayRuns/minimumRunMetres`` long, smoothed as on Home, as crossed-road pieces in Mercator units.
     static func yourWorldRoads(_ ways: [WornWayKey: WornTally], today: UInt16, generation: Int) -> WorldRoadDrawing {
         yourWorldWays(ways, kind: .road, today: today, generation: generation)
     }
 
     /// The passport's Your world ways of `kind` (roads, and the railways and ferry crossings as the roads): the runs of
-    /// its cells at level 1 or more on `today` at least ``WornWayRuns/minimumRunMetres`` long, joined into lines, as
-    /// crossed-road pieces in Mercator units. Bounded: at most ``WornWayRuns/maxCells`` cells.
+    /// its pooled cells (``WornWaysSmoothing/pooledLevels(_:kind:today:)``, as Home pools them) at level 1 or more on
+    /// `today` at least ``WornWayRuns/minimumRunMetres`` long, drawn as Home's smoothed lines, as crossed-road pieces
+    /// in Mercator units. Bounded: at most ``WornWayRuns/maxCells`` cells.
     static func yourWorldWays(_ ways: [WornWayKey: WornTally], kind: WornWayKind, today: UInt16, generation: Int) -> WorldRoadDrawing {
-        let frequent = wayLevels(ways, kind: kind, today: today).filter { $0.value >= .one }
+        let frequent = WornWaysSmoothing.pooledLevels(ways, kind: kind, today: today).filter { $0.value >= .one }
         let runs = WornWayRuns.longRuns(Set(frequent.keys))
         guard !runs.isEmpty else { return WorldRoadDrawing(generation: generation, pieces: [], roadCount: 0) }
         var kept: [HexCell: WornLevel] = [:]
         for run in runs { for cell in run { kept[cell] = .one } }
-        let pieces = roadPieces(kept).map(\.line)
+        let pieces = WornWaysSmoothing.smoothedPieces(kept, weights: WornWaysSmoothing.weights(ways, kind: kind)).map(\.line)
         return WorldRoadDrawing(generation: generation, pieces: pieces, roadCount: runs.count)
     }
 }
