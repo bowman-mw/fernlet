@@ -24,6 +24,10 @@ struct WorldFlyingHome: View {
     var isActive: Bool
     /// The map's night: Sprout winds down at the window too.
     var isNight: Bool
+    /// The scene's frame on screen each time it changes (the boarding hop plays there).
+    var onSceneFrame: ((CGRect) -> Void)? = nil
+    /// The boarding hop's glide for the status plate and the prints (``WorldHomeGlide``).
+    var glide: Namespace.ID? = nil
 
     /// Whether Home shows the plane at `now`, outside a decoy: the gate says flying, or a calendar flight does, leaving
     /// the airport the person was last known to be at with no reading heard since (no GPS in the cabin; display only,
@@ -38,7 +42,7 @@ struct WorldFlyingHome: View {
 
     var body: some View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen,
-                        onOpenPrint: onOpenPrint, inTheAir: true) {
+                        onOpenPrint: onOpenPrint, inTheAir: true, onSceneFrame: onSceneFrame, glide: glide) {
             WorldFlyingScene(store: store, bodySignal: bodySignal, isActive: isActive, isNight: isNight)
         }
     }

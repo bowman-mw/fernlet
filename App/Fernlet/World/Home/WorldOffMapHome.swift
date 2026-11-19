@@ -20,6 +20,12 @@ struct WorldOffMapHome<Companion: View>: View {
     /// Home in the air (World-Airports-Spec §6.2, ``WorldFlyingHome``): the scene is sky all the way down, with no
     /// grass, and grows with what it holds.
     var inTheAir = false
+    /// In the air: the open scene's frame on screen (global coordinates) each time it changes, so the boarding hop
+    /// plays exactly where the in-flight view stands (``WorldBoardingHopLayer``).
+    var onSceneFrame: ((CGRect) -> Void)? = nil
+    /// The boarding hop's glide (``WorldHomeGlide``): the status plate and the prints move to and from their places on
+    /// the map Home; nil keeps them still (Reduce Motion, and anywhere there is no switch).
+    var glide: Namespace.ID? = nil
     @ViewBuilder let companion: () -> Companion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Sprout's passport: while it is open only the scene shows behind it, as the map Home shows only the map
@@ -34,11 +40,13 @@ struct WorldOffMapHome<Companion: View>: View {
                 .padding(.horizontal, 18)
                 .opacity(plates)
             WorldPhotoPrints(store: store, arrangement: .row(compact: large), onOpen: onOpenPrint)
+                .worldHomeGlide(.prints, in: glide)
                 .padding(.leading, 14)
                 .padding(.top, 8)
                 .opacity(plates)
             scene(large: large)
             WorldStatusPlate(status: status) { onOpen(.today) }
+                .worldHomeGlide(.plate, in: glide)
                 .scaleEffect(large ? 1 : 1.22, anchor: .top)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 8)
@@ -69,10 +77,7 @@ struct WorldOffMapHome<Companion: View>: View {
     /// The open scene: sky fading in from the page, the companion and its bubble, grass to the edges.
     private func scene(large: Bool) -> some View {
         ZStack(alignment: .bottom) {
-            LinearGradient(stops: [.init(color: WorldOffScenePalette.sky.opacity(0), location: 0),
-                                   .init(color: WorldOffScenePalette.sky.opacity(0.75), location: 0.3),
-                                   .init(color: WorldOffScenePalette.skyLow, location: 0.72)],
-                           startPoint: .top, endPoint: .bottom)
+            WorldOffScenePalette.skyGradient
             if !inTheAir {
                 WorldGrassBand()
                     .frame(height: 92)
@@ -86,6 +91,9 @@ struct WorldOffMapHome<Companion: View>: View {
         .frame(minHeight: inTheAir ? WorldFlyingLayout(large: large).sceneHeight : nil)
         .fixedSize(horizontal: false, vertical: inTheAir)
         .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+            if inTheAir { onSceneFrame?(frame) }
+        }
         .padding(.top, 10)
         .accessibilityElement(children: .contain)
     }
@@ -103,6 +111,13 @@ nonisolated enum WorldOffScenePalette {
     static let grass = WorldPalette.adaptive(light: 0x9BC27F, dark: 0x4F6E43)
     static let grassLight = WorldPalette.adaptive(light: 0xB5D69A, dark: 0x6B8C5A)
     static let tuft = WorldPalette.adaptive(light: 0x6E9A55, dark: 0x3F5C35)
+
+    /// The open scene's sky: fading in from the page at the top, deepening, then paler towards the ground.
+    static var skyGradient: LinearGradient {
+        LinearGradient(stops: [.init(color: sky.opacity(0), location: 0), .init(color: sky.opacity(0.75), location: 0.3),
+                               .init(color: skyLow, location: 0.72)],
+                       startPoint: .top, endPoint: .bottom)
+    }
 }
 
 /// The grass along the scene's foot: a light lip, pixel tufts, fading out at the bottom.

@@ -27,8 +27,23 @@ extension UITestSupport {
         case "landed": WorldFlightGateState(layoverAirport: "LHR", layoverStart: now, currentAirport: "LHR",
                                             isOnTrip: true, showsTravelLook: true)
         case "flying": WorldFlightGateState(isFlying: true, isOnTrip: true)
+        case "cycle": WorldFlightGateState(isFlying: isCycleInTheAir(now: now), isOnTrip: true)
         default: nil
         }
+    }
+
+    /// `FERNLET_UI_TEST_AIRPORT=cycle`: on the ground and in the air in turn, ``airportCycleSeconds`` each, while the
+    /// app stays open, so the boarding hop plays over Home switching live (owner 2026-11-18). Display only.
+    static var airportCycleSeconds: TimeInterval? {
+        guard airportHomeScene == "cycle" else { return nil }
+        let asked = ProcessInfo.processInfo.environment["FERNLET_UI_TEST_AIRPORT_CYCLE"].flatMap(Double.init) ?? 20
+        return max(asked, 8)
+    }
+
+    /// Whether the cycle is in its air half at `now`.
+    static func isCycleInTheAir(now: Date) -> Bool {
+        guard let seconds = airportCycleSeconds else { return false }
+        return Int(now.timeIntervalSince1970 / seconds) % 2 == 1
     }
 
     /// The scene's made-up latest find: PDX by ten minutes (`at`), LHR by a landing (`landed`); nil otherwise.
@@ -42,6 +57,7 @@ extension UITestSupport {
     #else
     static var airportHomeScene: String? { nil }
     static func airportHomeState(now: Date) -> WorldFlightGateState? { nil }
+    static var airportCycleSeconds: TimeInterval? { nil }
     static func airportHomeFind(now: Date) -> WorldAirportFind? { nil }
     #endif
 }

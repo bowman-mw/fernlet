@@ -150,6 +150,10 @@ struct WorldMapHome: View {
     @AppStorage(WorldMapPreferences.Key.livePlanes) private var livePlanesOn = false
     /// Live planes' fetch loop, tapped card and drawn places (a tap on a plane opens its card from ``tappedMap(at:)``).
     @State private var livePlanes = LiveAircraftHome()
+    /// The scene between the map and the plane (owner 2026-11-18): the one playing, and where the in-flight view stands.
+    @State private var boardingHop = WorldBoardingHopState()
+    /// The status plate's and the prints' glide between the map and the plane Homes (owner 2026-11-18).
+    @Namespace private var homeGlide
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -160,16 +164,11 @@ struct WorldMapHome: View {
     @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
 
     var body: some View {
-        TimelineView(.everyMinute) { timeline in
-            if WorldFlyingHome.shows(store, at: timeline.date) {
-                // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
-                WorldFlyingHome(store: store, date: timeline.date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
-                                isActive: isCompanionActive, isNight: phase(at: timeline.date) == .night)
-            } else if presence == .off {
-                offHome(date: timeline.date)
-            } else {
-                mapHome(date: timeline.date)
-            }
+        TimelineView(.everyMinute) { timeline in shownHome(date: timeline.date) }
+        // DEBUG `FERNLET_UI_TEST_AIRPORT=cycle`: the made-up flight turns between ground and air while the app is open.
+        .task { await turnTestSkyCycle() }
+        .overlay {
+            WorldBoardingHopLayer(store: store, hop: boardingHop, bodySignal: bodySignal, isNight: phase(at: Date()) == .night)
         }
         .accessibilityElement(children: .contain)
         // Round 7: Sprout's passport's new stamps and the world view's city tap (World-Passport-Spec §1, §6).
@@ -195,7 +194,8 @@ struct WorldMapHome: View {
         .modifier(WorldDiscoveryLinesDriver(store: store, router: discoveries, isSaying: isFrontmost && !isBubbleQuiet))
         // Airports (World-Airports-Spec §3, §6.3): the found and landing banners, Sprout's landing line.
         .modifier(WorldAirportHomeDriver(store: store, router: discoveries, state: airportHome, passport: passport,
-                                         holdsBanner: !isFrontmost || holdsRootBanners || stampBannerShowing))
+                                         holdsBanner: !isFrontmost || holdsRootBanners || stampBannerShowing
+                                             || boardingHop.isPlaying))
         // Take a trip (World-Airports-Spec §5, §7, §10.7): the ticket, the boarding pass, the quick action, on the day.
         .modifier(WorldTripHomeDriver(store: store, trip: trip, greeting: $homeGreeting, isFrontmost: isFrontmost,
                                       openCard: { openCard(spaceID: hereSpaceID) }))
@@ -242,12 +242,60 @@ struct WorldMapHome: View {
         .onChange(of: store.worldLocation.permission) { updateLocation() }
     }
 
+    /// Home at `date`: the plane's window in the air, the open scene with location off, else the map; and the
+    /// boarding hop's gate asked about it (owner 2026-11-18: once per switch between the map and the plane, while
+    /// Home is in front).
+    private func shownHome(date: Date) -> some View {
+        let flying = WorldFlyingHome.shows(store, at: date)
+        return Group {
+            if flying {
+                // Airports §6.2: in the air, the location-off Home with Sprout at the plane's window in place of the map.
+                WorldFlyingHome(store: store, date: date, onOpen: onOpen, onOpenPrint: openPrint, bodySignal: bodySignal,
+                                isActive: isCompanionActive, isNight: phase(at: date) == .night,
+                                onSceneFrame: { boardingHop.flightSceneFrame = $0 }, glide: homeGlideSpace)
+                    .transition(.opacity)
+            } else if presence == .off {
+                offHome(date: date)
+                    .transition(.opacity)
+            } else {
+                mapHome(date: date)
+                    .transition(.opacity)
+            }
+        }
+        // The switch between the map and the plane eases: the old Home fades as the new one comes, the plate and the
+        // prints gliding between their places; with Reduce Motion, a short cross-fade only.
+        .animation(reduceMotion ? .easeInOut(duration: 0.3) : .easeInOut(duration: WorldHomeGlide.duration), value: flying)
+        .modifier(WorldBoardingHopTrigger(hop: boardingHop, sky: flying ? .air : .ground,
+                                          canPlay: isFrontmost && scenePhase == .active,
+                                          isDecoy: store.duressSessionActive, companion: store.worldCompanionName))
+    }
+
+    /// Re-reads the DEBUG sky cycle's gate state each second, so Home switches live; returns at once without it
+    /// (release builds never have it). Bounded: at most a day of seconds; ends when Home goes.
+    private func turnTestSkyCycle() async {
+        guard UITestSupport.airportCycleSeconds != nil else { return }
+        // Bounded: one tick a second for at most a day.
+        for _ in 0..<86_400 {
+            store.worldLocation.flights.republishTestScene()
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
+    }
+
+    /// The glide's namespace, or nil under Reduce Motion (the switch is a cross-fade only).
+    private var homeGlideSpace: Namespace.ID? {
+        reduceMotion ? nil : homeGlide
+    }
+
     // MARK: Location off
 
     /// The open scene with location off (`b1-home-denied`, draft 4).
     private func offHome(date: Date) -> some View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen,
-                        onOpenPrint: openPrint) {
+                        onOpenPrint: openPrint, glide: homeGlideSpace) {
             WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive,
                               mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
                               isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint,
@@ -368,9 +416,11 @@ struct WorldMapHome: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 8) {
                 WorldStatusPlate(status: WorldStatus.current(store: store, date: date)) { onOpen(.today) }
+                    .worldHomeGlide(.plate, in: homeGlideSpace)
                 Spacer(minLength: 0)
                 if showsPrints {
                     WorldPhotoPrints(store: store, onOpen: openPrint)
+                        .worldHomeGlide(.prints, in: homeGlideSpace)
                         .padding(.trailing, -2)
                 }
             }

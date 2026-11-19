@@ -250,6 +250,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Map/LiveAircraft/LiveAircraftLayer.swift": .cleared(token: "WorldMapPreferences.clearAll"),
         "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Map/WorldAirportLayer.swift": .cleared(token: "WorldMapPreferences.clearAll"),
         "unresolved:WorldMapPreferences.Key.livePlanes@App/Fernlet/World/Settings/LivePlanesSwitch.swift": .cleared(token: "WorldMapPreferences.clearAll"),
+        // The boarding hop (2026-11-18): which Home this iPhone last showed, the map or the plane (display only).
+        "fernlet.worldMap.lastHomeSky": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
         "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),

@@ -32,6 +32,8 @@ import Foundation
 /// - **Background mapping's marker** (owner 2026-11-09, the locked launch): an empty file in Application Support that
 ///   mirrors the Always switch for the app's own defaults, because a launch the locked phone refuses can't trust what
 ///   it reads; ``clearAll(in:)`` removes it with the rest.
+/// - **The last Home shown** (owner 2026-11-18, the boarding hop): the map or the plane, so the scene between them
+///   plays once per switch, even one that happened while the app was closed.
 /// - **The car book and its salt** (owner 2026-11-09, car signals): which Bluetooth devices are the person's cars
 ///   (``WorldCarBook``, kept by ``WorldCarKeeper``), and the random salt their scrambled tags are made with, so a wipe
 ///   makes every old tag meaningless as well as deleting it.
@@ -67,6 +69,7 @@ nonisolated enum WorldMapPreferences {
         static let livePlanesUsed = "fernlet.worldMap.livePlanesUsed"
         static let livePlanesRestUntil = "fernlet.worldMap.livePlanesRestUntil"
         static let livePlanesStrikes = "fernlet.worldMap.livePlanesStrikes"
+        static let lastHomeSky = "fernlet.worldMap.lastHomeSky"
     }
 
     /// Whether "Live planes nearby" is on (default off).
@@ -212,6 +215,17 @@ nonisolated enum WorldMapPreferences {
         defaults.bool(forKey: Key.companionHintShown)
     }
 
+    /// Which Home this iPhone last showed, the map (`ground`) or the plane (`air`), for the boarding hop
+    /// (``WorldBoardingHopGate``); nil before the first look.
+    static func lastHomeSky(in defaults: UserDefaults = .standard) -> WorldHomeSky? {
+        defaults.string(forKey: Key.lastHomeSky).flatMap(WorldHomeSky.init(rawValue:))
+    }
+
+    /// Records the Home this iPhone shows now.
+    static func setLastHomeSky(_ sky: WorldHomeSky, in defaults: UserDefaults = .standard) {
+        defaults.set(sky.rawValue, forKey: Key.lastHomeSky)
+    }
+
     /// Records that the companion hint has had its turn.
     static func setCompanionHintShown(in defaults: UserDefaults = .standard) {
         defaults.set(true, forKey: Key.companionHintShown)
@@ -344,6 +358,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.livePlanesUsed)
         defaults.removeObject(forKey: Key.livePlanesRestUntil)
         defaults.removeObject(forKey: Key.livePlanesStrikes)
+        defaults.removeObject(forKey: Key.lastHomeSky)
         if defaults === UserDefaults.standard { setBackgroundMarker(false) }
     }
 }

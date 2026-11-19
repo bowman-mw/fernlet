@@ -364,6 +364,23 @@
         }
       }
     },
+    "%@ hopped on the plane. Taking off." : {
+      "comment" : "World Home: VoiceOver, once, as the boarding scene plays (the map switches to the plane). The argument is the companion's name.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ se subió al avión. ¡A despegar!"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ se subió al avión. ¡A despegar!"
+          }
+        }
+      }
+    },
     "%@ instead of %@" : {
       "comment" : "A saved swap: the first argument is planned wherever the second would be",
       "localizations" : {
@@ -27321,6 +27338,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Puestos en fila: %@ de plátano."
+          }
+        }
+      }
+    },
+    "Landed. %@ hopped off the plane." : {
+      "comment" : "World Home: VoiceOver, once, as the landing scene plays (the plane switches back to the map). The argument is the companion's name.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aterrizamos. %@ se bajó del avión."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aterrizamos. %@ se bajó del avión."
           }
         }
       }
