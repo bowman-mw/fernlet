@@ -80,7 +80,10 @@ jobs:
     # so the cron is spelled again in each condition).
     if: github.event.schedule != '23 7 * * 0'
     runs-on: macos-26
-    timeout-minutes: 120
+    # MEASURED on the hosted runner, run 44477202822 (2026-11-19), the first with three passes: 108
+    # minutes for the job (the main pass 2,690 s, mesh 850 s, timers 583 s, the rest the build). 120
+    # left twelve minutes, and a slow night would have been cancelled, not reported.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
