@@ -81094,7 +81094,7 @@
       }
     },
     "passport.wearing" : {
-      "comment" : "Sprout's passport, page 1: heading over the four slot buttons; the companion's name. Spanish: 'Lo que lleva Sprout'",
+      "comment" : "Wardrobe (opened from Sprout's passport): heading over the slot buttons; the companion's name. Spanish: 'Lo que lleva Sprout'",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -106631,7 +106631,6 @@
     },
     "wornWay.sheet.used" : {
       "comment" : "Worn way sheet header, middle part: how many kept trips have used this path",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {

@@ -3,8 +3,8 @@ import FernletUI
 import SwiftUI
 
 // Page 1's bottom half (World-Passport-Spec §4, mockup `idBody`, `kit-passport.css` `.ppslots`, `.ppslot`,
-// `.pprow`, `.pptwo`, `.ppcoins`, `.ppgold`, `.ppathome`, `.ppsw`): what Sprout's wearing, Wardrobe and
-// Creation Studio, the shop, This is home and App colors. Every control is a button that says what the page
+// `.pprow`, `.pptwo`, `.ppcoins`, `.ppgold`, `.ppathome`, `.ppsw`): Wardrobe and Creation Studio, the shop,
+// This is home and App colors; and what Sprout's wearing, which the Wardrobe shows since 2026-11-18. Every control is a button that says what the page
 // should do (``PassportSproutAction``); the page does it.
 
 /// A small caps heading on the page ("What Sprout's wearing", "Shop").
@@ -75,24 +75,27 @@ struct PassportSproutPairs<Content: View>: View {
     }
 }
 
-/// What Sprout's wearing: the four slot buttons, two by two, then Wardrobe and Creation Studio.
+/// What Sprout's wearing: the slot buttons, two by two, each opening its approved slot page. Since 2026-11-18 it
+/// heads the Wardrobe (``WardrobeView``) rather than page 1 (World-Passport-Spec §4), so page 1 holds less.
 struct PassportSproutWearing: View {
-    let model: PassportSproutModel
-    let act: (PassportSproutAction) -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.passportSproutCompact) private var compact
+    /// The companion's name, for the heading.
+    let name: String
+    /// What is worn in each slot, in order.
+    let slots: [CustomizeSlotSummary]
+    /// The look the slot icons draw.
+    let appearance: CompanionAppearance
+    /// The day's band, for the body icon.
+    let state: CompanionState
+    /// Opens a slot's page.
+    let open: (CustomizeSlot) -> Void
 
     var body: some View {
-        VStack(spacing: compact ? 4 : 6) {
-            PassportSproutHeading(text: PassportSproutCopy.wearingHeader(name: model.name))
+        VStack(spacing: 6) {
+            PassportSproutHeading(text: PassportSproutCopy.wearingHeader(name: name))
             PassportSproutPairs {
-                ForEach(model.slots, id: \.slot) { summary in
+                ForEach(slots, id: \.slot) { summary in
                     slotButton(summary)
                 }
-            }
-            PassportSproutPairs {
-                rowButton(.wardrobe, sprite: WorldSprites.face, title: Text("Wardrobe"), identifier: "wardrobe")
-                rowButton(.creationStudio, sprite: WorldSprites.pen, title: Text(LocalizedStringResource("passport.sprout.studio", defaultValue: "Creation Studio", comment: "Sprout's passport page: the half-width button that opens Creation Studio. Keep it short (Spanish: Estudio)")), identifier: "studio")
             }
         }
     }
@@ -100,16 +103,29 @@ struct PassportSproutWearing: View {
     /// A slot's button: its piece, its name and what is worn there. VoiceOver: "Body, Pear".
     private func slotButton(_ summary: CustomizeSlotSummary) -> some View {
         let title = String(localized: summary.slot.title)
-        return Button { act(.slot(summary.slot)) } label: {
+        return Button { open(summary.slot) } label: {
             PassportSproutButtonFace(label: title, value: summary.value) {
-                CustomizeSlotIcon(slot: summary.slot, appearance: model.appearance, state: model.state)
+                CustomizeSlotIcon(slot: summary.slot, appearance: appearance, state: state)
             } trailing: { EmptyView() }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: title))
         .accessibilityValue(Text(verbatim: summary.value))
         .accessibilityInputLabels([Text(verbatim: title)])
-        .accessibilityIdentifier("passport.sprout.slot.\(summary.slot.token)")
+        .accessibilityIdentifier("wardrobe.wearing.slot.\(summary.slot.token)")
+    }
+}
+
+/// Page 1's way into the closet: Wardrobe (which holds what Sprout's wearing) beside Creation Studio.
+struct PassportSproutCloset: View {
+    let act: (PassportSproutAction) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        PassportSproutPairs {
+            rowButton(.wardrobe, sprite: WorldSprites.face, title: Text("Wardrobe"), identifier: "wardrobe")
+            rowButton(.creationStudio, sprite: WorldSprites.pen, title: Text(LocalizedStringResource("passport.sprout.studio", defaultValue: "Creation Studio", comment: "Sprout's passport page: the half-width button that opens Creation Studio. Keep it short (Spanish: Estudio)")), identifier: "studio")
+        }
     }
 
     /// Wardrobe or Creation Studio.

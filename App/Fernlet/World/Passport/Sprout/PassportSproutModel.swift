@@ -87,8 +87,7 @@ nonisolated enum PassportMachineLines {
 nonisolated enum PassportSproutAction: Hashable, Sendable {
     /// Tap the photo to pet (the close-up's tap).
     case pet
-    /// One of the four slot buttons, opening its approved page.
-    case slot(CustomizeSlot)
+    /// The Wardrobe, which holds what Sprout's wearing and its slot pages (since 2026-11-18).
     case wardrobe
     case creationStudio
     /// Your shop (`b2-shop-editor`).
@@ -115,8 +114,6 @@ struct PassportSproutModel: Equatable {
     let state: CompanionState
     /// What it wears, as the page draws it (the standard look in a decoy).
     let appearance: CompanionAppearance
-    /// The four slot buttons, in order.
-    let slots: [CustomizeSlotSummary]
     /// The hearts and gold hearts.
     let status: WorldStatus
     /// Items listed in Your shop.
@@ -139,7 +136,7 @@ struct PassportSproutModel: Equatable {
 
     /// What the page offers now, in its order.
     var actions: [PassportSproutAction] {
-        var list: [PassportSproutAction] = [.pet] + slots.map { .slot($0.slot) } + [.wardrobe, .creationStudio, .yourShop]
+        var list: [PassportSproutAction] = [.pet, .wardrobe, .creationStudio, .yourShop]
         if friendShopMinutes != nil { list.append(.friendShops) }
         switch place {
         case .away: list.append(.thisIsHome)
@@ -152,14 +149,12 @@ struct PassportSproutModel: Equatable {
 
     /// The page for these readings. A decoy replaces everything that is the person's with a fresh passport's.
     static func make(name: String, feeling: String, state: CompanionState, appearance: CompanionAppearance,
-                     equipped: [CustomizationItem], status: WorldStatus, listed: Int, coins: Int,
+                     status: WorldStatus, listed: Int, coins: Int,
                      friendShopMinutes: Int?, place: WorldCloseUpPlace, counts: PassportSproutCounts,
                      isDecoy: Bool) -> PassportSproutModel {
         let look = isDecoy ? CompanionAppearance.standard : appearance
-        let worn = isDecoy ? [] : equipped
         return PassportSproutModel(
             name: name, feeling: feeling, state: state, appearance: look,
-            slots: CustomizeSlot.allCases.map { CustomizeSlotSummary.make($0, appearance: look, equipped: worn) },
             status: status, listed: isDecoy ? 0 : max(0, listed), coins: isDecoy ? 0 : max(0, coins),
             friendShopMinutes: isDecoy ? nil : friendShopMinutes, place: isDecoy ? .unknown : place,
             counts: isDecoy ? .zero : counts, isDecoy: isDecoy)
@@ -225,7 +220,7 @@ nonisolated enum PassportSproutCopy {
     /// "What Sprout's wearing".
     static func wearingHeader(name: String) -> String {
         String(localized: "passport.wearing", defaultValue: "What \(name)'s wearing",
-               comment: "Sprout's passport, page 1: heading over the four slot buttons; the companion's name. Spanish: 'Lo que lleva Sprout'")
+               comment: "Wardrobe (opened from Sprout's passport): heading over the slot buttons; the companion's name. Spanish: 'Lo que lleva Sprout'")
     }
 
     /// "Shop".

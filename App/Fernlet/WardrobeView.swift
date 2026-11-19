@@ -16,6 +16,9 @@ struct WardrobeView: View {
     /// Forwarded to every ``CreationStudioView`` pushed from here so the hosting customization sheet
     /// can block swipe-to-dismiss over an unsaved drawing. Nil when there is no host to tell.
     var studioDraftIsDirty: Binding<Bool>? = nil
+    /// Whether the closet starts with What Sprout's wearing and its slot pages (World-Passport-Spec §4, moved off
+    /// passport page 1 on 2026-11-18). Page 1 opens it so; a slot page's way in leaves it out, so the two never loop.
+    var showsWearing = false
 
     /// The listing refusals (`store.listCustomItemForSale`) surfaced from the swipe "Sell" action.
     @State private var shopAlert: ShopAlert?
@@ -37,12 +40,17 @@ struct WardrobeView: View {
     /// Drives the push into Your shop (`b2-shop-editor`, which opens from Friend shops and from here).
     /// A plain button + `navigationDestination`, like the studio's, so the `List` adds no second chevron.
     @State private var isShowingShop = false
+    /// Drives the push into a slot's page from What Sprout's wearing.
+    @State private var openSlot: CustomizeSlot?
+    /// "Hold to peek" at night, shared by the slot pages pushed from here (`comp-cust-night`).
+    @State private var peek = CustomizePeek()
 
     /// "Wardrobe", the page's title on the plate.
     static let title = LocalizedStringResource("Wardrobe", comment: "Wardrobe page title: the companion's closet of designed items")
 
     var body: some View {
         List {
+            wearingSection
             unlockedSection
             designNewSection
             shopStatusSection
@@ -68,6 +76,9 @@ struct WardrobeView: View {
         .navigationDestination(item: $editingItemID) { id in
             editor(forItemID: id)
         }
+        .navigationDestination(item: $openSlot) { slot in
+            CustomizeSlotPage(store: store, slot: slot, peek: $peek, isStudioDraftDirty: studioDraftIsDirty ?? .constant(false))
+        }
         .navigationDestination(isPresented: $isShowingShop) {
             YourShopView(store: store)
                 .fernletPushedPage("Your shop")
@@ -86,6 +97,24 @@ struct WardrobeView: View {
                                onExit: { editingItemID = nil })
         } else {
             Color.parchment.ignoresSafeArea()
+        }
+    }
+
+    /// What Sprout's wearing (``PassportSproutWearing``): the slot buttons, two by two, when ``showsWearing``. A decoy
+    /// session shows the fresh passport's look (World-Passport-Spec §9).
+    @ViewBuilder
+    private var wearingSection: some View {
+        if showsWearing {
+            Section {
+                PassportSproutWearing(
+                    name: CustomizeNightCopy.companionName(store),
+                    slots: CustomizeSlotSummary.all(appearance: store.settings.companionAppearance,
+                                                    equipped: store.equippedCustomItems, isDecoy: store.duressSessionActive),
+                    appearance: store.duressSessionActive ? .standard : store.settings.companionAppearance,
+                    state: store.liveCompanionState
+                ) { openSlot = $0 }
+                .plainClosetRow(insets: EdgeInsets(top: 12, leading: 20, bottom: 4, trailing: 20))
+            }
         }
     }
 

@@ -3,7 +3,8 @@ import Foundation
 /// `ps-parity` as data (World-Passport-Spec §4, approved 2026-10-30): every action the close-up, Customize and the
 /// shop offered, and the page-1 action that is its new home. Nothing may lose its home: `PassportSproutPageTests`
 /// checks every one is in ``PassportSproutModel/actions``. Display-only items (the name, the hearts, the previews)
-/// and the items that moved off page 1 (the Wardrobe's line, ✕, Customize from Today) are in the lane's notes.
+/// and the items that moved off page 1 (the Wardrobe's line, ✕, Customize from Today) are in the lane's notes. The
+/// slot buttons' home is the Wardrobe since 2026-11-18 (What Sprout's wearing moved there), one tap past page 1.
 nonisolated enum PassportSproutParity {
     /// One action of today's screens and its home on page 1.
     struct Row: Sendable {
@@ -19,12 +20,12 @@ nonisolated enum PassportSproutParity {
         Row(item: "This is home (away from a home)", actions: [.thisIsHome]),
         Row(item: "Manage (at a home or the hotel)", actions: [.manageHomes]),
         Row(item: "Customize (the button, the hold)",
-            actions: CustomizeSlot.allCases.map { .slot($0) } + [.wardrobe, .creationStudio, .appColors]),
+            actions: [.wardrobe, .creationStudio, .appColors]),
     ]
 
     /// Customize (`b2-customize` and its slot pages).
     static let customize: [Row] = [
-        Row(item: "Body, Hair, Eyes, Pattern, Accessory, Clothing, Side item, Background", actions: CustomizeSlot.allCases.map { .slot($0) }),
+        Row(item: "Body, Hair, Eyes, Pattern, Accessory, Clothing, Side item, Background (in the Wardrobe)", actions: [.wardrobe]),
         Row(item: "Wardrobe", actions: [.wardrobe]),
         Row(item: "Creation Studio", actions: [.creationStudio]),
         Row(item: "App colors", actions: [.appColors]),

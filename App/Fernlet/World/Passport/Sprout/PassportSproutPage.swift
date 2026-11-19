@@ -11,8 +11,8 @@ import WorldMapStore
 ///
 /// From the top: the header; the photo (Sprout at 4 pt a pixel in its current look; tap to pet, with the
 /// close-up's reactions at photo size) with its ghost at map size; the details (Name, Feeling, Shape, Care);
-/// Sprout's line in the light bubble; the two machine-readable lines; the four slot buttons, Wardrobe and
-/// Creation Studio; Your shop with the coins, and for the hour after a session the gold Friend shops row; This
+/// Sprout's line in the light bubble, kept one height between lines; the two machine-readable lines; Wardrobe
+/// (which holds what Sprout's wearing since 2026-11-18) and Creation Studio; Your shop with the coins, and for the hour after a session the gold Friend shops row; This
 /// is home (or the home's line with Manage) and App colors.
 ///
 /// **In the book.** The book shows this as page 1's content and wraps the book in a `NavigationStack`: this view
@@ -35,7 +35,6 @@ struct PassportSproutPage: View {
     /// Reports whether the page is scrolled to its top, so the book's swipe down closes it only then (§1).
     var onTop: (Bool) -> Void = { _ in }
     @State private var route: PassportSproutRoute?
-    @State private var peek = CustomizePeek()
     @State private var placeSheet: WorldPlaceSheetMode?
     @State private var managesHomes = false
     @State private var governor = PetInteractionGovernor()
@@ -74,7 +73,7 @@ struct PassportSproutPage: View {
             }
     }
 
-    /// The page's title and pushed slot pages in the passport's navigation stack; none for a turning leaf's copy.
+    /// The page's title and pushed pages in the passport's navigation stack; none for a turning leaf's copy.
     @ViewBuilder
     private func inNavigation(_ page: some View) -> some View {
         if isLeafCopy {
@@ -138,13 +137,21 @@ struct PassportSproutPage: View {
         VStack(spacing: rung.compact ? 6 : 10) {
             PassportSproutHeader()
             identity(model: model, now: now, rung: rung)
-            PassportSproutLine(text: reaction.line ?? store.companionAmbientThought(addressing: termOfAddress))
+            thought(name: model.name)
             PassportSproutMachineLines(lines: model.machineLines)
-            PassportSproutWearing(model: model, act: act)
+            PassportSproutCloset(act: act)
             PassportSproutShop(model: model, act: act)
             PassportSproutBottomRow(model: model, act: act)
         }
         .environment(\.passportSproutCompact, rung.compact)
+    }
+
+    /// Sprout's line: a pet's reaction while it shows, else the ambient thought, in a bubble that keeps the room of
+    /// every line it can show now, so a change of line never moves the page below (owner 2026-11-18).
+    private func thought(name: String) -> some View {
+        let ambient = store.companionAmbientThought(addressing: termOfAddress)
+        return PassportSproutLine(text: reaction.line ?? ambient,
+                                  reserved: [ambient] + WorldCloseUpReaction.lines(name: name))
     }
 
     /// The photo beside the details; the details under it at the largest text sizes.
@@ -183,10 +190,8 @@ struct PassportSproutPage: View {
     @ViewBuilder
     private func destination(_ route: PassportSproutRoute) -> some View {
         switch route {
-        case .slot(let slot):
-            CustomizeSlotPage(store: store, slot: slot, peek: $peek, isStudioDraftDirty: $isStudioDraftDirty)
         case .wardrobe:
-            WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
+            WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty, showsWearing: true)
         case .creationStudio:
             CreationStudioView(store: store, draftIsDirty: $isStudioDraftDirty, onExit: { self.route = nil })
         case .yourShop:
@@ -204,7 +209,6 @@ struct PassportSproutPage: View {
     private func act(_ action: PassportSproutAction) {
         switch action {
         case .pet: pet()
-        case .slot(let slot): route = .slot(slot)
         case .wardrobe: route = .wardrobe
         case .creationStudio: route = .creationStudio
         case .yourShop: route = .yourShop
@@ -265,7 +269,7 @@ struct PassportSproutPage: View {
                                       bottles: store.day.bottleCount, bottleTarget: store.settings.hydrationTarget)
         return PassportSproutModel.make(
             name: CustomizeNightCopy.companionName(store), feeling: PassportSproutFeeling.text(of: now), state: now.state,
-            appearance: store.settings.companionAppearance, equipped: store.equippedCustomItems, status: status,
+            appearance: store.settings.companionAppearance, status: status,
             listed: store.listedShopItems.count, coins: store.coinBalance,
             friendShopMinutes: WorldShopButton.minutesLeft(store: store, at: date), place: place(),
             counts: PassportSproutCounts(progress: library.progress(of: store.worldFog.atlas.book)), isDecoy: decoy)
@@ -304,10 +308,9 @@ extension EnvironmentValues {
     @Entry var passportSproutCompact = false
 }
 
-/// Where page 1 goes: each pushed page (`b2-slot-picker`, `b2-wardrobe`, `b2-studio`, `b2-shop-editor`,
-/// `b2-friend-shop`, App colors).
+/// Where page 1 goes: each pushed page (`b2-wardrobe`, which holds the slot pickers since 2026-11-18,
+/// `b2-studio`, `b2-shop-editor`, `b2-friend-shop`, App colors).
 nonisolated enum PassportSproutRoute: Hashable, Sendable {
-    case slot(CustomizeSlot)
     case wardrobe
     case creationStudio
     case yourShop
