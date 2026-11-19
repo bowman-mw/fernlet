@@ -22,19 +22,56 @@ struct RecipeIngredientRecipeSource {
     let prepare: (RecipeDefinition) -> FoodItem?
     /// Why `prepare` returned nil for a recipe, for the alert a refused pick shows.
     var gap: (RecipeDefinition) -> RecipeFoodGap? = { _ in nil }
+    /// "Make a recipe for it" on a row nothing matched (owner pick P11a), or nil where it is not offered.
+    var makeRecipe: ((ManualRecipeIngredientInput) -> Void)? = nil
 
     static let none = RecipeIngredientRecipeSource(choices: [], recipesByID: [:], prepare: { _ in nil })
 
     /// The store's recipes for a recipe being edited (`editing` nil while it is new).
     @MainActor
-    static func from(_ store: FernletStore, editing: UUID?) -> RecipeIngredientRecipeSource {
+    static func from(
+        _ store: FernletStore, editing: UUID?, makeRecipe: ((ManualRecipeIngredientInput) -> Void)? = nil
+    ) -> RecipeIngredientRecipeSource {
         let all = store.allRecipesForNesting
         return RecipeIngredientRecipeSource(
             choices: store.recipeIngredientChoices(editing: editing),
             recipesByID: Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
             prepare: { store.prepareRecipeFood(for: $0) },
-            gap: { store.recipeFoodGap(for: $0) }
+            gap: { store.recipeFoodGap(for: $0) },
+            makeRecipe: makeRecipe
         )
+    }
+}
+
+/// What a new recipe opened by "Make a recipe for it" starts with (owner pick P12a): the line's name,
+/// and its amount as the recipe's "Makes" when that is a mass or volume, so the line uses the whole batch.
+struct NewRecipeSeed {
+    let name: String
+    let makes: RecipeYield?
+
+    init(row: ManualRecipeIngredientInput) {
+        let trimmed = row.trimmedName
+        name = trimmed.prefix(1).uppercased() + trimmed.dropFirst()
+        makes = RecipeYield(quantity: row.quantity, unit: row.unit).validated
+    }
+}
+
+/// "Make a recipe for it": opens a new recipe named after a line nothing matched; its save binds the
+/// line to it (owner picks P11a, P12a).
+struct MakeRecipeForItButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("Make a recipe for it", systemImage: "plus.circle")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.moss)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("recipeIngredient.makeRecipe")
     }
 }
 

@@ -29403,6 +29403,23 @@
         }
       }
     },
+    "Make a recipe for it" : {
+      "comment" : "Button under a recipe ingredient nothing matched (a pasted line, or a search that found no food): opens a new recipe named after it, and saving binds the line to that recipe",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear una receta para esto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear una receta para esto"
+          }
+        }
+      }
+    },
     "Make a recovery code" : {
       "localizations" : {
         "es" : {
