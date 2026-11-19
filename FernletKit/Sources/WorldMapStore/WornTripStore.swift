@@ -365,7 +365,7 @@ public final class WornTripStore {
     }
 
     /// Reads every piece's summaries and the question's state. A piece that can't be opened is removed (its trips are
-    /// lost, the rest kept). Throws only when the buffer key can't be read (before the first unlock since boot).
+    /// lost, the rest kept). Throws, leaving every piece, when the buffer key or a file can't be read (before the first unlock since boot).
     public func load() throws {
         let names = try vault.fileNames(withPrefix: WorldMapVault.File.wornTripsPrefix, limit: Self.maxChunks + 1)
         var loaded: [WornTripSummary] = []
@@ -381,8 +381,8 @@ public final class WornTripStore {
                 }
                 loaded.append(contentsOf: summaries)
                 counts[chunk] = summaries.count
-            } catch WorldMapVault.VaultError.keyUnavailable {
-                throw WorldMapVault.VaultError.keyUnavailable
+            } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+                throw error
             } catch {
                 vault.remove(file)
                 FernletAuditLog.log("worldMap.trips.pieceDropped")
@@ -537,8 +537,8 @@ public final class WornTripStore {
         let data: Data?
         do {
             data = try vault.read(.wornTripsMeta)
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.wornTripsMeta)
             return

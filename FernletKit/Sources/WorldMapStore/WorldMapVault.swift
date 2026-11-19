@@ -119,7 +119,31 @@ public final class WorldMapVault {
         case unopenable
         /// The file is larger than any file the vault writes.
         case tooLarge
+        /// The file is there but its bytes can't be read right now: the phone is locked and the file's protection
+        /// class shuts it (complete protection while locked, until-first-unlock before the first unlock after a
+        /// restart). Nothing is wrong with the file. Try again after unlock, and never remove it.
+        case fileUnavailable
+
+        /// Whether this means "try again after unlock": the key or the file can't be read right now. A store must
+        /// never remove a file on such an error (release review F3, 2026-11-18); only ``unopenable``, ``tooLarge``,
+        /// ``keyMalformed`` or bytes it can't decode may lead to removal.
+        public var isTryAgainLater: Bool {
+            self == .keyUnavailable || self == .fileUnavailable
+        }
     }
+
+    /// Whether `error` means "try again after unlock" (``VaultError/isTryAgainLater``). Any other error, from the
+    /// vault or a decoder, means the bytes themselves are bad.
+    public nonisolated static func isTryAgainLater(_ error: any Error) -> Bool {
+        (error as? VaultError)?.isTryAgainLater == true
+    }
+
+    /// How the vault reads a file's bytes: from disk in the app; tests inject a failure here, the way a locked
+    /// phone's file protection fails a read.
+    public typealias FileReader = @MainActor @Sendable (URL) throws -> Data
+
+    /// Reads `url` from disk.
+    public static let readFromDisk: FileReader = { url in try Data(contentsOf: url) }
 
     /// One sealed file: its name and the purpose its bytes are bound to.
     public struct File: Sendable, Equatable {
@@ -246,11 +270,13 @@ public final class WorldMapVault {
     /// The folder the files live in.
     public let directory: URL
     private let keys: WorldMapKeys
+    private let readFile: FileReader
 
-    /// A vault over `directory` with `keys`.
-    public init(directory: URL, keys: WorldMapKeys) {
+    /// A vault over `directory` with `keys`, reading files with `readFile` (from disk unless a test injects one).
+    public init(directory: URL, keys: WorldMapKeys, readFile: @escaping FileReader = WorldMapVault.readFromDisk) {
         self.directory = directory
         self.keys = keys
+        self.readFile = readFile
     }
 
     /// The app's vault: `Application Support/WorldMap`, keys in the device keychain. Opening it re-asserts
@@ -305,11 +331,20 @@ public final class WorldMapVault {
         try write(plaintext, to: file, key: key)
     }
 
-    /// Reads and opens `file` with the key `key` returns, asked for only once the file exists.
+    /// Reads and opens `file` with the key `key` returns, asked for only once the file exists. A file that exists but
+    /// whose bytes can't be read (file protection while the phone is locked, or any other read failure) throws
+    /// ``VaultError/fileUnavailable``, never ``VaultError/unopenable``: a read failure says nothing about the bytes,
+    /// so no store may remove the file over it.
     private func read(_ file: File, key: () throws -> SymmetricKey) throws -> Data? {
         let url = directory.appendingPathComponent(file.name)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let sealed = try Data(contentsOf: url)
+        let sealed: Data
+        do {
+            sealed = try readFile(url)
+        } catch {
+            FernletAuditLog.log("worldMap.vault.readDeferred", context: ["file": file.name, "code": "\((error as NSError).code)"])
+            throw VaultError.fileUnavailable
+        }
         guard sealed.count <= Self.maxFileBytes else { throw VaultError.tooLarge }
         guard sealed.starts(with: Self.magic) else { throw VaultError.unopenable }
         let resolved = try key()

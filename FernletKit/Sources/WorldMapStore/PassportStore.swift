@@ -58,14 +58,15 @@ public final class PassportStore {
         self.vault = vault
     }
 
-    /// Reads the passport. An unopenable or unreadable file is removed and the book starts empty. Throws only
-    /// when the key can't be read right now (the phone is locked: try again after unlock).
+    /// Reads the passport. A file whose bytes don't open or decode is removed and the book starts empty. Throws, and
+    /// leaves the file alone, when the key or the file can't be read right now (the phone is locked: try again after
+    /// unlock, ``WorldMapVault/VaultError/isTryAgainLater``).
     public func load() throws {
         do {
             book = try vault.read(.passport).map(PassportBook.init(data:)) ?? PassportBook()
             written = book
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.passport)
             book = PassportBook()

@@ -12,8 +12,9 @@ import WorldMapStore
 ///
 /// Both use the buffer key (`AfterFirstUnlockThisDeviceOnly`), because the iPhone that maps is in a pocket: the line
 /// is appended, and a locked launch reads whether it maps, with the phone locked. A file that can't be opened (its
-/// key gone, its bytes damaged) is removed, as every vault file is; a key that can't be read right now throws
-/// `WorldMapVault/VaultError/keyUnavailable` (only before the first unlock since the phone started). Every wipe and
+/// key gone, its bytes damaged) is removed, as every vault file is; a key or a file that can't be read right now
+/// throws `WorldMapVault/VaultError/keyUnavailable` or `fileUnavailable` and is never removed (only before the first
+/// unlock since the phone started; release review F3). Every wipe and
 /// Delete map history remove every file with the vault's folder (`WorldFogKeeper.clearAll()`). Never in a decoy (the
 /// keeper's gate). Nothing here is synced, backed up, exported or given to the AI.
 @MainActor
@@ -25,15 +26,15 @@ final class RoadTripStore {
         self.vault = vault
     }
 
-    /// The book: empty when none was written (or it can't be opened any more, when it is removed). Throws only when
-    /// the key can't be read right now.
+    /// The book: empty when none was written (or it can't be opened any more, when it is removed). Throws, leaving the
+    /// file, when the key or the file can't be read right now.
     func readBook() throws -> RoadTripBook {
         let file = WorldMapVault.File.roadTrips
         let data: Data?
         do {
             data = try vault.read(file)
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             FernletAuditLog.log("worldMap.roadTrip.bookUnopenable")
             vault.remove(file)
@@ -73,8 +74,8 @@ final class RoadTripStore {
         return Array(indices.filter { (0..<RoadTripLine.maxChunks).contains($0) }.sorted().prefix(RoadTripLine.maxChunks))
     }
 
-    /// Piece `chunk` of `trip`'s line: empty when it doesn't exist (or can't be opened, when it is removed). Throws
-    /// only when the key can't be read right now.
+    /// Piece `chunk` of `trip`'s line: empty when it doesn't exist (or can't be opened, when it is removed). Throws,
+    /// leaving the file, when the key or the file can't be read right now.
     func readChunk(_ chunk: Int, of trip: UUID) throws -> [RoadTripPoint] {
         let file = WorldMapVault.File.roadTripLine(trip: trip, chunk: chunk)
         do {
@@ -85,8 +86,8 @@ final class RoadTripStore {
                 return []
             }
             return points
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             FernletAuditLog.log("worldMap.roadTrip.chunkUnopenable")
             vault.remove(file)
