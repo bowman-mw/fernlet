@@ -181,6 +181,40 @@ public final class WornWayStore {
         return counted
     }
 
+    /// Takes one trip of `kind` back out of each of `cells` (a kept trip changed or forgotten, ferry and train build):
+    /// the count drops by one and the last day stays; a way whose count reaches zero goes. A cell named twice counts
+    /// once. Returns how many ways changed. Nothing before ``load()``.
+    @discardableResult
+    public func unrecord(_ cells: some Sequence<HexCell>, kind: WornWayKind) -> Int {
+        guard isLoaded else { return 0 }
+        var changed = 0
+        // Bounded: at most FogCellStore.maxCells distinct cells.
+        for cell in Set(cells.prefix(FogCellStore.maxCells)) {
+            let key = WornWayKey(cell: cell, kind: kind)
+            guard let tally = tallies[key] else { continue }
+            tallies[key] = tally.count > 1 ? WornTally(count: tally.count - 1, lastDay: tally.lastDay) : nil
+            changed += 1
+        }
+        if changed > 0 { hasUnsavedChanges = true }
+        return changed
+    }
+
+    /// Moves one trip on `day` through each of `cells` from `kind` to `newKind` (a kept trip's kind changed).
+    public func move(_ cells: some Sequence<HexCell>, from kind: WornWayKind, to newKind: WornWayKind, on day: UInt16) {
+        guard kind != newKind else { return }
+        let distinct = Set(cells.prefix(FogCellStore.maxCells))
+        unrecord(distinct, kind: kind)
+        record(distinct, kind: newKind, on: day)
+    }
+
+    /// Removes the way `key` whatever its count ("Forget this path" on a cell); whether it was there.
+    @discardableResult
+    public func remove(_ key: WornWayKey) -> Bool {
+        guard isLoaded, tallies.removeValue(forKey: key) != nil else { return false }
+        hasUnsavedChanges = true
+        return true
+    }
+
     /// Writes the counter (a no-op when nothing changed).
     public func save() throws {
         guard isLoaded, hasUnsavedChanges else { return }

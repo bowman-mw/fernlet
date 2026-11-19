@@ -26,6 +26,12 @@ import WorldMapStore
 /// falls back to the atlas's `LAND`. Each fix is read with it too, so the passport's land rules match the map
 /// (`WorldAtlasShore.swift`); without it they are the atlas's own.
 ///
+/// **The rail pack** (`WorldRail.pack`, Docs/World-Rail-Pack.md) opens in that same background task when
+/// ``onTransitGeography`` is set (the app sets it before ``beginOpening()``). Once the atlas, the shore mask (or its
+/// absence) and the rail pack are open, the keeper hands a `WorldTransitGeography` to ``onTransitGeography`` once, and
+/// the app sets the fog keeper's `transitGeography` from it. A missing or unreadable rail pack is logged once and no
+/// geography is handed over, so every trip stays a road.
+///
 /// **Landmarks** (World-Exploration-Spec §2). The hand-written `WorldLandmarks.json` beside the pack is opened
 /// once, on first use (``bundledLandmarks(in:)``); a missing or malformed file is logged once and means no
 /// landmarks, and the atlas still works. With a list open, each fix is read through `AtlasWithLandmarks`, so a
@@ -117,6 +123,11 @@ final class WorldAtlasKeeper {
     /// one over a deleted one. A restore does not run it (the restore marks the payload owed itself). Nil
     /// (tests) does nothing.
     @ObservationIgnored var onPassportChanged: (@MainActor () -> Void)?
+    /// Called once with the ground under a trip (``WorldTransitGeography``: shore, atlas roads, rail pack) when the
+    /// background open (``beginOpening()``) has all three; set it before that. The app hands it to the fog keeper.
+    @ObservationIgnored var onTransitGeography: (@MainActor (any WornTransitGeography) -> Void)?
+    /// Opens the rail pack off the main actor (the bundled `WorldRail.pack`; tests may swap it).
+    @ObservationIgnored var openRail: @Sendable () -> WorldRail? = WorldRailShelf.bundled()
 
     /// A keeper over `vault`, opening the atlas with `openAtlas` when the first fix arrives (the app passes
     /// ``bundledPack(in:open:)``; tests pass a fake). `openAtlas` returns nil when there is no atlas.
@@ -265,10 +276,22 @@ final class WorldAtlasKeeper {
         guard case .notOpened = atlas, !isOpeningAtlas, let openOffMain = openAtlasOffMain else { return }
         isOpeningAtlas = true
         let openShore = openShore
+        let openRail: (@Sendable () -> WorldRail?)? = onTransitGeography == nil ? nil : openRail
         Task { [weak self] in
-            let opened = await Task.detached(priority: .userInitiated) { (atlas: openOffMain(), shore: openShore?()) }.value
+            let opened = await Task.detached(priority: .userInitiated) {
+                (atlas: openOffMain(), shore: openShore?(), rail: openRail?())
+            }.value
             self?.finishOpening(opened.atlas, shore: opened.shore)
+            self?.handTransitGeography(rail: opened.rail)
         }
+    }
+
+    /// Hands ``onTransitGeography`` the ground under a trip once the atlas, the shore mask (or its absence) and the
+    /// rail pack are open; nothing without an atlas or a rail pack (every trip is then a road).
+    private func handTransitGeography(rail: WorldRail?) {
+        guard let rail, let world = openedAtlas, let hand = onTransitGeography else { return }
+        onTransitGeography = nil
+        hand(WorldTransitGeography(atlas: world, shore: openedShore, rail: rail))
     }
 
     /// Takes the atlas ``beginOpening()`` opened (nil: unreadable, logged) with the shore mask, and reads the fix that

@@ -139,6 +139,13 @@ struct WorldMapHome: View {
     @State private var testCorner: HexCell?
     /// Meeting someone new by tapping phones (World Friends §1.2): the rings, the plate and Sprout's line.
     @State private var tapCue = TapToConnectHomeCue()
+    /// Ferry and train build (owner's C2): a worn way's sheet, the tap waiting out a double-tap, and when the last
+    /// map tap landed.
+    @State private var wornWaySheet: WornWaySheetRoute?
+    @State private var pendingWayTap: WornWayPendingTap?
+    @State private var lastMapTap: Date?
+    /// DEBUG `transitAsk`: a staged "Was that a train?" (display only); nil in release builds.
+    @State private var testTransitQuestion: WornTransitQuestion?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -257,6 +264,8 @@ struct WorldMapHome: View {
                           veiled: isOffline, terrain: terrain, isFrontmost: isMapFrontPage, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size, line: line, pastBedtime: pastBedtime)
             }, geometry: geometry, followGlide: glide)
+            // Simultaneous, so Apple's pans, pinches and double-tap zoom keep working (``tappedMap(at:)``).
+            .simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { tappedMap(at: $0.location) })
             if let sky, sky == .rain || sky == .snow {
                 WorldWeatherLayer(sky: sky, isActive: isFrontmost).ignoresSafeArea()
             }
@@ -265,6 +274,11 @@ struct WorldMapHome: View {
         .overlay { bottomControls.opacity(passport?.isPresented == true ? 0 : 1) }
         // A new day: worn ways fade a level for every 30 days without a trip.
         .onChange(of: WornDay.number(for: date)) { updateWorn() }
+        // Ferry and train build (owner's C2): a tap on a worn road, railway or ferry wake opens its sheet.
+        .task(id: pendingWayTap) { await openPendingWayTap() }
+        .sheet(item: $wornWaySheet) { route in
+            WornWaySheet(route: route, book: WornTransitAskTestScenes.opensSheet ? WornTransitAskTestScenes.book() : .live(store))
+        }
     }
 
     /// What stands on the map, placed from the viewport: the space markers, the companion (saying `line`) and any
@@ -319,6 +333,12 @@ struct WorldMapHome: View {
                           isOnScreen: Self.isOnScreen(point, in: size), onHintEnded: endHint, onOpenPassport: openPassport)
         // Rebuilt every map frame only to move it: its body runs when its inputs change (perf 2026-10-31).
         .equatable()
+        // A hex tap can't be reached with VoiceOver: the worn ways near the person, from Sprout's actions.
+        .accessibilityActions {
+            if !store.wornYourWorldTallies().isEmpty {
+                Button { openNearbyWays() } label: { Text(WornWayCopy.nearbyTitle) }
+            }
+        }
         // Measured at the bubble's own wrap width, so a line of two or three rows is measured as it is
         // drawn and the feet stay on `point` (an unbounded measure took one row and pushed the sprite
         // down by the rest, off the house, the z's and the suitcase that stand at `point`).
@@ -419,6 +439,13 @@ struct WorldMapHome: View {
                 .padding(.bottom, WorldWalkToast.bottomLift)
                 .frame(maxWidth: .infinity)
                 .transition(.opacity)
+            } else if store.worldLocation.rides.loggedRide == nil, cardContext == nil, !isRiding, let question = transitQuestion {
+                // Was that a train? (owner's C1): in the car question's place, on its terms, never to someone moving.
+                WorldTransitQuestionNote(question: question, onAnswer: answerTransitQuestion)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, WorldWalkToast.bottomLift)
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
             } else {
                 // A bike ride that logged itself (`b1-home-bike`, round 7).
                 WorldRideNote(store: store, isFrontmost: isFrontmost && scenePhase == .active)
@@ -1064,6 +1091,7 @@ extension WorldMapHome {
         if scenes.contains("far") { camera.distance = 3_000 }
         if scenes.contains("recenter") { await panAwayForTest() }
         applyPlacesTestScenes(scenes)
+        applyTransitTestScenes()
     }
 
     /// DEBUG `recenter`: once the map is in front with a reading (waiting at most 15 s), moves it off the
@@ -1182,5 +1210,84 @@ extension WorldMapHome {
         let week = FogCornerNudge.weekStart(for: Date(), calendar: .current)
         testCorner = FogCornerNudge.pick(home: fix.point, revealed: store.worldFog.visibleCells, weekStart: week)
         if testCorner != nil { cornerLine = String(localized: WorldCornerCopy.bubble) }
+    }
+}
+
+extension WorldMapHome {
+    // MARK: Ferry and train paths (owner's C1 and C2, 2026-11-15)
+
+    /// Home's transit question: the fog keeper's (none in a decoy), or DEBUG `transitAsk`'s staged one.
+    private var transitQuestion: WornTransitQuestion? {
+        testTransitQuestion ?? WornTransitQuestion(store.duressSessionActive ? nil : store.worldFog.transitQuestion)
+    }
+
+    /// An answer to the transit question (a staged one only goes away).
+    private func answerTransitQuestion(_ kind: WornWayKind?) {
+        guard testTransitQuestion == nil else {
+            testTransitQuestion = nil
+            return
+        }
+        store.worldFog.answerTransitQuestion(kind)
+    }
+
+    /// A tap on the map, in global points: when it lands on a drawn worn way (not on a marker or Sprout, whose own
+    /// taps win), the way waits out a double-tap's second tap, then opens its sheet (``openPendingWayTap()``).
+    private func tappedMap(at location: CGPoint) {
+        let now = Date()
+        defer { lastMapTap = now }
+        if let last = lastMapTap, now.timeIntervalSince(last) < 0.35 {
+            // A double tap zooms the map: its first tap's sheet stays shut.
+            pendingWayTap = nil
+            return
+        }
+        guard isFrontmost, passport?.isPresented != true, cardContext == nil, !isRiding,
+              let viewport = geometry.viewport, viewport.isUsable else { return }
+        let size = geometry.size
+        let tallies = store.wornYourWorldTallies()
+        guard !tallies.isEmpty else { return }
+        let anchors = shownMarkers.map(\.point) + shownPhotoPlaces.map(\.point) + tripPhotoPlaces.map(\.point)
+        guard !WornWayLookup.isOnMarker(location, markers: anchors.map { viewport.screenPoint(for: $0, in: size) },
+                                        companion: companionPoint(viewport: viewport, size: size)) else { return }
+        let ground = viewport.geo(at: location, in: size)
+        let reach = WornWayLookup.toleranceMetres(pointsPerMetre: viewport.pointsPerMetre(at: ground.latitude, in: size))
+        guard let key = WornWayLookup.way(at: ground, within: reach, tallies: tallies, today: WornDay.number(for: now)) else { return }
+        pendingWayTap = WornWayPendingTap(key: key, serial: (pendingWayTap?.serial ?? 0) &+ 1)
+    }
+
+    /// Opens a tapped way's sheet once no second tap came, unless the tap opened something else meanwhile (a
+    /// landmark's or a city's card, photos, a place, the passport).
+    private func openPendingWayTap() async {
+        guard let tap = pendingWayTap else { return }
+        do {
+            try await Task.sleep(for: WornWayPendingTap.doubleTapWindow)
+        } catch {
+            return
+        }
+        pendingWayTap = nil
+        guard isFrontmost, passport?.isPresented != true, explore.openLandmark == nil, explore.openCity == nil,
+              openPhotoPlace == nil, openTripPhotos == nil, placeSheet == nil, wornWaySheet == nil else { return }
+        wornWaySheet = .way(tap.key)
+    }
+
+    /// VoiceOver's "Paths near you" on Sprout: the worn ways within 200 m, or a spoken line when there are none.
+    private func openNearbyWays() {
+        let today = WornDay.number(for: Date())
+        let ways = store.worldLocation.latest.map {
+            WornWayLookup.nearby(around: $0.point, tallies: store.wornYourWorldTallies(), today: today)
+        } ?? []
+        guard !ways.isEmpty else {
+            FernletAnnouncer.system.announce(.status, resolved: String(localized: WornWayCopy.noneNearby))
+            return
+        }
+        wornWaySheet = .nearby(ways)
+    }
+
+    /// DEBUG `transitAsk` and `transitSheet`: the question, and a staged train path's sheet (display only).
+    private func applyTransitTestScenes() {
+        if WornTransitAskTestScenes.asks { testTransitQuestion = WornTransitAskTestScenes.question() }
+        if WornTransitAskTestScenes.opensSheet {
+            let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+            wornWaySheet = .way(WornTransitAskTestScenes.key(around: here))
+        }
     }
 }

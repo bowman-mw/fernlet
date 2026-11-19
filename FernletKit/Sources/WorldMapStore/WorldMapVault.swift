@@ -216,6 +216,31 @@ public final class WorldMapVault {
             return File(name: roadTripLinePrefix(trip: trip) + index + ".bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
                         role: .buffer, context: Data("roadTripLine:\(trip.uuidString):\(index)".utf8))
         }
+
+        /// The prefix every piece of the kept trips starts with (``wornTrips(chunk:)``).
+        public static let wornTripsPrefix = "worn-trips-"
+
+        /// Piece `chunk` of the kept trips (``WornTripStore``, ferry and train build, owner 2026-11-15): up to
+        /// ``WornTripStore/tripsPerChunk`` rides with their kind, day, times and thinned line. The walk lines' purpose
+        /// under the buffer key (a drive ends with the phone locked), bound to the piece under the context "trips", so
+        /// no piece opens as another or as a road trip's line. `chunk` is written with four digits.
+        public static func wornTrips(chunk: Int) -> File {
+            let digits = String(max(0, min(chunk, 9_999)))
+            let index = String(repeating: "0", count: max(0, 4 - digits.count)) + digits
+            return File(name: wornTripsPrefix + index + ".bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
+                        role: .buffer, context: Data("trips:\(index)".utf8))
+        }
+
+        /// The kept trips' small state (``WornTripStore``): the day Home last asked about a ride, and which ride. The
+        /// pieces' purpose and key under the context "trips:meta".
+        public static let wornTripsMeta = File(name: "worn-trip-meta.bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
+                                               role: .buffer, context: Data("trips:meta".utf8))
+
+        /// The ride in progress (``WornRideCheckpointCodec``): a drive-speed trip's thinned readings so far, written
+        /// every few minutes so a suspended or ended app keeps the ride. The pieces' purpose and key under the context
+        /// "trips:ride"; removed once the ride is kept.
+        public static let wornTripRide = File(name: "worn-trip-ride.bin", purpose: FernletCryptoPurpose.AEAD.worldMapRouteV1,
+                                              role: .buffer, context: Data("trips:ride".utf8))
     }
 
     /// The folder the files live in.

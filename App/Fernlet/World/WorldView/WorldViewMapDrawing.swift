@@ -24,6 +24,9 @@ nonisolated struct WorldViewMapFacts: Sendable {
     let roads: WorldRoadDrawing
     /// The long frequent roads (``WornWaysBuilder/yourWorldRoads(_:today:generation:)``).
     let wornRoads: WorldRoadDrawing
+    /// The long railways and ferry crossings ridden most (``WornWaysBuilder/yourWorldWays(_:kind:today:generation:)``).
+    let wornRails: WorldRoadDrawing
+    let wornFerries: WorldRoadDrawing
     /// The hexes on found airports' grounds.
     let airports: Set<HexCell>
     /// The found airports' runways.
@@ -39,7 +42,7 @@ nonisolated struct WorldViewMapFacts: Sendable {
     init(detail: AtlasZoomDetail, raster: WorldViewLandRaster?, atlas: WorldAtlas?, found: Set<HexCell>,
          places: [HexCell: AtlasPlaceName?], roads: WorldRoadDrawing, lands: [HexCell: Bool],
          airports: Set<HexCell> = [], runways: [WorldViewRunway] = [], shore: WorldShoreMask? = nil,
-         wornRoads: WorldRoadDrawing = .none) {
+         wornRoads: WorldRoadDrawing = .none, wornRails: WorldRoadDrawing = .none, wornFerries: WorldRoadDrawing = .none) {
         self.detail = detail
         self.raster = raster
         self.atlas = atlas
@@ -52,6 +55,8 @@ nonisolated struct WorldViewMapFacts: Sendable {
         self.airports = airports
         self.runways = runways
         self.wornRoads = wornRoads
+        self.wornRails = wornRails
+        self.wornFerries = wornFerries
     }
 
     /// Whether `hex` is uncovered.
@@ -166,8 +171,10 @@ nonisolated struct WorldViewMapDrawing: Sendable {
     let roads: [RoadPath]
     /// The found airports' runways (empty farther out than City, where they'd be specks).
     let runways: Path
-    /// The long frequent roads (empty where the level draws no roads).
+    /// The long frequent roads, railways and ferry crossings (empty where the level draws no roads).
     var wornRoads = Path()
+    var wornRails = Path()
+    var wornFerries = Path()
 
     /// The key a drawing for `screen` would have.
     static func key(for screen: WorldViewCamera, generation: Int, dark: Bool) -> Key {
@@ -221,7 +228,9 @@ nonisolated struct WorldViewMapDrawing: Sendable {
         return WorldViewMapDrawing(key: key, hexes: ordered, region: lines.region, country: lines.country,
                                    uncovered: uncovered, roads: roadPaths(camera, facts: facts, uncovered: uncovered),
                                    runways: runwayPath(camera, runways: facts.runways),
-                                   wornRoads: wornRoadPath(camera, facts: facts, uncovered: uncovered))
+                                   wornRoads: wornPath(facts.wornRoads, camera: camera, uncovered: uncovered),
+                                   wornRails: wornPath(facts.wornRails, camera: camera, uncovered: uncovered),
+                                   wornFerries: wornPath(facts.wornFerries, camera: camera, uncovered: uncovered))
     }
 
     /// The runways on or near the camera's view, from City in. Bounded: ``WorldViewAirportTiles`` runways.
@@ -262,14 +271,15 @@ nonisolated struct WorldViewMapDrawing: Sendable {
         }
     }
 
-    /// The long frequent roads, where the level draws roads and some hex they may cross is uncovered.
-    private static func wornRoadPath(_ camera: WorldViewCamera, facts: WorldViewMapFacts, uncovered: Path) -> Path {
-        guard WorldRoadStyle.showsRoads(at: camera.level), !facts.wornRoads.pieces.isEmpty, !uncovered.isEmpty else { return Path() }
+    /// The long frequent roads (or railways, or ferry crossings) of `ways`, where the level draws roads and some hex
+    /// they may cross is uncovered.
+    private static func wornPath(_ ways: WorldRoadDrawing, camera: WorldViewCamera, uncovered: Path) -> Path {
+        guard WorldRoadStyle.showsRoads(at: camera.level), !ways.pieces.isEmpty, !uncovered.isEmpty else { return Path() }
         let view = camera.viewport, centreX = view.minX + view.width / 2
         let projection = WorldRoadPainter.Projection(originX: view.minX, originY: view.minY, scale: camera.scale) { piece in
             WorldViewCamera.wrappedDelta(piece.minX - centreX) - (piece.minX - centreX)
         }
-        return WorldRoadPainter.path(facts.wornRoads.pieces, size: camera.size, projection: projection)
+        return WorldRoadPainter.path(ways.pieces, size: camera.size, projection: projection)
     }
 
     /// A path of the edge segments, in the camera's screen points.

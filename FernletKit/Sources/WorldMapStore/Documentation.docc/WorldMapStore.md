@@ -51,6 +51,8 @@ A key that can't be read right now is an error, never a reason to mint a new one
 
 ``WornWayStore`` (2026-11-16, frequent roads, option B of `Docs/World-Frequent-Paths-Exploration-2026-11-15.md`) counts, for each cell a drive passed along, how many trips and the day of the last, keyed by ``WornWayKey`` (cell and ``WornWayKind``; only roads are written, rail and ferry are reserved). ``WornTally`` turns a count and a day into a ``WornLevel`` that fades one level every 30 idle days. Its own locked-phone buffer holds a trip's cells with their day until the next unlock. `fog-ways.bin` and `fog-pending-ways.bin` reuse the fog's and the buffer's purposes and keys under their own context, in ``WornWayCodec``'s fixed-size records. Device-only like the rest of the vault: never synced, exported, given to the AI or sent to friends.
 
+**Ferry and train paths** (2026-11-17, `Docs/World-Transit-Paths-Exploration-2026-11-15.md` §9): ``WornRideClassifier`` tells a ferry (1 km over water at 8–70 km/h, not along a major road) or a train (rail layer, learned rail cells, sustained speed; never with a car connected) from a drive when a drive-speed trip ends, over a ``WornTransitGeography`` the app supplies, and splits a drive with a crossing into ``WornRideSegment``s. ``WornTripStore`` keeps every such ride as a ``WornTrip`` (kind, day, start and end, the thinned line on 1/100,000-degree steps, ``WornTripCodec``) forever, until it is forgotten or the map is cleared, in pieces of 200 (`worn-trips-<piece>.bin`), with Home's question state in `worn-trip-meta.bin` and a ride in progress in `worn-trip-ride.bin` (``WornRideCheckpointCodec``). All three use the walk lines' purpose under the buffer key (a drive ends locked), bound to their own context. Bounded at 100,000 trips (refused and counted past it, never evicted); memory holds only ``WornTripSummary``s. Device-only like the rest of the vault: never synced, exported, given to the AI or sent to friends.
+
 **Wipes.** ``WorldMapVault/clearAll()`` removes the folder and both keys. Delete everything and the duress silent wipe reach it through `FernletStore.resetAll()`; the duress recovery lock through its own purge hook (design page answer 16). A decoy session never reads or writes it.
 
 ### The atlas
@@ -66,6 +68,8 @@ Round 7 (ideas 1, 2, 4, 7, A and B; contract in `Docs/World-Atlas-Pack.md`). The
 ``WorldAtlas/city(token:)``, ``WorldAtlas/country(code:)`` and ``WorldAtlas/sea(token:)`` turn a passport's frozen tokens back into the pack's entries (one dictionary read each, built once when the atlas opens). ``WorldAtlas/seaNeighbours()`` says which seas' water touches on the grid (one pass over the `OCEA` raster), so the passport's sea stamps can keep neighbouring seas in different blues.
 
 **The shore mask** (``WorldShoreMask``; contract in `Docs/World-Shore-Pack.md`). A second bundled file, `WorldShore.pack`, holds the land and water the fog and Your world draw: OpenStreetMap's coast and water, far finer than `LAND`, under the ODbL. The passport's land rules read it too (``WorldAtlas/visit(at:shore:)``): terrain follows it, a continent comes from the nearest `CONT` cell, and a country from the nearest outline within ``WorldAtlas/shoreCountryReachMetres``, refused near another sovereign state or away from water. They only add to ``WorldAtlas/visit(at:)``, so nothing earned changes. Without the pack the map falls back to `LAND` and the passport reads the atlas alone. Opening it reads its table and half-degree overview and refuses a bad file with a ``WorldShoreMaskError``. ``WorldShoreMask/isLand(at:)`` decodes at most two 1° tiles, outside its lock, into a cache held to ``WorldShoreMask/maxCachedTiles`` and ``WorldShoreMask/maxCachedBytes``; ``WorldShoreMask/landShare(at:)`` opens no tile. A bad tile never traps (a coast tile answers from the overview, a water tile as no water). Its xz seam, `WorldShoreXZ.swift`, is allowlisted like `WorldAtlasInflate.swift`. Land the mask finds where the atlas has water takes its climate from ``AtlasTerrainClassifier/nearbyClimateCode(at:)`` or ``AtlasTerrainClassifier/landTerrain(at:)``, which the passport never asks.
+
+**The rail pack** (``WorldRail``; contract in `Docs/World-Rail-Pack.md`, 2026-11-16, the ferry and train paths build). A third bundled file, `WorldRail.pack` (`FWR1`, at most 2 MiB, pinned by ``WorldRail/expectedSHA256``), holds Natural Earth's rail lines and ferry routes (public domain), thinned at about 110 m and indexed by one-degree cell. ``WorldRail/isNearRail(_:within:)`` and ``WorldRail/isNearFerryRoute(_:within:)`` measure point-to-segment distance over the few cells near a point; ``WorldAtlas/isNearMajorRoad(_:within:)`` does the same for the atlas's roads. The app joins them with the shore mask into a ``WornTransitGeography`` for the trip classifier. A bad pack decodes to nil (``WorldRail/decode(_:)``), and every trip is then a road.
 
 **Landmarks** (World-Exploration-Spec §2; ``WorldLandmarks``, ``AtlasLandmark``). A hand-written list in its own bundled file, `WorldLandmarks.json`, beside the pack and not in it (never an OpenStreetMap import, never fetched). Two tiers (``AtlasLandmarkTier``): a famous landmark has its own pixel art, named by an art id (``WorldLandmarks/famousArtIDs``: 28 drawn, all approved 2026-10-29: `eiffel`, `empire`, `opera`, `colosseum` and the owner's 24 more; a future famous landmark waits in ``WorldLandmarks/placeholderArtIDs``, which ``AtlasLandmarkTier/drawable`` draws with a generic icon until its art is approved); the art itself is ``WorldLandmarkArt`` (the design session's sprites, palette, halos, not-found greys and scales, bundled as `WorldLandmarkArt.json`; ``WorldLandmarkArt/sprite(for:)`` picks what a landmark draws now); every other one a generic icon (``AtlasLandmarkKind``: park, bridge, lighthouse, stadium, castle, tower). Each entry has a frozen lowerCamel token, an English and a Spanish name (data, shown only once found), its city's atlas token, a point and a find radius of 50 to 600 m. ``WorldLandmarks/init(data:)`` refuses a whole file for any broken entry, an unknown key, a second use of a token, a version it does not read, or more than ``WorldLandmarks/maxLandmarks`` (5,000). An accepted fix within a landmark's radius finds it: ``AtlasWithLandmarks`` puts the tokens into ``AtlasVisit/landmarks`` (at most ``AtlasVisit/maxLandmarks``), and the passport keeps each one once as kind `landmark`, after the city and before the terrain. The city card reads ``PassportBook/foundLandmarkCount(inCity:of:)`` against ``WorldLandmarks/landmarks(inCity:)``, and the map asks ``PassportBook/isFound(_:)``; before it is found a landmark is drawn grey and unnamed through the fog, even in a decoy, since the list is public data and a decoy's empty book finds nothing.
 
@@ -113,6 +117,17 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``DrivenFogStore``
 - ``WornWayStore``
 - ``WornWayCodec``
+- ``WornTripStore``
+- ``WornTripCodec``
+- ``WornTripSummary``
+- ``WornTrip``
+- ``WornRideCheckpointCodec``
+- ``WornRideClassifier``
+- ``WornRideSegment``
+- ``WornRideSample``
+- ``WornRideVerdict``
+- ``WornRideConfidence``
+- ``WornTransitGeography``
 - ``FogCellCodec``
 - ``WorldRouteStore``
 - ``WorldRouteCodec``
@@ -165,6 +180,7 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``WorldAtlas``
 - ``WorldShoreMask``
 - ``WorldShoreMaskError``
+- ``WorldRail``
 - ``AtlasGrid``
 - ``AtlasPolygon``
 - ``AtlasCountry``

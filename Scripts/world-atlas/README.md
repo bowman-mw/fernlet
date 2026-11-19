@@ -64,3 +64,21 @@ admin-1 table (ISO 3166-2 tokens, `ne:<id>` for stand-in or shared codes, pieces
 `ADM0_A3` or `ISO_A2`, a tiny polygon kept, plate groups by `GEONUNIT`, `REGION_COD` and a county's own code);
 determinism; and the size cap. The plate groups themselves (the first-level regions shown where Natural Earth's
 admin-1 is second-level) are the hand-written `PLATE_GROUPS` table in the generator.
+
+## 4. The rail pack (`WorldRail.pack`)
+
+Natural Earth's rail lines and ferry routes for the ferry and train paths' classifier have their own pack,
+generator and pin table (format, rules and sizes in [Docs/World-Rail-Pack.md](../../Docs/World-Rail-Pack.md)).
+The rail layer is pinned in `fetch-rail-sources.sh`; the ferry routes come from `ne_10m_roads`, which stays pinned
+in `fetch-sources.sh`, so the atlas's table, generator and pack are untouched.
+
+```sh
+Scripts/world-atlas/fetch-rail-sources.sh
+python3 -I Scripts/world-atlas/build_world_rail.py --sources ~/Library/Caches/Fernlet/atlas-sources \
+    --out App/Fernlet/World/Atlas/WorldRail.pack --date 2026-11-16
+python3 -I Scripts/world-atlas/rail_selftest.py
+```
+
+Thinned at 0.001° (about 110 m), cut and indexed by one-degree cell, deterministic, and capped at 2 MiB (the
+generator writes nothing over it). After a regeneration, move `WorldRail.expectedSHA256` to the printed hash in the
+same commit.

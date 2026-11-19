@@ -184,6 +184,7 @@ struct WorldAtlasMapView: View {
     private var generation: Int {
         model.placeGeneration &+ (model.raster == nil ? 0 : 1) &+ (model.found.isEmpty ? 0 : 2) &+ (model.roads.roadCount > 0 ? 4 : 0)
             &+ (model.airportCells.isEmpty ? 0 : 8) &+ (model.wornRoads.pieces.isEmpty ? 0 : 16)
+            &+ (model.wornRails.pieces.isEmpty ? 0 : 32) &+ (model.wornFerries.pieces.isEmpty ? 0 : 64)
     }
 
     /// The zoom level's spoken value.

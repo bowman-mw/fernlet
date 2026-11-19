@@ -126,6 +126,13 @@
      each part of the map and when you last did, so the roads you use most show and fade, encrypted on
      this iPhone with the rest of the map and deleted with it; the map widget's sentence adds the paths
      and roads you use most. Nothing new is sent to the developer and no promise is weakened under §13.
+     DRAFT 2026-11-16, awaiting the owner's approval of the final words (ferry and train paths, direction
+     approved as P1 on 2026-11-15): §6's motion sentence adds riding on a train, bus or boat; the
+     frequent-roads sentence counts passes by road, rail or water and names railways and ferry crossings;
+     a new sentence says Fernlet keeps each ride (the day, its start and end, the way it went) until the
+     person forgets it or clears the map, so one ride can be changed or forgotten. All of it stays on
+     the iPhone, encrypted with the map; nothing new is sent to the developer and no promise is weakened
+     under §13.
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -462,8 +469,8 @@ Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
 you're driving or riding, the road you take; to notice a trip starting, it asks iOS to tell it when
 you leave a place, then checks for a couple of minutes.
-If you turn on background mapping, Fernlet also counts how often you pass along each part of the map and when you last did, so the roads you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. If you turn on background mapping or Log my bike
-rides, Fernlet uses your iPhone's motion data to tell when you're riding in a car or cycling, on this
+If you turn on background mapping, Fernlet also counts how often you pass along each part of the map, by road, rail or water, and when you last did, so the roads, railways and ferry crossings you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. It also keeps each ride (the day, when it started and ended, and the way it went) until you forget it or clear your map, so you can change or forget one ride. If you turn on background mapping or Log my bike
+rides, Fernlet uses your iPhone's motion data to tell when you're riding in a car, on a train, bus or boat, or cycling, on this
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
 exercise; it never keeps the motion data itself. To tell when you're driving, it also notes
 the Bluetooth audio devices your iPhone is connected to during a drive, on this iPhone only: it keeps a
