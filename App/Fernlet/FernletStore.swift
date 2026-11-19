@@ -355,9 +355,6 @@ final class FernletStore {
         manager.nameDisclosureInputs = { [weak self] in self?.recipeNameDisclosureInputs() }
         return manager
     }()
-    /// The identity the recipe radio's friend tags are derived under (SEC-L29): the app's one factory,
-    /// built once rather than per epoch.
-    @ObservationIgnored private lazy var recipeTagIdentity: IdentityService = makeProximityIdentity()
     /// Meeting someone new by tapping phones on Home (World Friends §1): the tap rendezvous, what Home
     /// draws for it, and the hand-off to the hangout mesh (`FernletStore+TapToConnect.swift`).
     @ObservationIgnored private(set) lazy var tapToConnect: TapToConnectController = makeTapToConnect()
@@ -1998,12 +1995,17 @@ final class FernletStore {
     }
 
     /// What the recipe radio's name disclosure reads (SEC-L29): the switch, the trust vault and the
-    /// app identity, built once.
+    /// app identity.
+    ///
+    /// The identity is the presence radio's, which `PresenceManager` provisions when it is built and
+    /// Delete everything wipes. Until 2026-11-19 this was a fourth `makeProximityIdentity()` instance
+    /// that nothing provisioned, so every friend tag threw `notProvisioned` and kept friends were never
+    /// named in the recipe picker (release review since build 460).
     func recipeNameDisclosureInputs() -> ProximityRecipeShareManager.NameDisclosureInputs {
         ProximityRecipeShareManager.NameDisclosureInputs(
             toEveryone: settings.advertiseNameToEveryoneNearby,
             friends: trustedProximityPeers,
-            identity: recipeTagIdentity
+            identity: presenceManager.tagDerivationIdentity
         )
     }
 
@@ -7437,7 +7439,8 @@ final class FernletStore {
         // re-friend in person; same semantics as bitchat's panic wipe) and takes the backup-escrow
         // rows under the same keychain service with it — their sealed backups were already deleted
         // in step 2, so the keys are orphans. All three live IdentityService caches are wiped so RAM
-        // matches the keychain until relaunch.
+        // matches the keychain until relaunch. The recipe radio's friend tags derive under the
+        // presence manager's instance (`recipeNameDisclosureInputs()`), so its wipe covers them too.
         do {
             try meshNetworkManager.wipeIdentityForDeleteAll()
             // The session photos' two at-rest key caches (the wall's and the pending corpus's), dropped
