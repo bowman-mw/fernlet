@@ -230,7 +230,11 @@ struct PrivacyPolicyParityTests {
         // SEC-L29 (2026-11-15, owner's option c of 2026-11-13; wording awaits the owner's approval): the
         // recipe radio shows a name only to kept friends unless the person turns on the opt-in.
         "nearby phones see your name only if they belong to friends you added",
-        "(Nearby friends, off by default)"
+        "(Nearby friends, off by default)",
+        // Release review policy pass (2026-11-19; both sentences await the owner's approval, so an edit of his
+        // moves these): the map record marks ground only driven past, and a calendar flight needs a confirmed trip.
+        "the ground you only drove or rode past",
+        "counts as yours only once Fernlet sees you take it or you add it yourself"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

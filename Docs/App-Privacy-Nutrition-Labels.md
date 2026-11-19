@@ -7,7 +7,9 @@
 > journal text, the iMessage app, the Open Food Facts barcode lookup). *2026-10-17: the Sensitive-info row
 > was re-reviewed for period data in Fernlet and Sealed backup v2 (2026-10-01). Its answer is unchanged
 > and its scope is widened. The other rows were not re-audited in that pass.* Re-review with legal before
-> submission, and re-review whenever a data type gains a new egress path.
+> submission, and re-review whenever a data type gains a new egress path. *2026-11-19: the location rows
+> were re-reviewed for everything merged since build 460; live planes add Coarse Location (see the last
+> section for the App Store Connect entries).*
 >
 > **Social data does sync to CloudKit.** This header used to say no social/friend type did — false for
 > as long as the roster has lived in the aggregate blob. When iCloud sync is on, the friend roster and
@@ -43,7 +45,9 @@ data with the user's Apple ID, classify those types as **Data Linked to You**, *
 | User Content — recipes and planned workouts sent as Messages cards | No | — | No | — | Leaves the device only when the user sends a card, to recipients the user picks, through Apple's Messages service; the developer never receives or can access it. The App Group catalog the extension reads stays on the device, and the Messages extension keeps nothing of its own (its only writes are the review-inbox records of cards received, which the app consumes, expires after seven days, and wipes). |
 | Search History — typed product searches (DuckDuckGo) and barcode lookups (Open Food Facts) | Not collected by the developer; sent to a third-party lookup service only when the user taps to look something up, behind the Web-nutrition-lookup consent (off by default; AI helper on) | No (no account, email or device identifier is sent; the service sees an IP address) | No | App Functionality | The request carries only the typed query or the barcode digits plus standard HTTP metadata (OFF also gets the app's name/version User-Agent); the developer never receives it, and neither service is a partner or receives data for advertising. Confirm with legal whether Apple's "collected" definition reaches a third-party lookup the user initiates; if it does, declare **Search History → Not Linked to You → App Functionality**. The saved product itself is covered by the Health & Fitness row (user's own foods, iCloud sync if on). |
 | Identifiers — public key | Peer-to-peer only | Yes (device identity) | No | App Functionality | Ed25519 public key exchanged in person with friends; no server. A friend's key also rides the roster in the Contacts row. |
-| Coarse location | Optional, on-device | No | No | App Functionality | WeatherKit prompts + optional activity tagging; never tracked over time, never sent to developer. |
+| Coarse location — live planes ("Live planes nearby", opt-in, since 2026-11-19) | Sent to a third party, adsb.lol, only while the switch is on and Home's map is in front. Declare it as collected | No | No | App Functionality | Off by default (Settings → Home map, and offered once in onboarding). Each request to `api.adsb.lol` carries the centre of the 0.5° grid cell (about 55 km) under the middle of the visible map, a fixed radius, and `User-Agent: Fernlet/<version>`; adsb.lol also sees the IP address and keeps temporary logs under its own policy. No account, key or identifier. At most one request every 30 seconds and 400 a day. The developer never receives it. Because adsb.lol's logs outlive the request, this meets Apple's "collect" definition for a third party: **Location → Coarse Location → App Functionality → Not Linked to You → not used for tracking.** Disclosed in Privacy Policy §6; egress row in `No-Tracking-Wall.md`. |
+| Location — everything else (the map, uncovered and driven-past ground, walks, rides, places, airports and flights, weather prompts, activity tagging) | No | — | No | App Functionality | Kept on the device only, encrypted in the map's own folder, never synced or sent to the developer (the passport's opt-in sealed backup is ciphertext in the user's own iCloud). Apple services receive a location to answer a request and are not "collection" by the developer: WeatherKit (weather prompts), Apple Maps tiles for the area on screen, and Apple Maps place lookups while Fernlet is open and when a drive ends (since 2026-11-15). Not tracked over time by anyone but the device. |
+| Location and Photos — road trips (since 2026-11-10) | No | — | No | — | A road trip the person starts or joins shares the road driven together and the trip's photos with the friends on it, phone to phone over the in-person connection, each getting only the stretch they were there for. Nothing goes to the developer or to any server, so it is sharing between users' devices, not collection by the developer, and adds nothing to the label. Disclosed in Privacy Policy §6. |
 | Contact info / Browsing / Purchases / Financial / etc. | No | — | — | — | Not collected. |
 
 ## Required-reason API declarations (`PrivacyInfo.xcprivacy`)
@@ -132,3 +136,46 @@ change these answers:
 - **Sensitive info** — sensitive (Tier-2) memories left the encrypted-backup row; they are now
   device-only.
 - **Required-reason APIs** — four manifests now, each declared per bundle above.
+
+## Owner action — App Store Connect entries for the build after 460 (2026-11-19)
+
+Reviewed 2026-11-19 against everything merged since build 460 (`0e8037ff`). One answer changes; the
+rest is recorded so the next review does not have to re-derive it. Nothing here updates App Store
+Connect: the owner enters it under **App Privacy → Edit** (Data Types).
+
+**Add: Coarse Location (live planes).**
+
+1. Data collection: **Yes, we collect data from this app** (if it is not already ticked for the rows
+   above).
+2. Data types → **Location** → tick **Coarse Location**. Leave **Precise Location** unticked.
+3. Coarse Location → purposes: tick **App Functionality** only.
+4. "Is the coarse location collected from this app linked to the user's identity?" → **No, it is
+   not linked to the user.**
+5. "Do you or your third-party partners use coarse location for tracking purposes?" → **No.**
+6. Publish. The label then shows Coarse Location under **Data Not Linked to You**.
+
+Why: with the off-by-default **Live planes nearby** switch on, a 55 km grid cell under the map's
+centre goes to adsb.lol, a third party that keeps temporary logs. Everything else about location
+stays on the device.
+
+**Checked since build 460, no label change:**
+
+- **Road trips** share a driven road and trip photos between friends' phones in person. Not
+  collection by the developer.
+- **Worn paths, frequent roads, railways and ferries, kept rides, driven-past ground, car signals
+  (Bluetooth tags and car names), homes and hotels, airports, flights and the Hangar:** on the
+  device only, encrypted with the map.
+- **Flights from Calendar** and the **Flighty file**: read on the device; nothing sent.
+- **Apple Maps lookup when a drive ends** (hotel check-in): a location goes to Apple to answer the
+  request, as the existing place lookups do. Apple is not a partner that keeps it for the developer.
+- **Recovery code:** the backup keys, sealed to the 12 words, sit in the user's own iCloud private
+  database. Ciphertext in the user's iCloud, like the sealed backups (Sensitive-info row).
+- **Memories as their own synced rows** and **the per-device day key**: the same user's-own-iCloud
+  sync already declared (Health & Fitness and User Content rows).
+- **Passport sealed backup** (opt-in): ciphertext in the user's own iCloud; same treatment as the
+  Sensitive-info row. Confirm with legal whether it adds Location under "Data Linked to You", as
+  the other sealed-backup rows may.
+- **Travel-day city in memory:** device only, on-device AI only.
+- `PrivacyInfo.xcprivacy`: unchanged since build 460 in all four bundles. `NSPrivacyCollectedDataTypes`
+  is still empty; ask legal whether live planes' Coarse Location should also be listed there
+  (changing the manifest is a code change and is not part of this note).
