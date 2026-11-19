@@ -56,7 +56,8 @@ struct PassportBookScreen: View {
 
     var body: some View {
         let flights = flightsModel
-        let book = PassportBookModel(entries: entries, showsFlights: flights != nil, showsRoadTrips: roadTripsModel != nil)
+        let book = PassportBookModel(entries: entries, showsFlights: flights != nil, showsHangar: flights?.hangar.isEmpty == false,
+                                     showsRoadTrips: roadTripsModel != nil)
         NavigationStack {
             GeometryReader { proxy in
                 ZStack {
@@ -263,6 +264,8 @@ struct PassportBookScreen: View {
                                     onOpenTrip: { openWorld(on: $0) }, onOpenYear: { openYear($0) },
                                     onAddPastFlights: addPastFlightsAction)
             }
+        case .hangar:
+            PassportHangarPage(planes: flights?.hangar ?? [])
         case .roadTrips:
             roadTripsContent
         case .stamps(let index):

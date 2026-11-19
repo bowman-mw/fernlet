@@ -517,6 +517,16 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: .homeMap,
             route: .homeMap
         ),
+        // Live planes nearby (owner 2026-11-19): Home map's switch for real planes from adsb.lol.
+        SettingsSearchEntry(
+            title: "Live planes nearby",
+            display: LocalizedStringResource(
+                "settings.search.title.livePlanes", defaultValue: "Live planes nearby",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["live planes", "planes", "plane", "aircraft", "flights", "flight tracker", "adsb", "adsb.lol", "sky"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
         // Round 7 (car and bike detection): Home map's "Log my bike rides".
         SettingsSearchEntry(
             title: "Log my bike rides",

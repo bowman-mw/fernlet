@@ -173,6 +173,7 @@ struct AcknowledgmentsView: View {
                 foodDataSection
                 mapDataSection
                 airportsSection
+                livePlanesSection
                 weatherSection
             }
             .padding(.horizontal, 16)
@@ -332,6 +333,15 @@ struct AcknowledgmentsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
+        }
+    }
+
+    /// Where live planes come from (owner 2026-11-19): adsb.lol's feed, under the ODbL, with the same linked credit the
+    /// map shows while they are on. The credit is a notice, kept as written.
+    private var livePlanesSection: some View {
+        FernletFramedSection(header: Text("Live planes")) {
+            paragraph(Text("When Live planes nearby is on, the planes on the World map come from adsb.lol, a community flight tracker fed by volunteers, under the Open Database License (ODbL). Fernlet draws them and keeps nothing about them."))
+            LiveAircraftCredit()
         }
     }
 

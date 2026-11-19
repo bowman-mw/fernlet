@@ -168,6 +168,9 @@ struct PassportContents: View {
             if let flights = book.flightsPage {
                 row(Text(PassportFlightsCopy.title), detail: Text(verbatim: "\(flights)"), page: flights, on: current == flights)
             }
+            if let hangar = book.hangarPage {
+                row(Text(PassportHangarCopy.title), detail: Text(verbatim: "\(hangar)"), page: hangar, on: current == hangar)
+            }
             if let roadTrips = book.roadTripsPage {
                 row(Text(RoadTripCopy.passportTitle), detail: Text(verbatim: "\(roadTrips)"), page: roadTrips, on: current == roadTrips)
             }

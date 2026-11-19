@@ -64,6 +64,8 @@ extension SettingsSearchSynonyms {
         "Save new routes": ["guardar rutas nuevas", "rutas", "ruta", "líneas", "senderos", "borrar rutas"],
         "Show worn paths": ["mostrar caminos trillados", "caminos trillados", "caminos", "carreteras", "calles",
                             "frecuentes", "abandonados"],
+        "Live planes nearby": ["aviones en directo cerca", "aviones", "avión", "aeronaves", "vuelos",
+                               "rastreador de vuelos", "adsb", "cielo"],
         "Log my bike rides": ["registrar mis salidas en bici", "bici", "bicicleta", "ciclismo", "movimiento",
                               "movimiento y forma física"],
         "Remember places I stop at": ["recordar los lugares donde me detengo", "lugares", "visitas", "dónde has estado",

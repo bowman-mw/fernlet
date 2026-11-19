@@ -146,6 +146,8 @@ struct WorldMapHome: View {
     @State private var lastMapTap: Date?
     /// DEBUG `transitAsk`: a staged "Was that a train?" (display only); nil in release builds.
     @State private var testTransitQuestion: WornTransitQuestion?
+    /// "Live planes nearby" (owner 2026-11-19): while on, the map carries adsb.lol's credit.
+    @AppStorage(WorldMapPreferences.Key.livePlanes) private var livePlanesOn = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -261,7 +263,8 @@ struct WorldMapHome: View {
         return ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
-                          veiled: isOffline, terrain: terrain, isFrontmost: isMapFrontPage, overlay: { viewport, size in
+                          veiled: isOffline, terrain: terrain, isFrontmost: isMapFrontPage,
+                          livePlanesCredit: livePlanesOn && !store.duressSessionActive, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size, line: line, pastBedtime: pastBedtime)
             }, geometry: geometry, followGlide: glide)
             // Simultaneous, so Apple's pans, pinches and double-tap zoom keep working (``tappedMap(at:)``).
@@ -314,6 +317,8 @@ struct WorldMapHome: View {
                     .fixedSize()
                     .position(x: point.x + (index == 0 ? 92 : -92), y: point.y + 40)
             }
+            // Live planes nearby (owner 2026-11-19): over the markers, under Sprout; fetched only while this map is in front.
+            LiveAircraftLayer(store: store, viewport: viewport, size: size, isActive: isMapFrontPage && scenePhase == .active)
             companion(at: point, size: size, line: line)
             WorldCompanionExtras(store: store, point: point, isPastBedtime: pastBedtime)
             WorldTravelLook(store: store, point: point)

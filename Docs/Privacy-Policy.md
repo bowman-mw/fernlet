@@ -133,12 +133,22 @@
      person forgets it or clears the map, so one ride can be changed or forgotten. All of it stays on
      the iPhone, encrypted with the map; nothing new is sent to the developer and no promise is weakened
      under §13.
+     And 2026-11-19 (live planes, both passages approved by the owner word for word on the live-planes review page
+     that day): §6 gains "Live planes nearby (off by default)" — while the map is open, the area the map shows,
+     rounded to a fixed grid about 55 km across, and the internet address go to adsb.lol, a community flight
+     tracker, under its own policy, at most every 30 seconds and 400 times a day, with nothing about the planes kept
+     and nothing added to the passport; and "Airports and flights" says a Flighty file's aircraft type and tail
+     number are now kept, encrypted in the passport on this iPhone (they reverse Airports-Spec answers 24A/27A
+     for those two fields only). A new third party receives the coarse area behind an off-by-default switch, so
+     the effective date moves to November 19, 2026. Nothing goes to the developer and no promise is weakened
+     under §13: the switch is the fresh, affirmative consent, and the App Store label adds Coarse Location (App
+     Functionality, not linked, not tracking).
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** November 15, 2026
+**Effective date:** November 19, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -509,10 +519,12 @@ you look at your places.
 When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at a hotel; only that location is sent, with nothing about you attached.
 
 **Airports and flights.** With Airports and flights on, Fernlet notes the airports you visit and the flights you take from your location, and keeps them in your passport, encrypted on this iPhone and carried only in the passport's own sealed backup if you use it.
-If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports and gate times; it doesn't keep the file and never contacts Flighty.
+If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports, gate times, aircraft type and tail number; it doesn't keep the file and never contacts Flighty. The aircraft type and tail number stay in your passport, encrypted on this iPhone, so the map can point out a plane you've flown on and the passport can stamp each type you've flown.
 If you turn on Flights from Calendar (iOS asks for full access to your calendar), Fernlet reads your calendar's events on this iPhone to find flights, keeping only each flight's date, airports and times, plus a scrambled tag so it won't add an event twice, and dropping booking codes, links and notes as it reads; it never opens a link or changes your calendar.
 It looks from two days back to 60 days ahead each time you open Fernlet, and once further back when you turn it on; the flights it finds draw your routes and fill the passport's Flights page, but never stamp an airport or uncover the map.
 Sprout's memory can note which city you travelled to, so the AI on your iPhone can mention it; only the city, never the airport, times or where you were.
+
+**Live planes nearby (off by default).** If you turn on Live planes nearby, then while the map is open Fernlet asks adsb.lol, a community flight tracker, for the planes in the area the map shows. adsb.lol receives that area, rounded to a fixed grid about 55 km across, and your internet address, under its own privacy policy; nothing else about you is sent. Fernlet asks at most once every 30 seconds and 400 times a day, only while the map is in front, keeps nothing about the planes, and never adds them to your passport.
 
 ## 7. Artificial intelligence
 

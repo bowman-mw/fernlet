@@ -212,7 +212,7 @@ struct NoTrackingBoundaryTests {
         PermittedDestination(
             host: "html.duckduckgo.com",
             reason: """
-            One of the two hosts the app itself chooses to contact. DuckDuckGo's no-JS HTML search \
+            One of the three hosts the app itself chooses to contact. DuckDuckGo's no-JS HTML search \
             endpoint, behind the web-nutrition-lookup opt-in: it receives the typed product query and \
             nothing else — no account, no identifier, no health data (Fernlet/FoodProductWebImporter.swift).
             """
@@ -220,7 +220,7 @@ struct NoTrackingBoundaryTests {
         PermittedDestination(
             host: "world.openfoodfacts.org",
             reason: """
-            The other host the app itself chooses to contact: Open Food Facts' read-only product API \
+            Another host the app itself chooses to contact: Open Food Facts' read-only product API \
             (v3.4), for the optional online UPC lookup when a scanned barcode misses every local catalog. \
             Behind the SAME web-nutrition-lookup consent (webNutritionLookupEnabled + the recorded \
             .accepted decision), and only on an explicit tap per lookup. It receives the barcode digits \
@@ -230,6 +230,31 @@ struct NoTrackingBoundaryTests {
             EphemeralWebSession with redirects refused, a 128 KB cap and a 20 s deadline \
             (Fernlet/OpenFoodFactsClient.swift). Data is ODbL; every surface showing it carries the \
             attribution line.
+            """
+        ),
+        PermittedDestination(
+            host: "api.adsb.lol",
+            reason: """
+            The third host the app itself chooses to contact (owner 2026-11-19, the live-planes build): \
+            adsb.lol's community flight-tracking API, `GET /v2/point/{lat}/{lon}/50`, for "Live planes nearby" \
+            on Home's map. Behind its own off-by-default switch (WorldMapPreferences.showsLivePlanes), asked in \
+            onboarding and Settings with the owner's approved disclosure; fetched only while Home's map is in \
+            front and the app is active, every 30 s at most, at most 400 times a day, resting after a 429. It \
+            receives the centre of the 0.5° grid cell under the map's centre (never a finer point: the client \
+            takes only a LiveAircraftCell), a fixed 50 NM radius, Accept and a User-Agent naming the app and its \
+            version — no key, account, identifier or query; plus the IP address and TLS metadata any HTTPS \
+            request carries. Fetched through EphemeralWebSession with redirects refused, a 1 MB cap and a 15 s \
+            deadline (Fernlet/World/Map/LiveAircraft/LiveAircraftClient.swift). Nothing it returns is saved. \
+            Data is ODbL; the map carries "© adsb.lol contributors" while the switch is on.
+            """
+        ),
+        PermittedDestination(
+            host: "www.adsb.lol",
+            reason: """
+            Not fetched. adsb.lol's privacy and licence page, which the map's "© adsb.lol contributors" credit \
+            links for the ODbL attribution. A `Link` hands it to Safari when the user taps the credit (Home's map \
+            while live planes are on; Acknowledgments); the app sends it nothing and holds no client for it \
+            (Fernlet/World/Map/LiveAircraft/LiveAircraftLayer.swift, LiveAircraftCredit).
             """
         ),
         PermittedDestination(
@@ -295,18 +320,21 @@ struct NoTrackingBoundaryTests {
         )
     ]
 
-    /// The three files in shipping code that may PERFORM an outbound fetch.
+    /// The four files in shipping code that may PERFORM an outbound fetch.
     ///
     /// This closes the gap the host allowlist cannot: a host assembled at runtime from string pieces
     /// (`"api." + "tracker.io"`) has no `https://` literal to find. Pinning WHERE an HTTP client may
-    /// exist means such a call site has to live in one of these reviewed files — each a
-    /// user-initiated lookup whose destinations are an allowlisted host or a URL the user supplied:
-    /// the two web importers are SSRF-guarded and consent-gated, and the Open Food Facts client
-    /// talks to exactly one fixed host with every redirect refused, behind the same consent.
+    /// exist means such a call site has to live in one of these reviewed files — each behind a
+    /// switch the user turned on, whose destinations are an allowlisted host or a URL the user supplied:
+    /// the two web importers are SSRF-guarded and consent-gated, the Open Food Facts client
+    /// talks to exactly one fixed host with every redirect refused, behind the same consent, and the
+    /// live-planes client talks to exactly one fixed host with every redirect refused, behind its own
+    /// off-by-default switch, sending only a 0.5° grid cell.
     private static let pinnedWebImporterFiles: Set<String> = [
         "FoodProductWebImporter.swift",  // product-page lookup (opt-in web nutrition lookup)
         "RecipeWebImporter.swift",       // recipe import from a URL the user pasted/shared
-        "OpenFoodFactsClient.swift"      // barcode lookup on Open Food Facts (same opt-in, one tap each)
+        "OpenFoodFactsClient.swift",     // barcode lookup on Open Food Facts (same opt-in, one tap each)
+        "LiveAircraftClient.swift"       // live planes on Home's map (its own off-by-default switch, 2026-11-19)
     ]
 
     /// The hosts each HTTP-client file may hardcode — an exact set PER FILE, so a destination
@@ -317,6 +345,7 @@ struct NoTrackingBoundaryTests {
         "FoodProductWebImporter.swift": ["duckduckgo.com", "html.duckduckgo.com"],
         "RecipeWebImporter.swift": [],
         "OpenFoodFactsClient.swift": ["world.openfoodfacts.org"],
+        "LiveAircraftClient.swift": ["api.adsb.lol"],
         "EphemeralWebSession.swift": []
     ]
 
@@ -606,10 +635,11 @@ struct NoTrackingBoundaryTests {
         )
     }
 
-    /// A raw HTTP client may exist only in the pinned fetchers (the two web importers and the Open
-    /// Food Facts client) and the session factory they share, and each of those files may hardcode
-    /// exactly its own hosts: the DuckDuckGo search endpoint and its redirect base in the product
-    /// importer, `world.openfoodfacts.org` in the Open Food Facts client, and none in the others.
+    /// A raw HTTP client may exist only in the pinned fetchers (the two web importers, the Open
+    /// Food Facts client and the live-planes client) and the session factory they share, and each of
+    /// those files may hardcode exactly its own hosts: the DuckDuckGo search endpoint and its redirect
+    /// base in the product importer, `world.openfoodfacts.org` in the Open Food Facts client,
+    /// `api.adsb.lol` in the live-planes client, and none in the others.
     ///
     /// The host allowlist alone can be evaded by assembling a hostname at runtime; this cannot. A new
     /// `URLSession` anywhere else in shipping code — a "telemetry uploader", a "config fetcher" — fails

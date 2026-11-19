@@ -35,6 +35,10 @@ import Foundation
 /// - **The car book and its salt** (owner 2026-11-09, car signals): which Bluetooth devices are the person's cars
 ///   (``WorldCarBook``, kept by ``WorldCarKeeper``), and the random salt their scrambled tags are made with, so a wipe
 ///   makes every old tag meaningless as well as deleting it.
+/// - **Live planes nearby** (off by default; owner 2026-11-19): whether Home's map asks adsb.lol for the planes in the
+///   0.5° cell it shows (``LiveAircraftWatch``); whether its one-time disclosure has been shown (the onboarding question
+///   counts); and this iPhone's own tally of fetches for the day (``LiveAircraftBudget``): a day, a number and a rest
+///   after a 429, nothing about where the map looked.
 ///
 /// Device-only `UserDefaults`, never in the synced settings: they describe this phone's location
 /// behaviour. Every key is cleared by the delete funnel (``clearAll(in:)``,
@@ -57,6 +61,54 @@ nonisolated enum WorldMapPreferences {
         static let flightsFromCalendar = "fernlet.worldMap.flightsFromCalendar"
         static let carBook = "fernlet.worldMap.carBook"
         static let carTagSalt = "fernlet.worldMap.carTagSalt"
+        static let livePlanes = "fernlet.worldMap.livePlanes"
+        static let livePlanesDisclosed = "fernlet.worldMap.livePlanesDisclosed"
+        static let livePlanesDay = "fernlet.worldMap.livePlanesDay"
+        static let livePlanesUsed = "fernlet.worldMap.livePlanesUsed"
+        static let livePlanesRestUntil = "fernlet.worldMap.livePlanesRestUntil"
+        static let livePlanesStrikes = "fernlet.worldMap.livePlanesStrikes"
+    }
+
+    /// Whether "Live planes nearby" is on (default off).
+    static func showsLivePlanes(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.livePlanes)
+    }
+
+    /// Sets "Live planes nearby"; turning it on also records that its disclosure was seen.
+    static func setShowsLivePlanes(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.livePlanes)
+        if on { defaults.set(true, forKey: Key.livePlanesDisclosed) }
+    }
+
+    /// Whether the person has seen the live-planes disclosure (in onboarding or Settings' first-time confirmation).
+    static func livePlanesDisclosed(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.livePlanesDisclosed)
+    }
+
+    /// Records that the live-planes disclosure was seen (answered either way).
+    static func setLivePlanesDisclosed(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: Key.livePlanesDisclosed)
+    }
+
+    /// Today's live-planes tally as of `now` (a new day starts from nothing).
+    static func livePlanesBudget(in defaults: UserDefaults = .standard, now: Date = Date()) -> LiveAircraftBudget {
+        let stored = LiveAircraftBudget(
+            day: defaults.string(forKey: Key.livePlanesDay) ?? "", used: max(0, defaults.integer(forKey: Key.livePlanesUsed)),
+            restUntil: defaults.object(forKey: Key.livePlanesRestUntil) as? Date,
+            strikes: max(0, defaults.integer(forKey: Key.livePlanesStrikes)))
+        return stored.rolled(to: now)
+    }
+
+    /// Saves the live-planes tally.
+    static func setLivePlanesBudget(_ budget: LiveAircraftBudget, in defaults: UserDefaults = .standard) {
+        defaults.set(budget.day, forKey: Key.livePlanesDay)
+        defaults.set(budget.used, forKey: Key.livePlanesUsed)
+        defaults.set(budget.strikes, forKey: Key.livePlanesStrikes)
+        guard let rest = budget.restUntil else {
+            defaults.removeObject(forKey: Key.livePlanesRestUntil)
+            return
+        }
+        defaults.set(rest, forKey: Key.livePlanesRestUntil)
     }
 
     /// The car book's saved bytes (``WorldCarKeeper``); nil before the first car or sighting.
@@ -286,6 +338,12 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.flightsFromCalendar)
         defaults.removeObject(forKey: Key.carBook)
         defaults.removeObject(forKey: Key.carTagSalt)
+        defaults.removeObject(forKey: Key.livePlanes)
+        defaults.removeObject(forKey: Key.livePlanesDisclosed)
+        defaults.removeObject(forKey: Key.livePlanesDay)
+        defaults.removeObject(forKey: Key.livePlanesUsed)
+        defaults.removeObject(forKey: Key.livePlanesRestUntil)
+        defaults.removeObject(forKey: Key.livePlanesStrikes)
         if defaults === UserDefaults.standard { setBackgroundMarker(false) }
     }
 }
