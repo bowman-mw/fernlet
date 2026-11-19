@@ -72,11 +72,23 @@ struct MapWidgetCard: View {
                                           spriteScale: Self.spriteScale, motif: entry.companion.homeScreenMotif,
                                           showsZee: entry.companion.hidesTheDay)
                     }
+                    .overlay(alignment: .bottom) { sceneStrip(width: proxy.size.width) }
             }
         }
         .dynamicTypeSize(...WidgetPaperFrame.maxTypeSize)
         .overlay { ContainerRelativeShape().strokeBorder(theme.frame, lineWidth: 3) }
         .widgetURL(FernletWidgetLink.home)
+    }
+
+    /// The person's background scene's ground along the bottom edge, under the tag (owner's pick A): the
+    /// map stays the map, so only the scene's bottom rows show, at the scene's own cell size for the
+    /// card's width. Colour only; nothing on the plain background.
+    @ViewBuilder private func sceneStrip(width: CGFloat) -> some View {
+        if let scene = entry.companion.cardScene(dark: scheme == .dark, mono: mono) {
+            let cell = width / CGFloat(WidgetCompanionScene.width)
+            WidgetSceneBackdrop(cells: scene, cellWidth: cell)
+                .frame(height: cell * CGFloat(WidgetCompanionScene.height - WidgetCompanionScene.ground))
+        }
     }
 
     /// Sprout, its feet on the picture's middle (where you were when it was taken), with its name and mood

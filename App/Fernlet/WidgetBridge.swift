@@ -576,10 +576,16 @@ final class WidgetSnapshotMirror {
 
     private let fileStore: WidgetSnapshotFileStore
     private let reloadTimelines: () -> Void
+    private let reloadDriveWidget: () -> Void
 
-    init(directory: URL? = nil, reloadTimelines: (() -> Void)? = nil) {
+    /// - Parameters:
+    ///   - reloadDriveWidget: Reloads "Your drive" (tests count the calls). It reloads only when Sprout's
+    ///     look changes (``publish(_:)``), not on every save: the drive widget's own count reloads it
+    ///     as a drive goes, and a reload per save would spend its budget for nothing it draws.
+    init(directory: URL? = nil, reloadTimelines: (() -> Void)? = nil, reloadDriveWidget: (() -> Void)? = nil) {
         self.fileStore = WidgetSnapshotFileStore(directory: directory)
         self.reloadTimelines = reloadTimelines ?? { Self.reloadEverySurface() }
+        self.reloadDriveWidget = reloadDriveWidget ?? { WidgetCenter.shared.reloadTimelines(ofKind: WorldDriveWidget.kind) }
     }
 
     /// Reloads every surface that renders the snapshot: the four widgets and the Control Center control.
@@ -595,10 +601,13 @@ final class WidgetSnapshotMirror {
     }
 
     /// Writes the snapshot and reloads the widget timelines; a failed write skips the reload
-    /// (the widget keeps its last good snapshot).
+    /// (the widget keeps its last good snapshot). When Sprout's look changed — a new background, outfit
+    /// or colour in Customize — "Your drive" reloads too, so it draws Sprout on the new scene.
     func publish(_ snapshot: WidgetSnapshot) {
+        let previousLook = fileStore.read()?.companionLook
         guard fileStore.write(snapshot) else { return }
         reloadTimelines()
+        if previousLook != snapshot.companionLook { reloadDriveWidget() }
     }
 
     /// Writes the snapshot, but reloads the widget timelines ONLY when the content changed.
@@ -632,6 +641,7 @@ final class WidgetSnapshotMirror {
             // first publish that did not reload would leave the placeholder up until something else
             // poked WidgetKit.
             reloadTimelines()
+            if previous?.companionLook != snapshot.companionLook { reloadDriveWidget() }
             return .reloaded
         }
         return .unchanged

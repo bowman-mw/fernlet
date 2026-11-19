@@ -1390,9 +1390,6 @@ struct WidgetCompanionSprite: View {
     /// Moves the companion right as far as the motif reaches past the frame when it goes to the top-left
     /// corner, so it stays clear of the widget's rounded corner: the small card only (group 16).
     var makesRoomForALeftMotif = false
-    /// The person's background scene (G8), cropped to the frame behind the companion; nil draws none.
-    /// Colour surfaces only: one colour never shows a scene.
-    var scene: [UInt32]? = nil
     @Environment(\.redactionReasons) private var redaction
 
     /// The sprite's size at `scale`: the whole item frame, so a drawn piece never clips.
@@ -1457,23 +1454,9 @@ struct WidgetCompanionSprite: View {
         return .plain
     }
 
-    /// The scene's cells behind the frame: the 24 × 24 window where the frame stands in the scene.
-    private func drawScene(_ scene: [UInt32], in context: inout GraphicsContext) {
-        guard scene.count == WidgetCompanionScene.width * WidgetCompanionScene.height else { return }
-        let origin = WidgetCompanionScene.frameOrigin
-        for y in 0..<WidgetCompanionGrid.frameHeight {
-            for x in 0..<WidgetCompanionGrid.frameWidth {
-                let hex = scene[(origin.y + y) * WidgetCompanionScene.width + origin.x + x]
-                context.fill(Path(CGRect(x: CGFloat(x) * scale, y: CGFloat(y) * scale, width: scale + 0.5, height: scale + 0.5)),
-                             with: .color(Color(widgetRGB: hex)))
-            }
-        }
-    }
-
     private var canvas: some View {
         Canvas { context, _ in
             let originX = CGFloat(WidgetCompanionGrid.frameX), originY = CGFloat(WidgetCompanionGrid.frameY)
-            if ink == .color, let scene { drawScene(scene, in: &context) }
             if ink == .color {
                 context.fill(Path(CGRect(x: (originX + 5) * scale, y: (originY + 21) * scale, width: 10 * scale, height: scale)),
                              with: .color(Color(.sRGB, red: 40 / 255, green: 22 / 255, blue: 8 / 255, opacity: 0.28)))

@@ -179,8 +179,19 @@ struct DriveWidgetView: View {
 
     var body: some View {
         let mono = renderingMode.drawsInOneColour
+        if let scene = entry.companion.cardScene(dark: scheme == .dark, mono: mono) {
+            // The person's background fills the card, Sprout on its ground (owner's pick A).
+            DriveSceneView(entry: entry)
+                .containerBackground(for: .widget) { WidgetCardGround(scene: scene, paper: WidgetTheme.current(scheme).paper) }
+        } else {
+            paperCard(mono: mono)
+        }
+    }
+
+    /// The paper card: the plain background, and every one-colour rendering.
+    private func paperCard(mono: Bool) -> some View {
         let theme = mono ? WidgetTheme.mono : WidgetTheme.current(scheme, contrast: contrast)
-        Group {
+        return Group {
             switch entry.shown {
             case .thisDrive(let tiles), .lastDrive(let tiles):
                 VStack(spacing: 2) {
