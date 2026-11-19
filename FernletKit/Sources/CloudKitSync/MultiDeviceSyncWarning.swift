@@ -12,10 +12,10 @@ import Foundation
 /// Pure classifier for the "your devices will diverge without iCloud" warning.
 ///
 /// With sync off there is no merge path between a user's own devices, so day history and the
-/// per-row stores drift apart silently. `classify` turns three already-available signals —
-/// account presence, the sync preference, and ``CloudKitDataService``'s existing-data
-/// detection — into one of four warning cases, or `nil` when sync is on with an account signed in
-/// and no warning is warranted. Deliberately free of FileManager and view state so the three-way decision is
+/// per-row stores drift apart silently. `classify` turns four already-available signals —
+/// account presence, the sync preference, ``CloudKitDataService``'s existing-data detection and
+/// the mirror's standing refusals (``MirrorSyncHealth``) — into one of five warning cases, or `nil`
+/// when sync is on with an account signed in, iCloud is taking the changes, and no warning is warranted. Deliberately free of FileManager and view state so the three-way decision is
 /// trivially unit-testable; the settings banner and disable-sync sheet render `message` as-is.
 public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     /// An iCloud account is present and another device signed into it already wrote Fernlet data, but
@@ -31,6 +31,11 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     /// user signs in. Without this case the page showed no warning at all — "selected" passed for
     /// "working" (simulator log review 2026-10-29).
     case syncOnWithoutAccount
+    /// Sync is on and an account is signed in, but iCloud refused this device's changes and will
+    /// refuse them again (``MirrorSyncHealth/lastingIssue``): a schema that lacks a field, a full
+    /// account. Before this case the page said nothing, so "on" passed for "reaching iCloud" (release
+    /// review 2026-11-18, finding F2).
+    case iCloudRefusedChanges
 
     /// Classify the multi-device state. Returns `nil` when no warning is warranted (sync is on and an
     /// account is signed in, so the devices stay merged through CloudKit).
@@ -41,13 +46,17 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     ///   - syncEnabled: `StoragePreferences.iCloudSyncEnabled`.
     ///   - otherDeviceHasData: another device already wrote data
     ///     (`ExistingDataSummary.hasData` from `detectExistingData()`).
+    ///   - iCloudRefusedChanges: the mirror has a standing lasting failure
+    ///     (`PersistenceController.mirrorSyncHealth.lastingIssue != nil`). Only matters while sync is
+    ///     on with an account; a transient failure never sets it.
     public static func classify(
         iCloudAccountPresent: Bool,
         syncEnabled: Bool,
-        otherDeviceHasData: Bool
+        otherDeviceHasData: Bool,
+        iCloudRefusedChanges: Bool = false
     ) -> MultiDeviceSyncWarning? {
         guard iCloudAccountPresent else { return syncEnabled ? .syncOnWithoutAccount : .noICloudAccount }
-        guard !syncEnabled else { return nil }
+        guard !syncEnabled else { return iCloudRefusedChanges ? .iCloudRefusedChanges : nil }
         return otherDeviceHasData ? .anotherDeviceHasData : .syncOffWithAccount
     }
 
@@ -73,6 +82,11 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
                           defaultValue: "iCloud sync is on, but this iPhone isn't signed in to iCloud, so nothing is syncing yet. Your logs are safe on this iPhone and start syncing once you sign in to iCloud in the Settings app.",
                           bundle: .module,
                           comment: "Privacy & Data, multiple-devices note: the user chose iCloud sync but no iCloud account is signed in on this device.")
+        case .iCloudRefusedChanges:
+            return String(localized: "multiDevice.iCloudRefusedChanges",
+                          defaultValue: "iCloud did not accept the latest changes from this iPhone, so for now they are only on this iPhone. Nothing is lost here, and Fernlet keeps trying.",
+                          bundle: .module,
+                          comment: "Privacy & Data, multiple-devices note: iCloud sync is on and signed in, but iCloud refused to save this device's recent changes and will keep refusing until something changes on Apple's side or in the account.")
         }
     }
 }

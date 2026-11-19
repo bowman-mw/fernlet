@@ -61,6 +61,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// Ids of blob memories whose copy into rows failed in this process: served from the blob until
     /// the copy (or the next save's upsert) lands, so a failed copy never hides a memory.
     private var pendingBlobMemoryIDs: Set<UUID> = []
+    /// True from a memory read that failed until the next one that works. While it is set the last
+    /// snapshot served holds no row memory, so a save must not read their absence as "forgotten":
+    /// ``writeMemoryRows(_:)`` then writes changes and soft-deletes nothing.
+    private var memoryRowsUnreadable = false
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     /// The device-local Tier-2 sidecar — the legacy repository's own, so both backends agree on one
@@ -300,7 +304,13 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
             if let data { bytes[memory.id] = data }
             if data == nil || memoryRowBytes[memory.id] != data { changed.append(memory) }
         }
-        let removed = Set(memoryRowBytes.keys).subtracting(memories.map(\.id))
+        var removed = Set(memoryRowBytes.keys).subtracting(memories.map(\.id))
+        if memoryRowsUnreadable, !removed.isEmpty {
+            // The snapshot being saved was served without the rows (their read failed), so these ids
+            // are missing because they could not be read, not because the person forgot them.
+            FernletAuditLog.log("memory.rows.forgetSkippedUnreadable", context: ["count": "\(removed.count)"])
+            removed = []
+        }
         guard memoryRepository.upsert(changed) else { return false }
         guard memoryRepository.delete(ids: Array(removed)) else { return false }
         if !removed.isEmpty {
@@ -328,7 +338,10 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// served joins the known set (``memoryRowBytes``); a pending blob memory does not, so the next
     /// save writes it.
     private func servedMemories(from database: LocalFernletDatabase) -> [MemoryNote] {
-        let rows = memoryRepository.load()
+        let readable = memoryRepository.loadIfReadable()
+        memoryRowsUnreadable = readable == nil
+        if readable == nil { FernletAuditLog.log("memory.rows.unreadable") }
+        let rows = readable ?? []
         let rowIDs = Set(rows.map(\.id))
         let pending = database.memories.filter { !rowIDs.contains($0.id) && pendingBlobMemoryIDs.contains($0.id) }
         // Only the rows join the known set: a pending blob memory has no row yet, so the next save must
