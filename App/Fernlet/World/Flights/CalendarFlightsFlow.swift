@@ -117,7 +117,7 @@ final class CalendarFlightsFlow {
         isOn = true
         isRefused = false
         switch await looker.look(CalendarFlightLook.firstLookWindow(now: now), now: now) {
-        case .success(let look): present(look, now: now)
+        case .success(let look): present(look)
         case .failure(.notAllowed): refuse()
         case .failure(.switchedOff): return
         case .failure(let other): problem = other
@@ -125,8 +125,8 @@ final class CalendarFlightsFlow {
     }
 
     /// Keeps the first look's upcoming flights and opens its summary.
-    private func present(_ look: CalendarFlightLook, now: Date) {
-        guard atlas.keepCalendarLook(flown: [], upcoming: look.upcoming, now: now) else {
+    private func present(_ look: CalendarFlightLook) {
+        guard atlas.keepCalendarLook(flown: [], upcoming: look.upcoming) else {
             problem = .passportClosed
             return
         }

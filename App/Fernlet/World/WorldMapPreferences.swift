@@ -61,6 +61,7 @@ nonisolated enum WorldMapPreferences {
         static let bikeRidesCheckedThrough = "fernlet.worldMap.bikeRidesCheckedThrough"
         static let airportsAndFlights = "fernlet.worldMap.airportsAndFlights"
         static let flightsFromCalendar = "fernlet.worldMap.flightsFromCalendar"
+        static let calendarFlightsUpgraded = "fernlet.worldMap.calendarFlightsUpgraded"
         static let carBook = "fernlet.worldMap.carBook"
         static let carTagSalt = "fernlet.worldMap.carTagSalt"
         static let livePlanes = "fernlet.worldMap.livePlanes"
@@ -151,6 +152,17 @@ nonisolated enum WorldMapPreferences {
     /// Sets "Flights from Calendar".
     static func setReadsCalendarFlights(_ on: Bool, in defaults: UserDefaults = .standard) {
         defaults.set(on, forKey: Key.flightsFromCalendar)
+    }
+
+    /// Whether the passport went through the calendar flights' upgrade (owner 2026-11-19: a calendar flight
+    /// counts only once the trip is confirmed; `FernletStore.upgradeUnconfirmedCalendarFlights`). Default false.
+    static func calendarFlightsUpgraded(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.calendarFlightsUpgraded)
+    }
+
+    /// Records that the calendar flights' upgrade ran.
+    static func setCalendarFlightsUpgraded(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: Key.calendarFlightsUpgraded)
     }
 
     /// Whether "Log my bike rides" is on (default off).
@@ -350,6 +362,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.bikeRidesCheckedThrough)
         defaults.removeObject(forKey: Key.airportsAndFlights)
         defaults.removeObject(forKey: Key.flightsFromCalendar)
+        defaults.removeObject(forKey: Key.calendarFlightsUpgraded)
         defaults.removeObject(forKey: Key.carBook)
         defaults.removeObject(forKey: Key.carTagSalt)
         defaults.removeObject(forKey: Key.livePlanes)

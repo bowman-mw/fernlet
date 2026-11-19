@@ -116,6 +116,12 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
 
     // MARK: One flight, once
 
+    /// Whether the calendar is this flight's only source. Such a flight is the person's own trip only once
+    /// confirmed (owner 2026-11-19): a calendar can hold a friend's flight, kept to pick them up. Fernlet's own
+    /// landing or a Flighty record of the same flight adds its source, and the person's "Add" in the calendar
+    /// summary imports one; anything else stays upcoming, and Fernlet never acts on one alone.
+    public var isCalendarOnly: Bool { sources.subtracting(.calendar).isEmpty }
+
     /// The route as one token, "FROM>TO" (the sealed backup's record token).
     public var route: String { from + ">" + to }
 

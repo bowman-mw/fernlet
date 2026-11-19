@@ -23,14 +23,29 @@ extension PassportBook {
 
     /// Adds `incoming` to the flights flown under the one-flight rule (spec §9.3): a flight already held (same
     /// airports, departures within ``PassportFlight/sameFlightWindow``) is merged with it (every source, the
-    /// richer record's times), and any other is added, refused and counted past ``maxFlights``. Returns how many
+    /// richer record's times), and any other is added, refused and counted past ``maxFlights``. An upcoming
+    /// calendar flight that is the same flight as one of `incoming` leaves the upcoming list and joins it: Fernlet
+    /// saw it land, or the person added it, which is the trip's confirmation (owner 2026-11-19). Returns how many
     /// flights were added or changed. Bounded by ``maxFlights``.
     @discardableResult
     public mutating func addFlights(_ incoming: [PassportFlight]) -> Int {
-        let result = Self.merging(incoming, into: flightList, cap: Self.maxFlights)
+        let result = Self.merging(incoming + takeUpcoming(matching: incoming), into: flightList, cap: Self.maxFlights)
         flightList = result.list
         refusedCount += result.refused
         return result.changed
+    }
+
+    /// Removes and returns every upcoming flight that is the same flight as one of `flights`. Bounded by
+    /// ``maxUpcomingFlights`` upcoming flights, each looking only through its own route's.
+    private mutating func takeUpcoming(matching flights: [PassportFlight]) -> [PassportFlight] {
+        guard !upcomingList.isEmpty, !flights.isEmpty else { return [] }
+        let byRoute = Dictionary(grouping: flights.prefix(Self.maxFlights), by: \.route)
+        let taken = upcomingList.filter { planned in
+            byRoute[planned.route]?.contains { $0.isSameFlight(as: planned) } ?? false
+        }
+        guard !taken.isEmpty else { return [] }
+        upcomingList.removeAll { taken.contains($0) }
+        return taken
     }
 
     /// Removes `sources` from every flight and upcoming flight ("Remove imported flights", spec §9.5): a flight
@@ -55,16 +70,40 @@ extension PassportBook {
         return true
     }
 
-    /// Moves every upcoming flight whose departure is at or before `now` into the flights flown, under the
-    /// one-flight rule (spec §10.6: one whose day has passed joins the Flights page unless Fernlet already saw it,
-    /// and then it is that flight, with the calendar among its sources). Returns how many flights flown were
-    /// added or changed.
+    /// Keeps a calendar look's flights (spec §10.6, amended by the owner 2026-11-19: "needs confirmation of a trip";
+    /// a calendar flight may be a friend's, kept to pick them up). A calendar flight is never flown on its own: one
+    /// that is the same flight as a flight already flown joins it (the calendar among its sources), and every other
+    /// one replaces the upcoming list, including those that left inside the look's window, which wait there for
+    /// the trip's confirmation (``addFlights(_:)``, from Fernlet's own landing) and lapse when a later look's window
+    /// has passed them. Returns whether anything changed. Bounded by ``maxFlights``.
     @discardableResult
-    public mutating func promoteUpcomingFlights(asOf now: Date) -> Int {
-        let due = upcomingList.filter { $0.departure <= now }
-        guard !due.isEmpty else { return 0 }
-        upcomingList.removeAll { $0.departure <= now }
-        return addFlights(due)
+    public mutating func keepCalendarFlights(_ flights: [PassportFlight]) -> Bool {
+        let byRoute = Dictionary(grouping: flightList, by: \.route)
+        let isFlown: (PassportFlight) -> Bool = { flight in
+            byRoute[flight.route]?.contains { $0.isSameFlight(as: flight) } ?? false
+        }
+        let window = flights.prefix(Self.maxFlights)
+        let joined = Self.merging(window.filter(isFlown), into: flightList, cap: Self.maxFlights)
+        flightList = joined.list
+        refusedCount += joined.refused
+        let replaced = setUpcomingFlights(window.filter { !isFlown($0) })
+        return joined.changed > 0 || replaced
+    }
+
+    /// Moves every flight flown that came from the calendar alone (``PassportFlight/isCalendarOnly``) and left at or
+    /// after `since` to the upcoming list, where it waits like any unconfirmed calendar flight and lapses at the
+    /// next look: the upgrade from builds that counted calendar flights as flown without proof (owner 2026-11-19).
+    /// Nothing is deleted here (past ``maxUpcomingFlights`` a flight is refused and counted, as any upcoming one).
+    /// Returns the flights moved. Bounded by ``maxFlights``.
+    @discardableResult
+    public mutating func demoteCalendarOnlyFlights(since: Date) -> [PassportFlight] {
+        let demoted = flightList.filter { $0.isCalendarOnly && $0.departure >= since }
+        guard !demoted.isEmpty else { return [] }
+        flightList.removeAll { $0.isCalendarOnly && $0.departure >= since }
+        let result = Self.merging(demoted, into: upcomingList, cap: Self.maxUpcomingFlights)
+        upcomingList = result.list
+        refusedCount += result.refused
+        return demoted
     }
 
     // MARK: Merging
