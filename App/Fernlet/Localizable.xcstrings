@@ -20043,6 +20043,22 @@
         }
       }
     },
+    "Fernlet couldn't add up “%@”. Open that recipe, check its ingredients, then pick it again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet no pudo sumar “%@”. Abre esa receta, revisa sus ingredientes y vuelve a elegirla."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet no pudo sumar “%@”. Abre esa receta, revisa sus ingredientes y vuelve a elegirla."
+          }
+        }
+      }
+    },
     "Fernlet couldn't confirm who it was sending to, so no heart was sent." : {
       "localizations" : {
         "es" : {
@@ -25873,6 +25889,28 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "In “%@”, the amount of %@ can't be added up. Open that recipe, check the amount and unit, then pick it again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "In “%1$@”, the amount of %2$@ can't be added up. Open that recipe, check the amount and unit, then pick it again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En “%1$@”, la cantidad de %2$@ no se puede sumar. Abre esa receta, revisa la cantidad y la unidad, y vuelve a elegirla."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En “%1$@”, la cantidad de %2$@ no se puede sumar. Abre esa receta, revisa la cantidad y la unidad, y vuelve a elegirla."
           }
         }
       }
@@ -34506,6 +34544,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Un recordatorio suave al día — como haya ido el día, una pequeña nota de cuidado también cuenta. Cámbialo o desactívalo cuando quieras."
+          }
+        }
+      }
+    },
+    "One of the ingredients in “%@” is missing. Open that recipe, check its ingredients, then pick it again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falta uno de los ingredientes de “%@”. Abre esa receta, revisa sus ingredientes y vuelve a elegirla."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falta uno de los ingredientes de “%@”. Abre esa receta, revisa sus ingredientes y vuelve a elegirla."
           }
         }
       }
@@ -51469,6 +51523,44 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esto restaura la clave que recibió tu dispositivo de recuperación. Si configuraste un nuevo bloqueo de la app desde entonces, se perderá todo lo que hayas escrito con él; todo lo anterior se recupera."
+          }
+        }
+      }
+    },
+    "This recipe and the recipes it uses have %lld steps. A share can carry at most %lld, so it can't go to a nearby Fernlet or in Messages. Share it as text, or turn off notes in Settings › Sharing to send it without steps." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This recipe and the recipes it uses have %1$lld steps. A share can carry at most %2$lld, so it can't go to a nearby Fernlet or in Messages. Share it as text, or turn off notes in Settings › Sharing to send it without steps."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta receta y las recetas que usa tienen %1$lld pasos. Al compartir caben como máximo %2$lld, así que no puede ir a un Fernlet cercano ni por Mensajes. Compártela como texto, o desactiva las notas en Ajustes › Opciones para compartir para enviarla sin pasos."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta receta y las recetas que usa tienen %1$lld pasos. Al compartir caben como máximo %2$lld, así que no puede ir a un Fernlet cercano ni por Mensajes. Compártela como texto, o desactiva las notas en Configuración › Opciones para compartir para enviarla sin pasos."
+          }
+        }
+      }
+    },
+    "This recipe can't be an ingredient yet" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta receta aún no puede ser un ingrediente"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta receta aún no puede ser un ingrediente"
           }
         }
       }
@@ -76683,7 +76775,6 @@
     },
     "livePlanes.spoken.count" : {
       "comment" : "VoiceOver: the planes on the map as one element; its actions open each plane's card",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -81416,7 +81507,6 @@
     },
     "passport.hangar.spoken" : {
       "comment" : "VoiceOver, a plane in the Hangar: the aircraft type, how many flights, and the month of the first",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -81530,7 +81620,6 @@
     },
     "passport.hangar.types" : {
       "comment" : "Sprout's passport Hangar page header: how many aircraft types you've flown",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -107846,6 +107935,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@” y cualquier foto adjunta se eliminarán de este dispositivo. Fernlet no puede deshacer esto."
+          }
+        }
+      }
+    },
+    "“%@” has no ingredients to add up. Add its ingredients, then pick it again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” no tiene ingredientes que sumar. Añade sus ingredientes y vuelve a elegirla."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” no tiene ingredientes que sumar. Agrega sus ingredientes y vuelve a elegirla."
           }
         }
       }

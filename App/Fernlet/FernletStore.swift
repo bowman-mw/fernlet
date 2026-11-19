@@ -6326,6 +6326,15 @@ final class FernletStore {
         return recipe.flattenedForSharing(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all))
     }
 
+    /// How many steps a share of `recipe` would carry with its steps included (its own plus every
+    /// sub-recipe's, as ``sharingDefinition(for:)`` flattens them), when that is more than any share
+    /// can carry (`SharedRecipeLimits.maxSteps`; the wire refuses more). Nil within the limit. The
+    /// Share screen refuses such a recipe up front and names the limit (release review 2026-11-18, F3).
+    func shareStepOverflow(for recipe: RecipeDefinition) -> Int? {
+        let count = sharingDefinition(for: recipe).steps?.count ?? 0
+        return count > SharedRecipeLimits.maxSteps ? count : nil
+    }
+
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
         MealBuilder.micronutrientTotals(for: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
