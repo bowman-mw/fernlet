@@ -231,6 +231,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         // Calendar" (switches only: the flights themselves are passport records in the sealed vault).
         "fernlet.worldMap.airportsAndFlights": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.flightsFromCalendar": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Calendar flights need a confirmed trip (2026-11-19, PR #202): whether the passport's one-time upgrade ran.
+        "fernlet.worldMap.calendarFlightsUpgraded": .cleared(token: "WorldMapPreferences.clearAll"),
         // Car signals (2026-11-09): the car book (scrambled tags of the Bluetooth devices seen on drives, the names
         // of the person's cars and of the one device waiting to be asked about) and the salt its tags are made with.
         "fernlet.worldMap.carBook": .cleared(token: "WorldMapPreferences.clearAll"),

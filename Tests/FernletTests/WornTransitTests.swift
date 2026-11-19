@@ -111,21 +111,59 @@ struct WornTransitTests {
 
     // MARK: Train
 
-    /// A ride along rail with no car is rail: unsure on the rail layer alone beside a road, sure when its cells are
-    /// learned or it holds 130 km/h for minutes.
+    /// A ride along rail with no car is rail (F13 3B): unsure on the rail line alone, sure with 130 km/h for minutes as
+    /// well, or on the person's own learned line unless a major road runs beside it the whole way.
     @Test func aTrainAlongRailIsRail() {
+        let unsure = WornRideVerdict(kind: .rail, confidence: .unsure), sure = WornRideVerdict(kind: .rail, confidence: .sure)
         let ground = FakeGround(roadNorth: [200], railNorth: [0])
         let train = Self.ride(from: 0, to: 20_000, speed: 25, inCar: false, stopEvery: 6_000)
-        #expect(WornRideClassifier.classify(train, geography: ground, learnedRail: Self.noLearned) == WornRideVerdict(kind: .rail, confidence: .unsure))
+        #expect(WornRideClassifier.classify(train, geography: ground, learnedRail: Self.noLearned) == unsure)
         let learned = Set(WornFootpaths.cells(along: train.map(\.point)))
-        #expect(WornRideClassifier.classify(train, geography: ground, learnedRail: { learned.contains($0) })
-                == WornRideVerdict(kind: .rail, confidence: .sure))
+        #expect(WornRideClassifier.classify(train, geography: ground, learnedRail: { learned.contains($0) }) == unsure,
+                "a learned line beside a road the whole way asks (light rail in a motorway median)")
+        let farRoad = FakeGround(roadNorth: [2_000], railNorth: [0])
+        #expect(WornRideClassifier.classify(train, geography: farRoad, learnedRail: { learned.contains($0) }) == sure)
+        #expect(WornRideClassifier.classify(train, geography: FakeGround(roadNorth: [2_000]), learnedRail: { learned.contains($0) })
+                == sure, "the person's own line, away from roads, with no rail layer")
         let fast = Self.ride(from: 0, to: 20_000, speed: 45)
-        #expect(WornRideClassifier.classify(fast, geography: ground, learnedRail: Self.noLearned) == WornRideVerdict(kind: .rail, confidence: .sure))
-        let ownLine = FakeGround(roadNorth: [200])
-        #expect(WornRideClassifier.classify(train, geography: ownLine, learnedRail: { learned.contains($0) })
-                == WornRideVerdict(kind: .rail, confidence: .unsure), "learned alone, no rail layer: asked")
+        #expect(WornRideClassifier.classify(fast, geography: ground, learnedRail: Self.noLearned) == sure)
+        #expect(WornRideClassifier.classify(fast, geography: FakeGround(roadNorth: [2_000]), learnedRail: Self.noLearned) == unsure,
+                "speed alone asks")
         #expect(WornRideClassifier.classify(train, geography: FakeGround(roadNorth: [200]), learnedRail: Self.noLearned) == .road)
+        #expect(WornRideClassifier.fastSpeed == 36, "the owner kept 130 km/h")
+    }
+
+    /// Rail plus long-spaced stops far from any road no longer makes a sure train, and learned rail plus mapped rail are
+    /// one sign, not two (F13 3B).
+    @Test func supportingSignsAndLearnedRailDoNotMakeItSure() {
+        let ground = FakeGround(roadNorth: [200], railNorth: [0])
+        let quiet = FakeGround(railNorth: [0])
+        let train = Self.ride(from: 0, to: 20_000, speed: 25, inCar: false, stopEvery: 6_000)
+        #expect(WornRideClassifier.classify(train, geography: quiet, learnedRail: Self.noLearned).confidence == .unsure)
+        let learned = Set(WornFootpaths.cells(along: train.map(\.point)))
+        #expect(WornRideClassifier.classify(train, geography: ground, learnedRail: { learned.contains($0) }).confidence == .unsure)
+    }
+
+    /// A kept ride needs 60 s and 500 m (F13 2B).
+    @Test func aRideNeedsAMinuteAndHalfAKilometre() {
+        #expect(WornRideClassifier.isLongEnough(Self.ride(from: 0, to: 600, speed: 8)))
+        #expect(!WornRideClassifier.isLongEnough(Self.ride(from: 0, to: 450, speed: 3)), "under 500 m")
+        #expect(!WornRideClassifier.isLongEnough(Self.ride(from: 0, to: 1_000, speed: 25)), "under a minute")
+        #expect(!WornRideClassifier.isLongEnough([]))
+    }
+
+    /// Learned rail needs Train-marked rides on two different days; unmarked rail never teaches.
+    @Test func learnedRailNeedsTwoTrainDays() {
+        let line = (0...40).map { Self.here.offset(east: Double($0) * 50, north: 0) }
+        func train(day: UInt16, marked: Bool = true, north: Double = 0) -> WornTrip {
+            WornTrip(kind: .rail, confirmed: true, markedTrain: marked, day: day, start: Self.now, end: Self.now,
+                     line: line.map { $0.offset(east: 0, north: north) })
+        }
+        #expect(WornRideClassifier.learnedRailCells(from: [train(day: 1), train(day: 1)]).isEmpty, "one day")
+        #expect(WornRideClassifier.learnedRailCells(from: [train(day: 1), train(day: 2, marked: false)]).isEmpty, "Not sure")
+        let learned = WornRideClassifier.learnedRailCells(from: [train(day: 1), train(day: 2, north: 12)])
+        #expect(learned.contains(MercatorHexGrid.cell(containing: line[20])), "two days, a few metres apart")
+        #expect(WornRideClassifier.learnedDays == 2)
     }
 
     /// A bus beside rail stopping every 400 m, with no car connected, is unsure at most.
@@ -195,9 +233,44 @@ struct WornTransitTests {
         #expect(WornTripCodec.decode(data.dropLast(), limit: 10) == nil, "a cut-off file is refused")
         #expect(WornTripCodec.decode(data, limit: 1) == nil, "more than the limit is refused")
         #expect(WornTripCodec.decode(Data([9]) + data.dropFirst(), limit: 10) == nil, "an unknown version is refused")
+    }
+
+    /// Version 2 keeps the Train mark; version 1 files still read; each version refuses flag bits it doesn't know.
+    @Test func theTripCodecReadsVersionOne() throws {
+        let marked = WornTrip(kind: .rail, confirmed: true, markedTrain: true, day: 4_000, start: Self.now, end: Self.now,
+                              line: Self.line(5))
+        let plain = WornTrip(kind: .rail, confirmed: true, day: 4_000, start: Self.now, end: Self.now, line: Self.line(5))
+        let data = WornTripCodec.encode([(marked, false)])
+        let decoded = try #require(WornTripCodec.decode(data, limit: 1))
+        #expect(data.first == 2 && decoded.first?.trip.markedTrain == true)
+        #expect(WornTripCodec.decodeSummaries(data, chunk: 0, limit: 1)?.first?.markedTrain == true)
+        var versionOne = WornTripCodec.encode([(plain, true)])
+        versionOne[versionOne.startIndex] = 1
+        let old = try #require(WornTripCodec.decode(versionOne, limit: 1))
+        #expect(old.first.map { $0.trip.confirmed && !$0.trip.markedTrain && $0.unsure } == true)
+        var markedOne = data
+        markedOne[markedOne.startIndex] = 1
+        #expect(WornTripCodec.decode(markedOne, limit: 1) == nil, "bit 2 is unknown in version 1")
+        var unknownBit = data
+        unknownBit[unknownBit.startIndex + 5 + 17] |= 8
+        #expect(WornTripCodec.decode(unknownBit, limit: 1) == nil, "bit 3 is unknown in version 2")
+    }
+
+    /// The checkpoint keeps whether the ride watch saw a drive; a version 1 checkpoint reads as one that did; the queue
+    /// round-trips its rides.
+    @Test func theCheckpointAndQueueRoundTrip() throws {
         let samples = [WornRideSample(point: Self.here, at: Self.now, speed: 12.5, inCar: true),
                        WornRideSample(point: Self.here.offset(east: 30, north: 0), at: Self.now.addingTimeInterval(2), speed: nil, inCar: nil)]
-        #expect(WornRideCheckpointCodec.decode(WornRideCheckpointCodec.encode(samples), limit: 5) == samples)
+        let offDrive = WornRideCheckpoint(samples: samples, sawDrive: false)
+        let data = WornRideCheckpointCodec.encode(offDrive)
+        #expect(WornRideCheckpointCodec.decode(data, limit: 5) == offDrive)
+        var versionOne = Data([1])
+        versionOne.append(data.dropFirst(2))
+        #expect(WornRideCheckpointCodec.decode(versionOne, limit: 5) == WornRideCheckpoint(samples: samples, sawDrive: true))
+        #expect(WornRideCheckpointCodec.decode(data, limit: 1) == nil, "more than the limit is refused")
+        let rides = [offDrive, WornRideCheckpoint(samples: samples.reversed(), sawDrive: true)]
+        #expect(WornRideQueueCodec.decode(WornRideQueueCodec.encode(rides), limit: 5) == rides)
+        #expect(WornRideQueueCodec.decode(WornRideQueueCodec.encode(rides).dropLast(), limit: 5) == nil)
     }
 
     /// Trips go in pieces of 200; a reopened store has them all; an emptied slot fills first; a delete and an update
@@ -269,6 +342,7 @@ struct WornTransitTests {
     /// A keeper over `vault` whose clock reads `clock`, loaded.
     private static func keeper(_ vault: WorldMapVault, ground: FakeGround?, clock: Date = now) throws -> WorldFogKeeper {
         let defaults = try #require(UserDefaults(suiteName: "WornTransitTests.\(UUID().uuidString)"))
+        defaults.set(true, forKey: WorldMapPreferences.Key.alwaysLowPower)
         let keeper = WorldFogKeeper(vault: vault, defaults: defaults, isProtectedDataAvailable: { true })
         keeper.now = { clock }
         keeper.transitGeography = ground
@@ -276,15 +350,17 @@ struct WornTransitTests {
         return keeper
     }
 
-    /// Rides a train east along ``here``'s rail line for 10 km at 25 m/s, starting `minutes` after ``now``, then
-    /// walks (the ride ends).
-    private static func rideTrain(_ keeper: WorldFogKeeper, minutes: Double = 0) async {
+    /// Rides a train east along ``here``'s rail line for `metres` at 25 m/s, starting `minutes` after ``now``, then
+    /// walks (the ride ends). `onDrive` is what the ride watch said.
+    private static func rideTrain(_ keeper: WorldFogKeeper, minutes: Double = 0, metres: Double = 10_000,
+                                  onDrive: Bool = true) async {
         let start = now.addingTimeInterval(minutes * 60)
-        for (index, east) in stride(from: 0.0, through: 10_000, by: 50).enumerated() {
+        for (index, east) in stride(from: 0.0, through: metres, by: 50).enumerated() {
             keeper.handle(WorldFix(point: here.offset(east: east, north: 0), accuracy: 8, at: start.addingTimeInterval(Double(index) * 2),
-                                   isPrecise: true, speed: 25), thinLine: true)
+                                   isPrecise: true, speed: 25), thinLine: onDrive)
         }
-        keeper.handle(WorldFix(point: here.offset(east: 10_050, north: 0), accuracy: 8, at: start.addingTimeInterval(1_000), isPrecise: true))
+        keeper.handle(WorldFix(point: here.offset(east: metres + 50, north: 0), accuracy: 8,
+                               at: start.addingTimeInterval(metres / 25 + 60), isPrecise: true))
         await keeper.settleTrips()
     }
 
@@ -313,13 +389,19 @@ struct WornTransitTests {
         #expect(reopened.wornWays.isEmpty && reopened.wornTrips.isEmpty)
     }
 
-    /// Without geography a ride is a sure road; "Forget this path" takes the trips of that kind through a cell.
-    @Test func noGeographyIsARoadAndAPathCanBeForgotten() async throws {
+    /// Without geography a ride waits unsorted and is sorted when the ground arrives (F13 4B); "Forget this path" takes
+    /// the trips of that kind through a cell.
+    @Test func noGeographyWaitsAndAPathCanBeForgotten() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
         let keeper = try Self.keeper(vault, ground: nil)
         await Self.rideTrain(keeper)
         await Self.rideTrain(keeper, minutes: 60)
+        #expect(keeper.wornTrips.isEmpty && keeper.wornWays.isEmpty)
+        #expect(try vault.read(.wornTripQueue) != nil)
+        keeper.transitGeography = FakeGround()
+        await keeper.settleTrips()
+        #expect(try vault.read(.wornTripQueue) == nil, "the queue empties once sorted")
         #expect(keeper.wornTrips.count == 2 && keeper.wornTrips.allSatisfy { $0.kind == .road && !$0.unsure })
         #expect(keeper.transitQuestion == nil)
         let cell = MercatorHexGrid.cell(containing: Self.here.offset(east: 5_000, north: 0))
@@ -384,17 +466,91 @@ struct WornTransitTests {
     @Test func aCheckpointedRideIsKeptAfterARelaunch() async throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
-        let keeper = try Self.keeper(vault, ground: nil)
+        let keeper = try Self.keeper(vault, ground: FakeGround())
         for (index, east) in stride(from: 0.0, through: 6_000, by: 50).enumerated() {
             keeper.handle(WorldFix(point: Self.here.offset(east: east, north: 0), accuracy: 8,
                                    at: Self.now.addingTimeInterval(Double(index) * 2), isPrecise: true, speed: 25), thinLine: true)
         }
         #expect(try vault.read(.wornTripRide) != nil)
         #expect(keeper.wornTrips.isEmpty)
-        let relaunched = try Self.keeper(vault, ground: nil, clock: Self.now.addingTimeInterval(3_600))
+        let relaunched = try Self.keeper(vault, ground: FakeGround(), clock: Self.now.addingTimeInterval(3_600))
         await relaunched.settleTrips()
         #expect(relaunched.wornTrips.count == 1 && relaunched.wornTrips.first?.kind == .road)
         #expect(!relaunched.wornWays.isEmpty)
         #expect(try vault.read(.wornTripRide) == nil, "the kept ride's checkpoint goes")
+    }
+
+    // MARK: F13 (owner 2026-11-19)
+
+    /// A ride under a minute or half a kilometre is not kept; a ride the ride watch never called a drive keeps only its
+    /// rail and ferry stretches (F13 2B).
+    @Test func smallAndOffDriveRidesKeepLess() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = try Self.keeper(vault, ground: Self.railGround)
+        await Self.rideTrain(keeper, metres: 400)
+        #expect(keeper.wornTrips.isEmpty && keeper.wornWays.isEmpty, "a 16 s burst")
+        await Self.rideTrain(keeper, minutes: 30, onDrive: false)
+        #expect(keeper.wornTrips.map(\.kind) == [.rail], "off a drive, a train along rail is kept")
+        keeper.transitGeography = FakeGround()
+        await Self.rideTrain(keeper, minutes: 60, onDrive: false)
+        #expect(keeper.wornTrips.count == 1, "off a drive, a road stretch is not")
+    }
+
+    /// A ride a cycling workout overlaps is not kept, and one a late workout overlaps goes at the next load, unless the
+    /// person confirmed it (F13 2B, the owner's idea).
+    @Test func aCyclingWorkoutDropsTheRide() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = try Self.keeper(vault, ground: Self.railGround)
+        let bike = DateInterval(start: Self.now, duration: 600)
+        keeper.cyclingWorkouts = { $0.intersects(bike) ? [bike] : [] }
+        await Self.rideTrain(keeper)
+        #expect(keeper.wornTrips.isEmpty && keeper.wornWays.isEmpty)
+        keeper.cyclingWorkouts = { _ in [] }
+        await Self.rideTrain(keeper, minutes: 60)
+        await Self.rideTrain(keeper, minutes: 120)
+        let confirmed = try #require(keeper.wornTrips.first)
+        keeper.changeTrip(confirmed.id, to: .rail)
+        let late = DateInterval(start: Self.now.addingTimeInterval(3_500), duration: 7_500)
+        keeper.cyclingWorkouts = { $0.intersects(late) ? [late] : [] }
+        keeper.load()
+        #expect(keeper.wornTrips.map(\.id) == [confirmed.id], "the unconfirmed ride goes; the answered one stays")
+    }
+
+    /// Only Train answers on two different days teach a line; "Not sure" never does; a learned ride away from roads is
+    /// then sure, and beside a road the whole way still asks (F13 3B).
+    @Test func trainAnswersOnTwoDaysTeachALine() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let ground = FakeGround(roadNorth: [2_000], railNorth: [0])
+        let keeper = try Self.keeper(vault, ground: ground)
+        func rideAndAnswer(_ minutes: Double, train: Bool) async throws -> WornTripSummary {
+            await Self.rideTrain(keeper, minutes: minutes)
+            let trip = try #require(keeper.wornTrips.first)
+            if train { keeper.changeTrip(trip.id, to: .rail) } else { try keeper.tripStore.update(trip.id, kind: .rail, confirmed: true) }
+            return trip
+        }
+        #expect(try await rideAndAnswer(0, train: false).unsure)
+        #expect(try await rideAndAnswer(1_440, train: false).unsure, "Not sure on day 1 taught nothing")
+        #expect(try await rideAndAnswer(2_880, train: true).unsure)
+        #expect(try await rideAndAnswer(2_940, train: true).unsure, "two answers the same day are one day")
+        #expect(try await rideAndAnswer(4_320, train: true).unsure)
+        await Self.rideTrain(keeper, minutes: 4_380)
+        #expect(keeper.wornTrips.first.map { $0.kind == .rail && !$0.unsure } == true, "two days: the person's own line")
+        keeper.transitGeography = FakeGround(roadNorth: [100], railNorth: [0])
+        await Self.rideTrain(keeper, minutes: 4_440)
+        #expect(keeper.wornTrips.first?.unsure == true, "beside a major road the whole way it still asks")
+    }
+
+    /// A full queue keeps a ride as a road, as before (F13 4B's bound).
+    @Test func aFullQueueKeepsARoad() async throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = try Self.keeper(vault, ground: nil)
+        for index in 0...WornRideQueueCodec.maxRides { await Self.rideTrain(keeper, minutes: Double(index) * 20, metres: 2_000) }
+        #expect(keeper.wornTrips.map(\.kind) == [.road])
+        let queued = try #require(try vault.read(.wornTripQueue))
+        #expect(WornRideQueueCodec.decode(queued, limit: WornRideClassifier.maxSamples)?.count == WornRideQueueCodec.maxRides)
     }
 }

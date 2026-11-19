@@ -810,6 +810,8 @@ final class FernletStore {
         keeper.widgetMap = WorldWidgetMapFile(directory: appGroupDirectory)
         // The passport's own Sealed backup owes an upload after a saved first visit or a wipe (round 7).
         keeper.atlas.onPassportChanged = { [weak self] in self?.markSealedBackupDirty(.worldPassport) }
+        // A ride a cycling workout overlaps is no drive (F13 2B): the log holds Fernlet's own bike rides and Health's.
+        keeper.cyclingWorkouts = { [weak self] interval in self?.worldCyclingWorkouts(during: interval) ?? [] }
         return keeper
     }()
     /// The World map's location (`WorldLocationSource`), following the permission the person gave.

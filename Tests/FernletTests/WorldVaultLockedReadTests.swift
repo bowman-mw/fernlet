@@ -247,4 +247,43 @@ struct WorldVaultLockedReadTests {
         #expect(line.count == 3)
         #expect(try store.readChunk(0, of: trip.id) == line)
     }
+
+    /// The rides waiting for the ground (F13 4B) are never removed over a read that can't happen now: a ride ending then
+    /// leaves the queue as it was, and the queue sorts once the phone unlocks.
+    @Test func aLockedRideQueueIsKept() async throws {
+        let fixture = Fixture()
+        defer { _ = fixture.vault.clearAll() }
+        let defaults = try #require(UserDefaults(suiteName: "WorldVaultLockedReadTests.\(UUID().uuidString)"))
+        defaults.set(true, forKey: WorldMapPreferences.Key.alwaysLowPower)
+        let keeper = WorldFogKeeper(vault: fixture.vault, defaults: defaults, isProtectedDataAvailable: { true })
+        let start = Date(timeIntervalSince1970: 2_000_000_000)
+        keeper.now = { start }
+        keeper.load()
+        func ride(minutes: Double) {
+            let from = start.addingTimeInterval(minutes * 60)
+            let here = GeoPoint(45.5205, -122.6255)
+            for index in 0...40 {
+                keeper.handle(WorldFix(point: here.offset(east: Double(index) * 50, north: 0), accuracy: 8,
+                                       at: from.addingTimeInterval(Double(index) * 2), isPrecise: true, speed: 25), thinLine: true)
+            }
+            keeper.endTrip()
+        }
+        ride(minutes: 0)
+        let queued = try #require(fixture.raw(.wornTripQueue))
+        fixture.lock(.wornTripQueue)
+        ride(minutes: 30)
+        #expect(fixture.raw(.wornTripQueue) == queued, "the locked queue is neither removed nor written over")
+        fixture.unlock()
+        keeper.transitGeography = BareGround()
+        await keeper.settleTrips()
+        #expect(fixture.raw(.wornTripQueue) == nil && keeper.wornTrips.count >= 1)
+    }
+
+    /// Ground with no water, rail or roads.
+    private struct BareGround: WornTransitGeography {
+        func isWater(_ point: GeoPoint) -> Bool { false }
+        func isNearMajorRoad(_ point: GeoPoint, within metres: Double) -> Bool { false }
+        func isNearRail(_ point: GeoPoint, within metres: Double) -> Bool { false }
+        func isNearFerryRoute(_ point: GeoPoint, within metres: Double) -> Bool { false }
+    }
 }

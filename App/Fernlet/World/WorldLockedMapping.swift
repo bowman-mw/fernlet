@@ -23,6 +23,9 @@ import WorldMapStore
 /// - **Hand-over:** the store's own location source is this one (``handOver()``), wired to everything once the phone
 ///   unlocks and the store loads, so there is only ever one location manager and a drive, a fence or a listen under
 ///   way carries on.
+/// - **Rides** (F13, owner 2026-11-19): followed only while the marker says background mapping is on. With no ground
+///   loaded, a finished ride waits unsorted in the sealed queue for the store's keeper to sort; the ride under way is
+///   checkpointed at the hand-over so its end survives.
 @MainActor
 final class WorldLockedMappingHolder {
     /// The source running before the store; nil until a locked launch starts one, and after the hand-over.
@@ -56,6 +59,8 @@ final class WorldLockedMappingHolder {
         let mapVault = vault()
         let keeper = WorldFogKeeper(vault: mapVault)
         let marked = isMarked
+        // The switch's defaults may be unreadable locked: rides follow the marker (F13 1A).
+        keeper.countsRides = { marked() }
         let started = WorldLocationSource(backgroundMapping: { marked() })
         started.onFix = { [weak keeper, weak started] fix in
             keeper?.handle(fix, saveNow: true, thinLine: started?.rides.isDriving ?? false)
@@ -80,6 +85,8 @@ final class WorldLockedMappingHolder {
     func handOver() -> WorldLocationSource? {
         guard let handed = source else { return nil }
         fog?.roadTrip.flush()
+        // The ride under way is written, so the store's keeper resumes it and its end is kept (F13 4B).
+        fog?.checkpointRide()
         source = nil
         fog = nil
         FernletAuditLog.log("worldMap.lockedLaunch.handedOver")

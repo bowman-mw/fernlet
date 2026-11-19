@@ -12,6 +12,8 @@ public nonisolated struct WornTripSummary: Sendable, Equatable, Identifiable {
     public var confirmed: Bool
     /// Whether the guess was unsure when it was made (Home may ask about it, at most once a day).
     public let unsure: Bool
+    /// Whether the person said it was a train (``WornTrip/markedTrain``).
+    public var markedTrain: Bool
     /// The ``WornDay`` it counts on.
     public let day: UInt16
     /// When it started and ended.
@@ -21,11 +23,13 @@ public nonisolated struct WornTripSummary: Sendable, Equatable, Identifiable {
     public let chunk: Int
 
     /// A summary.
-    public init(id: UUID, kind: WornWayKind, confirmed: Bool, unsure: Bool, day: UInt16, start: Date, end: Date, chunk: Int) {
+    public init(id: UUID, kind: WornWayKind, confirmed: Bool, unsure: Bool, markedTrain: Bool = false, day: UInt16, start: Date,
+                end: Date, chunk: Int) {
         self.id = id
         self.kind = kind
         self.confirmed = confirmed
         self.unsure = unsure
+        self.markedTrain = markedTrain
         self.day = day
         self.start = start
         self.end = end
@@ -36,17 +40,24 @@ public nonisolated struct WornTripSummary: Sendable, Equatable, Identifiable {
 /// The binary format of a piece of ``WornTripStore``: a version byte, the trip count as a little-endian `UInt32`, then
 /// one record a trip:
 ///
-/// - id (16 bytes), kind `UInt8`, flags `UInt8` (bit 0 confirmed, bit 1 unsure), day `UInt16`, start and end as
-///   whole seconds since 1970 (`Int64` each), the point count `UInt16` and the line's byte count `UInt32`;
+/// - id (16 bytes), kind `UInt8`, flags `UInt8` (bit 0 confirmed, bit 1 unsure, and from version 2 bit 2 marked Train
+///   by the person, F13 3B), day `UInt16`, start and end as whole seconds since 1970 (`Int64` each), the point count
+///   `UInt16` and the line's byte count `UInt32`;
 /// - the line: each point's latitude and longitude in 1/100,000 of a degree (about 1.1 m), the first as is and each
 ///   next as the change from the one before, zigzag-encoded LEB128 varints. A 25 m-thinned commute takes about two
 ///   bytes a point, a few KB a ride.
 ///
-/// Every number is little-endian. Decoding rejects a wrong version, a size that doesn't match, an unknown kind, more
-/// points than ``WornTrip/maxLinePoints``, a coordinate off the globe and more trips than the limit.
+/// Every number is little-endian. Encoding always writes version 2; decoding reads version 1 (flags bits 0–1 only) and
+/// version 2 (bits 0–2), and rejects any other version, a flag bit its version doesn't know, a size that doesn't match,
+/// an unknown kind, more points than ``WornTrip/maxLinePoints``, a coordinate off the globe and more trips than the
+/// limit.
 public nonisolated enum WornTripCodec {
-    /// The format's version byte.
-    static let version: UInt8 = 1
+    /// The version byte written.
+    static let version: UInt8 = 2
+    /// The first version, still read (no Train mark).
+    static let versionOne: UInt8 = 1
+    /// The flag bits each version knows.
+    static func knownFlags(version: UInt8) -> UInt8 { version == versionOne ? 3 : 7 }
     /// Bytes before the first record.
     static let headerSize = 5
     /// Bytes in a record before its line.
@@ -63,7 +74,7 @@ public nonisolated enum WornTripCodec {
             let line = encodeLine(trip.line)
             data.append(contentsOf: uuidBytes(trip.id))
             data.append(trip.kind.rawValue)
-            data.append((trip.confirmed ? 1 : 0) | (unsure ? 2 : 0))
+            data.append((trip.confirmed ? 1 : 0) | (unsure ? 2 : 0) | (trip.markedTrain ? 4 : 0))
             appendInt(trip.day, to: &data)
             appendInt(Int64(trip.start.timeIntervalSince1970.rounded()), to: &data)
             appendInt(Int64(trip.end.timeIntervalSince1970.rounded()), to: &data)
@@ -78,16 +89,17 @@ public nonisolated enum WornTripCodec {
     public static func decode(_ data: Data, limit: Int) -> [(trip: WornTrip, unsure: Bool)]? {
         let bytes = [UInt8](data)
         guard let count = count(bytes, limit: limit) else { return nil }
+        let known = knownFlags(version: bytes[0])
         var trips: [(trip: WornTrip, unsure: Bool)] = []
         trips.reserveCapacity(count)
         var offset = headerSize
         // Bounded: count ≤ limit, checked above.
         for _ in 0..<count {
-            guard let header = recordHeader(bytes, at: offset) else { return nil }
+            guard let header = recordHeader(bytes, at: offset, knownFlags: known) else { return nil }
             let lineEnd = offset + recordHeaderSize + header.lineBytes
             guard let line = decodeLine(bytes[(offset + recordHeaderSize)..<lineEnd], points: header.points) else { return nil }
-            trips.append((WornTrip(id: header.id, kind: header.kind, confirmed: header.confirmed, day: header.day,
-                                   start: header.start, end: header.end, line: line), header.unsure))
+            trips.append((WornTrip(id: header.id, kind: header.kind, confirmed: header.confirmed, markedTrain: header.markedTrain,
+                                   day: header.day, start: header.start, end: header.end, line: line), header.unsure))
             offset = lineEnd
         }
         return offset == bytes.count ? trips : nil
@@ -98,14 +110,16 @@ public nonisolated enum WornTripCodec {
     public static func decodeSummaries(_ data: Data, chunk: Int, limit: Int) -> [WornTripSummary]? {
         let bytes = [UInt8](data)
         guard let count = count(bytes, limit: limit) else { return nil }
+        let known = knownFlags(version: bytes[0])
         var summaries: [WornTripSummary] = []
         summaries.reserveCapacity(count)
         var offset = headerSize
         // Bounded: count ≤ limit, checked above.
         for _ in 0..<count {
-            guard let header = recordHeader(bytes, at: offset) else { return nil }
+            guard let header = recordHeader(bytes, at: offset, knownFlags: known) else { return nil }
             summaries.append(WornTripSummary(id: header.id, kind: header.kind, confirmed: header.confirmed, unsure: header.unsure,
-                                             day: header.day, start: header.start, end: header.end, chunk: chunk))
+                                             markedTrain: header.markedTrain, day: header.day, start: header.start,
+                                             end: header.end, chunk: chunk))
             offset += recordHeaderSize + header.lineBytes
         }
         return offset == bytes.count ? summaries : nil
@@ -160,6 +174,7 @@ public nonisolated enum WornTripCodec {
         let kind: WornWayKind
         let confirmed: Bool
         let unsure: Bool
+        let markedTrain: Bool
         let day: UInt16
         let start: Date
         let end: Date
@@ -167,17 +182,18 @@ public nonisolated enum WornTripCodec {
         let lineBytes: Int
     }
 
-    /// The record header at `offset`, when it is whole, its kind known and its line fits in `bytes`.
-    private static func recordHeader(_ bytes: [UInt8], at offset: Int) -> RecordHeader? {
+    /// The record header at `offset`, when it is whole, its kind and flags (`knownFlags`) known and its line fits in
+    /// `bytes`.
+    private static func recordHeader(_ bytes: [UInt8], at offset: Int, knownFlags: UInt8) -> RecordHeader? {
         guard offset + recordHeaderSize <= bytes.count else { return nil }
         let id = uuid(bytes, at: offset)
         guard let kind = WornWayKind(rawValue: bytes[offset + 16]) else { return nil }
         let flags = bytes[offset + 17]
-        guard flags & ~3 == 0 else { return nil }
+        guard flags & ~knownFlags == 0 else { return nil }
         let points = Int(readInt(bytes, at: offset + 36, size: 2))
         let lineBytes = Int(readInt(bytes, at: offset + 38, size: 4))
         guard points <= WornTrip.maxLinePoints, lineBytes <= bytes.count - offset - recordHeaderSize else { return nil }
-        return RecordHeader(id: id, kind: kind, confirmed: flags & 1 != 0, unsure: flags & 2 != 0,
+        return RecordHeader(id: id, kind: kind, confirmed: flags & 1 != 0, unsure: flags & 2 != 0, markedTrain: flags & 4 != 0,
                             day: UInt16(readInt(bytes, at: offset + 18, size: 2)),
                             start: Date(timeIntervalSince1970: TimeInterval(Int64(bitPattern: readInt(bytes, at: offset + 20, size: 8)))),
                             end: Date(timeIntervalSince1970: TimeInterval(Int64(bitPattern: readInt(bytes, at: offset + 28, size: 8)))),
@@ -196,9 +212,9 @@ public nonisolated enum WornTripCodec {
         return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
     }
 
-    /// The trip count the header states, when the version is right and it is within `limit`.
+    /// The trip count the header states, when the version is one this reads and it is within `limit`.
     private static func count(_ bytes: [UInt8], limit: Int) -> Int? {
-        guard bytes.count >= headerSize, bytes[0] == version, limit >= 0 else { return nil }
+        guard bytes.count >= headerSize, bytes[0] == version || bytes[0] == versionOne, limit >= 0 else { return nil }
         let count = Int(readInt(bytes, at: 1, size: 4))
         return count <= limit ? count : nil
     }
@@ -252,22 +268,40 @@ public nonisolated enum WornTripCodec {
     }
 }
 
-/// The ride in progress's bytes (``WorldMapVault/File/wornTripRide``): a version byte, the sample count as a
-/// little-endian `UInt32`, then 29 bytes a sample: latitude, longitude and time (`Double` bit patterns), speed
-/// (`Float` bits, NaN for none) and the car (0 unknown, 1 no, 2 yes).
+/// A ride's readings and whether the ride watch ever called it a drive (F13 2B, owner 2026-11-19): a ride seen only off
+/// a drive (readings faster than a car while Motion said walking or cycling) keeps only its ferry and rail stretches.
+public nonisolated struct WornRideCheckpoint: Sendable, Equatable {
+    /// The readings, oldest first.
+    public let samples: [WornRideSample]
+    /// Whether any of them came while the ride watch said driving.
+    public let sawDrive: Bool
+
+    /// A ride.
+    public init(samples: [WornRideSample], sawDrive: Bool) {
+        self.samples = samples
+        self.sawDrive = sawDrive
+    }
+}
+
+/// The ride in progress's bytes (``WorldMapVault/File/wornTripRide``): a version byte (2), a flags byte (bit 0: the
+/// ride watch called it a drive), the sample count as a little-endian `UInt32`, then 29 bytes a sample: latitude,
+/// longitude and time (`Double` bit patterns), speed (`Float` bits, NaN for none) and the car (0 unknown, 1 no, 2 yes).
+/// Version 1 (no flags byte) still reads, as a ride that saw a drive.
 public nonisolated enum WornRideCheckpointCodec {
-    /// The format's version byte.
-    static let version: UInt8 = 1
+    /// The version byte written.
+    static let version: UInt8 = 2
+    /// The first version, still read.
+    static let versionOne: UInt8 = 1
     /// Bytes in one sample.
     static let sampleSize = 29
 
-    /// The bytes for `samples`.
-    public static func encode(_ samples: [WornRideSample]) -> Data {
-        var data = Data([version])
-        data.reserveCapacity(5 + samples.count * sampleSize)
-        append(UInt32(clamping: samples.count), to: &data)
+    /// The bytes for `ride`.
+    public static func encode(_ ride: WornRideCheckpoint) -> Data {
+        var data = Data([version, ride.sawDrive ? 1 : 0])
+        data.reserveCapacity(6 + ride.samples.count * sampleSize)
+        append(UInt32(clamping: ride.samples.count), to: &data)
         // Bounded: the keeper holds at most WornRideClassifier.maxSamples.
-        for sample in samples {
+        for sample in ride.samples {
             append(sample.point.latitude.bitPattern, to: &data)
             append(sample.point.longitude.bitPattern, to: &data)
             append(sample.at.timeIntervalSince1970.bitPattern, to: &data)
@@ -277,30 +311,39 @@ public nonisolated enum WornRideCheckpointCodec {
         return data
     }
 
-    /// The samples in `data`, or nil when the bytes are not this format or hold more than `limit`.
-    public static func decode(_ data: Data, limit: Int) -> [WornRideSample]? {
+    /// The ride in `data`, or nil when the bytes are not this format or hold more than `limit` samples.
+    public static func decode(_ data: Data, limit: Int) -> WornRideCheckpoint? {
         let bytes = [UInt8](data)
-        guard bytes.count >= 5, bytes[0] == version else { return nil }
-        let count = Int(read(bytes, at: 1, size: 4))
-        guard count <= limit, bytes.count == 5 + count * sampleSize else { return nil }
+        guard let first = bytes.first, first == version || first == versionOne else { return nil }
+        let header = first == version ? 6 : 5
+        guard bytes.count >= header else { return nil }
+        let flags: UInt8 = first == version ? bytes[1] : 1
+        guard flags & ~1 == 0 else { return nil }
+        let count = Int(read(bytes, at: header - 4, size: 4))
+        guard count <= limit, bytes.count == header + count * sampleSize else { return nil }
         var samples: [WornRideSample] = []
         samples.reserveCapacity(count)
         // Bounded: count ≤ limit.
         for index in 0..<count {
-            let start = 5 + index * sampleSize
-            let point = GeoPoint(Double(bitPattern: read(bytes, at: start, size: 8)), Double(bitPattern: read(bytes, at: start + 8, size: 8)))
-            let at = Date(timeIntervalSince1970: Double(bitPattern: read(bytes, at: start + 16, size: 8)))
-            let speed = Float(bitPattern: UInt32(read(bytes, at: start + 24, size: 4)))
-            let car = bytes[start + 28]
-            guard point.isValid, car <= 2 else { return nil }
-            samples.append(WornRideSample(point: point, at: at, speed: speed.isNaN ? nil : Double(speed),
-                                          inCar: car == 0 ? nil : car == 2))
+            guard let sample = sample(bytes, at: header + index * sampleSize) else { return nil }
+            samples.append(sample)
         }
-        return samples
+        return WornRideCheckpoint(samples: samples, sawDrive: flags & 1 != 0)
+    }
+
+    /// The sample at `start` (the caller checks its bytes are there), or nil when it is off the globe or its car byte
+    /// is unknown.
+    private static func sample(_ bytes: [UInt8], at start: Int) -> WornRideSample? {
+        let point = GeoPoint(Double(bitPattern: read(bytes, at: start, size: 8)), Double(bitPattern: read(bytes, at: start + 8, size: 8)))
+        let at = Date(timeIntervalSince1970: Double(bitPattern: read(bytes, at: start + 16, size: 8)))
+        let speed = Float(bitPattern: UInt32(read(bytes, at: start + 24, size: 4)))
+        let car = bytes[start + 28]
+        guard point.isValid, car <= 2 else { return nil }
+        return WornRideSample(point: point, at: at, speed: speed.isNaN ? nil : Double(speed), inCar: car == 0 ? nil : car == 2)
     }
 
     /// The little-endian unsigned number of `size` bytes at `start`.
-    private static func read(_ bytes: [UInt8], at start: Int, size: Int) -> UInt64 {
+    static func read(_ bytes: [UInt8], at start: Int, size: Int) -> UInt64 {
         var value: UInt64 = 0
         // Bounded: at most 8 bytes.
         for shift in 0..<size { value |= UInt64(bytes[start + shift]) << (8 * UInt64(shift)) }
@@ -308,9 +351,56 @@ public nonisolated enum WornRideCheckpointCodec {
     }
 
     /// Appends `value` little-endian.
-    private static func append<Value: FixedWidthInteger>(_ value: Value, to data: inout Data) {
+    static func append<Value: FixedWidthInteger>(_ value: Value, to data: inout Data) {
         // Bounded: at most 8 bytes.
         for index in 0..<(Value.bitWidth / 8) { data.append(UInt8(truncatingIfNeeded: value >> (8 * index))) }
+    }
+}
+
+/// The finished rides waiting to be sorted (``WorldMapVault/File/wornTripQueue``, F13 4B, owner 2026-11-19): a ride that
+/// ends before the ground under it is known (a locked launch, or a background launch before the packs open) waits
+/// here instead of being kept as a road. A version byte (1), the ride count as a little-endian `UInt16`, then each ride
+/// as its byte count (`UInt32`) and its ``WornRideCheckpointCodec`` bytes.
+public nonisolated enum WornRideQueueCodec {
+    /// The format's version byte.
+    static let version: UInt8 = 1
+    /// The most rides the queue holds (a bound; a ride is a few KB, at most about 230 KB).
+    public static let maxRides = 24
+    /// The most bytes the queue's rides take together, under the vault's 8 MB file cap.
+    public static let maxBytes = 6 * 1_024 * 1_024
+
+    /// The bytes for `rides` (at most ``maxRides``).
+    public static func encode(_ rides: [WornRideCheckpoint]) -> Data {
+        let kept = Array(rides.prefix(maxRides))
+        var data = Data([version])
+        WornRideCheckpointCodec.append(UInt16(kept.count), to: &data)
+        // Bounded: at most maxRides.
+        for ride in kept {
+            let bytes = WornRideCheckpointCodec.encode(ride)
+            WornRideCheckpointCodec.append(UInt32(clamping: bytes.count), to: &data)
+            data.append(bytes)
+        }
+        return data
+    }
+
+    /// The rides in `data` (each at most `limit` samples), or nil when the bytes are not this format.
+    public static func decode(_ data: Data, limit: Int) -> [WornRideCheckpoint]? {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 3, bytes[0] == version else { return nil }
+        let count = Int(WornRideCheckpointCodec.read(bytes, at: 1, size: 2))
+        guard count <= maxRides else { return nil }
+        var rides: [WornRideCheckpoint] = []
+        var offset = 3
+        // Bounded: count ≤ maxRides.
+        for _ in 0..<count {
+            guard offset + 4 <= bytes.count else { return nil }
+            let size = Int(WornRideCheckpointCodec.read(bytes, at: offset, size: 4))
+            guard size <= bytes.count - offset - 4,
+                  let ride = WornRideCheckpointCodec.decode(Data(bytes[(offset + 4)..<(offset + 4 + size)]), limit: limit) else { return nil }
+            rides.append(ride)
+            offset += 4 + size
+        }
+        return offset == bytes.count ? rides : nil
     }
 }
 
@@ -408,8 +498,8 @@ public final class WornTripStore {
         trips.append((trip, unsure))
         try vault.write(WornTripCodec.encode(trips), to: .wornTrips(chunk: chunk))
         chunkCounts[chunk] = trips.count
-        let summary = WornTripSummary(id: trip.id, kind: trip.kind, confirmed: trip.confirmed, unsure: unsure, day: trip.day,
-                                      start: trip.start, end: trip.end, chunk: chunk)
+        let summary = WornTripSummary(id: trip.id, kind: trip.kind, confirmed: trip.confirmed, unsure: unsure,
+                                      markedTrain: trip.markedTrain, day: trip.day, start: trip.start, end: trip.end, chunk: chunk)
         summaries.insert(summary, at: summaries.firstIndex { $0.start <= trip.start } ?? summaries.count)
         if cellChunks != nil {
             // Bounded: the cells of one line.
@@ -437,19 +527,34 @@ public final class WornTripStore {
         return found.sorted { $0.start > $1.start }
     }
 
-    /// Sets trip `id`'s kind and whether it is confirmed; whether it was kept.
+    /// Sets trip `id`'s kind, whether it is confirmed and whether the person said it was a train; whether it was kept.
     @discardableResult
-    public func update(_ id: UUID, kind: WornWayKind, confirmed: Bool) throws -> Bool {
+    public func update(_ id: UUID, kind: WornWayKind, confirmed: Bool, markedTrain: Bool = false) throws -> Bool {
         guard let position = summaries.firstIndex(where: { $0.id == id }) else { return false }
         let chunk = summaries[position].chunk
         var trips = try readChunk(chunk)
         guard let inChunk = trips.firstIndex(where: { $0.trip.id == id }) else { return false }
         trips[inChunk].trip.kind = kind
         trips[inChunk].trip.confirmed = confirmed
+        trips[inChunk].trip.markedTrain = markedTrain
         try vault.write(WornTripCodec.encode(trips), to: .wornTrips(chunk: chunk))
         summaries[position].kind = kind
         summaries[position].confirmed = confirmed
+        summaries[position].markedTrain = markedTrain
         return true
+    }
+
+    /// The newest `limit` rail trips the person marked Train, with their lines (each piece read once): the rides
+    /// learned rail comes from (F13 3B).
+    public func markedTrainTrips(limit: Int) throws -> [WornTrip] {
+        let wanted = summaries.filter { $0.markedTrain && $0.kind == .rail }.prefix(max(0, limit))
+        let ids = Set(wanted.map(\.id))
+        var found: [WornTrip] = []
+        // Bounded: at most `limit` trips, in at most maxChunks pieces.
+        for chunk in Set(wanted.map(\.chunk)).sorted() {
+            found += try readChunk(chunk).map(\.trip).filter { ids.contains($0.id) }
+        }
+        return found.sorted { $0.start > $1.start }
     }
 
     /// Deletes trip `id` (forgotten by the person); whether it was kept. An emptied piece's file goes.
