@@ -368,8 +368,7 @@ struct WorldMapHome: View {
                     .position(x: point.x + (index == 0 ? 92 : -92), y: point.y + 40)
             }
             // Live planes nearby (owner 2026-11-19): over the markers, under Sprout; fetched only while this map is in front.
-            LiveAircraftLayer(store: store, viewport: viewport, size: size, isActive: isMapFrontPage && scenePhase == .active,
-                              home: livePlanes)
+            LiveAircraftLayer(store: store, viewport: viewport, size: size, isActive: isLivePlanesFront, home: livePlanes)
             companion(at: point, size: size, line: line)
             WorldCompanionExtras(store: store, point: point, isPastBedtime: pastBedtime)
             WorldTravelLook(store: store, point: point)
@@ -1099,6 +1098,12 @@ extension WorldMapHome {
             && openPhotoPlace == nil && openTripPhotos == nil && placeSheet == nil && menuSearch == nil && explore.openCity == nil
             && explore.openLandmark == nil
     }
+
+    /// Whether live planes may be asked for and glide (release review 2026-11-18, F7; the policy's "only while the map
+    /// is in front"): the map the front page of an active app, with none of Home's own sheets or covers over it. The
+    /// tapped plane's own card is the one exception: it is part of the planes and leaves the map showing above it, so
+    /// they keep flying under it (the card lives in ``LiveAircraftLayer`` and is not counted here).
+    private var isLivePlanesFront: Bool { isTapFrontPage && wornWaySheet == nil }
 
     /// A tap or hold on Sprout (World-Passport-Spec §1): the passport on page 1 (or, the first open after a new
     /// stamp, that stamp's page), the book rising from `anchor`, where Sprout stands.

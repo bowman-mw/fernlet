@@ -32,6 +32,14 @@ nonisolated final class CannedLiveAircraftTransport: LiveAircraftTransporting, @
     }
 }
 
+/// A transport that never answers until its task is cancelled, then fails as a dropped connection does.
+nonisolated struct StalledLiveAircraftTransport: LiveAircraftTransporting {
+    func response(for request: URLRequest, maxBytes: Int) async throws -> LiveAircraftHTTPResponse {
+        try await Task.sleep(for: .seconds(30))
+        throw LiveAircraftTransportError.network
+    }
+}
+
 @MainActor
 struct LiveAircraftTests {
     /// A made-up readsb answer: two planes in the air, one on the ground, one stale, one with no position.
@@ -119,6 +127,179 @@ struct LiveAircraftTests {
         #expect(LiveAircraftFeed.aircraft(in: Data("<html>".utf8), now: now) == nil)
     }
 
+    // MARK: A hostile feed (release review 2026-11-18, F9)
+
+    /// One good plane, for telling "the rest of the answer survived" from "everything was dropped".
+    static let goodEntry = #"{"hex":"900d01","flight":"UAL1","alt_baro":31000,"gs":450,"track":90,"lat":39.5,"lon":-105.5,"seen_pos":1}"#
+
+    /// The planes read from `entries` (JSON objects or anything else) followed by ``goodEntry``.
+    private func planes(after entries: [String], now: Date = Date(timeIntervalSince1970: 1_763_500_000)) throws -> [LiveAircraft] {
+        let body = Data(("{\"ac\":[" + (entries + [Self.goodEntry]).joined(separator: ",") + "]}").utf8)
+        return try #require(LiveAircraftFeed.aircraft(in: body, now: now))
+    }
+
+    /// The crash itself: a finite altitude no `Int` can hold. The plane is dropped; the one after it is kept.
+    @Test func aHugeAltitudeIsDroppedAndNeverTraps() throws {
+        for altitude in ["1e30", "-1e30", "1e308", "9223372036854775808", "-9223372036854775809", "1.7976931348623157e308",
+                         "150001", "-2001", "4294967296"] {
+            let read = try planes(after: [#"{"hex":"bad001","alt_baro":\#(altitude),"lat":39.5,"lon":-105.5}"#])
+            #expect(read.map(\.id) == ["900d01"], "alt_baro \(altitude)")
+        }
+        #expect(LiveAircraftFeed.altitudeFeet(NSNumber(value: 1e30)) == nil)
+        #expect(LiveAircraftFeed.altitudeFeet(NSNumber(value: Double.greatestFiniteMagnitude)) == nil)
+        #expect(LiveAircraftFeed.altitudeFeet(NSNumber(value: -Double.greatestFiniteMagnitude)) == nil)
+        #expect(LiveAircraftFeed.altitudeFeet(NSNumber(value: Double.nan)) == nil)
+        #expect(LiveAircraftFeed.altitudeFeet(NSNumber(value: Double.infinity)) == nil)
+    }
+
+    @Test func altitudesInRangeAreKeptNegativeOnesIncluded() throws {
+        let read = try planes(after: [
+            #"{"hex":"low001","alt_baro":-1200,"lat":31.5,"lon":35.4}"#,
+            #"{"hex":"hi0001","alt_baro":150000,"lat":31.5,"lon":35.4}"#,
+            #"{"hex":"frac01","alt_baro":35000.6,"lat":31.5,"lon":35.4}"#,
+        ])
+        #expect(read.map(\.id) == ["low001", "hi0001", "frac01", "900d01"])
+        #expect(read.map(\.altitudeFeet) == [-1_200, 150_000, 35_001, 31_000])
+    }
+
+    @Test func aPlaneOnTheGroundOrWithAWrongTypedAltitudeIsDropped() throws {
+        let read = try planes(after: [
+            #"{"hex":"gnd001","alt_baro":"ground","lat":39.5,"lon":-105.5}"#,
+            #"{"hex":"str001","alt_baro":"31000","lat":39.5,"lon":-105.5}"#,
+            #"{"hex":"boo001","alt_baro":true,"lat":39.5,"lon":-105.5}"#,
+            #"{"hex":"nul001","alt_baro":null,"lat":39.5,"lon":-105.5}"#,
+            #"{"hex":"arr001","alt_baro":[31000],"lat":39.5,"lon":-105.5}"#,
+            #"{"hex":"obj001","alt_baro":{"feet":31000},"lat":39.5,"lon":-105.5}"#,
+        ])
+        #expect(read.map(\.id) == ["900d01"])
+    }
+
+    @Test func coordinatesOffTheEarthAreDropped() throws {
+        let read = try planes(after: [
+            #"{"hex":"lat001","alt_baro":1000,"lat":90.01,"lon":0}"#,
+            #"{"hex":"lat002","alt_baro":1000,"lat":-91,"lon":0}"#,
+            #"{"hex":"lon001","alt_baro":1000,"lat":0,"lon":180.5}"#,
+            #"{"hex":"lon002","alt_baro":1000,"lat":0,"lon":-1e30}"#,
+            #"{"hex":"lat003","alt_baro":1000,"lat":1e308,"lon":1e308}"#,
+            #"{"hex":"lat004","alt_baro":1000,"lat":"39.5","lon":-105.5}"#,
+            #"{"hex":"lat005","alt_baro":1000,"lat":true,"lon":false}"#,
+            #"{"hex":"edge01","alt_baro":1000,"lat":-90,"lon":180}"#,
+        ])
+        #expect(read.map(\.id) == ["edge01", "900d01"], "the poles and the date line are real places")
+    }
+
+    /// A speed or a track out of range is left out; the plane stays, and gliding it stays on the Earth.
+    @Test func hugeSpeedsAndTracksAreLeftOutAndThePlaneKept() throws {
+        let now = Date(timeIntervalSince1970: 1_763_500_000)
+        let read = try planes(after: [
+            #"{"hex":"gs0001","alt_baro":1000,"gs":1e300,"track":90,"lat":10,"lon":10}"#,
+            #"{"hex":"gs0002","alt_baro":1000,"gs":-5,"track":90,"lat":10,"lon":10}"#,
+            #"{"hex":"gs0003","alt_baro":1000,"gs":"fast","track":90,"lat":10,"lon":10}"#,
+            #"{"hex":"tr0001","alt_baro":1000,"gs":300,"track":1e300,"lat":10,"lon":10}"#,
+            #"{"hex":"tr0002","alt_baro":1000,"gs":300,"track":-90,"true_heading":45,"lat":10,"lon":10}"#,
+            #"{"hex":"tr0003","alt_baro":1000,"gs":300,"track":360,"lat":10,"lon":10}"#,
+            #"{"hex":"tr0004","alt_baro":1000,"gs":4000,"track":[1],"mag_heading":{"a":1},"lat":10,"lon":10}"#,
+        ], now: now)
+        #expect(read.map(\.id) == ["gs0001", "gs0002", "gs0003", "tr0001", "tr0002", "tr0003", "tr0004", "900d01"])
+        #expect(read.prefix(3).allSatisfy { $0.groundSpeedKnots == nil })
+        #expect(read[3].trackDegrees == nil)
+        #expect(read[4].trackDegrees == 45, "a track out of range gives way to the heading")
+        #expect(read[5].trackDegrees == 0)
+        #expect(read[6].trackDegrees == nil)
+        #expect(read[6].groundSpeedKnots == 4_000)
+        // Bounded: eight planes.
+        for plane in read {
+            let later = LiveAircraftSky.position(of: plane, at: now.addingTimeInterval(600), glides: true)
+            #expect(later.isValid, "\(plane.id) glided off the Earth")
+            #expect((0..<8).contains(LiveAircraftSprites.eighths(for: plane.trackDegrees)))
+            _ = LiveAircraftPlaced.shadowOffset(feet: plane.altitudeFeet)
+            _ = LiveAircraftCopy.altitude(feet: plane.altitudeFeet, locale: Locale(identifier: "en_US"))
+            _ = plane.groundSpeedKnots.map { LiveAircraftCopy.speed(knots: $0, locale: Locale(identifier: "fr_FR")) }
+            _ = LiveAircraftCardSnapshot(plane, match: .none).spokenName
+        }
+    }
+
+    @Test func aBadPositionAgeDropsThePlane() throws {
+        let read = try planes(after: [
+            #"{"hex":"age001","alt_baro":1000,"lat":10,"lon":10,"seen_pos":-1}"#,
+            #"{"hex":"age002","alt_baro":1000,"lat":10,"lon":10,"seen_pos":1e300}"#,
+            #"{"hex":"age003","alt_baro":1000,"lat":10,"lon":10,"seen_pos":"now"}"#,
+            #"{"hex":"age004","alt_baro":1000,"lat":10,"lon":10,"seen_pos":60}"#,
+        ])
+        #expect(read.map(\.id) == ["age004", "900d01"])
+        #expect(read.allSatisfy { abs($0.seenAt.timeIntervalSince1970) < 2_000_000_000 })
+    }
+
+    /// Entries that aren't objects, and objects with every field the wrong type, are skipped; the rest is read.
+    @Test func wrongTypesNeverPoisonTheRestOfTheAnswer() throws {
+        let read = try planes(after: [
+            "7", "null", "\"plane\"", "[1,2,3]", "true", "{}",
+            #"{"hex":12345,"alt_baro":1000,"lat":10,"lon":10}"#,
+            #"{"hex":"","alt_baro":1000,"lat":10,"lon":10}"#,
+            #"{"hex":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","alt_baro":1000,"lat":10,"lon":10}"#,
+            #"{"hex":["a"],"flight":{"x":1},"r":7,"t":false,"category":[],"alt_baro":{},"gs":[],"track":"n","lat":[],"lon":{},"seen_pos":[]}"#,
+            #"{"hex":"txt001","flight":7,"r":[1],"t":{"a":1},"category":true,"alt_baro":1000,"lat":10,"lon":10}"#,
+            #"{"hex":"txt002","flight":"\u0000\u202e\n","r":"ÑÑÑ","t":"                                 ","alt_baro":1000,"lat":10,"lon":10}"#,
+            #"{"hex":"900d01","alt_baro":2000,"lat":11,"lon":11,"seen_pos":30}"#,
+        ])
+        #expect(read.map(\.id) == ["txt001", "txt002", "900d01", "900d01"])
+        #expect(read[0].callsign == nil && read[0].registration == nil && read[0].typeCode == nil && read[0].category == nil)
+        #expect(read[1].callsign == nil && read[1].registration == nil && read[1].typeCode == nil)
+        // The same address twice in one answer: the sky holds one plane, the newer reading.
+        let now = Date(timeIntervalSince1970: 1_763_500_000)
+        let sky = LiveAircraftSky().merging(read, at: now)
+        #expect(sky.planes.count == 3)
+        #expect(sky.planes["900d01"]?.altitudeFeet == 31_000)
+    }
+
+    @Test func answersThatAreNotTheFeedFailWithoutTrapping() {
+        let now = Date(timeIntervalSince1970: 1_763_500_000)
+        let deep = String(repeating: "[", count: 5_000) + String(repeating: "]", count: 5_000)
+        for body in ["", "null", "[]", "7", "\"ac\"", "{}", #"{"ac":null}"#, #"{"ac":{"hex":"a"}}"#, #"{"ac":"none"}"#, #"{"ac":7}"#,
+                     #"{"ac":[{"hex":"a","lat":1,"lon":1,"alt_baro":1e30}"#, deep, "{\"ac\":\(deep)}", "\u{FEFF}\u{0}\u{0}"] {
+            let outcome = LiveAircraftFeed.outcome(statusCode: 200, retryAfter: nil, body: Data(body.utf8), now: now)
+            #expect(outcome == .failed, "body \(body.prefix(40))")
+        }
+        #expect(LiveAircraftFeed.outcome(statusCode: 200, retryAfter: nil, body: Data([0xFF, 0xFE, 0x00, 0xD8]), now: now) == .failed)
+        #expect(LiveAircraftFeed.outcome(statusCode: 200, retryAfter: nil, body: Data(#"{"ac":[]}"#.utf8), now: now) == .planes([]))
+        #expect(LiveAircraftFeed.outcome(statusCode: 200, retryAfter: nil, body: Data(#"{"ac":[7,null,"x"]}"#.utf8), now: now) == .planes([]))
+        // Bounded: a handful of statuses.
+        for status in [0, -1, 100, 204, 301, 400, 403, 404, 500, 502, 503, Int.max, Int.min] {
+            #expect(LiveAircraftFeed.outcome(statusCode: status, retryAfter: nil, body: Self.feed, now: now) == .failed, "status \(status)")
+        }
+    }
+
+    /// The reviewer's own scenario, through the whole fetch: the answer that crashed Home.
+    @Test func theAnswerThatCrashedHomeNowReadsAsAnEmptySky() async throws {
+        let body = Data(#"{"ac":[{"hex":"a","lat":1,"lon":1,"alt_baro":1e30}]}"#.utf8)
+        let cell = try #require(LiveAircraftCell(containing: GeoPoint(1, 1)))
+        let outcome = await LiveAircraftClient.fetch(cell, enabled: true, appVersion: "1", transport: CannedLiveAircraftTransport(body: body))
+        #expect(outcome == .planes([]))
+    }
+
+    @Test func aListOfThousandsIsCutAtSixHundredAndTheSkyHoldsNoMore() throws {
+        let now = Date(timeIntervalSince1970: 1_763_500_000)
+        // Bounded: 2,500 made-up entries, every fourth one hostile.
+        let entries = (0..<2_500).map { index -> String in
+            let hex = String(format: "%06x", index)
+            if index % 4 == 3 { return #"{"hex":"\#(hex)","alt_baro":1e30,"gs":1e300,"track":-1e300,"lat":1e9,"lon":-1e9}"# }
+            return #"{"hex":"\#(hex)","alt_baro":\#(1_000 + index),"gs":300,"track":\#(index % 360),"lat":\#(Double(index % 120) - 60),"lon":\#(Double(index % 300) - 150),"seen_pos":\#(index % 50)}"#
+        }
+        let body = Data(("{\"ac\":[" + entries.joined(separator: ",") + "]}").utf8)
+        let read = try #require(LiveAircraftFeed.aircraft(in: body, now: now))
+        #expect(read.count == 450, "the first 600 entries, less their 150 hostile ones")
+        #expect(read.allSatisfy { $0.position.isValid && LiveAircraftFeed.altitudeFeetRange.contains(Double($0.altitudeFeet)) })
+        var sky = LiveAircraftSky().merging(read, at: now)
+        // A second answer of 600 other planes: the sky keeps the newest 600 and no more.
+        let others = (0..<600).map { index in
+            LiveAircraft(id: "ff" + String(format: "%04x", index), callsign: nil, registration: nil, typeCode: nil, category: nil,
+                         position: GeoPoint(10, 10), altitudeFeet: 30_000, groundSpeedKnots: 400, trackDegrees: 10, seenAt: now)
+        }
+        sky = sky.merging(others, at: now)
+        #expect(sky.planes.count == LiveAircraftSky.maxPlanes)
+        #expect(sky.showing(at: now).count == LiveAircraftSky.maxPlanes)
+    }
+
     @Test func aTooManyRequestsAnswerRests() {
         #expect(LiveAircraftFeed.outcome(statusCode: 429, retryAfter: 120, body: Data()) == .rateLimited(retryAfter: 120))
         #expect(LiveAircraftFeed.outcome(statusCode: 503, retryAfter: nil, body: Self.feed) == .failed)
@@ -155,6 +336,140 @@ struct LiveAircraftTests {
         let told = budget.answered(.rateLimited(retryAfter: 5), at: now)
         #expect(told.restUntil == now.addingTimeInterval(LiveAircraftBudget.interval), "never sooner than the 30 s beat")
         #expect(second.answered(.planes([]), at: now).strikes == 0)
+    }
+
+    // MARK: Backing off on failures (release review 2026-11-18, F9)
+
+    /// A failed fetch (no network, a timeout, a 403 or 5xx, a body that isn't the feed) rests, doubling from the 30 s
+    /// beat to 15 minutes; planes clear it.
+    @Test func failedFetchesInARowRestLongerUpToFifteenMinutes() {
+        let start = Date(timeIntervalSince1970: 1_763_500_000)
+        var budget = LiveAircraftBudget(day: LiveAircraftBudget.dayStamp(start), used: 0)
+        var now = start
+        var rests: [TimeInterval] = []
+        // Bounded: twelve failures.
+        for _ in 0..<12 {
+            budget = budget.answered(.failed, at: now)
+            let until = budget.restUntil ?? now
+            rests.append(until.timeIntervalSince(now))
+            #expect(!budget.allows(at: until.addingTimeInterval(-1)))
+            #expect(budget.allows(at: until))
+            now = until
+        }
+        #expect(rests == [30, 60, 120, 240, 480, 900, 900, 900, 900, 900, 900, 900])
+        #expect(rests.allSatisfy { $0 >= LiveAircraftBudget.interval && $0 <= LiveAircraftBudget.longestFailureRest })
+        #expect(budget.strikes == LiveAircraftBudget.maxStrikes)
+        let recovered = budget.answered(.planes([]), at: now)
+        #expect(recovered.strikes == 0)
+        #expect(recovered.answered(.failed, at: now).restUntil == now.addingTimeInterval(30), "after planes the back-off starts again")
+        #expect(budget.answered(.notPermitted, at: now) == budget, "the switch refusing a fetch is no failure")
+    }
+
+    /// An outage with the map in front all day: the back-off makes it about a hundred requests, not the 400 cap, and
+    /// never one sooner than 30 s after the last.
+    @Test func aDayLongOutageSendsFarFewerThanTheCap() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        let midnight = Date(timeIntervalSince1970: 1_763_510_400)   // 2025-11-19 00:00 UTC
+        var budget = LiveAircraftBudget(day: LiveAircraftBudget.dayStamp(midnight, calendar: calendar), used: 0)
+        var sent = 0, lastSent: Date?
+        // Bounded: one day of 30 s beats.
+        for beat in 0..<2_880 {
+            let now = midnight.addingTimeInterval(Double(beat) * LiveAircraftBudget.interval)
+            guard budget.allows(at: now, calendar: calendar) else { continue }
+            if let lastSent { #expect(now.timeIntervalSince(lastSent) >= LiveAircraftBudget.interval) }
+            budget = budget.spending(at: now, calendar: calendar).answered(.failed, at: now)
+            sent += 1
+            lastSent = now
+        }
+        #expect(sent <= 110, "sent \(sent)")
+        #expect(sent < LiveAircraftBudget.dailyCap)
+    }
+
+    @Test func a429AfterFailuresAndAHostileRetryAfterStayBounded() {
+        let now = Date(timeIntervalSince1970: 1_763_500_000)
+        let budget = LiveAircraftBudget(day: LiveAircraftBudget.dayStamp(now), used: 3)
+        let longest = LiveAircraftBudget.longestRest * 6
+        // Bounded: a handful of hostile headers.
+        for header in [Double.nan, .infinity, -.infinity, -1, 0, 1e300, .greatestFiniteMagnitude] {
+            let rested = budget.answered(.rateLimited(retryAfter: header), at: now)
+            let rest = (rested.restUntil ?? now).timeIntervalSince(now)
+            #expect(rest.isFinite && rest >= LiveAircraftBudget.interval && rest <= longest, "Retry-After \(header) rested \(rest)")
+            #expect(!rested.allows(at: now.addingTimeInterval(LiveAircraftBudget.interval - 1)))
+        }
+        var mixed = budget
+        // Bounded: 40 answers, failures and 429s by turns; a stored tally of nonsense strikes too.
+        for round in 0..<40 {
+            mixed = mixed.answered(round.isMultiple(of: 2) ? .failed : .rateLimited(retryAfter: nil), at: now)
+            let rest = (mixed.restUntil ?? now).timeIntervalSince(now)
+            #expect(rest >= LiveAircraftBudget.interval && rest <= LiveAircraftBudget.longestRest)
+        }
+        #expect(mixed.strikes == LiveAircraftBudget.maxStrikes)
+        for strikes in [Int.max, Int.min, -1] {
+            let stored = LiveAircraftBudget(day: budget.day, used: 0, restUntil: nil, strikes: strikes)
+            let rest = (stored.answered(.failed, at: now).restUntil ?? now).timeIntervalSince(now)
+            #expect(rest >= LiveAircraftBudget.interval && rest <= LiveAircraftBudget.longestFailureRest, "strikes \(strikes)")
+        }
+    }
+
+    /// Through the watch: a failing host is asked once, then left alone for the rest; a second look inside the rest
+    /// sends nothing.
+    @Test func theWatchRestsAfterAFailedFetchAndSendsNothingMeanwhile() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "LiveAircraftTests.\(UUID().uuidString)"))
+        WorldMapPreferences.setShowsLivePlanes(true, in: defaults)
+        let cell = try #require(LiveAircraftCell(containing: GeoPoint(39.86, -104.67)))
+        // Bounded: four kinds of failing answer.
+        for (status, body) in [(503, Data()), (403, Self.feed), (200, Data("<html>".utf8)), (200, Data(#"{"ac":7}"#.utf8))] {
+            WorldMapPreferences.setLivePlanesBudget(LiveAircraftBudget(day: "", used: 0), in: defaults)
+            let transport = CannedLiveAircraftTransport(status: status, body: body)
+            let watch = LiveAircraftWatch(transport: transport, defaults: defaults)
+            await watch.fetchOnce(cell)
+            await watch.fetchOnce(cell)
+            await watch.fetchOnce(cell, now: Date().addingTimeInterval(LiveAircraftBudget.interval - 2))
+            #expect(transport.requests.count == 1, "status \(status): asked \(transport.requests.count) times inside the rest")
+            let budget = WorldMapPreferences.livePlanesBudget(in: defaults)
+            #expect(budget.strikes == 1 && budget.used == 1)
+            await watch.fetchOnce(cell, now: Date().addingTimeInterval(LiveAircraftBudget.interval + 2))
+            #expect(transport.requests.count == 2, "after the rest it asks again")
+            #expect(watch.sky.planes.isEmpty)
+        }
+        // A good answer clears the strikes and fills the sky.
+        let good = LiveAircraftWatch(transport: CannedLiveAircraftTransport(body: Self.feed), defaults: defaults)
+        await good.fetchOnce(cell, now: Date().addingTimeInterval(3_600))
+        #expect(WorldMapPreferences.livePlanesBudget(in: defaults).strikes == 0)
+    }
+
+    /// A fetch cut short because the map left the front (its task cancelled) is no failure of adsb.lol's: no strike.
+    @Test func aFetchCancelledWhenTheMapLeavesEarnsNoRest() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "LiveAircraftTests.\(UUID().uuidString)"))
+        WorldMapPreferences.setShowsLivePlanes(true, in: defaults)
+        let cell = try #require(LiveAircraftCell(containing: GeoPoint(39.86, -104.67)))
+        let watch = LiveAircraftWatch(transport: StalledLiveAircraftTransport(), defaults: defaults)
+        let task = Task { await watch.fetchOnce(cell) }
+        try await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+        await task.value
+        let budget = WorldMapPreferences.livePlanesBudget(in: defaults)
+        #expect(budget.used == 1, "the request was sent and counts toward the day")
+        #expect(budget.strikes == 0 && budget.restUntil == nil)
+    }
+
+    /// Release review F7: the planes are asked for only while nothing of Home's own covers the map, the tapped
+    /// plane's card aside (it lives in the layer, part of the planes).
+    @Test func homeAsksForPlanesOnlyWithNothingOfItsOwnOverTheMap() throws {
+        let home = try RepoRoot.source("App/Fernlet/World/Home/WorldMapHome.swift")
+        #expect(home.contains("isActive: isLivePlanesFront, home: livePlanes"))
+        #expect(home.contains("private var isLivePlanesFront: Bool { isTapFrontPage && wornWaySheet == nil }"))
+        #expect(!home.contains("LiveAircraftLayer(store: store, viewport: viewport, size: size, isActive: isMapFrontPage"))
+        let front = try #require(home.range(of: "private var isTapFrontPage: Bool {"))
+        let rule = home[front.upperBound...].prefix(500)
+        for cover in ["isMapFrontPage", "scenePhase == .active", "guidedSession == nil", "cameraMode == nil", "!isLocationIntroUp",
+                      "openPhotoPlace == nil", "openTripPhotos == nil", "placeSheet == nil", "menuSearch == nil",
+                      "explore.openCity == nil", "explore.openLandmark == nil"] {
+            #expect(rule.contains(cover), "isTapFrontPage no longer checks \(cover)")
+        }
+        let layer = try RepoRoot.source("App/Fernlet/World/Map/LiveAircraft/LiveAircraftLayer.swift")
+        #expect(layer.contains(".sheet(item: $home.opened)"), "the plane's card is the layer's own sheet")
     }
 
     @Test func theSwitchIsOffByDefaultAndTheWipeClearsEverything() throws {

@@ -100,7 +100,7 @@ nonisolated enum LiveAircraftFlownMatch: Equatable, Sendable {
 
 /// When live planes are fetched, and what came back (owner 2026-11-19, calls 3, 4 and 6): the 0.5° cell under the
 /// visible map's centre, wherever the map is, every ``LiveAircraftBudget/interval`` while Home's map is in front and the
-/// app is active, within the daily cap. Main actor, held by ``LiveAircraftLayer``; its loop is the layer's task, so it
+/// app is active, within the daily cap and the budget's rests (after a 429, and doubling after failed fetches). Main actor, held by ``LiveAircraftLayer``; its loop is the layer's task, so it
 /// stops the moment the map leaves the front, the app leaves the foreground or the mid-flight screen takes Home.
 @MainActor
 @Observable
@@ -149,7 +149,9 @@ final class LiveAircraftWatch {
         }
     }
 
-    /// One fetch of `cell`, if the switch is on and the budget allows.
+    /// One fetch of `cell`, if the switch is on and the budget allows (the cap, and no rest after a 429 or failed
+    /// fetches). A fetch that failed because its task was cancelled (the map left the front, or panned to another
+    /// cell) is no failure of adsb.lol's and earns no rest.
     func fetchOnce(_ cell: LiveAircraftCell, now: Date = Date()) async {
         let enabled = WorldMapPreferences.showsLivePlanes(in: defaults)
         var budget = WorldMapPreferences.livePlanesBudget(in: defaults, now: now)
@@ -164,8 +166,10 @@ final class LiveAircraftWatch {
         let outcome = await LiveAircraftClient.fetch(cell, enabled: enabled, appVersion: Self.appVersion, transport: transport)
         let answered = Date()
         FernletAuditLog.log("liveAircraft.fetch." + Self.outcomeName(outcome))
-        WorldMapPreferences.setLivePlanesBudget(
-            WorldMapPreferences.livePlanesBudget(in: defaults, now: answered).answered(outcome, at: answered), in: defaults)
+        if !(Task.isCancelled && outcome == .failed) {
+            WorldMapPreferences.setLivePlanesBudget(
+                WorldMapPreferences.livePlanesBudget(in: defaults, now: answered).answered(outcome, at: answered), in: defaults)
+        }
         guard !Task.isCancelled, self.cell == cell, case .planes(let planes) = outcome else { return }
         sky = sky.merging(planes, at: answered)
     }
