@@ -150,7 +150,7 @@
      word on 2026-11-19 ("Wording 1 as applied", PR #212): §6's map record "also marks, more
      lightly, the ground you only drove or rode past, and Delete map history removes it with the rest of your
      map" (`DrivenFogStore`, `fog-driven.bin` in the map's own encrypted folder, cell ids only, since PR #142);
-     (2) DRAFT, awaiting the owner's approval of the words: calendar flights, the wording PR #202 proposed with its last clause made exact: a flight found in the
+     (2) calendar flights, approved by the owner as written on 2026-11-19 ("Calendar flights wording is good"): the wording PR #202 proposed with its last clause made exact: a flight found in the
      calendar "counts as yours only once Fernlet sees you take it or you add it yourself", and one that is only
      in the calendar "stays planned and is let go a couple of days after it leaves". The old clause, "the
      flights it finds draw your routes and fill the passport's Flights page", stopped being true with PR #202.

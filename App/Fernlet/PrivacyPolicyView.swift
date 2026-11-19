@@ -58,7 +58,7 @@
 //  to adsb.lol while the map is open; "Airports and flights" keeps a Flighty file's aircraft type and tail number.
 //  Revised 2026-11-19 (release review policy pass, no behaviour change; owner-approved word for word that day):
 //  "Location and the map" says the record also marks, more lightly, the ground only driven or ridden past, and that
-//  Delete map history removes it. DRAFT 2026-11-19, awaiting the owner's approval of the words:
+//  Delete map history removes it;
 //  "Airports and flights" says a calendar flight counts only once Fernlet sees the
 //  person take it or they add it themselves, and otherwise stays planned and is let go (true since PR #202).
 //  Any material change to the policy must update the effective date below AND in Docs/Privacy-Policy.md AND
