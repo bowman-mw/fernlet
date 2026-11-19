@@ -42,6 +42,11 @@ extension CloudKitDataService: RecoveryEscrowStoring {}
 /// (a "Make a new code" whose delete has not landed, or two phones making codes at once) the newest
 /// `codeMadeAt` wins, and ``sealNewEscrowKeys()`` deletes the others, finishing the revoke.
 ///
+/// **A code counts only once confirmed.** ``beginNewCode()`` saves nothing; the records are written,
+/// and the older code revoked, by ``confirmNewCode(_:)`` after the person typed three words back. An
+/// unconfirmed code therefore never exists in iCloud, so there is no pending state to persist, wipe
+/// or clean up, and ``sealNewEscrowKeys()`` only ever sees confirmed codes.
+///
 /// **Refused in a duress session** (every call throws ``RecoveryCodeFailure/refusedInDuress``): the
 /// decoy must not reveal, make or use the owner's code. The code itself is never stored; the screens
 /// that show it ask for a fresh passcode or Face ID first and are capture-protected.
@@ -65,7 +70,7 @@ final class RecoveryCodeService {
     ///   - cloud: Where the records live.
     ///   - identityFactory: Builds the identity; nil for Fernlet's (``IdentityService/fernletApp(keychainService:)``).
     ///   - duressActive: Whether a duress session is active; every call refuses while it is.
-    ///   - anyBackupEnabled: Whether any encrypted backup is on (see ``makeNewCode()``).
+    ///   - anyBackupEnabled: Whether any encrypted backup is on (see ``beginNewCode()``).
     ///   - now: The clock.
     init(
         cloud: any RecoveryEscrowStoring,
@@ -90,8 +95,15 @@ final class RecoveryCodeService {
         return .madeOn(current.madeAt)
     }
 
-    /// Makes a new code: fresh entropy, every escrow key on this phone sealed to its public key, the
-    /// records saved, then every older code's records deleted (the revoke).
+    /// Starts a new code: fresh entropy, checked against this phone's escrow keys and iCloud, and
+    /// **nothing saved**. The code counts only once ``confirmNewCode(_:)`` has run, after the person
+    /// typed three of its words back; until then the code made before it stays the current one,
+    /// keeps opening the backups and keeps its "Made on" date.
+    ///
+    /// The pending code lives only in the caller's memory (the sheet's state) between showing and
+    /// confirming: no record, no preference and no keychain row describes it, so a closed sheet, an
+    /// ended app or a dead battery leaves nothing behind to clean up and nothing able to open the
+    /// backups (owner 2026-11-19, release review finding 8).
     ///
     /// With a backup switched on but its first upload not yet run (the Private tab not opened since),
     /// there is no escrow key yet: the seal path mints it now, exactly as that upload would
@@ -99,21 +111,42 @@ final class RecoveryCodeService {
     ///
     /// - Returns: The new code, to show once; the caller drops it when the screen closes.
     /// - Throws: ``RecoveryCodeFailure/noBackupKey`` when this phone holds no escrow key (no encrypted
-    ///   backup was turned on), ``RecoveryCodeFailure/refusedInDuress``, or the cloud's error. A failed
-    ///   revoke is not thrown: the new code works, and the next launch's ``sealNewEscrowKeys()`` deletes
-    ///   the old records.
-    func makeNewCode() async throws -> RecoveryCode {
+    ///   backup was turned on), ``RecoveryCodeFailure/refusedInDuress``, or the cloud's error when
+    ///   iCloud cannot be read (so the words are not shown for a code that could not be saved).
+    func beginNewCode() async throws -> RecoveryCode {
         try refuseInDuress()
         let identity = try provisionedIdentity()
         if !identity.holdsEscrowKeyForRecovery, anyBackupEnabled() {
             identity.provisionBackupEscrowKeyForSealing()
         }
         guard identity.holdsEscrowKeyForRecovery else { throw RecoveryCodeFailure.noBackupKey }
+        _ = try await cloud.recoveryEscrowRecords()
         let code = try RecoveryCode.generate()
+        FernletAuditLog.log("recoveryCode.begun")
+        return code
+    }
+
+    /// Makes a begun code the current one, once the person has typed three of its words back: every
+    /// escrow key on this phone sealed to its public key, the records saved, then every other code's
+    /// records deleted (the revoke). Nothing is deleted unless the save landed, so a refused or
+    /// failed save leaves the older code working and this call can simply be tried again.
+    ///
+    /// The code is dated now, or just after the newest code already in iCloud when that one's date is
+    /// ahead of this phone's clock, so the confirmed code is always the newest: a revoke that did not
+    /// land is then finished by the next launch's ``sealNewEscrowKeys()`` in the right direction.
+    ///
+    /// - Parameter code: The code ``beginNewCode()`` returned.
+    /// - Throws: ``RecoveryCodeFailure/noBackupKey``, ``RecoveryCodeFailure/refusedInDuress``, or the
+    ///   cloud's error from the read or the save (nothing was revoked). A failed revoke is not thrown:
+    ///   the new code works, and the next launch's ``sealNewEscrowKeys()`` deletes the old records.
+    func confirmNewCode(_ code: RecoveryCode) async throws {
+        try refuseInDuress()
+        let identity = try provisionedIdentity()
+        guard identity.holdsEscrowKeyForRecovery else { throw RecoveryCodeFailure.noBackupKey }
         let publicKey = try code.recoveryPublicKey()
         let sealed = try identity.sealEscrowKeysForRecovery(to: publicKey, skipping: [])
         guard !sealed.isEmpty else { throw RecoveryCodeFailure.noBackupKey }
-        let madeAt = now()
+        let madeAt = Self.date(now(), after: Self.currentSet(of: try await cloud.recoveryEscrowRecords()))
         try await cloud.saveRecoveryEscrowRecords(sealed.map { Self.record($0, recoveryPublicKey: publicKey, madeAt: madeAt) })
         do {
             _ = try await cloud.deleteRecoveryEscrowRecords(keeping: publicKey)
@@ -121,7 +154,6 @@ final class RecoveryCodeService {
             FernletAuditLog.log("recoveryCode.revokeDeferred")
         }
         FernletAuditLog.log("recoveryCode.made", context: ["sealedKeys": String(sealed.count)])
-        return code
     }
 
     /// Keeps the current code current without it: seals every escrow key this phone holds that has
@@ -212,6 +244,13 @@ final class RecoveryCodeService {
         let members = records.filter { $0.recoveryPublicKey == newest.recoveryPublicKey }
         return CurrentSet(publicKey: newest.recoveryPublicKey, madeAt: newest.codeMadeAt,
                           escrowHashes: Set(members.map(\.escrowPublicKeyHash)))
+    }
+
+    /// The date a code confirmed at `now` carries: `now`, or one second after `current`'s when that
+    /// code's date is not before it (a clock that ran ahead), so the confirmed code is the newest.
+    static func date(_ now: Date, after current: CurrentSet?) -> Date {
+        guard let current, current.madeAt >= now else { return now }
+        return current.madeAt.addingTimeInterval(1)
     }
 
     private func refuseInDuress() throws {

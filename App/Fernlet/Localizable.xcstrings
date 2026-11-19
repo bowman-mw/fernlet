@@ -14339,6 +14339,22 @@
         }
       }
     },
+    "Couldn't save this code to iCloud, so it doesn't open your backups yet. Check that you're signed in and online, then tap Done again. If you made a code before, that one still works." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se ha podido guardar este código en iCloud, así que todavía no abre tus copias. Comprueba que has iniciado sesión y tienes conexión, y vuelve a tocar OK. Si ya habías creado un código, ese sigue funcionando."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se pudo guardar este código en iCloud, así que todavía no abre tus copias. Comprueba que has iniciado sesión y tienes conexión, y vuelve a tocar OK. Si ya habías creado un código, ese sigue funcionando."
+          }
+        }
+      }
+    },
     "Couldn't save this photo" : {
       "localizations" : {
         "es" : {

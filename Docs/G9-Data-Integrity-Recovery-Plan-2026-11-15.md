@@ -222,7 +222,10 @@ your code". (Call R1.)
    `RecoveryEscrowRecord`, stores the escrow keys locally as `ThisDeviceOnly` rows (then the
    normal WS-2 promote path), and retries restore.
 6. **Make a new code** = new entropy, new key pair, re-seal all escrow keys, delete the old
-   records. The old code stops working the moment the delete syncs.
+   records. The old code stops working the moment the delete syncs. **Since 2026-11-19 (release
+   review finding 8) nothing is saved or deleted until the three words are typed back:** the new
+   code exists only in the sheet's memory before that, so an abandoned sheet, an ended app or a
+   dead phone leaves the old code working and its "Made on" date showing, and no orphan records.
 7. **Delete Everything** deletes `RecoveryEscrowRecord`s with the rest of the iCloud data.
 
 **If both the code and iCloud Keychain are lost, the backups cannot be opened by anyone.** The
