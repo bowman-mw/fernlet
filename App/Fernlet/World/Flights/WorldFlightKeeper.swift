@@ -219,6 +219,13 @@ final class WorldFlightKeeper {
         }
     }
 
+    /// DEBUG `FERNLET_UI_TEST_AIRPORT=cycle`: mirrors the made-up gate state again (its air and ground halves turn
+    /// with the clock, not with readings). Does nothing without that scene.
+    func republishTestScene() {
+        guard UITestSupport.airportCycleSeconds != nil else { return }
+        publish()
+    }
+
     /// Mirrors the detector's state for the screens (or the DEBUG scene's made-up state), writing only what changed.
     private func publish() {
         let state = UITestSupport.airportHomeState(now: Date()) ?? WorldFlightGateState(detector, at: lastAt)

@@ -159,6 +159,8 @@ struct WorldMapHome: View {
 
     var body: some View {
         TimelineView(.everyMinute) { timeline in shownHome(date: timeline.date) }
+        // DEBUG `FERNLET_UI_TEST_AIRPORT=cycle`: the made-up flight turns between ground and air while the app is open.
+        .task { await turnTestSkyCycle() }
         .overlay {
             WorldBoardingHopLayer(store: store, hop: boardingHop, bodySignal: bodySignal, isNight: phase(at: Date()) == .night)
         }
@@ -254,6 +256,21 @@ struct WorldMapHome: View {
         .modifier(WorldBoardingHopTrigger(hop: boardingHop, sky: flying ? .air : .ground,
                                           canPlay: isFrontmost && scenePhase == .active,
                                           isDecoy: store.duressSessionActive, companion: store.worldCompanionName))
+    }
+
+    /// Re-reads the DEBUG sky cycle's gate state each second, so Home switches live; returns at once without it
+    /// (release builds never have it). Bounded: at most a day of seconds; ends when Home goes.
+    private func turnTestSkyCycle() async {
+        guard UITestSupport.airportCycleSeconds != nil else { return }
+        // Bounded: one tick a second for at most a day.
+        for _ in 0..<86_400 {
+            store.worldLocation.flights.republishTestScene()
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
     }
 
     // MARK: Location off
