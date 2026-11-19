@@ -235,6 +235,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         // of the person's cars and of the one device waiting to be asked about) and the salt its tags are made with.
         "fernlet.worldMap.carBook": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.carTagSalt": .cleared(token: "WorldMapPreferences.clearAll"),
+        // The boarding hop (2026-11-18): which Home this iPhone last showed, the map or the plane (display only).
+        "fernlet.worldMap.lastHomeSky": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
         "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
