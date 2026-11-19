@@ -55,14 +55,15 @@ struct CalendarFlightLooker {
         return .success(look)
     }
 
-    /// Each open's look (spec §10.6, option A): 2 days ago to 60 days ahead; passed upcoming flights and the
-    /// window's flown ones join the Flights page, and the upcoming flights are replaced by the window's (a moved
-    /// or cancelled event is followed). Nil when it was kept, else why not.
+    /// Each open's look (spec §10.6, option A): 2 days ago to 60 days ahead; the upcoming flights are replaced by the
+    /// window's (a moved or cancelled event is followed), those that have left waiting there for the trip's
+    /// confirmation (owner 2026-11-19), and one Fernlet already saw gains the calendar as a source. Nil when it was
+    /// kept, else why not.
     @discardableResult
     func keepWatching(now: Date) async -> CalendarLookProblem? {
         switch await look(CalendarFlightLook.watchWindow(now: now), now: now) {
         case .success(let look):
-            atlas.keepCalendarLook(flown: look.flown, upcoming: look.upcoming, now: now) ? nil : .passportClosed
+            atlas.keepCalendarLook(flown: look.flown, upcoming: look.upcoming) ? nil : .passportClosed
         case .failure(let problem):
             problem
         }

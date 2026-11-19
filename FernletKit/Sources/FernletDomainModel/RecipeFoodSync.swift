@@ -5,7 +5,7 @@ import Foundation
 //
 // A recipe food exists only while some recipe uses its recipe, so an older paired device, which lists
 // it among the person's foods, sees one only for a recipe actually used as an ingredient. The store
-// runs ``RecipeFoodSync/synced(foodItems:recipes:)`` after every recipe change and after every sync,
+// runs ``RecipeFoodSync/synced(foodItems:recipes:referenceFoods:)`` after every recipe change and after every sync,
 // which is also how an edit made on an older device (which refreshes nothing) is caught up.
 
 /// The pure rules the store applies to keep recipe foods current.
@@ -17,7 +17,14 @@ public nonisolated enum RecipeFoodSync {
     /// - a recipe food whose recipe is gone but which a recipe still uses becomes a fixed food
     ///   (``frozen(_:)``), so that recipe keeps its numbers.
     /// Returns `foodItems` unchanged (same order) when nothing differs.
-    public static func synced(foodItems: [FoodItem], recipes: [RecipeDefinition]) -> [FoodItem] {
+    ///
+    /// `referenceFoods` are foods a line may point at that are not the person's own: the built-in
+    /// catalog rows, which never enter `foodItems` (release review 2026-11-18, F1). They are read to
+    /// resolve lines and never written into the result; a food in `foodItems` wins over one with the
+    /// same id here, so a recipe food just rebuilt is the one its parent reads.
+    public static func synced(
+        foodItems: [FoodItem], recipes: [RecipeDefinition], referenceFoods: [FoodItem] = []
+    ) -> [FoodItem] {
         let graph = RecipeNestingGraph(recipes: recipes)
         let recipesByID = Dictionary(recipes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let referenced = Set(recipes.flatMap { $0.ingredients.map(\.foodItemId) })
@@ -34,7 +41,7 @@ public nonisolated enum RecipeFoodSync {
         for id in used {
             guard let recipe = recipesByID[id] else { continue }
             let existing = foods.firstIndex { $0.id == id }
-            guard let made = RecipeFood.make(for: recipe, foodItems: foods) else { continue }
+            guard let made = RecipeFood.make(for: recipe, foodItems: foods + referenceFoods) else { continue }
             if let existing {
                 if foods[existing] != made { foods[existing] = made }
             } else {
@@ -46,8 +53,11 @@ public nonisolated enum RecipeFoodSync {
 
     /// Recipe foods for `ids` that are saved recipes and have none yet, built against `foodItems`, so
     /// an editor row picked as a recipe binds to its recipe food rather than minting a custom
-    /// ingredient. Deepest first; a recipe whose lines do not resolve is skipped.
-    public static func ensuring(_ ids: [UUID], foodItems: [FoodItem], recipes: [RecipeDefinition]) -> [FoodItem] {
+    /// ingredient. Deepest first; a recipe whose lines do not resolve is skipped. `referenceFoods` are
+    /// read, never added, as in ``synced(foodItems:recipes:referenceFoods:)``.
+    public static func ensuring(
+        _ ids: [UUID], foodItems: [FoodItem], recipes: [RecipeDefinition], referenceFoods: [FoodItem] = []
+    ) -> [FoodItem] {
         let have = Set(foodItems.map(\.id))
         let graph = RecipeNestingGraph(recipes: recipes)
         let wanted = recipes.filter { ids.contains($0.id) && !have.contains($0.id) }
@@ -57,9 +67,9 @@ public nonisolated enum RecipeFoodSync {
             // Its own sub-recipes first, so its numbers read theirs.
             let below = graph.makingOrder(below: recipe.id).compactMap { id in recipes.first { $0.id == id } }
             for child in below where !foods.contains(where: { $0.id == child.id }) {
-                if let made = RecipeFood.make(for: child, foodItems: foods) { foods.append(made) }
+                if let made = RecipeFood.make(for: child, foodItems: foods + referenceFoods) { foods.append(made) }
             }
-            if let made = RecipeFood.make(for: recipe, foodItems: foods) { foods.append(made) }
+            if let made = RecipeFood.make(for: recipe, foodItems: foods + referenceFoods) { foods.append(made) }
         }
         return foods
     }
@@ -84,7 +94,7 @@ public nonisolated enum RecipeFoodSync {
     /// `parent` after the recipe `deleted` it uses is removed: the deleted recipe's steps, and those
     /// of every recipe it used, are copied in front of the parent's own, each labelled with its
     /// recipe's name, so no instructions are lost (owner pick P06a). The parent's lines are unchanged;
-    /// the deleted recipe's food is frozen by ``synced(foodItems:recipes:)``. Steps stay within
+    /// the deleted recipe's food is frozen by ``synced(foodItems:recipes:referenceFoods:)``. Steps stay within
     /// `maxSteps`, the parent's own kept first.
     public static func parent(
         _ parent: RecipeDefinition, afterDeleting deleted: RecipeDefinition,

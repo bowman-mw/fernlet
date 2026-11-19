@@ -287,11 +287,12 @@ final class WorldFogKeeper {
 
     /// Folds what the phone buffered while locked into the driven cells (owner 2026-11-09): what was walked meanwhile
     /// (the fog buffer the store just drained) is walked, and a drive's buffered cells join the fog, driven unless
-    /// they were walked before or meanwhile.
+    /// they were walked before or meanwhile. The buffer is emptied only after the fog and the driven cells are saved
+    /// (release review F3): a failed save leaves it for the next unlock, and merging it twice is harmless.
     private func mergeDriven() throws {
         guard driven.isLoaded else { return }
         driven.remove(store.lastDrained)
-        let pending = try driven.takePending()
+        let pending = try driven.pending()
         if !pending.isEmpty {
             let walked = store.cells.subtracting(driven.cells)
             store.lift(Array(pending))
@@ -299,13 +300,18 @@ final class WorldFogKeeper {
             try store.save()
         }
         try driven.save()
+        if !driven.clearPending() { FernletAuditLog.log("worldMap.fog.drivenBufferKept") }
     }
 
-    /// Counts the ways a drive passed while the phone was locked (each with its day, oldest first), then saves.
+    /// Counts the ways a drive passed while the phone was locked (each with its day, oldest first), saves, and only
+    /// then empties the buffer, so a failed save leaves it for the next unlock.
     private func mergeWorn() throws {
         guard worn.isLoaded else { return }
-        let pending = try worn.takePending()
-        guard !pending.isEmpty else { return }
+        let pending = try worn.pending()
+        guard !pending.isEmpty else {
+            worn.clearPending()
+            return
+        }
         var byDayAndKind: [UInt16: [WornWayKind: [HexCell]]] = [:]
         // Bounded: the buffer holds at most FogCellStore.maxPendingCells records.
         for (key, day) in pending.prefix(FogCellStore.maxPendingCells) {
@@ -319,6 +325,7 @@ final class WorldFogKeeper {
         }
         wornUnpublished = true
         try worn.save()
+        if !worn.clearPending() { FernletAuditLog.log("worldMap.fog.wornBufferKept") }
     }
 
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`

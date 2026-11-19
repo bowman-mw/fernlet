@@ -113,6 +113,26 @@ struct PersistenceFailureAuditTests {
         #expect(events.contains("rowStore.fetch.failed", where: "store", equals: "coinLedger"))
     }
 
+    /// Release review 2026-11-18 (F2): for memories "could not read" must not look like "none",
+    /// because `CoreDataFernletRepository` soft-deletes every served memory a saved snapshot lacks.
+    @Test func anUnreadableMemoryStoreIsNotAnEmptyOne() throws {
+        let healthy = MemoryRecordRepository(controller: PersistenceController(inMemory: true, preferences: localOnly))
+        #expect(healthy.loadIfReadable() == [])
+
+        let directory = try makeTempDirectory()
+        defer { removeTempDirectory(directory) }
+        let repo = MemoryRecordRepository(controller: try makeUnreadableController(at: directory, seed: { controller in
+            _ = MemoryRecordRepository(controller: controller).upsert([
+                MemoryNote(category: "note", text: "Here", sourceDate: self.stamp)
+            ])
+        }))
+        var events: [AuditEvent] = []
+        let rows = captureAudit(into: &events) { repo.loadIfReadable() }
+        #expect(rows == nil)
+        #expect(repo.load().isEmpty)
+        #expect(events.contains("rowStore.fetch.failed", where: "store", equals: "memory"))
+    }
+
     @Test func rowStoreSaveAuditsInsteadOfTrapping() throws {
         let directory = try makeTempDirectory()
         defer { removeTempDirectory(directory) }

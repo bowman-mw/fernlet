@@ -378,7 +378,8 @@ extension WorldFogKeeper {
                 return
             }
             saved = WornRideCheckpointCodec.decode(data, limit: WornRideClassifier.maxSamples + 1)
-        } catch WorldMapVault.VaultError.keyUnavailable {
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            FernletAuditLog.log("worldMap.trips.rideDeferred", context: ["error": "\(error)"])
             return
         } catch {
             saved = nil
@@ -437,13 +438,15 @@ extension WorldFogKeeper {
         keep(Self.kept(road, sawDrive: ride.sawDrive), of: ride.samples)
     }
 
-    /// The queued rides (none when there is no queue; a queue that can't be opened is removed); nil when the buffer key
-    /// can't be read.
+    /// The queued rides (none when there is no queue; a queue whose bytes are bad is removed); nil when the key or the
+    /// file can't be read right now (a locked phone), so nothing is written over it.
     private func readQueue() -> [WornRideCheckpoint]? {
         do {
             guard let data = try vault.read(.wornTripQueue) else { return [] }
             if let rides = WornRideQueueCodec.decode(data, limit: WornRideClassifier.maxSamples) { return rides }
-        } catch WorldMapVault.VaultError.keyUnavailable {
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            // Locked or before the first unlock: the queue stays, never removed over a read that can't happen now (F3).
+            FernletAuditLog.log("worldMap.trips.queueDeferred", context: ["error": "\(error)"])
             return nil
         } catch {
             FernletAuditLog.log("worldMap.trips.queueDropped")

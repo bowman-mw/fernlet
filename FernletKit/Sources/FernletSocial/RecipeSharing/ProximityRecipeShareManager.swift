@@ -10,6 +10,7 @@
 
 import FernletConnections
 import FernletDomainModel
+import FernletFoundation
 import Foundation
 import Observation
 import ProximityKit
@@ -206,17 +207,36 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         let eligible = PresenceManager.eligibleFriends(in: friends)
         var own: Set<String> = []
         var names: [String: String] = [:]
+        // A tag that cannot be derived (an unprovisioned identity, a malformed friend key) leaves that
+        // friend unnamed; the failures are counted and logged once per pass (R7), never per friend.
+        var failures = 0
+        var lastFailure: (any Error)?
         for friend in eligible.prefix(Self.maxAdvertisedFriendTags) {
-            if let tag = try? identity.recipeFriendTag(for: friend.keyAgreementPublicKey, epoch: epoch) {
-                own.insert(tag.base64EncodedString())
+            do {
+                own.insert(try identity.recipeFriendTag(for: friend.keyAgreementPublicKey, epoch: epoch)
+                    .base64EncodedString())
+            } catch {
+                failures += 1
+                lastFailure = error
             }
         }
         for friend in eligible.prefix(Self.maxMatchedFriends) {
             for candidate in [epoch &- 1, epoch, epoch &+ 1] {
-                if let tag = try? identity.recipeFriendTag(for: friend.keyAgreementPublicKey, epoch: candidate) {
+                do {
+                    let tag = try identity.recipeFriendTag(for: friend.keyAgreementPublicKey, epoch: candidate)
                     names[tag.base64EncodedString()] = friend.displayName
+                } catch {
+                    failures += 1
+                    lastFailure = error
                 }
             }
+        }
+        if let lastFailure {
+            // Count and error type only: never a key, a tag or a friend's name.
+            FernletAuditLog.log(
+                "recipe.nameDisclosure.tagDerivationFailed",
+                context: ["failures": String(failures), "error": String(describing: lastFailure)]
+            )
         }
         friendNamesByTag = names
         nameDisclosureEpoch = epoch

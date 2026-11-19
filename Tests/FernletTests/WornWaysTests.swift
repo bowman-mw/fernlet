@@ -196,10 +196,13 @@ struct WornWaysTests {
         try store.appendPending([a, b], kind: .road, on: 20)
         try store.appendPending([a, a], kind: .road, on: 20)
         try store.appendPending([a], kind: .road, on: 19)
-        let taken = try store.takePending()
+        let taken = try store.pending()
         #expect(taken.count == 3, "the same cell, kind and day waits once")
         #expect(taken.map(\.1) == [19, 20, 20], "oldest day first")
-        #expect(try store.takePending().isEmpty && (try vault.read(.pendingWornWays)) == nil)
+        #expect(try store.pending().count == 3, "reading the buffer leaves it until it is cleared")
+        #expect(store.clearPending())
+        #expect(try store.pending().isEmpty)
+        #expect(try vault.read(.pendingWornWays) == nil)
     }
 
     /// Past the caps new ways and buffered passes are refused and counted, never evicting what is there.
@@ -216,7 +219,7 @@ struct WornWaysTests {
         try store.appendPending(pendingFull, kind: .road, on: 3)
         try store.appendPending([HexCell(q: -1, r: -1)], kind: .road, on: 3)
         #expect(store.refusedCount == 2)
-        #expect(try store.takePending().count == FogCellStore.maxPendingCells)
+        #expect(try store.pending().count == FogCellStore.maxPendingCells)
     }
 
     // MARK: The fog keeper

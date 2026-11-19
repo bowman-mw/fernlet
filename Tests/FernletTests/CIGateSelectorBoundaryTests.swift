@@ -1350,7 +1350,10 @@ import Testing
     /// 607 → 608 on 2026-10-17 for `IntimacyHealthWriteTests` (on no line), the anomaly re-triage's fix
     /// that tells a failed Apple Health sample from a failed link mark after an intimacy save.
     /// 608 → 609 on 2026-11-16 for `RecoveryCodeGoldenTests`, which joined `crypto-goldens`.
-    static let measuredInventoryRows = 609
+    /// 609 → 611 on 2026-11-19 for `CloudKitExpectedSchemaTests` and `MirrorSyncHealthTests` (on no
+    /// line), release review finding F2: the expected CloudKit schema held to the code, and the
+    /// mirror's refused exports classified.
+    static let measuredInventoryRows = 611
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has three

@@ -355,9 +355,6 @@ final class FernletStore {
         manager.nameDisclosureInputs = { [weak self] in self?.recipeNameDisclosureInputs() }
         return manager
     }()
-    /// The identity the recipe radio's friend tags are derived under (SEC-L29): the app's one factory,
-    /// built once rather than per epoch.
-    @ObservationIgnored private lazy var recipeTagIdentity: IdentityService = makeProximityIdentity()
     /// Meeting someone new by tapping phones on Home (World Friends §1): the tap rendezvous, what Home
     /// draws for it, and the hand-off to the hangout mesh (`FernletStore+TapToConnect.swift`).
     @ObservationIgnored private(set) lazy var tapToConnect: TapToConnectController = makeTapToConnect()
@@ -2000,12 +1997,17 @@ final class FernletStore {
     }
 
     /// What the recipe radio's name disclosure reads (SEC-L29): the switch, the trust vault and the
-    /// app identity, built once.
+    /// app identity.
+    ///
+    /// The identity is the presence radio's, which `PresenceManager` provisions when it is built and
+    /// Delete everything wipes. Until 2026-11-19 this was a fourth `makeProximityIdentity()` instance
+    /// that nothing provisioned, so every friend tag threw `notProvisioned` and kept friends were never
+    /// named in the recipe picker (release review since build 460).
     func recipeNameDisclosureInputs() -> ProximityRecipeShareManager.NameDisclosureInputs {
         ProximityRecipeShareManager.NameDisclosureInputs(
             toEveryone: settings.advertiseNameToEveryoneNearby,
             friends: trustedProximityPeers,
-            identity: recipeTagIdentity
+            identity: presenceManager.tagDerivationIdentity
         )
     }
 
@@ -5899,7 +5901,7 @@ final class FernletStore {
 
     /// Brings every recipe food up to date with the recipe book and the saved recipes: run after every
     /// recipe change here and after every sync, so an edit made on another device (an older build
-    /// refreshes nothing) is caught up too. See `RecipeFoodSync.synced(foodItems:recipes:)`.
+    /// refreshes nothing) is caught up too. See `RecipeFoodSync.synced(foodItems:recipes:referenceFoods:)`.
     func syncRecipeFoods() {
         diary.syncRecipeFoods(alsoConsidering: savedRecipeService.savedRecipes)
     }
@@ -5960,6 +5962,12 @@ final class FernletStore {
     func prepareRecipeFood(for recipe: RecipeDefinition) -> FoodItem? {
         diary.ensureRecipeFoods(for: [recipe.id], alsoConsidering: savedRecipeService.savedRecipes)
         return foodCatalog.items(ids: [recipe.id]).first
+    }
+
+    /// Why ``prepareRecipeFood(for:)`` returned nil for `recipe`: the reason a recipe pick shows
+    /// instead of doing nothing (`RecipeFoodRefusalAlert`).
+    func recipeFoodGap(for recipe: RecipeDefinition) -> RecipeFoodGap? {
+        RecipeFood.gap(in: recipe, foodItems: foodCatalog.items(forRecipe: recipe))
     }
 
     /// Saves a book recipe's "Makes" amount (owner pick P02a): see `DiaryStore.setRecipeMakes`.
@@ -6320,6 +6328,15 @@ final class FernletStore {
     func sharingDefinition(for recipe: RecipeDefinition) -> RecipeDefinition {
         let all = allRecipesForNesting
         return recipe.flattenedForSharing(graph: RecipeNestingGraph(recipes: all), recipesByID: recipesByIDForNesting(all))
+    }
+
+    /// How many steps a share of `recipe` would carry with its steps included (its own plus every
+    /// sub-recipe's, as ``sharingDefinition(for:)`` flattens them), when that is more than any share
+    /// can carry (`SharedRecipeLimits.maxSteps`; the wire refuses more). Nil within the limit. The
+    /// Share screen refuses such a recipe up front and names the limit (release review 2026-11-18, F3).
+    func shareStepOverflow(for recipe: RecipeDefinition) -> Int? {
+        let count = sharingDefinition(for: recipe).steps?.count ?? 0
+        return count > SharedRecipeLimits.maxSteps ? count : nil
     }
 
     func micronutrientTotals(for recipe: RecipeDefinition) -> Micronutrients {
@@ -7439,7 +7456,8 @@ final class FernletStore {
         // re-friend in person; same semantics as bitchat's panic wipe) and takes the backup-escrow
         // rows under the same keychain service with it — their sealed backups were already deleted
         // in step 2, so the keys are orphans. All three live IdentityService caches are wiped so RAM
-        // matches the keychain until relaunch.
+        // matches the keychain until relaunch. The recipe radio's friend tags derive under the
+        // presence manager's instance (`recipeNameDisclosureInputs()`), so its wipe covers them too.
         do {
             try meshNetworkManager.wipeIdentityForDeleteAll()
             // The session photos' two at-rest key caches (the wall's and the pending corpus's), dropped

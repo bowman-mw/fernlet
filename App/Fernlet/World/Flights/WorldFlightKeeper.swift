@@ -190,6 +190,25 @@ final class WorldFlightKeeper {
         return PassportFlight(from: from, to: to, departure: departed, arrival: arrived, sources: .fernlet)
     }
 
+    /// The passport's record of a flight Fernlet saw land at the airport `token` without knowing where it took off
+    /// (the phone off or silent at the departure airport): the first of `planned` (the calendar's upcoming flights)
+    /// going to that airport that had left by the landing and lands within ``PassportFlight/sameFlightWindow`` of it
+    /// (or, its arrival unknown, left at most ``plannedLandingReach`` before it) lends its departure airport and time.
+    /// The landing is the trip's confirmation (owner 2026-11-19). Nil with none, or when the airport has no IATA code.
+    func flight(plannedIn planned: [PassportFlight], to token: String, arrived: Date) -> PassportFlight? {
+        guard let to = iataCode(token) else { return nil }
+        let match = planned.prefix(PassportBook.maxUpcomingFlights).first { flight in
+            guard flight.to == to, flight.departure <= arrived else { return false }
+            guard let arrival = flight.arrival else { return arrived.timeIntervalSince(flight.departure) <= Self.plannedLandingReach }
+            return abs(arrival.timeIntervalSince(arrived)) <= PassportFlight.sameFlightWindow
+        }
+        guard let match else { return nil }
+        return PassportFlight(from: match.from, to: to, departure: match.departure, arrival: arrived, sources: .fernlet)
+    }
+
+    /// How long before a landing a calendar flight with no arrival time may have left to be the flight landed.
+    static let plannedLandingReach: TimeInterval = 24 * 60 * 60
+
     /// Hands `events` to ``onEvents``, keeping them (the newest ``maxPendingEvents``) when it could not take them.
     private func hand(_ events: [FlightEvent]) {
         guard !events.isEmpty else { return }

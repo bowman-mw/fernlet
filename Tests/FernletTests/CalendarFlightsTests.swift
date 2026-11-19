@@ -287,8 +287,9 @@ struct CalendarFlightsTests {
 
     // MARK: Keep watching (screen 30)
 
-    /// Each open reads 2 days ago to 60 days ahead: a passed upcoming flight joins the Flights page, the window's
-    /// upcoming flights replace the old ones, and access taken away turns the switch off with flights kept.
+    /// Each open reads 2 days ago to 60 days ahead: the window's flights replace the upcoming ones, a passed one
+    /// waits there unconfirmed (owner 2026-11-19: never flown on the calendar's word) and lapses once the window has
+    /// passed it, and access taken away turns the switch off with what was found kept.
     @Test func keepWatching() async throws {
         let defaults = try Self.defaults(), store = makeTestStore()
         store.worldFog.load()
@@ -303,13 +304,18 @@ struct CalendarFlightsTests {
         let later = flightUTC("2026-11-15T18:00:00Z")
         watcher.look(now: later)
         await watcher.settle()
-        #expect(store.worldFog.atlas.book.flights.map(\.route) == ["PDX>HNL"])
+        #expect(store.worldFog.atlas.book.flights.isEmpty, "a calendar flight flew without confirmation")
+        #expect(store.worldFog.atlas.book.upcomingFlights.map(\.route) == ["PDX>HNL", "HNL>PDX"])
+        let lapsed = flightUTC("2026-11-17T18:00:00Z")
+        watcher.look(now: lapsed)
+        await watcher.settle()
+        #expect(store.worldFog.atlas.book.flights.isEmpty)
         #expect(store.worldFog.atlas.book.upcomingFlights.map(\.route) == ["HNL>PDX"])
         calendar.revoke()
-        watcher.look(now: later)
+        watcher.look(now: lapsed)
         await watcher.settle()
         #expect(!WorldMapPreferences.readsCalendarFlights(in: defaults))
-        #expect(store.worldFog.atlas.book.flights.count == 1)
+        #expect(store.worldFog.atlas.book.upcomingFlights.count == 1)
     }
 
     /// A look that finishes after the person reached the airport brings today's flight, and Home must read it again

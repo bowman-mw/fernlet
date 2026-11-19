@@ -1759,12 +1759,17 @@ public final class DiaryStore {
     // MARK: - Recipes as building blocks
 
     /// Brings every recipe food in ``foodItems`` up to date with the book and `otherRecipes` (the app's
-    /// saved and web recipes, which live outside this store): see `RecipeFoodSync.synced(foodItems:recipes:)`.
+    /// saved and web recipes, which live outside this store): see `RecipeFoodSync.synced(foodItems:recipes:referenceFoods:)`.
     /// Writes and persists only when something changed. The app calls it after every recipe change and
     /// after every sync; `otherRecipes` must be every recipe outside the book, or a recipe food whose
     /// recipe is missing from the list is frozen as if that recipe were deleted.
+    ///
+    /// Lines bound to built-in catalog rows resolve through ``foodCatalog`` (``catalogFoods(for:)``),
+    /// which never adds those rows to ``foodItems``. A recipe food a build without that left unmade
+    /// (release review 2026-11-18, F1) is therefore made on the first pass that runs here.
     public func syncRecipeFoods(alsoConsidering otherRecipes: [RecipeDefinition]) {
-        let updated = RecipeFoodSync.synced(foodItems: foodItems, recipes: recipes + otherRecipes)
+        let all = recipes + otherRecipes
+        let updated = RecipeFoodSync.synced(foodItems: foodItems, recipes: all, referenceFoods: catalogFoods(for: all))
         guard updated != foodItems else { return }
         batchSnapshotPersistence { foodItems = updated }
     }
@@ -1783,9 +1788,19 @@ public final class DiaryStore {
     /// Makes the recipe foods editor rows picked as recipes (`ids`) bind to, before a save resolves
     /// them, so a picked recipe never becomes a custom ingredient of the same name.
     public func ensureRecipeFoods(for ids: [UUID], alsoConsidering otherRecipes: [RecipeDefinition]) {
-        let updated = RecipeFoodSync.ensuring(ids, foodItems: foodItems, recipes: recipes + otherRecipes)
+        let all = recipes + otherRecipes
+        let updated = RecipeFoodSync.ensuring(ids, foodItems: foodItems, recipes: all,
+                                              referenceFoods: catalogFoods(for: all))
         guard updated != foodItems else { return }
         batchSnapshotPersistence { foodItems = updated }
+    }
+
+    /// The catalog rows `recipes`' lines point at that are not among ``foodItems`` (built-in and
+    /// branded foods), looked up by id for building recipe foods. Read only: never stored here.
+    private func catalogFoods(for recipes: [RecipeDefinition]) -> [FoodItem] {
+        let have = Set(foodItems.map(\.id))
+        let wanted = Set(recipes.flatMap { $0.ingredients.map(\.foodItemId) }).subtracting(have)
+        return foodCatalog.items(ids: Array(wanted))
     }
 
     /// Writes only a recipe's "Makes" amount (`RecipeDefinition.makes`), validated, and persists: the

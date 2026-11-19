@@ -68,15 +68,22 @@ public struct MemoryRecordRepository: MemoryRepositoring {
     /// healed. A duplicate-id pair (two phones adopting the same blob memory before they synced)
     /// collapses to the copy read last.
     public func load() -> [MemoryNote] {
-        let rows = store.load()
+        // Environmental (locked/unavailable store): serve nothing rather than risk showing a
+        // forgotten memory.
+        loadIfReadable() ?? []
+    }
+
+    /// ``load()``, or nil when the rows or their tombstones could not be read (audited). The caller
+    /// that soft-deletes by absence (`CoreDataFernletRepository`) reads through this, so a failed
+    /// fetch is never taken for "every memory was forgotten".
+    public func loadIfReadable() -> [MemoryNote]? {
+        guard let rows = store.loadIfReadable() else { return nil }
         let deleted: Set<UUID>
         do {
             deleted = try tombstones.allTombstonedIDs(in: controller.container.viewContext)
         } catch {
-            // Environmental (locked/unavailable store): serve nothing rather than risk showing a
-            // forgotten memory.
             PersistenceFailureAudit.record("rowStore.fetch.failed", error: error, context: ["store": "memory"])
-            return []
+            return nil
         }
         if !deleted.isEmpty {
             tombstones.heal(ids: Set(rows.map(\.id)).intersection(deleted))

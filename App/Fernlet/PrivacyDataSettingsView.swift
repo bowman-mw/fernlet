@@ -1154,12 +1154,15 @@ struct PrivacyDataSettingsView: View {
         MultiDeviceSyncWarning.classify(
             iCloudAccountPresent: iCloudAccountPresent,
             syncEnabled: storagePreferencesStore.preferences.iCloudSyncEnabled,
-            otherDeviceHasData: existingDataSummary?.hasData ?? false
+            otherDeviceHasData: existingDataSummary?.hasData ?? false,
+            // A standing refusal from the mirror's own export/import events (F2): without it the page
+            // said nothing while iCloud took none of this iPhone's changes.
+            iCloudRefusedChanges: PersistenceController.shared.mirrorSyncHealth.lastingIssue != nil
         )
     }
 
     /// Non-silent multi-device divergence warning (Phase 1): when sync is off, the user's devices can't
-    /// merge. Hidden entirely while sync is on. Reuses the loaded `existingDataSummary` to name the
+    /// merge. While sync is on it shows only for an account that is missing or an iCloud refusal. Reuses the loaded `existingDataSummary` to name the
     /// other device's data when present.
     @ViewBuilder
     private var multiDeviceWarningBanner: some View {

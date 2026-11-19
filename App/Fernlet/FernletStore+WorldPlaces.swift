@@ -72,6 +72,8 @@ extension FernletStore {
         Task { await catchUpWorldBikeRides() }
         worldFog.load()
         worldLocation.startForeground()
+        // Calendar flights counted without proof by earlier builds go back to the upcoming flights, once.
+        upgradeUnconfirmedCalendarFlights()
         // Tier-2's travel snapshot, now that the passport is loaded (launch and each return to the front).
         publishTierTwoTravel()
     }

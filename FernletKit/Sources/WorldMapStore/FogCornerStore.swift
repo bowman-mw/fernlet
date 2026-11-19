@@ -75,15 +75,15 @@ public final class FogCornerStore {
         self.vault = vault
     }
 
-    /// The kept corner, or nil when there is none. An unopenable or unreadable file is removed and reads as
-    /// none. Throws only when the key can't be read right now (the phone is locked: try again after unlock).
+    /// The kept corner, or nil when there is none. A file whose bytes don't open or decode is removed and
+    /// reads as none. Throws, leaving the file, when the key or the file can't be read right now (try again after unlock).
     public func load() throws -> FogCornerState? {
         do {
             guard let data = try vault.read(.corner) else { return nil }
             guard let state = FogCornerState(data: data) else { throw WorldMapVault.VaultError.unopenable }
             return state
-        } catch WorldMapVault.VaultError.keyUnavailable {
-            throw WorldMapVault.VaultError.keyUnavailable
+        } catch let error as WorldMapVault.VaultError where error.isTryAgainLater {
+            throw error
         } catch {
             vault.remove(.corner)
             FernletAuditLog.log("worldMap.corner.unopenableRemoved")

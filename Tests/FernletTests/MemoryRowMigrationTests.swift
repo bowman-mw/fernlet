@@ -88,7 +88,55 @@ struct MemoryRowMigrationTests {
         #expect(try blobMemoryCount(controller) == 1)
     }
 
+    /// Release review 2026-11-18 (F2): a failed read used to come back as an empty list. The
+    /// repository soft-deletes every id it has served that a saved snapshot no longer holds, so a
+    /// snapshot loaded while the rows were unreadable, then saved, tombstoned every memory for good.
+    @Test func aSnapshotLoadedWhileTheRowsWereUnreadableNeverForgetsThem() throws {
+        let controller = PersistenceController(inMemory: true)
+        let notes = [memory("First", day: 0), memory("Second", day: 1)]
+        let rows = MemoryRecordRepository(controller: controller)
+        #expect(rows.upsert(notes))
+        let flaky = FlakyReadMemoryRepository(rows)
+        let repository = CoreDataFernletRepository(
+            controller: controller,
+            legacyRepository: LocalFernletRepository(fileURL: temporaryURL("flaky")),
+            memoryRepository: flaky
+        )
+        #expect(repository.loadSnapshot(todayKey: todayKey).memories.map(\.id) == notes.map(\.id))
+
+        flaky.readsFail = true
+        let blind = repository.loadSnapshot(todayKey: todayKey)
+        #expect(blind.memories.isEmpty)
+        #expect(repository.saveSnapshot(blind))
+        flaky.readsFail = false
+
+        #expect(rows.load().map(\.id) == notes.map(\.id), "an unreadable store is not a forget")
+        #expect(repository.loadSnapshot(todayKey: todayKey).memories.map(\.id) == notes.map(\.id))
+
+        // Once the rows read again, leaving one out of a saved snapshot is a forget, as before.
+        var trimmed = repository.loadSnapshot(todayKey: todayKey)
+        trimmed.memories.removeAll { $0.id == notes[0].id }
+        #expect(repository.saveSnapshot(trimmed))
+        #expect(rows.load().map(\.id) == [notes[1].id])
+    }
+
     // MARK: - Helpers
+
+    /// The real row store, with reads that can be made to fail (a locked or unavailable store).
+    @MainActor
+    private final class FlakyReadMemoryRepository: MemoryRepositoring {
+        private let rows: MemoryRecordRepository
+        var readsFail = false
+
+        init(_ rows: MemoryRecordRepository) { self.rows = rows }
+
+        func load() -> [MemoryNote] { loadIfReadable() ?? [] }
+        func loadIfReadable() -> [MemoryNote]? { readsFail ? nil : rows.loadIfReadable() }
+        func upsert(_ memories: [MemoryNote]) -> Bool { rows.upsert(memories) }
+        func adoptMissing(_ memories: [MemoryNote]) -> Bool { rows.adoptMissing(memories) }
+        func delete(ids: [UUID]) -> Bool { rows.delete(ids: ids) }
+        func deleteAll() -> Bool { rows.deleteAll() }
+    }
 
     /// A memory store whose every write fails (a locked or full store).
     @MainActor
