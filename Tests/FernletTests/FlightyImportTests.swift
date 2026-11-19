@@ -93,6 +93,46 @@ struct FlightyImportTests {
         #expect(flight.departure == flightUTC("2026-03-12T16:05:00Z"), "09:05 PDT")
         #expect(flight.arrival == flightUTC("2026-03-12T21:45:00Z"), "11:45 HST")
         #expect(!flight.timesUnsure)
+        #expect(flight.aircraftType == "Airbus A321neo" && flight.tailNumber == "N812CD", "kept since 2026-11-19")
+    }
+
+    /// The aircraft type and tail number reach the passport flight (owner 2026-11-19, reversing 24 A and 27 A for
+    /// these two only), and nothing else from the file's other columns does: the record holds the frozen keys plus
+    /// `y` and `n`, with no airline, flight number, booking code, seat or notes.
+    @Test func aircraftTypeAndTailReachThePassport() throws {
+        let result = try read(Self.file([Self.row(
+            "2026-03-12", "PDX", "HNL", departure: ("", "2026-03-12T09:05"), arrival: ("", "2026-03-12T11:45"),
+            id: "f-1")]))
+        let plan = FlightImportPlan(records: result.flights, source: .flighty, airports: FlightTestAirports(),
+                                    book: PassportBook())
+        let flight = try #require(plan.flights.first)
+        #expect(flight.aircraftType == "Airbus A321neo" && flight.tailNumber == "N812CD")
+        let bytes = try JSONEncoder().encode(flight)
+        let object = try #require(try JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        #expect(Set(object.keys) == ["f", "t", "d", "a", "s", "y", "n"])
+        let text = String(decoding: bytes, as: UTF8.self)
+        // Bounded: eight dropped values.
+        for dropped in ["Cedar", "K7QX2M", "14A", "WINDOW", "ECONOMY", "LEISURE", "Window seat", "f-1"] {
+            #expect(!text.contains(dropped), "\(dropped) reached the passport")
+        }
+    }
+
+    /// An older export without the aircraft or tail column imports as before, with neither; an empty, over-long
+    /// or garbled type or tail is dropped and the row still imports.
+    @Test func missingOrBadAircraftColumnsStillImport() throws {
+        let old = try read(Data("Date,From,To\n2026-03-12,PDX,SEA\n".utf8))
+        let plain = try #require(old.flights.first)
+        #expect(plain.aircraftType == nil && plain.tailNumber == nil)
+        let long = String(repeating: "A", count: PassportFlight.maxAircraftTypeLength + 1)
+        let text = "Date,From,To,Aircraft Type Name,Tail Number\n"
+            + "2026-03-12,PDX,SEA,,\n"
+            + "2026-03-13,PDX,SEA,\(long),N812CD!\n"
+            + "2026-03-14,PDX,SEA,\"Boeing\n737\",N8128CD12345\n"
+            + "2026-03-15,PDX,SEA, Embraer E175 ,g-euua\n"
+        let result = try read(Data(text.utf8))
+        #expect(result.flights.count == 4)
+        #expect(result.flights.prefix(3).allSatisfy { $0.aircraftType == nil && $0.tailNumber == nil })
+        #expect(result.flights.last?.aircraftType == "Embraer E175" && result.flights.last?.tailNumber == "G-EUUA")
     }
 
     /// LF lines and no BOM read the same; scheduled times stand in where actual ones are empty.
@@ -266,7 +306,8 @@ struct FlightyImportTests {
     }
 
     /// Columns that are never read are never decoded: bytes that aren't UTF-8 in the PNR and notes don't stop
-    /// the row, and nothing from those columns reaches a flight.
+    /// the row, and nothing from those columns reaches a flight (the aircraft type and tail number are read and
+    /// kept since 2026-11-19, so the tail "N812CD" is taken out before looking for the flight number "812").
     @Test func unreadColumnsAreNeverDecoded() throws {
         var data = Data((Self.header + "\n").utf8)
         let before = "2026-03-12,Cedar Air,812,PDX,HNL,B,C4,2,A9,false,,,2026-03-12T09:05,,,,,,2026-03-12T11:45,"
@@ -279,7 +320,8 @@ struct FlightyImportTests {
         let result = try read(data)
         let flight = try #require(result.flights.first)
         #expect(flight.from == "PDX" && flight.to == "HNL")
-        let shown = String(describing: result)
+        #expect(flight.aircraftType == "Airbus A321neo" && flight.tailNumber == "N812CD")
+        let shown = String(describing: result).replacingOccurrences(of: "N812CD", with: "")
         #expect(!shown.contains("Cedar") && !shown.contains("812") && !shown.contains("14A") && !shown.contains("f-1"))
     }
 }

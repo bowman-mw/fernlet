@@ -8486,19 +8486,36 @@
         }
       }
     },
-    "Airline, flight number, aircraft, booking code, seat, seat type, cabin, reason, notes, tail number, terminals and gates." : {
+    "Aircraft type, Tail number" : {
+      "comment" : "Airports: fields read from a Flighty file and kept with the flight",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tipo de avión, Matrícula"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tipo de avión, Matrícula"
+          }
+        }
+      }
+    },
+    "Airline, flight number, booking code, seat, seat type, cabin, reason, notes, terminals and gates." : {
       "comment" : "Airports: what a Flighty file holds that is never kept",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aerolínea, número de vuelo, avión, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, matrícula, terminales y puertas."
+            "value" : "Aerolínea, número de vuelo, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, terminales y puertas."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aerolínea, número de vuelo, avión, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, matrícula, terminales y puertas."
+            "value" : "Aerolínea, número de vuelo, código de reserva, asiento, tipo de asiento, cabina, motivo, notas, terminales y puertas."
           }
         }
       }
@@ -51919,6 +51936,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Para contar un vuelo una vez si el archivo lo repite"
+          }
+        }
+      }
+    },
+    "To know the planes you've flown on" : {
+      "comment" : "Airports: why a Flighty file's aircraft type and tail number are read and kept",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para saber en qué aviones has volado"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para saber en qué aviones volaste"
           }
         }
       }

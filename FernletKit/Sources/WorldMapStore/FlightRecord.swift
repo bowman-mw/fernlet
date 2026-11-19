@@ -74,8 +74,10 @@ public nonisolated struct FlightDay: Hashable, Comparable, Sendable {
     }
 }
 
-/// One flight as a reader found it (spec §9.2, §10.4): only the day, the two airports and the gate-to-gate
-/// instants. The airline, flight number, booking code and everything else a source holds never reach it.
+/// One flight as a reader found it (spec §9.2, §10.4): only the day, the two airports, the gate-to-gate
+/// instants and, where the source gives them, the aircraft type and tail number (kept since the owner's
+/// 2026-11-19 reversal of 24 A and 27 A for those two). The airline, flight number, booking code and everything
+/// else a source holds never reach it.
 public nonisolated struct FlightRecord: Equatable, Sendable {
     /// The departure airport's IATA code.
     public let from: String
@@ -89,14 +91,23 @@ public nonisolated struct FlightRecord: Equatable, Sendable {
     public let arrival: Date?
     /// Whether the source's times disagree with themselves; the Flights page then shows no duration.
     public let timesUnsure: Bool
+    /// The aircraft type as the source wrote it, or nil where it gives none (the calendar never does).
+    public let aircraftType: String?
+    /// The tail number, or nil where the source gives none; ``PassportFlight`` tidies it
+    /// (``PassportFlight/cleanTailNumber(_:)``).
+    public let tailNumber: String?
 
-    public init(from: String, to: String, day: FlightDay, departure: Date?, arrival: Date?, timesUnsure: Bool) {
+    /// A record from a reader's fields; the aircraft type and tail number are optional and default to none.
+    public init(from: String, to: String, day: FlightDay, departure: Date?, arrival: Date?, timesUnsure: Bool,
+                aircraftType: String? = nil, tailNumber: String? = nil) {
         self.from = from
         self.to = to
         self.day = day
         self.departure = departure
         self.arrival = arrival
         self.timesUnsure = timesUnsure
+        self.aircraftType = aircraftType
+        self.tailNumber = tailNumber
     }
 }
 

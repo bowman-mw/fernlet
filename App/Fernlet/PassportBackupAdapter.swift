@@ -23,7 +23,9 @@ struct PassportBackupSeamClosedError: Error, Equatable {}
 /// - kind `airportTransit`: one layover, `token` the airport and `first` its trip's start;
 /// - kind `flight` (flown) and `upcomingFlight`: one `PassportFlight`, `token` "FROM>TO" (IATA codes), `first`
 ///   the departure and `last` the arrival when known, with `src` the sources bitmask, `flags` (bit 1: the times
-///   are unsure; absent when 0) and `eh` the calendar event's hash (calendar flights only).
+///   are unsure; absent when 0) and `eh` the calendar event's hash (calendar flights only), and, where the
+///   flight knows them (kept since the owner's 2026-11-19 reversal of 24 A and 27 A for these two only), `ac`
+///   the aircraft type and `tn` the tail number.
 ///
 /// The `id` is minted when the export's snapshot is taken and names the record only within its set
 /// (the engine keeps one copy per id of a hostile set); it says nothing about the place and is never
@@ -51,6 +53,10 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
     var flags: Int?
     /// A calendar flight's event hash (`eh`); nil otherwise.
     var eventHash: String?
+    /// A flight's aircraft type (`ac`); nil when it isn't known and for every other kind.
+    var aircraftType: String?
+    /// A flight's tail number (`tn`); nil when it isn't known and for every other kind.
+    var tailNumber: String?
     /// Every key this build does not know, as it was read (a newer Fernlet's).
     var extra: [String: PassportJSONValue]
 
@@ -72,11 +78,14 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
         case sources = "src"
         case flags
         case eventHash = "eh"
+        case aircraftType = "ac"
+        case tailNumber = "tn"
     }
 
     /// Creates a record.
     init(id: UUID, kind: String, token: String, date: Date, lastSeen: Date? = nil, sources: Int? = nil,
-         flags: Int? = nil, eventHash: String? = nil, extra: [String: PassportJSONValue] = [:]) {
+         flags: Int? = nil, eventHash: String? = nil, aircraftType: String? = nil, tailNumber: String? = nil,
+         extra: [String: PassportJSONValue] = [:]) {
         self.id = id
         self.kind = kind
         self.token = token
@@ -85,6 +94,8 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
         self.sources = sources
         self.flags = flags
         self.eventHash = eventHash
+        self.aircraftType = aircraftType
+        self.tailNumber = tailNumber
         self.extra = extra
     }
 
@@ -92,11 +103,12 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
     init(id: UUID, flight: PassportFlight, upcoming: Bool) {
         self.init(id: id, kind: upcoming ? Self.upcomingFlightKind : Self.flightKind, token: flight.route,
                   date: flight.departure, lastSeen: flight.arrival, sources: flight.sources.rawValue,
-                  flags: flight.timesUnsure ? Self.timesUnsureFlag : nil, eventHash: flight.eventHash)
+                  flags: flight.timesUnsure ? Self.timesUnsureFlag : nil, eventHash: flight.eventHash,
+                  aircraftType: flight.aircraftType, tailNumber: flight.tailNumber)
     }
 
-    /// Decodes the frozen shape (`first` and `last` in seconds since 1970; `last`, `src`, `flags` and `eh` may be
-    /// absent), keeping every other key as it was read.
+    /// Decodes the frozen shape (`first` and `last` in seconds since 1970; `last`, `src`, `flags`, `eh`, `ac` and
+    /// `tn` may be absent), keeping every other key as it was read.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -107,6 +119,8 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
         sources = try container.decodeIfPresent(Int.self, forKey: .sources)
         flags = try container.decodeIfPresent(Int.self, forKey: .flags)
         eventHash = try container.decodeIfPresent(String.self, forKey: .eventHash)
+        aircraftType = try container.decodeIfPresent(String.self, forKey: .aircraftType)
+        tailNumber = try container.decodeIfPresent(String.self, forKey: .tailNumber)
         let all = try decoder.container(keyedBy: AnyKey.self)
         let known = Set(CodingKeys.allCases.map(\.stringValue))
         let others = all.allKeys.filter { !known.contains($0.stringValue) }
@@ -122,7 +136,7 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
         self.extra = extra
     }
 
-    /// Encodes the frozen shape (`last`, `src`, `flags` and `eh` only when set) and every kept key.
+    /// Encodes the frozen shape (`last`, `src`, `flags`, `eh`, `ac` and `tn` only when set) and every kept key.
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: AnyKey.self)
         // Bounded: at most maxExtraKeys; a kept key never takes a frozen key's place.
@@ -137,6 +151,8 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
         try container.encodeIfPresent(sources, forKey: AnyKey(CodingKeys.sources.stringValue))
         try container.encodeIfPresent(flags, forKey: AnyKey(CodingKeys.flags.stringValue))
         try container.encodeIfPresent(eventHash, forKey: AnyKey(CodingKeys.eventHash.stringValue))
+        try container.encodeIfPresent(aircraftType, forKey: AnyKey(CodingKeys.aircraftType.stringValue))
+        try container.encodeIfPresent(tailNumber, forKey: AnyKey(CodingKeys.tailNumber.stringValue))
     }
 
     /// The passport entry this record carries (a country's or an airport's: one trip), or nil for a layover, a
@@ -153,7 +169,8 @@ nonisolated struct PassportBackupRecord: Codable, Equatable {
         guard codes.count == 2 else { return nil }
         return PassportFlight(from: String(codes[0]), to: String(codes[1]), departure: date, arrival: lastSeen,
                               sources: PassportFlight.Sources(rawValue: sources),
-                              timesUnsure: (flags ?? 0) & Self.timesUnsureFlag != 0, eventHash: eventHash)
+                              timesUnsure: (flags ?? 0) & Self.timesUnsureFlag != 0, eventHash: eventHash,
+                              aircraftType: aircraftType, tailNumber: tailNumber)
     }
 
     /// Whether this build knows the record's kind.

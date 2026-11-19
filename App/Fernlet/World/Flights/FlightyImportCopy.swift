@@ -121,9 +121,11 @@ nonisolated enum FlightyImportCopy {
          LocalizedStringResource("To skip a flight, or use where it really went", comment: "Airports: why a Flighty file's Cancelled and Diverted to are read")),
         (LocalizedStringResource("Flighty's flight ID", comment: "Airports: a field read from a Flighty file"),
          LocalizedStringResource("To count a flight once when the file repeats it", comment: "Airports: why a Flighty file's flight ID is read")),
+        (LocalizedStringResource("Aircraft type, Tail number", comment: "Airports: fields read from a Flighty file and kept with the flight"),
+         LocalizedStringResource("To know the planes you've flown on", comment: "Airports: why a Flighty file's aircraft type and tail number are read and kept")),
     ]
     static let droppedTitle = LocalizedStringResource("Dropped as it's read, never kept", comment: "Airports: the heading of what a Flighty file holds that is never kept")
-    static let droppedBody = LocalizedStringResource("Airline, flight number, aircraft, booking code, seat, seat type, cabin, reason, notes, tail number, terminals and gates.",
+    static let droppedBody = LocalizedStringResource("Airline, flight number, booking code, seat, seat type, cabin, reason, notes, terminals and gates.",
                                                      comment: "Airports: what a Flighty file holds that is never kept")
     static let zonesTitle = LocalizedStringResource("Times without a time zone", comment: "Airports: the heading of how a Flighty file's times are read")
     static let zonesBody = LocalizedStringResource("The file's times are local to each airport. The airport list carries each airport's time zone, so the phone works out stops offline.",

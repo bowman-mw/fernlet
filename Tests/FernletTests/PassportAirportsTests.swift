@@ -306,6 +306,108 @@ struct PassportAirportsTests {
         }
     }
 
+    /// The aircraft type and tail number (owner 2026-11-19, reversing 24 A and 27 A for these two only) are kept
+    /// under their own frozen keys `y` and `n`; a flight without them writes exactly the bytes it wrote before, and
+    /// a book saved before them reads as it did.
+    @Test func aircraftTypeAndTailAreKeptUnderTheirOwnKeys() throws {
+        let sorted = JSONEncoder()
+        sorted.outputFormatting = .sortedKeys
+        let plain = Self.flight("PDX", "MEX", Self.t0, .fernlet)
+        #expect(String(decoding: try sorted.encode(plain), as: UTF8.self)
+                == #"{"d":1792800000,"f":"PDX","s":1,"t":"MEX"}"#, "no new key when there is no aircraft")
+        let old = Data(#"{"f":"PDX","t":"MEX","d":1792800000,"s":1}"#.utf8)
+        #expect(try JSONDecoder().decode(PassportFlight.self, from: old) == plain)
+        let flown = try #require(PassportFlight(from: "PDX", to: "MEX", departure: Self.t0, sources: .flighty,
+                                                aircraftType: "Airbus A321neo", tailNumber: "n 812cd"))
+        #expect(flown.aircraftType == "Airbus A321neo" && flown.tailNumber == "N812CD")
+        let json = try Self.object(JSONEncoder().encode(flown))
+        #expect(Set(json.keys) == ["f", "t", "d", "s", "y", "n"], "FROZEN keys")
+        #expect(json["y"] as? String == "Airbus A321neo" && json["n"] as? String == "N812CD")
+        #expect(try JSONDecoder().decode(PassportFlight.self, from: JSONEncoder().encode(flown)) == flown)
+        var book = PassportBook()
+        book.addFlights([flown, Self.flight("PDX", "SEA", Self.at(5), .fernlet)])
+        #expect(try PassportBook(data: book.encoded()) == book)
+    }
+
+    /// A type or tail that breaks its rule is dropped, never a reason to refuse the flight, whether it's given or
+    /// read from a saved book.
+    @Test func aBadAircraftTypeOrTailIsDroppedNotRefused() throws {
+        let long = String(repeating: "A", count: PassportFlight.maxAircraftTypeLength + 1)
+        #expect(PassportFlight.cleanAircraftType(long) == nil)
+        #expect(PassportFlight.cleanAircraftType(String(long.dropFirst())) == String(long.dropFirst()), "48 is kept")
+        #expect(PassportFlight.cleanAircraftType("Boeing\n737") == nil && PassportFlight.cleanAircraftType("  ") == nil)
+        #expect(PassportFlight.cleanAircraftType("A320\u{202E}") == nil, "a direction override")
+        #expect(PassportFlight.cleanAircraftType(" Boeing 737-800 ") == "Boeing 737-800")
+        #expect(PassportFlight.cleanTailNumber("G-EUUA") == "G-EUUA" && PassportFlight.cleanTailNumber(" ja 01xj ") == "JA01XJ")
+        #expect(PassportFlight.cleanTailNumber("N812CD12345") == nil, "11 characters")
+        #expect(PassportFlight.cleanTailNumber("N812CD!") == nil && PassportFlight.cleanTailNumber("--") == nil)
+        #expect(PassportFlight.cleanTailNumber("N812ÇD") == nil && PassportFlight.cleanTailNumber("") == nil)
+        let given = try #require(PassportFlight(from: "PDX", to: "MEX", departure: Self.t0, sources: .flighty,
+                                                aircraftType: long, tailNumber: "N812CD!"))
+        #expect(given.aircraftType == nil && given.tailNumber == nil)
+        let saved = Data(#"{"f":"PDX","t":"MEX","d":1792800000,"s":2,"y":7,"n":"\#(String(repeating: "N", count: 11))"}"#.utf8)
+        let read = try JSONDecoder().decode(PassportFlight.self, from: saved)
+        #expect(read.route == "PDX>MEX" && read.aircraftType == nil && read.tailNumber == nil)
+    }
+
+    /// Tails match by ``PassportFlight/tailKey(_:)``: case, spaces, hyphens and dots aside.
+    @Test func tailsMatchByKey() {
+        #expect(PassportFlight.tailKey("G-EUUA") == "GEUUA")
+        #expect(PassportFlight.tailKey("g euua") == "GEUUA" && PassportFlight.tailKey("G.EUUA") == "GEUUA")
+        #expect(PassportFlight.tailKey("n812cd") == PassportFlight.tailKey("N812CD"))
+        #expect(PassportFlight.tailKey("JA01XJ") != PassportFlight.tailKey("JA01XK"))
+        #expect(PassportFlight.tailKey(" - ") == "")
+    }
+
+    /// Merging keeps the type and tail the passport already holds and fills one it lacks from the other record;
+    /// they leave with Flighty (an import's Undo takes back what it added) and stay when another source goes.
+    @Test func mergingFillsTheAircraftAndFlightyTakesItBack() throws {
+        var book = PassportBook()
+        let seen = Self.flight("PDX", "SFO", Self.t0, arrives: Self.t0.addingTimeInterval(2 * Self.hour), .fernlet)
+        book.addFlights([seen])
+        let imported = try #require(PassportFlight(from: "PDX", to: "SFO", departure: Self.t0.addingTimeInterval(600),
+                                                   sources: .flighty, aircraftType: "Airbus A321neo",
+                                                   tailNumber: "N812CD"))
+        #expect(book.addFlights([imported]) == 1)
+        let held = try #require(book.flights.first)
+        #expect(held.sources == [.fernlet, .flighty] && held.arrival == seen.arrival, "Fernlet's times stay")
+        #expect(held.aircraftType == "Airbus A321neo" && held.tailNumber == "N812CD", "filled from the import")
+        #expect(book.addFlights([imported]) == 0, "the same record twice changes nothing")
+        let other = try #require(PassportFlight(from: "PDX", to: "SFO", departure: Self.t0, sources: .calendar,
+                                                aircraftType: "Boeing 737-800", tailNumber: "N1AA"))
+        #expect(book.addFlights([other]) == 1, "the calendar joins")
+        #expect(book.flights.first?.tailNumber == "N812CD" && book.flights.first?.aircraftType == "Airbus A321neo",
+                "the one held stays")
+        let typeOnly = try #require(PassportFlight(from: "PDX", to: "HNL", departure: Self.t0, sources: .flighty,
+                                                   aircraftType: "Airbus A330-200"))
+        let tailOnly = try #require(PassportFlight(from: "PDX", to: "HNL", departure: Self.t0, sources: .flighty,
+                                                   tailNumber: "N390HA"))
+        let both = typeOnly.merged(with: tailOnly)
+        #expect(both.aircraftType == "Airbus A330-200" && both.tailNumber == "N390HA")
+        #expect(book.removeSource(.calendar) == 0 && book.flights.first?.tailNumber == "N812CD",
+                "another source going keeps them")
+        book.removeSource(.flighty, fromFlightsMatching: [imported])
+        #expect(book.flights.first?.sources == .fernlet)
+        #expect(book.flights.first?.aircraftType == nil && book.flights.first?.tailNumber == nil, "Undo takes them back")
+    }
+
+    /// The sealed backup carries a flight's type and tail under `ac` and `tn`, only when set, and reads them back.
+    @Test func theBackupCarriesTheAircraft() throws {
+        let flown = try #require(PassportFlight(from: "PDX", to: "HEL", departure: Self.t0, arrival: Self.at(0.5),
+                                                sources: [.fernlet, .flighty], aircraftType: "Airbus A350-900",
+                                                tailNumber: "OH-LWA"))
+        var book = Self.traveller()
+        book.addFlights([flown])
+        let records = try Self.exported(book)
+        let record = try #require(records.first { $0.kind == "flight" && $0.token == "PDX>HEL" })
+        let keys = Set(try Self.object(JSONEncoder().encode(record)).keys)
+        #expect(keys == ["id", "kind", "token", "first", "last", "src", "ac", "tn"])
+        #expect(record.flight?.tailNumber == "OH-LWA" && record.flight?.aircraftType == "Airbus A350-900")
+        #expect(try PassportBackupAdapter.book(of: records) == book)
+        let plain = try #require(records.first { $0.kind == "flight" && $0.token == "LHR>PDX" })
+        #expect(Set(try Self.object(JSONEncoder().encode(plain)).keys) == ["id", "kind", "token", "first", "last", "src", "eh"])
+    }
+
     /// Flights and upcoming flights round-trip in the bytes and merge one flight once.
     @Test func flightsRoundTripAndMerge() throws {
         let book = Self.traveller()

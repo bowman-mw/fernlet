@@ -1,12 +1,15 @@
 import Foundation
 
-/// One flight in the passport (World-Airports-Spec §8–§10): two airports and the times, nothing else. A flight
-/// Fernlet saw itself (its speed, or a ticket and a landing), one read from a Flighty export, or one found in the
+/// One flight in the passport (World-Airports-Spec §8–§10): two airports, the times, and, where a source gave
+/// them, the aircraft type and the tail number. A flight Fernlet saw itself (its speed, or a ticket and a landing), one read from a Flighty export, or one found in the
 /// calendar; the same flight from several of them is kept once (``isSameFlight(as:)``, spec §9.3), with every
 /// source it came from, so removing one source never deletes a flight another also has (spec §9.5).
 ///
-/// **Never kept:** an airline, a flight number, an aircraft, a seat, a cabin or a booking code (the owner approved
-/// 24 A and 27 A). They may be compared in memory while one file or one calendar look is read, then dropped.
+/// **Never kept:** an airline, a flight number, a seat, a seat type, a cabin, a reason, notes, terminals, gates or a
+/// booking code (the owner approved 24 A and 27 A). They may be compared in memory while one file or one calendar
+/// look is read, then dropped. **Kept since 2026-11-19:** the owner reversed 24 A and 27 A for the aircraft type and
+/// the tail number only (``aircraftType``, ``tailNumber``), sealed like the rest of the flight, so the World map
+/// can know a plane the person flew on and the passport can stamp each aircraft type flown.
 ///
 /// **FROZEN keys** (the passport's sealed file and its sealed backup carry them; never renamed, never reused):
 /// - `f`: from, the departure airport's IATA code (3 ASCII capitals);
@@ -18,7 +21,14 @@ import Foundation
 /// - `u`: `true` when the times are unsure (a calendar's notes disagreed with its event, spec §10.4); absent
 ///   otherwise;
 /// - `h`: for a calendar flight only, the salted hash of the event's `calendarItemExternalIdentifier` (64
-///   lowercase hex characters), so a later look knows the event without keeping its ID; absent otherwise.
+///   lowercase hex characters), so a later look knows the event without keeping its ID; absent otherwise;
+/// - `y`: the aircraft type as the source wrote it ("Airbus A321neo"), at most ``maxAircraftTypeLength`` printable
+///   characters; absent when not known;
+/// - `n`: the tail number (registration), uppercased with no spaces ("N812CD", "G-EUUA"), at most
+///   ``maxTailNumberLength`` ASCII letters, digits and hyphens; absent when not known.
+///
+/// A type or tail that breaks its rule is dropped (nil), never a reason to refuse the flight, whether it is given
+/// or read. A record without them encodes exactly as before they were kept.
 ///
 /// A flight that breaks a rule is refused when it is made (the initialiser returns nil) and when it is read
 /// (``PassportBook/BookError/badFlight``).
@@ -48,6 +58,10 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
     public static let longestFlight: TimeInterval = 48 * 60 * 60
     /// The length of an event hash, in lowercase hex characters.
     public static let eventHashLength = 64
+    /// The longest aircraft type kept, in Unicode scalars.
+    public static let maxAircraftTypeLength = 48
+    /// The longest tail number kept, in ASCII characters (registrations run to 7 or so, with a hyphen).
+    public static let maxTailNumberLength = 10
 
     /// The departure airport's IATA code.
     public let from: String
@@ -63,22 +77,32 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
     public let timesUnsure: Bool
     /// The calendar event's salted hash, for a calendar flight only.
     public let eventHash: String?
+    /// The aircraft type as the source wrote it ("Airbus A321neo"), or nil when not known.
+    public let aircraftType: String?
+    /// The tail number (registration) uppercased with no spaces ("N812CD"), or nil when not known. Match planes
+    /// by ``tailKey(_:)``, never by this text.
+    public let tailNumber: String?
 
     /// A flight with every field given, or nil when one breaks a rule: either code not 3 ASCII capitals, the two
     /// codes the same, a time that isn't finite, an arrival before the departure or more than ``longestFlight``
     /// after it, no source (or a mask past ``Sources/maxRawValue``), or an event hash that isn't 64 lowercase hex
-    /// characters on a flight from the calendar.
+    /// characters on a flight from the calendar. The aircraft type and tail number are tidied
+    /// (``cleanAircraftType(_:)``, ``cleanTailNumber(_:)``) and dropped when they break their rules; they never
+    /// refuse the flight.
     public init?(from: String, to: String, departure: Date, arrival: Date? = nil, sources: Sources,
-                 timesUnsure: Bool = false, eventHash: String? = nil) {
+                 timesUnsure: Bool = false, eventHash: String? = nil, aircraftType: String? = nil,
+                 tailNumber: String? = nil) {
         guard Self.isValid(from: from, to: to, departure: departure, arrival: arrival, sources: sources,
                            eventHash: eventHash) else { return nil }
         self.init(unchecked: from, to: to, departure: departure, arrival: arrival, sources: sources,
-                  timesUnsure: timesUnsure, eventHash: eventHash)
+                  timesUnsure: timesUnsure, eventHash: eventHash,
+                  aircraftType: aircraftType.flatMap(Self.cleanAircraftType),
+                  tailNumber: tailNumber.flatMap(Self.cleanTailNumber))
     }
 
     /// A flight whose fields already passed the rules.
     private init(unchecked from: String, to: String, departure: Date, arrival: Date?, sources: Sources,
-                 timesUnsure: Bool, eventHash: String?) {
+                 timesUnsure: Bool, eventHash: String?, aircraftType: String?, tailNumber: String?) {
         self.from = from
         self.to = to
         self.departure = departure
@@ -86,6 +110,8 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
         self.sources = sources
         self.timesUnsure = timesUnsure
         self.eventHash = eventHash
+        self.aircraftType = aircraftType
+        self.tailNumber = tailNumber
     }
 
     // MARK: One flight, once
@@ -112,22 +138,29 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
     }
 
     /// This flight and `other` (the same flight) as one: the richer record's times (this one's on a tie), every
-    /// source of both, and an event hash while a calendar is among them.
+    /// source of both, an event hash while a calendar is among them, and this record's aircraft type and tail
+    /// number, each filled from `other` where this one has none.
     public func merged(with other: PassportFlight) -> PassportFlight {
         let base = other.isRicher(than: self) ? other : self
         let sources = self.sources.union(other.sources)
         let hash = sources.contains(.calendar) ? (base.eventHash ?? eventHash ?? other.eventHash) : nil
         return PassportFlight(unchecked: base.from, to: base.to, departure: base.departure, arrival: base.arrival,
-                              sources: sources, timesUnsure: base.timesUnsure, eventHash: hash)
+                              sources: sources, timesUnsure: base.timesUnsure, eventHash: hash,
+                              aircraftType: aircraftType ?? other.aircraftType,
+                              tailNumber: tailNumber ?? other.tailNumber)
     }
 
     /// This flight without `removed` among its sources, or nil when no source is left (the event hash goes with
-    /// the calendar).
+    /// the calendar; the aircraft type and tail number go with Flighty, the one source that gives them, so an
+    /// import's Undo takes back what it added).
     public func removing(_ removed: Sources) -> PassportFlight? {
         let left = sources.subtracting(removed)
         guard !left.isEmpty else { return nil }
+        let keepsAircraft = !removed.contains(.flighty)
         return PassportFlight(unchecked: from, to: to, departure: departure, arrival: arrival, sources: left,
-                              timesUnsure: timesUnsure, eventHash: left.contains(.calendar) ? eventHash : nil)
+                              timesUnsure: timesUnsure, eventHash: left.contains(.calendar) ? eventHash : nil,
+                              aircraftType: keepsAircraft ? aircraftType : nil,
+                              tailNumber: keepsAircraft ? tailNumber : nil)
     }
 
     /// Earliest departure first, then the route, then the rest, so a list of flights always sorts the same.
@@ -139,7 +172,9 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
         if left != right { return left < right }
         if lhs.sources.rawValue != rhs.sources.rawValue { return lhs.sources.rawValue < rhs.sources.rawValue }
         if lhs.timesUnsure != rhs.timesUnsure { return !lhs.timesUnsure }
-        return (lhs.eventHash ?? "") < (rhs.eventHash ?? "")
+        if lhs.eventHash != rhs.eventHash { return (lhs.eventHash ?? "") < (rhs.eventHash ?? "") }
+        if lhs.aircraftType != rhs.aircraftType { return (lhs.aircraftType ?? "") < (rhs.aircraftType ?? "") }
+        return (lhs.tailNumber ?? "") < (rhs.tailNumber ?? "")
     }
 
     // MARK: Rules
@@ -152,6 +187,45 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
     /// Whether `hash` is 64 lowercase hex characters.
     public static func isValidEventHash(_ hash: String) -> Bool {
         hash.utf8.count == eventHashLength && hash.utf8.allSatisfy { ($0 >= 0x30 && $0 <= 0x39) || ($0 >= 0x61 && $0 <= 0x66) }
+    }
+
+    /// `text` as an aircraft type is kept: trimmed of surrounding white space, or nil when it's empty, longer than
+    /// ``maxAircraftTypeLength`` Unicode scalars, or holds a control or format character (a line break, a
+    /// direction override).
+    public static func cleanAircraftType(_ text: String) -> String? {
+        guard text.utf8.count <= maxAircraftTypeLength * 16 else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.unicodeScalars.count <= maxAircraftTypeLength else { return nil }
+        let refused = CharacterSet.controlCharacters.union(.illegalCharacters).union(.newlines)
+        guard trimmed.unicodeScalars.allSatisfy({ !refused.contains($0) }) else { return nil }
+        return trimmed
+    }
+
+    /// `text` as a tail number is kept: uppercased with every white space removed, or nil when it's empty,
+    /// longer than ``maxTailNumberLength``, holds anything but ASCII letters, digits and hyphens, or has no
+    /// letter or digit.
+    public static func cleanTailNumber(_ text: String) -> String? {
+        guard text.utf8.count <= maxTailNumberLength * 16 else { return nil }
+        let kept = String(String.UnicodeScalarView(
+            text.unicodeScalars.filter { !CharacterSet.whitespacesAndNewlines.contains($0) }))
+        guard kept.utf8.allSatisfy({ $0 < 0x80 }) else { return nil }
+        let squeezed = kept.uppercased()
+        guard !squeezed.isEmpty, squeezed.utf8.count <= maxTailNumberLength,
+              squeezed.utf8.allSatisfy({ isTailByte($0) || $0 == 0x2D }),
+              squeezed.utf8.contains(where: isTailByte) else { return nil }
+        return squeezed
+    }
+
+    /// The key two tail numbers match by: uppercased, with white space, hyphens and dots taken out ("G-EUUA",
+    /// "g euua" and "G.EUUA" are all "GEUUA"). Empty when nothing is left.
+    public static func tailKey(_ tail: String) -> String {
+        let dropped = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "-.\u{2010}\u{2011}"))
+        return String(String.UnicodeScalarView(tail.unicodeScalars.filter { !dropped.contains($0) })).uppercased()
+    }
+
+    /// Whether `byte` is an ASCII capital or digit.
+    private static func isTailByte(_ byte: UInt8) -> Bool {
+        (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5A)
     }
 
     /// Every rule a flight's fields must keep.
@@ -180,9 +254,12 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
         case sources = "s"
         case timesUnsure = "u"
         case eventHash = "h"
+        case aircraftType = "y"
+        case tailNumber = "n"
     }
 
-    /// Reads the frozen shape; a flight that breaks a rule is ``PassportBook/BookError/badFlight``.
+    /// Reads the frozen shape; a flight that breaks a rule is ``PassportBook/BookError/badFlight``. An aircraft
+    /// type or tail number that isn't text, or breaks its rule, is dropped and the flight kept.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let from = try container.decode(String.self, forKey: .from)
@@ -193,13 +270,24 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
         let unsure = try container.decodeIfPresent(Bool.self, forKey: .timesUnsure) ?? false
         let hash = try container.decodeIfPresent(String.self, forKey: .eventHash)
         guard let flight = PassportFlight(from: from, to: to, departure: departure, arrival: arrival, sources: sources,
-                                          timesUnsure: unsure, eventHash: hash) else {
+                                          timesUnsure: unsure, eventHash: hash,
+                                          aircraftType: Self.optionalText(container, .aircraftType),
+                                          tailNumber: Self.optionalText(container, .tailNumber)) else {
             throw PassportBook.BookError.badFlight
         }
         self = flight
     }
 
-    /// Writes the frozen shape (`a`, `u` and `h` only when set).
+    /// The text under `key`, or nil when it's absent or isn't text (never a reason to refuse the flight).
+    private static func optionalText(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> String? {
+        do {
+            return try container.decodeIfPresent(String.self, forKey: key)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Writes the frozen shape (`a`, `u`, `h`, `y` and `n` only when set).
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(from, forKey: .from)
@@ -209,5 +297,7 @@ public nonisolated struct PassportFlight: Codable, Hashable, Sendable {
         try container.encode(sources.rawValue, forKey: .sources)
         if timesUnsure { try container.encode(true, forKey: .timesUnsure) }
         try container.encodeIfPresent(eventHash, forKey: .eventHash)
+        try container.encodeIfPresent(aircraftType, forKey: .aircraftType)
+        try container.encodeIfPresent(tailNumber, forKey: .tailNumber)
     }
 }

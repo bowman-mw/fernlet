@@ -30,11 +30,12 @@ nonisolated enum FlightyImportProblem: Error, Equatable, Sendable {
 
 /// The Flighty import (World-Airports-Spec §9, screens 19–24): "Add past flights" opens iOS's own file picker
 /// (CSV only); the picked file is read once, off the main actor, by `FlightyImport` (only the date, airports,
-/// cancelled and diverted flags, gate times and Flighty's ID are ever decoded) and planned against the passport;
+/// cancelled and diverted flags, gate times, Flighty's ID, the aircraft type and the tail number are ever
+/// decoded) and planned against the passport;
 /// the summary sheet's "Add N flights" adds them as records, and the toast's Undo takes that import back.
 ///
 /// **Never on the network** (spec §9.1): no sign-in, no server, no share-sheet "Open in". The file isn't kept; the
-/// airline, flight number and aircraft are never read into memory as text. **A decoy** offers no import (the
+/// airline and flight number are never read into memory as text. **A decoy** offers no import (the
 /// entry points hide it) and the keeper keeps nothing in one. **"Airports and flights" off** (spec §11) keeps no
 /// new flights: the picker doesn't open and a confirm adds nothing, each with a message.
 @MainActor

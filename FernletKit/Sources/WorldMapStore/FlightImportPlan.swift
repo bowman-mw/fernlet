@@ -57,7 +57,8 @@ public nonisolated struct FlightImportPlan: Equatable, Sendable {
         let departure = record.departure ?? noon(of: record.day, in: airports.timeZone(iata: record.from))
         guard let departure else { return nil }
         return PassportFlight(from: record.from, to: record.to, departure: departure, arrival: record.arrival,
-                              sources: source, timesUnsure: record.timesUnsure || record.departure == nil)
+                              sources: source, timesUnsure: record.timesUnsure || record.departure == nil,
+                              aircraftType: record.aircraftType, tailNumber: record.tailNumber)
     }
 
     /// Noon on `day` in `zone` (UTC with no zone).
