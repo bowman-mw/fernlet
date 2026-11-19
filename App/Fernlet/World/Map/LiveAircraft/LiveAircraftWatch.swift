@@ -1,3 +1,4 @@
+import FernletFoundation
 import Foundation
 import WorldMapStore
 
@@ -131,6 +132,7 @@ final class LiveAircraftWatch {
     func watch(_ cell: LiveAircraftCell) async {
         if cell != self.cell { sky = LiveAircraftSky() }
         self.cell = cell
+        FernletAuditLog.log("liveAircraft.watch.started")
         do {
             try await Task.sleep(for: Self.settle)
             // Bounded: at most `maxFetches` fetches; the task is cancelled when the map leaves the front.
@@ -152,16 +154,30 @@ final class LiveAircraftWatch {
         let enabled = WorldMapPreferences.showsLivePlanes(in: defaults)
         var budget = WorldMapPreferences.livePlanesBudget(in: defaults, now: now)
         isSpent = budget.isSpent(at: now)
-        guard enabled, budget.allows(at: now) else { return }
+        guard enabled, budget.allows(at: now) else {
+            FernletAuditLog.log(enabled ? "liveAircraft.fetch.resting" : "liveAircraft.fetch.off")
+            return
+        }
         budget = budget.spending(at: now)
         WorldMapPreferences.setLivePlanesBudget(budget, in: defaults)
         lastFetch = now
         let outcome = await LiveAircraftClient.fetch(cell, enabled: enabled, appVersion: Self.appVersion, transport: transport)
         let answered = Date()
+        FernletAuditLog.log("liveAircraft.fetch." + Self.outcomeName(outcome))
         WorldMapPreferences.setLivePlanesBudget(
             WorldMapPreferences.livePlanesBudget(in: defaults, now: answered).answered(outcome, at: answered), in: defaults)
         guard !Task.isCancelled, self.cell == cell, case .planes(let planes) = outcome else { return }
         sky = sky.merging(planes, at: answered)
+    }
+
+    /// An outcome's name for the audit log: its kind only, never a plane, a cell or a count.
+    static func outcomeName(_ outcome: LiveAircraftFetchOutcome) -> String {
+        switch outcome {
+        case .planes: "answered"
+        case .rateLimited: "rateLimited"
+        case .notPermitted: "notPermitted"
+        case .failed: "failed"
+        }
     }
 
     /// Forgets the sky (the switch turned off, or a decoy began).

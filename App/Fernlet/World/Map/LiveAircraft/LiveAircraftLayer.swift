@@ -13,7 +13,8 @@ import WorldMapStore
 ///   colours, at the nearest of eight headings, with a shadow further below the higher it flies. Between fetches each
 ///   glides along its track; with Reduce Motion it stays where it was read. No labels, except on a plane the person has
 ///   flown on (the same tail) and, lighter, one of a type they've flown (a few at a time).
-/// - **Tap** a plane for its card (``LiveAircraftCard``). To VoiceOver the planes are one element, "12 live planes on the
+/// - **Tap** a plane for its card (``LiveAircraftCard``): Home's own map tap (``LiveAircraftHome/plane(near:)``), so the
+///   planes take no touch from the map. To VoiceOver the planes are one element, "12 live planes on the
 ///   map", whose actions open the nearest ones' cards.
 /// - **Nothing is kept:** the sky lives in memory, and live planes give nothing to the passport.
 struct LiveAircraftLayer: View {
@@ -22,17 +23,16 @@ struct LiveAircraftLayer: View {
     let size: CGSize
     /// Whether Home's map is in front and the app active.
     let isActive: Bool
+    /// What Home holds for the planes: the watch, the tapped card, the planes flown and where each plane last drew.
+    @Bindable var home: LiveAircraftHome
     @AppStorage(WorldMapPreferences.Key.livePlanes) private var isOn = false
-    @State private var watch = LiveAircraftWatch()
     @State private var images = LiveAircraftImageMemo()
-    @State private var flown = LiveAircraftFlown()
-    @State private var opened: LiveAircraftCardSnapshot?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
 
     /// About how many points a sprite pixel takes (owner 2026-11-19, review call 3: "a little bigger").
     static let pointsPerPixel: CGFloat = 1.6
-    /// The tap target round each plane, in points.
+    /// The side of VoiceOver's element on the nearest plane, in points.
     static let tapSide: CGFloat = 44
     /// The most light "type flown" labels at once.
     static let maxTypeLabels = 3
@@ -41,26 +41,34 @@ struct LiveAircraftLayer: View {
 
     var body: some View {
         let shows = isOn && !store.duressSessionActive
+        let scene = LiveAircraftTestScenes.isOn(decoy: store.duressSessionActive)
         let cell = shows && isActive ? LiveAircraftWatch.cell(for: viewport, size: size) : nil
         ZStack(alignment: .topLeading) {
-            if shows && !watch.sky.planes.isEmpty {
+            // Always there, so the fetch task below starts before the first plane arrives (an empty stack starts none).
+            Color.clear
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            if shows && (!home.watch.sky.planes.isEmpty || scene) {
                 TimelineView(.animation(minimumInterval: 1.0 / 15, paused: reduceMotion || !isActive)) { context in
                     sky(at: context.date)
                 }
             }
         }
         .task(id: cell) {
-            guard let cell else { return }
-            await watch.watch(cell)
+            guard let cell, !LiveAircraftTestScenes.isOn(decoy: store.duressSessionActive) else { return }
+            await home.watch.watch(cell)
         }
         .task(id: shows) {
             guard shows else {
-                watch.clear()
+                home.watch.clear()
+                home.drawn = []
                 return
             }
-            flown = LiveAircraftFlown(flights: WorldExploreState.book(store).flights)
+            home.flown = LiveAircraftTestScenes.isOn(decoy: store.duressSessionActive) ? LiveAircraftTestScenes.flown
+                : LiveAircraftFlown(flights: WorldExploreState.book(store).flights)
         }
-        .sheet(item: $opened) { snapshot in
+        .sheet(item: $home.opened) { snapshot in
             LiveAircraftCard(snapshot: snapshot)
                 .presentationDetents([.height(LiveAircraftCard.height)])
         }
@@ -88,14 +96,6 @@ struct LiveAircraftLayer: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             labels(placed)
-            ForEach(placed) { plane in
-                Color.clear
-                    .frame(width: Self.tapSide, height: Self.tapSide)
-                    .contentShape(Rectangle())
-                    .onTapGesture { opened = LiveAircraftCardSnapshot(plane.aircraft, match: plane.match) }
-                    .position(plane.point)
-                    .accessibilityHidden(true)
-            }
             spokenSummary(placed)
         }
     }
@@ -145,7 +145,7 @@ struct LiveAircraftLayer: View {
                     ForEach(nearest.prefix(Self.maxSpokenActions)) { plane in
                         let snapshot = LiveAircraftCardSnapshot(plane.aircraft, match: plane.match)
                         Button {
-                            opened = snapshot
+                            home.opened = snapshot
                         } label: {
                             Text(verbatim: snapshot.spokenName)
                         }
@@ -161,12 +161,19 @@ struct LiveAircraftLayer: View {
         return max(1, (pointsPerPixel * screen).rounded()) / screen
     }
 
+    /// The sky at `now`: the watch's, or under the DEBUG scene the made-up one round the person.
+    private func currentSky(at now: Date) -> LiveAircraftSky {
+        guard LiveAircraftTestScenes.isOn(decoy: store.duressSessionActive) else { return home.watch.sky }
+        return LiveAircraftTestScenes.sky(around: store.worldLocation.latest?.point ?? viewport.center, now: now)
+    }
+
     /// Every showing plane placed on the screen at `now`, those well off it left out, low planes first so high ones
     /// draw over them.
     private func place(at now: Date) -> [LiveAircraftPlaced] {
         let margin: CGFloat = 40
         let bounds = CGRect(origin: .zero, size: size).insetBy(dx: -margin, dy: -margin)
-        return watch.sky.showing(at: now).compactMap { plane -> LiveAircraftPlaced? in
+        let sky = currentSky(at: now)
+        let placed = sky.showing(at: now).compactMap { plane -> LiveAircraftPlaced? in
             let point = viewport.screenPoint(for: LiveAircraftSky.position(of: plane, at: now, glides: !reduceMotion), in: size)
             guard bounds.contains(point) else { return nil }
             let family = LiveAircraftTypes.family(code: plane.typeCode, category: plane.category)
@@ -176,11 +183,48 @@ struct LiveAircraftLayer: View {
             let rect = CGRect(x: point.x - spriteSize.width * scale / 2, y: point.y - spriteSize.height * scale / 2,
                               width: spriteSize.width * scale, height: spriteSize.height * scale)
             return LiveAircraftPlaced(aircraft: plane, point: point, rect: rect, sprite: key,
-                                      opacity: watch.sky.opacity(of: plane, at: now),
+                                      opacity: sky.opacity(of: plane, at: now),
                                       shadowOffset: LiveAircraftPlaced.shadowOffset(feet: plane.altitudeFeet),
-                                      match: flown.match(plane))
+                                      match: home.flown.match(plane))
         }
         .sorted { ($0.aircraft.altitudeFeet, $0.id) < ($1.aircraft.altitudeFeet, $1.id) }
+        home.drawn = placed
+        return placed
+    }
+}
+
+/// What Home keeps for live planes while its map lives: the fetch loop, the card a tap opened, the planes the person
+/// has flown, and where each plane was last drawn, so Home's map tap (which runs beside MapKit's own gestures) can tell
+/// a tap on a plane from a tap on the map. Main actor; in memory only.
+@MainActor
+@Observable
+final class LiveAircraftHome {
+    /// How near a plane's middle a tap must land, in points.
+    static let tapReach: CGFloat = 26
+
+    /// The fetch loop and the sky it holds.
+    let watch = LiveAircraftWatch()
+    /// The card a tap opened, or nil.
+    var opened: LiveAircraftCardSnapshot?
+    /// What the person has flown, for the labels.
+    var flown = LiveAircraftFlown()
+    /// The planes as last drawn: every frame while they glide, every redraw with Reduce Motion (not observed: written
+    /// while drawing).
+    @ObservationIgnored var drawn: [LiveAircraftPlaced] = []
+
+    /// The drawn plane whose middle is nearest `location` within ``tapReach``, or nil.
+    func plane(near location: CGPoint) -> LiveAircraftPlaced? {
+        drawn
+            .map { ($0, hypot($0.point.x - location.x, $0.point.y - location.y)) }
+            .filter { $0.1 <= Self.tapReach }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    /// Opens the card of the plane at `location`, if one is there; whether it did.
+    func open(at location: CGPoint) -> Bool {
+        guard let plane = plane(near: location) else { return false }
+        opened = LiveAircraftCardSnapshot(plane.aircraft, match: plane.match)
+        return true
     }
 }
 

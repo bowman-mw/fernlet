@@ -8,6 +8,7 @@
 //  and stamped. Every fixture plane is made up.
 //
 
+import CoreGraphics
 import Foundation
 import Testing
 import WorldMapStore
@@ -292,6 +293,28 @@ struct LiveAircraftTests {
         #expect(noFlights.hangarPage == nil && noFlights.pageCount == 4, "no Flights page, no Hangar")
         let without = PassportBookModel(entries: [], showsFlights: true, showsRoadTrips: true)
         #expect(without.hangarPage == nil && without.roadTripsPage == 5)
+    }
+
+    @Test func aTapNearADrawnPlaneOpensItsCardAndOtherTapsFallThrough() {
+        let home = LiveAircraftHome()
+        let plane = LiveAircraft(id: "a", callsign: "UAL1704", registration: "N27260", typeCode: "B38M", category: nil,
+                                 position: GeoPoint(40, -105), altitudeFeet: 9_500, groundSpeedKnots: 210, trackDegrees: 45,
+                                 seenAt: Date())
+        let key = LiveAircraftSpriteKey(family: .narrowbody, livery: .plain(.narrowbody), eighths: 1)
+        home.drawn = [LiveAircraftPlaced(aircraft: plane, point: CGPoint(x: 100, y: 200), rect: .zero, sprite: key, opacity: 1,
+                                         shadowOffset: 2, match: .samePlane)]
+        #expect(!home.open(at: CGPoint(x: 160, y: 200)), "a tap away from every plane is the map's")
+        #expect(home.opened == nil)
+        #expect(home.open(at: CGPoint(x: 110, y: 212)))
+        #expect(home.opened?.flight == "United 1704")
+        #expect(home.opened?.type == "Boeing 737 MAX 8")
+        #expect(home.opened?.match == .samePlane)
+    }
+
+    @Test func planesDrawAtWholeDevicePixels() {
+        #expect(LiveAircraftLayer.scale(displayScale: 3) * 3 == 5)
+        #expect(LiveAircraftLayer.scale(displayScale: 2) * 2 == 3)
+        #expect(LiveAircraftLayer.scale(displayScale: 1) == 2)
     }
 
     @Test func theCardSaysAltitudeAndSpeedInThePersonsUnits() {

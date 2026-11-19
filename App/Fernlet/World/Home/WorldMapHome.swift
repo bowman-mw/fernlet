@@ -148,6 +148,8 @@ struct WorldMapHome: View {
     @State private var testTransitQuestion: WornTransitQuestion?
     /// "Live planes nearby" (owner 2026-11-19): while on, the map carries adsb.lol's credit.
     @AppStorage(WorldMapPreferences.Key.livePlanes) private var livePlanesOn = false
+    /// Live planes' fetch loop, tapped card and drawn places (a tap on a plane opens its card from ``tappedMap(at:)``).
+    @State private var livePlanes = LiveAircraftHome()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -318,7 +320,8 @@ struct WorldMapHome: View {
                     .position(x: point.x + (index == 0 ? 92 : -92), y: point.y + 40)
             }
             // Live planes nearby (owner 2026-11-19): over the markers, under Sprout; fetched only while this map is in front.
-            LiveAircraftLayer(store: store, viewport: viewport, size: size, isActive: isMapFrontPage && scenePhase == .active)
+            LiveAircraftLayer(store: store, viewport: viewport, size: size, isActive: isMapFrontPage && scenePhase == .active,
+                              home: livePlanes)
             companion(at: point, size: size, line: line)
             WorldCompanionExtras(store: store, point: point, isPastBedtime: pastBedtime)
             WorldTravelLook(store: store, point: point)
@@ -1247,6 +1250,8 @@ extension WorldMapHome {
         }
         guard isFrontmost, passport?.isPresented != true, cardContext == nil, !isRiding,
               let viewport = geometry.viewport, viewport.isUsable else { return }
+        // Live planes (owner 2026-11-19): a tap on a plane opens its card instead of a worn way.
+        if livePlanesOn, livePlanes.open(at: location) { return }
         let size = geometry.size
         let tallies = store.wornYourWorldTallies()
         guard !tallies.isEmpty else { return }

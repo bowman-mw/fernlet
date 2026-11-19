@@ -42,7 +42,7 @@ struct LiveAircraftCard: View {
     @Environment(\.dismiss) private var dismiss
 
     /// The sheet's height.
-    static let height: CGFloat = 300
+    static let height: CGFloat = 260
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
