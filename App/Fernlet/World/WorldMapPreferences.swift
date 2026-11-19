@@ -125,9 +125,21 @@ nonisolated enum WorldMapPreferences {
         defaults.set(data, forKey: Key.carBook)
     }
 
-    /// The salt the car book's tags are made with, created once on this iPhone (a wipe makes a new one).
-    static func carTagSalt(in defaults: UserDefaults = .standard) -> String {
-        if let salt = defaults.string(forKey: Key.carTagSalt), !salt.isEmpty { return salt }
+    /// The salt the car book's tags are made with, as saved; nil when none reads. **Read-only** (release review
+    /// 2026-11-18, F15): before the phone's first unlock the defaults read as empty with no error, so a missing salt
+    /// may be an unreadable one, and nothing here ever writes. ``mintCarTagSalt(in:protectedData:)`` makes one.
+    static func carTagSalt(in defaults: UserDefaults = .standard) -> String? {
+        guard let salt = defaults.string(forKey: Key.carTagSalt), !salt.isEmpty else { return nil }
+        return salt
+    }
+
+    /// Makes this iPhone's salt, once (a wipe removes it, so the next one is new), and returns the salt in use. Only
+    /// while the phone's protected data can be read (`protectedData`), so an empty read is a true one, only when no
+    /// salt and no car book is saved (a book without its salt is never given a new one its tags can't match), and
+    /// never over a value already there. Nil when it made none and none reads.
+    static func mintCarTagSalt(in defaults: UserDefaults = .standard, protectedData: Bool) -> String? {
+        if let salt = carTagSalt(in: defaults) { return salt }
+        guard protectedData, defaults.object(forKey: Key.carTagSalt) == nil, carBookData(in: defaults) == nil else { return nil }
         let salt = UUID().uuidString
         defaults.set(salt, forKey: Key.carTagSalt)
         return salt

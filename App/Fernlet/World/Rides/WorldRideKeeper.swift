@@ -17,7 +17,9 @@ import WorldMapStore
 /// - **Motion is read in order:** while ``usesMotion``, each reading may ask for the samples since the last
 ///   query ended, at most every ``queryInterval``, one query at a time, never further back than
 ///   ``maxLookBack``. While a drive or ride is on and the app runs, a bounded loop ticks the watch every
-///   ``tickInterval`` so a drive ends when the car is parked and the readings stop.
+///   ``tickInterval`` so a drive ends when the car is parked and the readings stop. The loop is bounded at
+///   ``maxTicks`` (twelve hours); the next reading starts a new one, and a drive without readings never lasts that
+///   long (`WorldRideWatch.maxQuietTime` ends it within half an hour, whatever Motion says).
 @MainActor
 @Observable
 final class WorldRideKeeper {
@@ -35,6 +37,8 @@ final class WorldRideKeeper {
     /// Why the last drive ended (the location source cools a trace down only after one that ended on foot); nil
     /// before the first.
     var lastDriveEnd: WorldDriveEnd? { watch.lastDriveEnd }
+    /// When the last drive ended; nil before the first.
+    var lastDriveEndedAt: Date? { watch.lastDriveEndedAt }
 
     /// Whether the person is on a bike now (a catch-up waits for the live ride).
     var isCycling: Bool {
