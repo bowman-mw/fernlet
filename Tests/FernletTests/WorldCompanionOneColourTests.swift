@@ -224,7 +224,9 @@ struct WorldCompanionOneColourTests {
             .components(separatedBy: "\n}\n").first)
         let medium = try #require(cards.components(separatedBy: "struct CompanionThoughtView: View {").dropFirst().first?
             .components(separatedBy: "\n}\n").first)
-        #expect(small.contains("motif: entry.homeScreenMotif, makesRoomForALeftMotif: true,"), "the small card shifts")
+        // PR #196 took the `scene:` argument off this call (the scene cards draw the scene now), so the line
+        // ends at the bracket; the small card still asks for the room.
+        #expect(small.contains("motif: entry.homeScreenMotif, makesRoomForALeftMotif: true)"), "the small card shifts")
         #expect(!medium.contains("makesRoomForALeftMotif"), "the medium card has room")
         #expect(cards.components(separatedBy: "makesRoomForALeftMotif").count == 2, "only the small card")
         #expect(!(try RepoRoot.source("App/FernletWidgets/MapWidgetViews.swift")).contains("makesRoomForALeftMotif"))

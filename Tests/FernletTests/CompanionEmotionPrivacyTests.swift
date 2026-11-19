@@ -43,6 +43,11 @@ struct CompanionEmotionPrivacyTests {
         // face and asleep only, as Home's map does, so it never names the feeling.)
         "App/FernletWidgets/CompanionWidgetViews.swift",
         "App/FernletWidgets/WidgetThoughtLines.swift",
+        // 2026-11-18 widgets on Sprout's background (PR #196): the scene cards' plate reads the entry's
+        // feeling for its spoken value (`companionMoodValue`), exactly as the paper cards in
+        // `CompanionWidgetViews.swift` do. It only READS the widget's own `WidgetCompanionEmotion`; it
+        // neither persists nor sends it, and the scene itself is picked without the feeling.
+        "App/FernletWidgets/CompanionSceneViews.swift",
         // Round 6b: the map widget's Sprout reads the entry's feeling for its spoken value, as the small and
         // medium cards do; the feeling faces (owner's Q37) read the widget's own `WidgetCompanionEmotion` to
         // pick a face for the Home Screen. Neither persists nor sends it, and the Lock Screen still draws the
