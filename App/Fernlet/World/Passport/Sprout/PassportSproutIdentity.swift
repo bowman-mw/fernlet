@@ -191,43 +191,51 @@ struct PassportSproutDetails: View {
 
 /// Sprout's line in the light bubble (it stays light in dark mode), its tail pointing up at the photo.
 ///
-/// **One height** (owner 2026-11-18): the bubble is as tall as the tallest of ``reservedLines`` lines and every line in
-/// `reserved` (the lines it can show next), each laid out hidden under the line showing, so a long thought turning
-/// into a short one never moves the page below. The room is measured in the page's own text, so with large text the
-/// bubble grows with it but still holds still between lines. Hidden lines are not read; VoiceOver reads `text`.
+/// **A still page** (owner 2026-11-18): the bubble fits the line showing and grows or shrinks with it, but it sits at
+/// the top of a slot that keeps one height, so a long thought turning into a short one never moves the page below.
+/// The slot is as tall as the bubble would be for the tallest of ``reservedLines`` lines and every line in `reserved`
+/// (the lines it can show next), laid out hidden. Measured in the page's own text, it grows with Dynamic Type but
+/// still holds still between lines. Hidden lines are not read; VoiceOver reads `text`.
 struct PassportSproutLine: View {
     let text: String
-    /// The other lines the bubble may show in turn, whose room it keeps.
+    /// The other lines the bubble may show in turn, whose room the slot keeps.
     var reserved: [String] = []
     @Environment(\.passportSproutCompact) private var compact
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The fewest lines of room the bubble keeps, whatever it shows.
+    /// The fewest lines of room the slot keeps, whatever the bubble shows.
     static let reservedLines = 3
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Text(verbatim: " ")
-                .lineLimit(Self.reservedLines, reservesSpace: true)
-                .hidden()
-            ForEach(Array(reserved.enumerated()), id: \.offset) { _, line in
-                Text(verbatim: line)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .hidden()
+        ZStack(alignment: .top) {
+            bubble {
+                ZStack(alignment: .topLeading) {
+                    Text(verbatim: " ").lineLimit(Self.reservedLines, reservesSpace: true)
+                    ForEach(Array(reserved.enumerated()), id: \.offset) { _, line in
+                        Text(verbatim: line).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
-            Text(verbatim: text)
-                .fixedSize(horizontal: false, vertical: true)
+            .hidden()
+            bubble { Text(verbatim: text).fixedSize(horizontal: false, vertical: true) }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: text)
         }
-        .font(PassportSproutFont.line)
-        .foregroundStyle(PassportSproutInk.bubbleText)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, compact ? 5 : 7)
-        .background(PassportSproutInk.bubble, in: RoundedRectangle(cornerRadius: 4))
-        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
-        .overlay(alignment: .topLeading) {
-            PassportBubbleTail().fill(WorldPalette.ink).frame(width: 14, height: 9).offset(x: 44, y: -9)
-        }
-        .padding(.top, 9)
+    }
+
+    /// The light bubble with its tail around `content`, full width.
+    private func bubble(@ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .font(PassportSproutFont.line)
+            .foregroundStyle(PassportSproutInk.bubbleText)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, compact ? 5 : 7)
+            .background(PassportSproutInk.bubble, in: RoundedRectangle(cornerRadius: 4))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
+            .overlay(alignment: .topLeading) {
+                PassportBubbleTail().fill(WorldPalette.ink).frame(width: 14, height: 9).offset(x: 44, y: -9)
+            }
+            .padding(.top, 9)
     }
 }
 

@@ -11,7 +11,7 @@ import WorldMapStore
 ///
 /// From the top: the header; the photo (Sprout at 4 pt a pixel in its current look; tap to pet, with the
 /// close-up's reactions at photo size) with its ghost at map size; the details (Name, Feeling, Shape, Care);
-/// Sprout's line in the light bubble, kept one height between lines; the two machine-readable lines; Wardrobe
+/// Sprout's line in the light bubble, in a slot that keeps one height; the two machine-readable lines; Wardrobe
 /// (which holds what Sprout's wearing since 2026-11-18) and Creation Studio; Your shop with the coins, and for the hour after a session the gold Friend shops row; This
 /// is home (or the home's line with Manage) and App colors.
 ///
@@ -146,7 +146,7 @@ struct PassportSproutPage: View {
         .environment(\.passportSproutCompact, rung.compact)
     }
 
-    /// Sprout's line: a pet's reaction while it shows, else the ambient thought, in a bubble that keeps the room of
+    /// Sprout's line: a pet's reaction while it shows, else the ambient thought, in a bubble whose slot keeps the room of
     /// every line it can show now, so a change of line never moves the page below (owner 2026-11-18).
     private func thought(name: String) -> some View {
         let ambient = store.companionAmbientThought(addressing: termOfAddress)
