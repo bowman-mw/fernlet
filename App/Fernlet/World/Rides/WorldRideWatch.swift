@@ -230,6 +230,13 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     private var automotiveUntil: Date?
     private var sampleAt: Date?
 
+    /// What Motion's latest confident sample says the person is doing, and since when; nil without Motion or before
+    /// the first sample (the walk follow reads it: `WorldWalkFollow`).
+    var motionNow: (kind: WorldMotionKind, since: Date)? {
+        guard usesMotion, let motionKind, let motionSince else { return nil }
+        return (motionKind, motionSince)
+    }
+
     // The odometer.
     private var odometer = 0.0
     private var marks: [Mark] = []

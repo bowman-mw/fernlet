@@ -156,12 +156,20 @@
      flights it finds draw your routes and fill the passport's Flights page", stopped being true with PR #202.
      Both are clarifications of processing that stays on the iPhone; nothing new is sent anywhere and no promise
      is weakened under §13. The effective date stays November 19, 2026, the day these sentences were published.
+     And 2026-11-20 (following a walk in the background; the owner picked option A of the city-walk
+     investigation on 2026-11-21; BOTH SENTENCES ARE DRAFTS for the owner to approve word for word): §6 adds
+     "If that check finds you walking, it keeps following your walk so the map uncovers along it, and stops a
+     few minutes after you stop", and the motion sentence adds "walking" (Motion's walking or running is
+     what tells a walk from standing about; `WorldWalkFollow`). Background location is used for longer than
+     before behind the same off-by-default switch, so the effective date moves to November 20, 2026. Nothing
+     new is kept (the map record is the same cells), nothing leaves the iPhone, and no promise is weakened
+     under §13.
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** November 19, 2026
+**Effective date:** November 20, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -493,8 +501,9 @@ Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
 you're driving or riding, the road you take; to notice a trip starting, it asks iOS to tell it when
 you leave a place, then checks for a couple of minutes.
+If that check finds you walking, it keeps following your walk so the map uncovers along it, and stops a few minutes after you stop.
 If you turn on background mapping, Fernlet also counts how often you pass along each part of the map, by road, rail or water, and when you last did, so the roads, railways and ferry crossings you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. It also keeps each ride (the day, when it started and ended, and the way it went) until you forget it or clear your map, so you can change or forget one ride. If you turn on background mapping or Log my bike
-rides, Fernlet uses your iPhone's motion data to tell when you're riding in a car, on a train, bus or boat, or cycling, on this
+rides, Fernlet uses your iPhone's motion data to tell when you're walking, riding in a car, on a train, bus or boat, or cycling, on this
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
 exercise; it never keeps the motion data itself. To tell when you're driving, it also notes
 the Bluetooth audio devices your iPhone is connected to during a drive, on this iPhone only: it keeps a

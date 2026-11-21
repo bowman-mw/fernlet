@@ -103,7 +103,7 @@ struct HomeMapSettingsView: View {
             .buttonStyle(FernletRowButtonStyle(showsChevron: true))
             .accessibilityIdentifier("settings.homeMap.location")
             Toggle(isOn: backgroundBinding) {
-                FernletRowLabel("Map the world in the background", detail: "Always. Low power, except while driving or riding.")
+                FernletRowLabel("Map the world in the background", detail: "Always. Low power, except while walking, driving or riding.")
                     .padding(.vertical, 7)
             }
             .disabled(store.worldLocation.permission == .notAsked || store.worldLocation.permission == .denied)

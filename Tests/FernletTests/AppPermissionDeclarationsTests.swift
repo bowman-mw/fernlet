@@ -28,7 +28,7 @@ struct AppPermissionDeclarationsTests {
         // Car and bike detection (owner, 2026-10-25: "Approve both"; round 7), reworded when background mapping
         // began reading Motion too (owner, 2026-11-09: "The motion permission looks good"): asked when "Log my
         // bike rides" or background mapping is turned on.
-        "NSMotionUsageDescription": "Fernlet uses motion to tell when you're in a car or on a bike, so your trips map properly and bike rides log. It stays on this iPhone."
+        "NSMotionUsageDescription": "Fernlet uses motion to tell when you're walking, in a car or on a bike, so your walks and trips map properly and bike rides log. It stays on this iPhone."
     ]
 
     /// Approved texts declared in `App/Fernlet/Info.plist` itself, never as a build setting (Xcode drops
