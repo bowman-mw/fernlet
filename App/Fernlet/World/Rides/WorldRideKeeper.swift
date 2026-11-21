@@ -104,6 +104,10 @@ final class WorldRideKeeper {
         return isDriving
     }
 
+    /// What Motion's latest confident sample says and since when; nil while Motion is not read or before the first
+    /// sample (the location source's walk follow reads it).
+    var motionNow: (kind: WorldMotionKind, since: Date)? { watch.motionNow }
+
     /// Swaps where motion comes from (tests' scripted stream); the next query starts afresh.
     func replaceMotion(with motion: any WorldMotionReading) {
         self.motion = motion

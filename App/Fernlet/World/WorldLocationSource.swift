@@ -68,12 +68,16 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 }
 
 /// What the World map's continuous background updates follow, with Always and background mapping on
-/// (round 7): a drive's road (`nf-car`), or a bike ride's line (Refinements group 19, `ref-ride-line`).
+/// (round 7): a drive's road (`nf-car`), a bike ride's line (Refinements group 19, `ref-ride-line`), or a walk
+/// nobody started (owner 2026-11-21).
 nonisolated enum WorldTrace: Equatable, Sendable {
     /// A drive car detection found: traced as a lane of fog 25 m either side of the road.
     case drive
     /// A bike ride Motion found: followed closely for its line, lifting the fog like a walk.
     case ride
+    /// A walk a listen saw (owner 2026-11-21, pick A): followed at the walk pace until the person is still, lifting
+    /// the fog as any walk does.
+    case walk
 }
 
 /// The World map's location, following the permission the person gave (design page answer 3; World
@@ -133,6 +137,32 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   detection finds (``WorldRideKeeper/onCyclingChanged``) gets continuous background updates for the
 ///   `fitness` activity, so its line is drawn without cutting corners; the blue pill shows while it runs. It
 ///   stops when the ride ends, or at once when background mapping goes off.
+/// - **A walk nobody started, followed (owner 2026-11-21, pick A of the city-walk investigation):** a pocketed walk
+///   used to get one listen per fence, each fence twice as wide, so about a quarter of it was uncovered. Now a listen
+///   that sees steady walking (`WorldWalkFollow`: good readings at walking pace and, where Motion is read, Motion
+///   saying walking or running) keeps the continuous background updates as a third trace, ``WorldTrace/walk``, at
+///   ``walkPace`` for the `fitness` activity, until the person has been still a few minutes; then the fence is armed
+///   at its narrowest. A drive or a bike ride found takes the updates over as ever, and a road trip's passenger who
+///   turns out to be driving loses the follow at once (``followWalk(_:)``), so a passenger's drive is never traced
+///   by another name. Under exactly a trace's conditions (Always, background mapping on, no walk the person started);
+///   the blue pill shows while it runs. **Why not `CLLocationUpdate.liveUpdates`:** read against Apple's
+///   documentation on 2026-11-20, it takes no distance filter or accuracy, its `stationary` flag's behaviour is not
+///   documented, and its background session is to be created in the foreground, while a follow starts from a fence
+///   exit in the background; so the rules stay Fernlet's own, on the manager that already runs the fence.
+/// - **Staying awake after a background wake (the owner's phone log of 2026-11-20):** iOS suspended Fernlet about ten
+///   seconds into 11 of 13 listens, and into a drive's trace started by a fence exit, so a listen was a burst of a few
+///   readings and a walk follow started from one would stall the same way. Updates started with Fernlet open kept
+///   running. Three things answer it, each from Apple's own words (read 2026-11-20), none provable on a simulator:
+///   (1) a background activity session held for background mapping (``mappingSession``): Apple says a new session
+///   must start in the foreground but an outstanding one can be rejoined from the background, and must be re-created
+///   at once on a background launch (WWDC23 "Discover streamlined location updates"), so it is made when the source
+///   is built, whenever Fernlet opens, and when the mode turns on, and it ends with the mode; (2) no distance filter
+///   while Fernlet is not open (``managerFilter(for:appOpen:)``): an Apple engineer's reply (Developer Forums thread
+///   726945) says that since iOS 16.4 an app running both standard updates and significant-change monitoring may be
+///   suspended in the background when it sets a distance filter, unless the filter is off and the accuracy a hundred
+///   metres or better, or the location indicator shows; the readings are thinned here to the same spacing instead
+///   (``handsOn(_:after:spacing:)``), so the keepers do no more work than before; (3) a listen ends by the clock of
+///   the readings as well as by its sleeping task, which does not run while suspended (``listenUntil``).
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
 ///   permission screens (step 5c: the map intro's Turn on location, and Settings → Home map's background
 ///   mapping after its explainer); nothing here asks on its own.
@@ -193,6 +223,9 @@ final class WorldLocationSource: NSObject {
     /// Whether a bike ride is being followed closely, the same way (Refinements group 19, `ref-ride-line`).
     var isFollowingRide: Bool { trace == .ride }
 
+    /// Whether a walk nobody started is being followed (owner 2026-11-21).
+    var isFollowingWalk: Bool { trace == .walk }
+
     /// Whether the readings now are the map's own: updates running for the map on screen, not for a walk.
     var isFollowingMap: Bool { isUpdating && !isWalking }
 
@@ -200,6 +233,13 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var isUpdating = false
     @ObservationIgnored private var isMonitoringAlways = false
     @ObservationIgnored private var walkSession: CLBackgroundActivitySession?
+    /// The background activity session held while background mapping runs, so updates started from a fence exit or a
+    /// visit keep Fernlet running (the phone log of 2026-11-20); nil while the mode is off.
+    @ObservationIgnored private var mappingSession: CLBackgroundActivitySession?
+    /// When the running listen is over by the readings' own clock; nil while none runs.
+    @ObservationIgnored private var listenUntil: Date?
+    /// The last reading handed on while Fernlet was not open (``handsOn(_:after:spacing:)``).
+    @ObservationIgnored private var lastHandedOn: WorldFix?
     /// What the manager was set to before a drive's trace or a ride's follow, put back when it ends.
     @ObservationIgnored private var beforeTrace: (activity: CLActivityType, pauses: Bool)?
     /// Whether Home's map is the front page (``setMapOnScreen(_:)``); behind, readings come at ``offMapPace``.
@@ -214,6 +254,16 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var quietListens = 0
     /// When a reading last read the audio route (``readsRoute(at:lastRead:)``); nil before one.
     @ObservationIgnored private var lastRouteRead: Date?
+    /// The walk follow's rules: what a listen has seen of a walk, and whether a followed one still moves.
+    @ObservationIgnored private var walk = WorldWalkFollow()
+    /// The walk follow's loop: it ticks every ``walkTickInterval`` so a walk that stopped (no readings come from a
+    /// still phone) ends.
+    @ObservationIgnored private var walkTicks: Task<Void, Never>?
+
+    /// How often the walk follow checks whether the person is still, in seconds.
+    nonisolated static let walkTickInterval: TimeInterval = 30
+    /// The most checks one walk follow makes (a bound: `WorldWalkFollow.maxTime` ends it first).
+    nonisolated static let maxWalkTicks = Int(WorldWalkFollow.maxTime / walkTickInterval) + 1
 
     /// The least time between two audio-route reads a reading makes, in seconds (location power, owner 2026-11-17,
     /// option F): a drive delivers about one reading a second, and the route-change notification covers a running app.
@@ -261,6 +311,11 @@ final class WorldLocationSource: NSObject {
     /// readings sit far inside the fog's and ride detection's 65 m limit. Never iOS's hundred-metre mode,
     /// whose readings often miss that limit and would quietly stop the map uncovering.
     nonisolated static let offMapPace = (accuracy: kCLLocationAccuracyNearestTenMeters, distanceFilter: 25.0)
+
+    /// How readings come while a walk nobody started is followed in the background (owner 2026-11-21): every 25 m at
+    /// iOS's ten-metre accuracy, as ``offMapPace`` and for its reasons. A reading lifts 50 m round it, so lifts 25 m
+    /// apart leave no gap, and the person asked for the battery to be spared by the tracker itself.
+    nonisolated static let walkPace = offMapPace
 
     /// The Info.plist purpose key the walk's temporary full-accuracy request names (a frozen token).
     static let walkAccuracyPurposeKey = "WorldWalk"
@@ -325,11 +380,12 @@ final class WorldLocationSource: NSObject {
         startListening(for: Self.hintListenTime)
     }
 
-    /// The cool-down and the listen end with the source (the memory wall's ML1); both capture it weakly, so this
-    /// only stops a sleeping task outliving it.
+    /// The cool-down, the listen and the walk follow's loop end with the source (the memory wall's ML1); each
+    /// captures it weakly, so this only stops a sleeping task outliving it.
     isolated deinit {
         coolDown?.cancel()
         listening?.cancel()
+        walkTicks?.cancel()
     }
 
     /// Home's map came to the front or went behind a panel, a sheet or another tab.
@@ -339,18 +395,65 @@ final class WorldLocationSource: NSObject {
         applyPace()
     }
 
-    /// The pace readings come at: ``fullPace`` while the map is in front or a walk, a drive or a ride records
-    /// (their lines keep only readings within 25 m), ``offMapPace`` otherwise.
+    /// The pace readings come at: ``fullPace`` while the map is in front or a walk the person started, a drive or a
+    /// ride records (their lines keep only readings within 25 m), ``offMapPace`` otherwise, which is also
+    /// ``walkPace``: a walk followed in the background records no line.
     nonisolated static func pace(mapOnScreen: Bool, recording: Bool) -> (accuracy: CLLocationAccuracy, distanceFilter: CLLocationDistance) {
         mapOnScreen || recording ? fullPace : offMapPace
     }
 
+    /// Whether the map counts as in front for the pace: on screen and, while a walk is followed, with Fernlet open
+    /// (in the background the map is on no screen, whatever page was left in front).
+    nonisolated static func mapInFront(onScreen: Bool, appOpen: Bool, followingWalk: Bool) -> Bool {
+        onScreen && (appOpen || !followingWalk)
+    }
+
+    /// The distance filter the manager is given for `pace`: the pace's own while Fernlet is open, none otherwise.
+    /// With a filter set, iOS may suspend an app whose updates run beside significant-change monitoring in the
+    /// background (Apple Developer Forums thread 726945, since iOS 16.4); the readings are thinned here instead.
+    nonisolated static func managerFilter(for pace: (accuracy: CLLocationAccuracy, distanceFilter: CLLocationDistance),
+                                          appOpen: Bool) -> CLLocationDistance {
+        appOpen ? pace.distanceFilter : kCLDistanceFilterNone
+    }
+
+    /// The longest a reading that has not moved `spacing` is held back while Fernlet is not open, in seconds: a still
+    /// phone still hands one on this often, so a drive's parked rule and a walk's still rule keep hearing.
+    nonisolated static let thinTime: TimeInterval = 10
+
+    /// Whether a reading taken with no distance filter is handed on: the first, one `spacing` metres or more from the
+    /// last handed on, one ``thinTime`` after it, or one dated before it (a clock change). Nil `spacing` (Fernlet is
+    /// open, where iOS filters) hands every reading on.
+    nonisolated static func handsOn(_ fix: WorldFix, after last: WorldFix?, spacing: Double?) -> Bool {
+        guard let spacing, let last else { return true }
+        let seconds = fix.at.timeIntervalSince(last.at)
+        return seconds >= thinTime || seconds < 0 || last.point.distance(to: fix.point) >= spacing
+    }
+
+    /// The spacing readings are thinned to now: the pace's distance while a listen or a trace runs with Fernlet not
+    /// open (the only time the manager updates with no filter), nil otherwise.
+    private var thinSpacing: Double? {
+        Self.thins(appOpen: isUpdating, continuous: listening != nil || trace != nil) ? currentPace.distanceFilter : nil
+    }
+
+    /// Whether readings are thinned here: only those of continuous updates running while Fernlet is not open. iOS's
+    /// low-power readings and visits always go on.
+    nonisolated static func thins(appOpen: Bool, continuous: Bool) -> Bool {
+        !appOpen && continuous
+    }
+
+    /// The pace that applies now (``pace(mapOnScreen:recording:)``).
+    private var currentPace: (accuracy: CLLocationAccuracy, distanceFilter: CLLocationDistance) {
+        let recording = isWalking || trace == .drive || trace == .ride || riding.driving || riding.cycling || listening != nil
+        let inFront = Self.mapInFront(onScreen: mapOnScreen, appOpen: isUpdating, followingWalk: trace == .walk)
+        return Self.pace(mapOnScreen: inFront, recording: recording)
+    }
+
     /// Sets the manager to ``pace(mapOnScreen:recording:)`` now, touching only what changed.
     private func applyPace() {
-        let recording = isWalking || trace != nil || riding.driving || riding.cycling || listening != nil
-        let pace = Self.pace(mapOnScreen: mapOnScreen, recording: recording)
+        let pace = currentPace
+        let filter = Self.managerFilter(for: pace, appOpen: isUpdating)
         if manager.desiredAccuracy != pace.accuracy { manager.desiredAccuracy = pace.accuracy }
-        if manager.distanceFilter != pace.distanceFilter { manager.distanceFilter = pace.distanceFilter }
+        if manager.distanceFilter != filter { manager.distanceFilter = filter }
     }
 
     /// Whether iOS's location prompt is up: asked for, not answered yet (the companion hint waits for it).
@@ -373,6 +476,9 @@ final class WorldLocationSource: NSObject {
     func startForeground() {
         guard permission == .whileUsing || permission == .always, !isUpdating else { return }
         isUpdating = true
+        lastHandedOn = nil
+        holdMappingSession()
+        applyPace()
         manager.startUpdatingLocation()
     }
 
@@ -381,7 +487,10 @@ final class WorldLocationSource: NSObject {
     func stopForeground() {
         guard isUpdating, !isWalking else { return }
         isUpdating = false
-        // A drive's trace (or a ride's follow), or a listen, keeps the updates running in the background until it ends.
+        // A walk followed drops to its own pace once Fernlet is no longer open.
+        applyPace()
+        // A drive's trace (or a ride's or a walk's follow), or a listen, keeps the updates running in the background
+        // until it ends.
         guard trace == nil, listening == nil else { return }
         manager.stopUpdatingLocation()
         armFence()
@@ -418,6 +527,27 @@ final class WorldLocationSource: NSObject {
         stopForeground()
     }
 
+    /// Whether background mapping holds a background activity session: under exactly the leaving fence's conditions
+    /// (Always and the switch on), where the app declares the `location` background mode.
+    nonisolated static func holdsMappingSession(permission: WorldLocationPermission, backgroundMapping: Bool,
+                                                declaresBackground: Bool) -> Bool {
+        permission == .always && backgroundMapping && declaresBackground
+    }
+
+    /// Makes background mapping's session when it should be held and is not, and ends it when it should not be. Called
+    /// when the source is built (on a background launch iOS wants an outstanding session re-created at once), when
+    /// Fernlet opens (a new session can only start in the foreground) and when the mode or the permission changes.
+    private func holdMappingSession() {
+        let holds = Self.holdsMappingSession(permission: permission, backgroundMapping: backgroundMapping(),
+                                             declaresBackground: Self.declaresBackgroundLocation)
+        if holds, mappingSession == nil {
+            mappingSession = CLBackgroundActivitySession()
+        } else if !holds, let session = mappingSession {
+            session.invalidate()
+            mappingSession = nil
+        }
+    }
+
     /// Whether the app's Info.plist has `key` (an undeclared feature is skipped, never crashed into).
     nonisolated static func declares(_ key: String) -> Bool {
         Bundle.main.object(forInfoDictionaryKey: key) != nil
@@ -433,6 +563,7 @@ final class WorldLocationSource: NSObject {
     /// fence down, even when the mode wasn't running (iOS keeps a fence across launches).
     func setLowPowerAlways(_ on: Bool) {
         if !on { removeLeavingFence() }
+        holdMappingSession()
         guard on != isMonitoringAlways else { return }
         guard !on || permission == .always else { return }
         isMonitoringAlways = on
@@ -463,13 +594,13 @@ final class WorldLocationSource: NSObject {
                     walking: walking)
     }
 
-    /// The activity iOS is told the updates are for: automotive navigation for a drive, fitness for a bike ride
-    /// (Apple's type for walking, running and cycling, so iOS keeps the readings close to the path). Neither is
+    /// The activity iOS is told the updates are for: automotive navigation for a drive, fitness for a bike ride or
+    /// a walk (Apple's type for walking, running and cycling, so iOS keeps the readings close to the path). None is
     /// paused by iOS: Fernlet's own rules end them.
     nonisolated static func activityType(for trace: WorldTrace) -> CLActivityType {
         switch trace {
         case .drive: .automotiveNavigation
-        case .ride: .fitness
+        case .ride, .walk: .fitness
         }
     }
 
@@ -483,7 +614,8 @@ final class WorldLocationSource: NSObject {
     // MARK: A road trip's passengers (owner-approved 2026-11-10)
 
     /// Whether a trace of `kind` may start: never a drive's on a road trip's passenger, whose trip another member's
-    /// iPhone maps; a bike ride's always.
+    /// iPhone maps; a bike ride's or a walk's always (a walk's ends at once when the passenger is found driving,
+    /// ``followsWalk(driving:cycling:)``).
     nonisolated static func startsTrace(_ kind: WorldTrace, roadTripPassenger: Bool) -> Bool {
         kind != .drive || !roadTripPassenger
     }
@@ -534,6 +666,8 @@ final class WorldLocationSource: NSObject {
             return
         }
         guard Self.startsTrace(kind, roadTripPassenger: isRoadTripPassenger) else {
+            // A passenger's drive: nothing of it is traced, under any name.
+            stopTrace(.walk)
             endPassengerListen()
             return
         }
@@ -544,6 +678,7 @@ final class WorldLocationSource: NSObject {
         quietListens = 0
         if trace != nil { stopTrace(thenFence: false) }
         trace = kind
+        if kind == .walk { startWalkTicks() } else { walk.reset() }
         applyPace()
         beforeTrace = (manager.activityType, manager.pausesLocationUpdatesAutomatically)
         manager.allowsBackgroundLocationUpdates = true
@@ -593,6 +728,7 @@ final class WorldLocationSource: NSObject {
         guard let trace, kind.map({ $0 == trace }) ?? true else { return }
         self.trace = nil
         endCoolDown()
+        endWalkTicks()
         applyPace()
         if let beforeTrace {
             manager.activityType = beforeTrace.activity
@@ -669,6 +805,7 @@ final class WorldLocationSource: NSObject {
               Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: true) else { return }
         manager.allowsBackgroundLocationUpdates = true
+        listenUntil = Date().addingTimeInterval(duration)
         listening = Task { [weak self] in
             do {
                 try await Task.sleep(for: .seconds(duration))
@@ -684,7 +821,10 @@ final class WorldLocationSource: NSObject {
     /// A listen ran out with no drive or ride found (a trace ends it first): the updates stop unless the map or a
     /// walk keeps them, and the next, wider fence is armed where the person is now.
     private func listenOver() {
+        listening?.cancel()
         listening = nil
+        listenUntil = nil
+        walk.reset()
         quietListens = min(quietListens + 1, Self.maxQuietListens)
         applyPace()
         guard trace == nil else { return }
@@ -698,6 +838,79 @@ final class WorldLocationSource: NSObject {
     private func endListening() {
         listening?.cancel()
         listening = nil
+        listenUntil = nil
+    }
+
+    /// Whether a listen due to end at `until` is over at `now`: its sleeping task does not run while iOS has Fernlet
+    /// suspended (the phone log of 2026-11-20: listens "ended" minutes late, at the next wake), so each reading asks.
+    nonisolated static func listenIsOver(until: Date?, now: Date) -> Bool {
+        guard let until else { return false }
+        return now >= until
+    }
+
+    // MARK: A walk nobody started, followed (owner 2026-11-21)
+
+    /// Whether a walk may be followed, or go on being followed: never once car or bike detection says a drive or a
+    /// ride is on. Their trace takes over, and where it may not (a road trip's passenger) nothing is traced at all.
+    nonisolated static func followsWalk(driving: Bool, cycling: Bool) -> Bool {
+        !driving && !cycling
+    }
+
+    /// Shows a reading to the walk follow, after car and bike detection heard it: a followed walk notes whether it
+    /// moved, and ends at once when a drive or a ride is on; a listen looks for steady walking and, seeing it,
+    /// becomes the follow.
+    private func followWalk(_ fix: WorldFix) {
+        let walks = Self.followsWalk(driving: rides.isDriving, cycling: rides.isCycling)
+        if trace == .walk {
+            if walks { walk.follow(fix) } else { stopTrace(.walk) }
+            return
+        }
+        guard listening != nil, trace == nil, walks else { return }
+        let motion = rides.motionNow?.kind
+        walk.see(fix, motion: motion)
+        guard walk.seesWalk(motionRead: rides.usesMotion, motion: motion) else { return }
+        startTrace(.walk)
+        guard trace == .walk else { return }
+        walk.start(at: fix.at)
+        FernletAuditLog.log("worldMap.location.walkFollowed")
+    }
+
+    /// Starts the walk follow's loop: every ``walkTickInterval`` it asks whether the person is still.
+    private func startWalkTicks() {
+        walkTicks?.cancel()
+        walkTicks = Task { [weak self] in
+            for _ in 0..<WorldLocationSource.maxWalkTicks {
+                do {
+                    try await Task.sleep(for: .seconds(WorldLocationSource.walkTickInterval))
+                } catch {
+                    return
+                }
+                guard self?.walkTick(at: Date()) == true else { return }
+            }
+            self?.walkTicks = nil
+            self?.stopTrace(.walk)
+        }
+    }
+
+    /// One check of a followed walk at `now`: Motion is read through now (a still phone hands on no reading to ask
+    /// with), and a walk that is over ends, arming the fence at its narrowest where the person stopped. Whether the
+    /// walk is still followed. Internal so tests can tick.
+    @discardableResult
+    func walkTick(at now: Date) -> Bool {
+        guard trace == .walk else { return false }
+        rides.tickNow()
+        let motion = rides.motionNow
+        guard walk.isOver(at: now, motion: motion?.kind, motionSince: motion?.since) else { return true }
+        FernletAuditLog.log("worldMap.location.walkStill")
+        stopTrace(.walk)
+        return false
+    }
+
+    /// Cancels the walk follow's loop and forgets its rules' state.
+    private func endWalkTicks() {
+        walkTicks?.cancel()
+        walkTicks = nil
+        walk.reset()
     }
 
     /// Whether a change of answer CoreLocation reported while running turns background mapping's switch on
@@ -737,6 +950,9 @@ final class WorldLocationSource: NSObject {
     /// can hand readings in; the delegate is the only caller in the app.
     func deliver(_ fix: WorldFix) {
         guard fix.point.isValid, fix.accuracy.isFinite, fix.accuracy >= 0 else { return }
+        guard Self.handsOn(fix, after: lastHandedOn, spacing: thinSpacing) else { return }
+        lastHandedOn = fix
+        if listening != nil, Self.listenIsOver(until: listenUntil, now: Date()) { listenOver() }
         guard flights.admits(fix) else {
             if flights.isFlying { rides.takeOff(at: fix.at) }
             return
@@ -750,6 +966,7 @@ final class WorldLocationSource: NSObject {
         }
         rides.handle(fix)
         if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
+        followWalk(fix)
         var stamped = fix
         stamped.inCar = rides.inCarFlag
         stamped.carLinked = cars.isLinked

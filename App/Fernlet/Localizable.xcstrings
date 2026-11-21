@@ -9004,18 +9004,18 @@
         }
       }
     },
-    "Always. Low power, except while driving or riding." : {
+    "Always. Low power, except while walking, driving or riding." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Siempre. Bajo consumo, salvo al conducir o ir en bici."
+            "value" : "Siempre. Bajo consumo, salvo al caminar, conducir o ir en bici."
           }
         },
         "es-MX" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Siempre. Bajo consumo, salvo al manejar o ir en bici."
+            "value" : "Siempre. Bajo consumo, salvo al caminar, manejar o ir en bici."
           }
         }
       }

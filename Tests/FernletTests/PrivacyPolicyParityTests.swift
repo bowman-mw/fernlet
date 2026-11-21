@@ -156,6 +156,9 @@ struct PrivacyPolicyParityTests {
     ///   couple of minutes (the leaving fence and its listen);
     /// - `so your trips map properly` — why it reads motion data at all.
     ///
+    /// The marker added 2026-11-20 (following a walk in the background, owner's pick A) pins that the check after
+    /// leaving a place goes on following a walk it finds: `it keeps following your walk`.
+    ///
     /// The two markers added 2026-11-15 (hotel check-in) pin the drive-end lookup: Apple Maps is asked what is
     /// nearby when a drive ends, and only that location is sent.
     private static let substanceMarkers = [
@@ -213,6 +216,8 @@ struct PrivacyPolicyParityTests {
         "If you turn on background mapping or Log my bike",
         "never keeps the motion data itself",
         "to notice a trip starting",
+        // Following a walk in the background (2026-11-20, a draft until the owner approves it word for word).
+        "it keeps following your walk",
         "so your trips map properly",
         // Car signals (2026-11-09): what the car book keeps of the Bluetooth devices seen on drives.
         "scrambled tag for each",
