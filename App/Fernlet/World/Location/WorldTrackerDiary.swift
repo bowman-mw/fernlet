@@ -21,11 +21,16 @@ nonisolated enum WorldDiaryEventKind: String, Codable, CaseIterable, Sendable {
     case mode
     /// Motion's activity changed; the detail is a `WorldMotionKind` rawValue.
     case motion
+    /// A listen ran out with no walk followed; the detail is a `WorldWalkBlocker` (what stood in the way) and the
+    /// counts are the listen's good readings and its too-rough ones.
+    case walkNotSeen
 }
 
 /// Why a listen started. Frozen tokens.
 nonisolated enum WorldListenReason: String, Sendable {
     case fenceExit, carLinked, hint, fastReading, visitDeparture
+    /// Fernlet left the front while the person was moving.
+    case leftFront
 }
 
 /// Why a listen ended. Frozen tokens.
@@ -51,7 +56,8 @@ nonisolated struct WorldDiaryEvent: Codable, Equatable, Sendable {
     var detail = ""
     /// A fence's radius in metres; 0 for any other kind.
     var value = 0
-    /// A minute's readings by accuracy bucket (``WorldDiaryLog/bucketLimits``); empty for any other kind.
+    /// A minute's readings by accuracy bucket (``WorldDiaryLog/bucketLimits``), or, for a listen that followed no
+    /// walk, its good readings and its too-rough ones; empty for any other kind.
     var counts: [Int] = []
 }
 
@@ -132,8 +138,8 @@ nonisolated struct WorldDiaryLog: Equatable, Sendable {
 /// Events and counts only, never a place.
 ///
 /// - **What it holds:** ``WorldDiaryEvent`` lines from ``WorldLocationSource``: a fence exit, a fence armed and its
-///   radius, a listen started or ended and why, a trace started or ended and its kind, each minute's readings by
-///   accuracy, mode changes and Motion's changes.
+///   radius, a listen started or ended and why, what stood in the way when a listen followed no walk, a trace
+///   started or ended and its kind, each minute's readings by accuracy, mode changes and Motion's changes.
 /// - **Where:** one file in the World map vault (``file``, the device side's purpose under the buffer key, so a line
 ///   written with the phone locked is kept), on this iPhone only: never synced, backed up, exported or sent
 ///   anywhere. The vault's wipe removes it with the map's history, on every wipe path; ``forget()`` clears the lines
@@ -175,11 +181,11 @@ final class WorldTrackerDiary {
     /// Whether lines are being kept now: the switch on, no decoy.
     var isKeeping: Bool { isOn() && mayWrite() }
 
-    /// Keeps a line of `kind` with its token and value, and saves.
-    func note(_ kind: WorldDiaryEventKind, detail: String = "", value: Int = 0) {
+    /// Keeps a line of `kind` with its token, value and counts, and saves.
+    func note(_ kind: WorldDiaryEventKind, detail: String = "", value: Int = 0, counts: [Int] = []) {
         guard isKeeping else { return }
         load()
-        log.add(WorldDiaryEvent(at: now(), kind: kind, detail: detail, value: value))
+        log.add(WorldDiaryEvent(at: now(), kind: kind, detail: detail, value: value, counts: counts))
         save()
     }
 

@@ -120,7 +120,10 @@ struct WorldRidesTests {
         #expect(stream.drivesStarted == 1 && stream.drivesEnded == 0)
 
         var jam = Stream(usesMotion: true)
-        jam.motion(.automotive, 0, through: WorldRideWatch.motionHold)
+        jam.motion(.automotive, 0, through: 2)
+        #expect(!jam.watch.isDriving, "Motion alone starts nothing")
+        jam.read(0, 3, speed: 12)
+        jam.query([], through: WorldRideWatch.motionHold)
         #expect(jam.watch.isDriving, "a minute of the car's activity is the drive")
         jam.read(0, 5, speed: 15)
         for step in 1...18 {
@@ -179,7 +182,10 @@ struct WorldRidesTests {
         #expect(80 < FlightDetector.anywhereSpeed, "a train is no flight")
 
         var tram = Stream(usesMotion: true)
-        tram.motion(.automotive, 0, through: WorldRideWatch.motionHold)
+        tram.motion(.automotive, 0, through: 2)
+        #expect(!tram.watch.isDriving, "Motion alone starts nothing")
+        tram.read(0, 3, speed: 12)
+        tram.query([], through: WorldRideWatch.motionHold)
         #expect(tram.watch.isDriving, "Motion's automotive is set on buses and trains too")
         for step in 1...12 {
             tram.read(Double(step) * 12, WorldRideWatch.motionHold + Double(step) * 10, speed: 1.2)

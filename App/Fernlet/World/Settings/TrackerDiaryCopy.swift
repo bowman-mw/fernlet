@@ -18,11 +18,18 @@ nonisolated enum TrackerDiaryCopy {
             LocalizedStringResource("trackerDiary.readings", defaultValue: "Location readings this minute: \(event.counts.reduce(0, +))", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case .mode: mode(event.detail)
         case .motion: motion(WorldMotionKind(rawValue: event.detail))
+        case .walkNotSeen: walkNotSeen(WorldWalkBlocker(rawValue: event.detail))
         }
     }
 
-    /// A minute's readings by accuracy; nil for any other line.
+    /// A minute's readings by accuracy, or the readings of a listen that followed no walk; nil for any other line.
     static func detail(_ event: WorldDiaryEvent) -> LocalizedStringResource? {
+        if event.kind == .walkNotSeen, event.counts.count == 2 {
+            return LocalizedStringResource(
+                "trackerDiary.walkNotSeen.detail",
+                defaultValue: "Good readings: \(event.counts[0]) · too rough to use: \(event.counts[1])",
+                comment: "Tracker diary: how many of a check's location readings were good enough to count, and how many were not")
+        }
         guard event.kind == .readings, event.counts.count == WorldDiaryLog.bucketLimits.count + 1 else { return nil }
         let counts = event.counts
         return LocalizedStringResource(
@@ -40,6 +47,7 @@ nonisolated enum TrackerDiaryCopy {
         case .carLinked: LocalizedStringResource("trackerDiary.listen.carLinked", defaultValue: "Started checking: a car connected", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case .hint: LocalizedStringResource("trackerDiary.listen.hint", defaultValue: "Started checking: Driving Focus or Start a drive", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case .fastReading: LocalizedStringResource("trackerDiary.listen.fastReading", defaultValue: "Started checking: a reading faster than walking", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .leftFront: LocalizedStringResource("trackerDiary.listen.leftFront", defaultValue: "Started checking: you closed Fernlet while moving", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case .visitDeparture: LocalizedStringResource("trackerDiary.listen.visitDeparture", defaultValue: "Started checking: you left a place you stopped at", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case nil: other
         }
@@ -51,6 +59,19 @@ nonisolated enum TrackerDiaryCopy {
         case .traceTookOver: LocalizedStringResource("trackerDiary.listenEnd.traceTookOver", defaultValue: "Stopped checking: found something to follow", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case .passengerDriving: LocalizedStringResource("trackerDiary.listenEnd.passenger", defaultValue: "Stopped checking: a road trip friend's iPhone maps this drive", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case .mappingOff: LocalizedStringResource("trackerDiary.listenEnd.mappingOff", defaultValue: "Stopped checking: background mapping went off", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case nil: other
+        }
+    }
+
+    private static func walkNotSeen(_ blocker: WorldWalkBlocker?) -> LocalizedStringResource {
+        switch blocker {
+        case .motionSaysRide: LocalizedStringResource("trackerDiary.walkNotSeen.motionSaysRide", defaultValue: "No walk followed: Motion said vehicle or bike", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .noRun: LocalizedStringResource("trackerDiary.walkNotSeen.noRun", defaultValue: "No walk followed: no good reading at walking pace", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .tooShort: LocalizedStringResource("trackerDiary.walkNotSeen.tooShort", defaultValue: "No walk followed: under 45 seconds at walking pace", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .notFar: LocalizedStringResource("trackerDiary.walkNotSeen.notFar", defaultValue: "No walk followed: the readings didn't go far enough", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .tooSlow: LocalizedStringResource("trackerDiary.walkNotSeen.tooSlow", defaultValue: "No walk followed: slower than a walk", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .tooFast: LocalizedStringResource("trackerDiary.walkNotSeen.tooFast", defaultValue: "No walk followed: faster than a walk", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
+        case .motionUnsure: LocalizedStringResource("trackerDiary.walkNotSeen.motionUnsure", defaultValue: "No walk followed: Motion didn't say walking, and the readings alone weren't sure", comment: "Tracker diary (Settings, Home map): one line of what background mapping did")
         case nil: other
         }
     }

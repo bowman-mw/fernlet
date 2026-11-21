@@ -47,15 +47,25 @@ struct WorldWalkFollowTests {
         #expect(WorldWalkFollow.seeTime < WorldLocationSource.listenTime)
     }
 
-    /// Where Motion is read it must say walking or running: nothing yet, stationary, a car or a bike is no walk.
-    @Test func whereMotionIsReadItMustSayWalkingOrRunning() {
+    /// Where Motion is read, only a car or a bike refuses a walk (car and bike detection decide those). Saying
+    /// walking or running, the rule is the base one. Saying nothing yet, still or "can't tell" (a phone in a hand,
+    /// Motion's history running late), the readings alone must be surer: two minutes of steady walking are, one
+    /// minute is not.
+    @Test func motionRefusesOnlyACarOrABike() {
         let seen = Self.listen(pace: 1.3)
-        #expect(seen.seesWalk(motionRead: true, motion: .walking))
-        #expect(seen.seesWalk(motionRead: true, motion: .running))
-        for kind in [WorldMotionKind.stationary, .automotive, .cycling, .unknown] {
-            #expect(!seen.seesWalk(motionRead: true, motion: kind), "\(kind)")
+        let minute = Self.listen(pace: 1.3, seconds: 64)
+        for kind in [WorldMotionKind.walking, .running] {
+            #expect(seen.seesWalk(motionRead: true, motion: kind) && minute.seesWalk(motionRead: true, motion: kind), "\(kind)")
         }
-        #expect(!seen.seesWalk(motionRead: true, motion: nil), "no sample yet")
+        for kind in [WorldMotionKind.automotive, .cycling] {
+            #expect(seen.blocker(motionRead: true, motion: kind) == .motionSaysRide, "\(kind)")
+        }
+        for kind in [WorldMotionKind.stationary, .unknown, nil] {
+            #expect(seen.seesWalk(motionRead: true, motion: kind), "\(String(describing: kind))")
+            #expect(minute.blocker(motionRead: true, motion: kind) == .motionUnsure, "\(String(describing: kind))")
+        }
+        #expect(WorldWalkFollow.sureTime < WorldLocationSource.listenTime && WorldWalkFollow.sureTime > WorldWalkFollow.seeTime)
+        #expect(WorldWalkFollow.sureDistance > WorldWalkFollow.seeDistance)
     }
 
     /// Standing about with GPS drift goes nowhere beyond the readings' accuracy, and a shuffle slower than a walk
@@ -259,5 +269,192 @@ struct WorldWalkFollowTests {
         #expect(WorldLocationSource.listenIsOver(until: until, now: until))
         #expect(WorldLocationSource.listenIsOver(until: until, now: Self.start.addingTimeInterval(900)))
         #expect(!WorldLocationSource.listenIsOver(until: nil, now: until))
+    }
+
+    // MARK: Why full listens followed nothing (the phone log of 2026-11-20, section 9), replayed
+
+    /// Blocker 1, the rough first reading. A wake's first good reading comes from Wi-Fi: 60 m accuracy and, here,
+    /// 45 m further along the street than the person is. Measured from it, a steady walk counted only after about
+    /// 110 s (both hand-overs in the log came 112 s into a 120 s listen), or not at all. Measured from the sharp
+    /// reading six seconds later, it is seen within the minute.
+    @Test func aRoughFirstReadingNoLongerHidesTheWalk() {
+        var follow = WorldWalkFollow()
+        follow.see(Self.fix(45, 0, accuracy: 60), motion: .walking)
+        var seenAt: Double?
+        for index in 1...15 {
+            let second = Double(index) * 8 - 2
+            follow.see(Self.fix(1.3 * second, second, speed: 1.3), motion: .walking)
+            if seenAt == nil, follow.seesWalk(motionRead: true, motion: .walking) { seenAt = second }
+        }
+        #expect(follow.measureFrom?.accuracy == 8 && follow.runFrom?.accuracy == 60, "the clock keeps the first reading")
+        #expect((seenAt ?? 999) <= 62, "seen at \(String(describing: seenAt))")
+        // The old measure, from the first reading: |1.3 t - 45| - 68 m reaches 30 m only after t = 110 s.
+        let old = { (second: Double) in abs(1.3 * second - 45) - 68 >= WorldWalkFollow.seeDistance }
+        #expect(!old(102) && old(112))
+        // A later sharp reading does not move the measure: only one within the settle time.
+        var late = WorldWalkFollow()
+        late.see(Self.fix(0, 0, accuracy: 60), motion: .walking)
+        late.see(Self.fix(40, 30, speed: 1.3, accuracy: 60), motion: .walking)
+        late.see(Self.fix(52, 40, speed: 1.3), motion: .walking)
+        #expect(late.measureFrom?.accuracy == 60)
+    }
+
+    /// Blocker 2, Motion. A phone in a hand: Motion says "can't tell" or still through the whole listen while the
+    /// readings walk 150 m. That was no walk before; now the readings carry it, late in the listen. Standing in a
+    /// shop does not: drift, a wander round the aisles and pacing up and down all stay inside the rule, whatever
+    /// Motion says.
+    @Test func aPhoneInAHandIsFollowedAndAShopIsNot() {
+        for kind in [WorldMotionKind.unknown, .stationary] {
+            var follow = WorldWalkFollow()
+            var seenAt: Double?
+            for index in 0...24 {
+                let second = Double(index) * 5
+                follow.see(Self.fix(1.3 * second, second, speed: 1.3), motion: kind)
+                if seenAt == nil, follow.seesWalk(motionRead: true, motion: kind) { seenAt = second }
+            }
+            #expect((seenAt ?? 0) >= WorldWalkFollow.sureTime && (seenAt ?? 999) <= 90, "\(kind): \(String(describing: seenAt))")
+        }
+        var shops: [String: WorldWalkFollow] = [:]
+        var seen: [String] = []
+        for index in 0...24 {
+            let second = Double(index) * 5
+            // Drift indoors at 30 m accuracy, wandering up to 40 m off.
+            shops["drift", default: WorldWalkFollow()].see(Self.fix(Double((index * 17) % 81) - 40, second, speed: 0.6, accuracy: 30))
+            // Pacing a 25 m aisle at a walk's pace.
+            let lap = second.truncatingRemainder(dividingBy: 50)
+            shops["pacing", default: WorldWalkFollow()].see(Self.fix(lap <= 25 ? lap : 50 - lap, second, speed: 1.0))
+            // A slow shuffle along a queue: 20 m in two minutes.
+            shops["queue", default: WorldWalkFollow()].see(Self.fix(second / 6, second, speed: 0.2))
+            // Asked after every reading, as the listen asks, whatever Motion says and where it is not read.
+            for (name, shop) in shops {
+                let kinds: [WorldMotionKind?] = [.walking, .stationary, .unknown, nil]
+                if kinds.contains(where: { shop.seesWalk(motionRead: true, motion: $0) }) || shop.seesWalk(motionRead: false, motion: nil) {
+                    seen.append("\(name) at \(second)")
+                }
+            }
+        }
+        #expect(seen.isEmpty && shops.count == 3, "\(seen)")
+    }
+
+    /// Blocker 3, the pace rule. One stray reading faster than a walk (GPS speed jumps) no longer starts the run
+    /// over; two in a row do, and so does one at a car's speed, so a bike or a car is still left to their detection.
+    @Test func oneStrayFastReadingIsPassedBy() {
+        func walk(fastAt: Set<Int>, speed: Double) -> WorldWalkFollow {
+            var follow = WorldWalkFollow()
+            for index in 0...8 {
+                let second = Double(index) * 8
+                follow.see(Self.fix(1.3 * second, second, speed: fastAt.contains(index) ? speed : 1.3))
+            }
+            return follow
+        }
+        let stray = walk(fastAt: [4], speed: 3.4)
+        #expect(stray.runFrom?.at == Self.start && stray.seesWalk(motionRead: false, motion: nil))
+        let twice = walk(fastAt: [4, 5], speed: 3.4)
+        #expect(twice.runFrom?.at == Self.start.addingTimeInterval(48) && twice.blocker(motionRead: false, motion: nil) == .tooShort)
+        let car = walk(fastAt: [4], speed: 9)
+        #expect(car.runFrom?.at == Self.start.addingTimeInterval(40), "a car's speed starts it over at once")
+    }
+
+    /// What still stands in the way, by name, for the diary: readings all rougher than 65 m are no run at all (and
+    /// are counted as rough), readings of 65 m accuracy cannot show 30 m beyond it in two minutes, a walk too short,
+    /// too slow or too fast says so.
+    @Test func theBlockerSaysWhatStoodInTheWay() {
+        let rough = Self.listen(pace: 1.3, accuracy: 80)
+        #expect(rough.blocker(motionRead: true, motion: .walking) == .noRun && rough.goodSeen == 0 && rough.roughSeen == 16)
+        let wifi = Self.listen(pace: 1.3, accuracy: 65)
+        #expect(wifi.blocker(motionRead: true, motion: .walking) == .notFar && wifi.goodSeen == 16 && wifi.roughSeen == 0)
+        #expect(Self.listen(pace: 1.3, seconds: 32).blocker(motionRead: true, motion: .walking) == .tooShort)
+        #expect(Self.listen(pace: 0.4).blocker(motionRead: false, motion: nil) == .tooSlow)
+        #expect(Self.listen(pace: 12).blocker(motionRead: false, motion: nil) == .noRun, "never at walking pace")
+        #expect(WorldWalkFollow().blocker(motionRead: false, motion: nil) == .noRun)
+        #expect(Self.listen(pace: 1.3).blocker(motionRead: true, motion: .walking) == nil)
+        var counted = Self.listen(pace: 1.3)
+        counted.countFromHere()
+        #expect(counted.goodSeen == 0 && counted.runFrom != nil, "a listen counts its own readings and keeps the run")
+        #expect(WorldWalkBlocker.allCases.map(\.rawValue) == ["motionSaysRide", "noRun", "tooShort", "notFar", "tooSlow",
+                                                              "tooFast", "motionUnsure"], "frozen: the diary's file holds them")
+    }
+
+    // MARK: Leaving the front while moving (the phone log of 2026-11-20, section 9)
+
+    /// The recent readings show movement once one is 20 m beyond both accuracies from an earlier one, and stop
+    /// showing it a minute after the last that did. Standing still with drift, and rough readings, never do.
+    @Test func theMoveWatchTellsMovingFromStandingStill() {
+        var walking = WorldMoveWatch()
+        var firstMoved: Double?
+        for index in 0...12 {
+            let second = Double(index) * 5
+            walking.observe(Self.fix(1.3 * second, second, speed: 1.3))
+            if firstMoved == nil, walking.isMoving(at: Self.start.addingTimeInterval(second)) { firstMoved = second }
+        }
+        #expect(firstMoved == 30, "36 m at 1.3 m/s")
+        #expect(walking.isMoving(at: Self.start.addingTimeInterval(60 + WorldMoveWatch.freshTime)))
+        #expect(!walking.isMoving(at: Self.start.addingTimeInterval(61 + WorldMoveWatch.freshTime)), "stopped a minute ago")
+        #expect(!walking.isMoving(at: Self.start.addingTimeInterval(-5)), "a clock change")
+        var still = WorldMoveWatch(), rough = WorldMoveWatch()
+        for index in 0...60 {
+            let second = Double(index) * 5
+            still.observe(Self.fix(Double((index * 7) % 13) - 6, second, accuracy: 10))
+            rough.observe(Self.fix(1.3 * second, second, accuracy: 90))
+            #expect(!still.isMoving(at: Self.start.addingTimeInterval(second)))
+        }
+        #expect(still.movedAt == nil && rough.movedAt == nil)
+        #expect(still.kept.count <= WorldMoveWatch.maxKept && WorldMoveWatch.maxKept == 13)
+    }
+
+    /// Leaving the front starts a listen only when the person is moving: by the readings, or by Motion read within
+    /// the last minute saying anything but still or "can't tell". Old news and standing still start nothing.
+    @Test func leavingTheFrontListensOnlyWhenMoving() {
+        let now = Self.start
+        let fresh = now.addingTimeInterval(-20), old = now.addingTimeInterval(-90)
+        #expect(WorldLocationSource.listensOnLeaving(readingsMoving: true, motion: nil, motionKnown: nil, now: now))
+        #expect(WorldLocationSource.listensOnLeaving(readingsMoving: true, motion: .stationary, motionKnown: fresh, now: now))
+        for kind in [WorldMotionKind.walking, .running, .cycling, .automotive] {
+            #expect(WorldLocationSource.listensOnLeaving(readingsMoving: false, motion: kind, motionKnown: fresh, now: now), "\(kind)")
+            #expect(!WorldLocationSource.listensOnLeaving(readingsMoving: false, motion: kind, motionKnown: old, now: now), "old \(kind)")
+            #expect(!WorldLocationSource.listensOnLeaving(readingsMoving: false, motion: kind, motionKnown: nil, now: now))
+        }
+        for kind in [WorldMotionKind.stationary, .unknown, nil] {
+            #expect(!WorldLocationSource.listensOnLeaving(readingsMoving: false, motion: kind, motionKnown: fresh, now: now),
+                    "\(String(describing: kind))")
+        }
+    }
+
+    /// A walk with Fernlet opened and closed: the readings taken while it was open already count, so the listen that
+    /// starts as it leaves the front sees the walk with its first reading. With Fernlet open the readings are shown
+    /// to the walk rules only while no walk the person started records, and no follow starts in front.
+    @Test func aWalkSeenInFrontIsFollowedAsSoonAsFernletLeaves() {
+        var follow = WorldWalkFollow()
+        var moves = WorldMoveWatch()
+        // A minute and a half with Fernlet open, a reading every 10 m (iOS's filter in front).
+        for index in 0...11 {
+            let fix = Self.fix(Double(index) * 10.4, Double(index) * 8, speed: 1.3)
+            follow.see(fix, motion: .walking)
+            moves.observe(fix)
+        }
+        let left = Self.start.addingTimeInterval(90)
+        #expect(WorldLocationSource.listensOnLeaving(readingsMoving: moves.isMoving(at: left), motion: nil, motionKnown: nil, now: left))
+        follow.countFromHere()
+        follow.see(Self.fix(124.8, 96, speed: 1.3), motion: .walking)
+        #expect(follow.seesWalk(motionRead: true, motion: .walking) && follow.goodSeen == 1)
+        #expect(WorldLocationSource.watchesForWalk(listening: false, appOpen: true, walking: false))
+        #expect(!WorldLocationSource.watchesForWalk(listening: false, appOpen: true, walking: true))
+        #expect(WorldLocationSource.watchesForWalk(listening: true, appOpen: false, walking: false))
+        #expect(!WorldLocationSource.watchesForWalk(listening: false, appOpen: false, walking: false), "low-power readings")
+        // Standing still in front, then leaving: nothing to listen for.
+        var still = WorldMoveWatch()
+        for index in 0...11 { still.observe(Self.fix(Double(index % 3), Double(index) * 8, accuracy: 10)) }
+        #expect(!WorldLocationSource.listensOnLeaving(readingsMoving: still.isMoving(at: left), motion: .stationary,
+                                                      motionKnown: left, now: left))
+    }
+
+    /// In the test host (no Always) leaving the front starts no listen however the person moves, and coming to the
+    /// front and leaving it touches no trace.
+    @Test func leavingTheFrontWithoutAlwaysStartsNothing() {
+        let source = WorldLocationSource(backgroundMapping: { true })
+        source.startForeground()
+        for index in 0..<12 { source.deliver(Self.fix(Double(index) * 10.4, Double(index) * 8, speed: 1.3)) }
+        source.stopForeground()
+        #expect(!source.isListening && source.trace == nil)
     }
 }

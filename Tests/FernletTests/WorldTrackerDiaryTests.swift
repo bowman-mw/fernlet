@@ -55,7 +55,9 @@ struct WorldTrackerDiaryTests {
     /// The kinds are frozen tokens: the file is read back by them.
     @Test func theKindsAreFrozenTokens() {
         #expect(WorldDiaryEventKind.allCases.map(\.rawValue) == ["fenceExit", "fenceArmed", "listenStarted", "listenEnded",
-                                                                 "traceStarted", "traceEnded", "readings", "mode", "motion"])
+                                                                 "traceStarted", "traceEnded", "readings", "mode", "motion",
+                                                                 "walkNotSeen"])
+        #expect(WorldListenReason.leftFront.rawValue == "leftFront")
         #expect(WorldListenReason.fenceExit.rawValue == "fenceExit" && WorldListenEnd.timeUp.rawValue == "timeUp")
         #expect(WorldTrackerDiary.token(for: .walk) == "walk" && WorldTrackerDiary.token(for: .drive) == "drive")
         #expect(WorldTrackerDiary.token(for: .onFoot) == "onFoot" && WorldTrackerDiary.token(for: .driving(since: Self.start)) == "driving")
@@ -240,7 +242,7 @@ struct WorldTrackerDiaryTests {
         #expect(rows[0].detail == nil)
         #expect(TrackerDiaryRow.rows(from: []).isEmpty)
         // Every kind and token has words.
-        for reason in ["fenceExit", "carLinked", "hint", "fastReading", "visitDeparture"] {
+        for reason in ["fenceExit", "carLinked", "hint", "fastReading", "visitDeparture", "leftFront"] {
             #expect(TrackerDiaryCopy.title(WorldDiaryEvent(at: Self.start, kind: .listenStarted, detail: reason)).key != "trackerDiary.other")
         }
         for end in ["timeUp", "traceTookOver", "passengerDriving", "mappingOff"] {
@@ -249,6 +251,13 @@ struct WorldTrackerDiaryTests {
         for kind in ["stationary", "walking", "running", "cycling", "automotive", "unknown"] {
             #expect(TrackerDiaryCopy.title(WorldDiaryEvent(at: Self.start, kind: .motion, detail: kind)).key != "trackerDiary.other")
         }
+        // A listen that followed no walk says what stood in the way, and how good its readings were.
+        for blocker in WorldWalkBlocker.allCases {
+            let line = WorldDiaryEvent(at: Self.start, kind: .walkNotSeen, detail: blocker.rawValue, counts: [12, 5])
+            #expect(TrackerDiaryCopy.title(line).key == "trackerDiary.walkNotSeen.\(blocker.rawValue)")
+            #expect(TrackerDiaryCopy.detail(line)?.key == "trackerDiary.walkNotSeen.detail")
+        }
+        #expect(TrackerDiaryCopy.title(WorldDiaryEvent(at: Self.start, kind: .walkNotSeen, detail: "fog")).key == "trackerDiary.other")
         for token in ["drive", "ride", "walk"] {
             #expect(TrackerDiaryCopy.title(WorldDiaryEvent(at: Self.start, kind: .traceEnded, detail: token)).key != "trackerDiary.other")
         }

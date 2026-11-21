@@ -223,7 +223,9 @@ struct WorldTripTrackingTests {
     /// Each way a drive ends is named: Motion's confident walking is on foot, and a flight is a flight.
     @Test func everyDriveEndIsNamed() {
         var walking = Stream(usesMotion: true)
-        walking.motion(.automotive, 0, through: WorldRideWatch.motionHold)
+        walking.motion(.automotive, 0, through: 2)
+        walking.read(0, 3, speed: 12)
+        walking.query([], through: WorldRideWatch.motionHold)
         #expect(walking.watch.isDriving)
         walking.motion(.walking, 200)
         #expect(walking.watch.lastDriveEnd == .onFoot)

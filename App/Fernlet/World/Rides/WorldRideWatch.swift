@@ -18,6 +18,14 @@ import WorldMapStore
 ///   A short automotive flicker between walking samples starts nothing, and nor does a car's activity that Motion's
 ///   history shows already ended on foot (2026-11-20: a ride read back after it was over started a drive and ended
 ///   it in the same step).
+/// - **Motion alone starts nothing (the owner's phone log of 2026-11-20: on the metro Motion said cycling, then
+///   automotive, and a ride and then a drive were traced underground with no reading to show for them):** a start
+///   by Motion, a drive's or a ride's, also needs a good reading surely faster than walking pace, taken since that
+///   activity began and no more than ``proofTime`` before the samples' end
+///   (``readingShowsSpeed(since:knownThrough:)``). With none, nothing starts, and a ride underground is left to the
+///   subway hop (`WorldSubwayHopWatch`). The cost: a drive that begins in a tunnel or a garage starts when the car
+///   reaches open sky. A car connected still starts the drive without one, and bike rides read back from Motion's
+///   history while the app was closed (``rides(in:until:)``) are found as before, since no reading was taken then.
 /// - **A drive survives red lights and traffic:** a quiet minute or two, or slow readings, never end it. It
 ///   ends on foot (a confident walking or running sample after it started, or walking-pace readings spanning
 ///   ``footTime`` after the last fast one that also carried the person ``footDistance`` beyond their accuracy at
@@ -35,7 +43,7 @@ import WorldMapStore
 ///   speed spanning ``resumeHold`` start it again, not the full ``carHold`` (a light that still fooled the foot
 ///   rule). ``lastDriveEnd`` says why the last drive ended, for the location source's cool-down.
 /// - **Cycling** only with Motion ("Log my bike rides" or background mapping on, and allowed): a confident cycling sample starts a
-///   ride; it ends at the moment something else began once that has held ``rideGap`` (a red light is
+///   ride once a good reading shows the speed (above); it ends at the moment something else began once that has held ``rideGap`` (a red light is
 ///   shorter), or at once when the coprocessor says car. A ride of at least ``minRideTime`` whose distance
 ///   is unknown or at least ``minRideMetres`` ends as ``WorldRideEvent/rideEnded(_:)``, its distance from
 ///   the precise readings taken during it.
@@ -109,6 +117,9 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     var carLinked = false
     /// When a hint (Driving Focus, the Start a drive action) runs out; nil without one.
     private(set) var hintUntil: Date?
+    /// How long before the samples' end a good reading faster than walking pace still proves a start by Motion: a
+    /// red light just after pulling away is shorter.
+    static let proofTime: TimeInterval = 2 * 60
     /// How long something other than cycling must hold to end a ride (a stop at a light is shorter).
     static let rideGap: TimeInterval = 3 * 60
     /// The shortest ride that logs.
@@ -201,6 +212,11 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     private var paceFrom: PaceAnchor?
     /// The latest good reading's speed.
     private var lastSpeed: SpeedReading?
+    /// When a good reading was last surely faster than walking pace (``readingShowsSpeed(since:knownThrough:)``).
+    private var movedFastAt: Date?
+    /// Whether a start by Motion needs such a reading: always, except in a replay of Motion's history from while
+    /// the app was closed (``replay(_:until:)``), when no reading was taken.
+    private var needsProof = true
     /// While on foot: the first and latest readings of the current run at a car's speed.
     private var fastSince: Date?
     private var fastAt: Date?
@@ -252,6 +268,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         // How fast the reading surely was: a pace counts only the distance beyond both readings' accuracy.
         let surely = Self.isGood(fix) ? (fix.speed ?? pace(to: fix, beyondAccuracy: true)) : nil
         if let speed { lastSpeed = SpeedReading(at: fix.at, metresPerSecond: speed) }
+        if let surely, surely > Self.walkingSpeed { movedFastAt = fix.at }
         notePaceAnchor(fix)
         noteDistance(fix)
         lastAt = fix.at
@@ -277,10 +294,21 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
             // ride already over (read from Motion's history after a subway ride, or a wake long after a drive): no
             // drive starts only to end in the same step, which used to cool a trace down and look for a hotel.
             if !Self.endsOnFoot(sample.kind, carLinked: carLinked) { events += startByMotion(knownThrough: sample.at) }
+            // A ride Motion already told of, whose readings have shown the speed since: it started when Motion said.
+            events += startRideByMotion(knownThrough: sample.at)
             events += take(sample)
         }
-        if let end { events += startByMotion(knownThrough: end) }
+        if let end { events += startByMotion(knownThrough: end) + startRideByMotion(knownThrough: end) }
         return events
+    }
+
+    /// Whether a good reading shows the speed that Motion's activity since `since` claims, as far as the samples
+    /// are known (`known`): one surely faster than walking pace, taken since the activity began and no more than
+    /// ``proofTime`` before `known`. Always true in a replay of history (no reading was taken).
+    private func readingShowsSpeed(since: Date, knownThrough known: Date) -> Bool {
+        guard needsProof else { return true }
+        guard let movedFastAt, movedFastAt >= since else { return false }
+        return known.timeIntervalSince(movedFastAt) <= Self.proofTime
     }
 
     /// Whether a sample of `kind` ends a drive on foot at once: Motion's walking or running, unless a car is connected
@@ -359,6 +387,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     private static func replay(_ samples: [WorldMotionSample], until end: Date) -> (mode: WorldRideMode, events: [WorldRideEvent]) {
         var watch = WorldRideWatch()
         watch.usesMotion = true
+        watch.needsProof = false
         let events = watch.observe(samples) + watch.tick(at: end)
         return (watch.mode, events)
     }
@@ -412,11 +441,13 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
 
     /// Starts a drive once Motion's automotive activity has held ``motionHold`` as far as the samples are
     /// known (`known`), from its start, unless a good reading since then was at walking pace (the speed floor),
-    /// or it began before the last drive or ride ended.
+    /// or it began before the last drive or ride ended. Without a car connected it also needs a good reading that
+    /// shows the speed (``readingShowsSpeed(since:knownThrough:)``): Motion says automotive on a subway too.
     private mutating func startByMotion(knownThrough known: Date) -> [WorldRideEvent] {
         guard mode == .onFoot, motionKind == .automotive, let motionSince,
               known.timeIntervalSince(motionSince) >= Self.motionHold,
-              endedAt.map({ motionSince >= $0 }) ?? true else { return [] }
+              endedAt.map({ motionSince >= $0 }) ?? true,
+              carLinked || readingShowsSpeed(since: motionSince, knownThrough: known) else { return [] }
         if let lastSpeed, lastSpeed.at >= motionSince, Self.isWalkingPace(lastSpeed.metresPerSecond) { return [] }
         return startDrive(at: motionSince)
     }
@@ -553,8 +584,18 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         }
     }
 
+    /// Starts a ride while Motion says cycling, from when it began to, once a good reading shows the speed
+    /// (``readingShowsSpeed(since:knownThrough:)``), unless the cycling began before the last drive or ride ended.
+    private mutating func startRideByMotion(knownThrough known: Date) -> [WorldRideEvent] {
+        guard mode == .onFoot, motionKind == .cycling, let motionSince,
+              endedAt.map({ motionSince > $0 }) ?? true,
+              readingShowsSpeed(since: motionSince, knownThrough: known) else { return [] }
+        return startRide(at: motionSince)
+    }
+
     /// Takes one confident sample: the activity in effect from its moment, and what it starts or ends (an
-    /// automotive sample only marks when the car began; ``startByMotion(knownThrough:)`` starts the drive).
+    /// automotive sample only marks when the car began; ``startByMotion(knownThrough:)`` starts the drive, and a
+    /// cycling sample starts the ride only with a reading to show for it, ``startRideByMotion(knownThrough:)``).
     private mutating func take(_ sample: WorldMotionSample) -> [WorldRideEvent] {
         let at = sample.at
         if sample.kind != motionKind {
@@ -570,7 +611,7 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         case (.cycling, .driving):
             return endDrive(at: at, because: .cycling) + startRide(at: at)
         case (.cycling, .onFoot) where fresh:
-            return startRide(at: at)
+            return startRideByMotion(knownThrough: at)
         case (.walking, .driving(let since)), (.running, .driving(let since)):
             return at > since && !carLinked ? endDrive(at: at, because: .onFoot) : []
         default:

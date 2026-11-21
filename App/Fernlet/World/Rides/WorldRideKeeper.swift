@@ -108,6 +108,10 @@ final class WorldRideKeeper {
     /// sample (the location source's walk follow reads it).
     var motionNow: (kind: WorldMotionKind, since: Date)? { watch.motionNow }
 
+    /// The moment Motion's activity is known through (the last query's end); nil while Motion is not read or before
+    /// the first query. The location source reads it when Fernlet leaves the front: old news starts no listen.
+    var motionKnownThrough: Date? { usesMotion ? queryEnd : nil }
+
     /// Swaps where motion comes from (tests' scripted stream); the next query starts afresh.
     func replaceMotion(with motion: any WorldMotionReading) {
         self.motion = motion

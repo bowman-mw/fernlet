@@ -141,13 +141,90 @@ struct WorldSubwayHopTests {
         stream.read(0, 0, speed: 1.2)
         stream.read(3_000, 900)
         stream.query([(.automotive, 240, true)], through: 900)
+        #expect(stream.drivesStarted == 0, "Motion alone starts nothing: the listen's first reading at speed does")
+        stream.read(3_120, 910, speed: 12)
+        stream.query([], through: 930)
         #expect(stream.drivesStarted == 1 && stream.watch.isDriving)
+        if case .driving(let since) = stream.watch.mode { #expect(since == Stream.start.addingTimeInterval(240)) }
         var linked = Stream(usesMotion: true)
         linked.watch.carLinked = true
         linked.read(0, 0, speed: 1.2)
         linked.read(3_000, 900)
         linked.query([(.automotive, 240, true), (.walking, 780, true)], through: 900)
         #expect(linked.drivesStarted == 1 && linked.watch.isDriving, "\(linked.events)")
+    }
+
+    // MARK: Motion alone starts nothing (the metro of the evening of 2026-11-20, investigation section 9)
+
+    /// The owner's metro ride, replayed from the phone log's sequence. Underground no reading is good. Fernlet is
+    /// opened at 21:54:03 and the first reading asks Motion, whose history says cycling: a bike ride was traced. It
+    /// is opened again at 21:57:44 and Motion has said automotive for over a minute: a drive was traced for eight
+    /// minutes underground. Now neither starts, with rough readings or with good ones that stand still in a
+    /// station; out in the open the same Motion starts both as ever; and when a good reading comes back the gap is
+    /// a subway hop's candidate.
+    @Test func motionAloneOnTheMetroStartsNoRideAndNoDrive() {
+        for station in ["rough", "goodButStill"] {
+            var stream = Stream(usesMotion: true)
+            var hops = WorldSubwayHopWatch()
+            let good = station == "goodButStill"
+            #expect(hops.observe(Self.fix(0, 0, speed: 1.2), moving: false) == nil)
+            stream.read(0, 0, speed: 1.2)
+            stream.query([(.walking, -60, true)], through: 0)
+            // 21:54:03, the first opening: two readings, and Motion's history says cycling.
+            stream.read(700, 200, speed: good ? 0 : nil, accuracy: good ? 30 : 150)
+            stream.query([(.stationary, 60, true), (.cycling, 170, true)], through: 200)
+            stream.read(705, 201, speed: good ? 0 : nil, accuracy: good ? 30 : 150)
+            #expect(stream.events.isEmpty, "\(station): a ride started on Motion alone: \(stream.events)")
+            // 21:57:44, the second opening: automotive for over a minute, then eight minutes in the background.
+            stream.read(1_800, 420, speed: good ? 0 : nil, accuracy: good ? 30 : 150)
+            stream.query([(.automotive, 250, true)], through: 420)
+            for step in 1...16 {
+                let second = 420 + Double(step) * 30
+                stream.read(1_800 + Double(step) * 70, second, accuracy: 150)
+                stream.query([], through: second)
+                stream.tick(second)
+            }
+            #expect(stream.events.isEmpty && stream.watch.mode == .onFoot, "\(station): \(stream.events)")
+            #expect(hops.observe(Self.fix(3_000, 960, speed: 1.2), moving: stream.watch.isDriving || stream.watch.isCycling) != nil,
+                    "\(station): the ride is left to the subway hop")
+        }
+        // Out in the open the same Motion, with readings at the speed, starts the ride and then the drive.
+        var open = Stream(usesMotion: true)
+        open.read(0, 0, speed: 1.2)
+        open.query([(.walking, -60, true)], through: 0)
+        open.read(700, 200, speed: 5)
+        open.query([(.stationary, 60, true), (.cycling, 170, true)], through: 200)
+        #expect(open.watch.isCycling, "\(open.events)")
+        open.read(1_800, 420, speed: 11)
+        open.query([(.automotive, 250, true)], through: 420)
+        #expect(open.watch.isDriving && open.drivesStarted == 1, "\(open.events)")
+    }
+
+    /// The reading must be recent and from the activity itself: a fast reading from before Motion said car, or one
+    /// more than two minutes before the samples' end, proves nothing; a red light just after pulling away is inside
+    /// it. A car connected starts the drive on Motion alone, as before.
+    @Test func theReadingThatProvesAMotionStartMustBeRecent() {
+        var before = Stream(usesMotion: true)
+        before.read(0, 0, speed: 9)
+        before.query([(.automotive, 30, true)], through: 120)
+        #expect(before.drivesStarted == 0, "the fast reading was before Motion said car")
+        var stale = Stream(usesMotion: true)
+        stale.query([(.automotive, 0, true)], through: 5)
+        stale.read(100, 10, speed: 9)
+        stale.read(110, 20, accuracy: 150)
+        stale.query([], through: 20 + WorldRideWatch.proofTime + 1)
+        #expect(stale.drivesStarted == 0, "two minutes with nothing at speed since")
+        var light = Stream(usesMotion: true)
+        light.query([(.automotive, 0, true)], through: 5)
+        light.read(100, 10, speed: 9)
+        light.read(150, 20, speed: 0)
+        light.query([], through: 100)
+        #expect(light.drivesStarted == 1, "a red light just after pulling away")
+        var linked = Stream(usesMotion: true)
+        linked.watch.carLinked = true
+        linked.query([(.automotive, 0, true)], through: 90)
+        #expect(linked.drivesStarted == 1, "a car connected needs no reading")
+        #expect(WorldRideWatch.proofTime == 120)
     }
 
     /// The same replay through the location source: no drive callback, no cool-down, and Apple Maps is asked
