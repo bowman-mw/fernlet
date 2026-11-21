@@ -55,6 +55,9 @@ struct FernletApp: App {
     )
     @State private var loader = FernletStoreLoader()
     @AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) private var hasCompletedOnboarding = false
+    /// What the ready scene shows — app, onboarding, or an unlock wait (``OnboardingLaunchGate``).
+    /// `nil` until the store is ready and the first edge has decided.
+    @State private var onboardingDecision: OnboardingLaunchGate.Decision?
     /// The System/Light/Dark choice, applied to the WHOLE scene — launch screen, onboarding and
     /// main UI alike. Onboarding lives outside `ContentView`, so before this it was the one surface
     /// that followed the phone while every tab and sheet was pinned by ContentView's own modifier:
@@ -396,6 +399,7 @@ struct FernletApp: App {
 
     /// The ready store's half of a foreground activation (`handleScenePhaseChange`).
     private func handleForegroundActivation(_ store: FernletStore) {
+        refreshOnboardingDecision(store: store)
         store.refreshCurrentDayIfNeeded()
         store.reconcileGuidedRunFromAppGroup()
         // Same for a cooking Next/Finish made from the Live Activity / Siri while
@@ -458,6 +462,8 @@ struct FernletApp: App {
                 // relaunch may never become active.
                 lockService.refreshStateFromKeychain()
                 retryLaunchRefusedWhileLocked()
+                // The decision a locked launch could not make (or made from an empty defaults read).
+                if case .ready(let store) = loader.phase { refreshOnboardingDecision(store: store) }
                 // P5 item 10: the unlock edge, literal for the same reason, and the one that fires
                 // while the app is BACKGROUNDED — the ciphertext jobs the re-entry owes run there.
                 if case .ready(let store) = loader.phase {
@@ -594,25 +600,13 @@ struct FernletApp: App {
     /// the delayed startup CloudKit-sync activation.
     @ViewBuilder
     private func readyContentSurface(store: FernletStore) -> some View {
-        Group {
-            if hasCompletedOnboarding {
-                ContentView(store: store, healthKitService: healthKitService)
-                    .environment(lockService)
-                    .environment(storagePreferencesStore)
-                    .environment(captureProtection)
-            } else {
-                OnboardingCoordinator(
-                    store: store,
-                    detector: OnboardingCloudDataDetectorFactory.makeDetector()
-                ) {
-                    hasCompletedOnboarding = true
-                }
-                .environment(lockService)
-                .environment(storagePreferencesStore)
-                .onAppear {
-                    StartupTiming.endAppLaunch()
-                }
-            }
+        onboardingOrApp(store: store)
+        .onAppear { refreshOnboardingDecision(store: store) }
+        .onChange(of: hasCompletedOnboarding) { old, new in
+            // A drop from true to false is an explicit start-over (the Review demo's Leave, a DEBUG
+            // reset), never a locked read — a locked read never moves the value, it only starts it
+            // false — so it alone may take the app back to onboarding.
+            refreshOnboardingDecision(store: store, startingOver: old && !new)
         }
         .onChange(of: storagePreferencesStore.preferences) { old, new in
             let storageChanged = old.iCloudSyncEnabled != new.iCloudSyncEnabled
@@ -663,6 +657,73 @@ struct FernletApp: App {
                 + "Anything you've switched on an encrypted iCloud backup for is restored from that "
                 + "backup either way. You can change this anytime in Privacy & Data.")
         }
+    }
+
+    /// The ready scene's three faces, picked by ``OnboardingLaunchGate``: the app, onboarding, or
+    /// the launch screen asking for an unlock while nothing can be told yet. Before the first
+    /// decision lands (one frame, from `.onAppear`) it shows the launch screen too, never onboarding.
+    @ViewBuilder
+    private func onboardingOrApp(store: FernletStore) -> some View {
+        switch onboardingDecision {
+        case .app?:
+            ContentView(store: store, healthKitService: healthKitService)
+                .environment(lockService)
+                .environment(storagePreferencesStore)
+                .environment(captureProtection)
+        case .onboarding(let existingSetup)?:
+            OnboardingCoordinator(
+                store: store,
+                detector: OnboardingCloudDataDetectorFactory.makeDetector(),
+                existingSetup: existingSetup
+            ) {
+                hasCompletedOnboarding = true
+                onboardingDecision = .app
+            }
+            .environment(lockService)
+            .environment(storagePreferencesStore)
+            .onAppear {
+                StartupTiming.endAppLaunch()
+            }
+        case .waitForUnlock?, nil:
+            LaunchScreen(statusMessage: onboardingDecision == nil ? loader.statusMessage : Self.waitForUnlockMessage)
+        }
+    }
+
+    /// The launch screen's line while the phone is still locked and nothing says whether onboarding
+    /// finished (``OnboardingLaunchGate/Decision/waitForUnlock``).
+    private static var waitForUnlockMessage: String {
+        String(localized: "launch.waitForUnlock", defaultValue: "Unlock your iPhone to open Fernlet.",
+               comment: "Launch screen line shown when Fernlet was opened before the phone's first unlock after a restart and cannot read its records yet.")
+    }
+
+    /// Re-reads both completion witnesses, the lock and data protection, and folds the result into
+    /// the decision on screen (``OnboardingLaunchGate``). Runs when the store becomes ready, at the
+    /// unlock edge, at every activation and when the completion bit moves.
+    ///
+    /// - Parameters:
+    ///   - store: The loaded store, whose settings are the durable witness.
+    ///   - startingOver: An explicit start-over: drop the decision on screen and decide afresh.
+    @MainActor
+    private func refreshOnboardingDecision(store: FernletStore, startingOver: Bool = false) {
+        let protectedData = protectedDataAvailableNow
+        // A process that booted blind failed closed to `.locked`; re-derive before asking whether a
+        // passcode exists. A no-op while an unlock holds.
+        if protectedData { lockService.refreshStateFromKeychain() }
+        let evidence = OnboardingLaunchGate.Evidence(
+            // A fresh read, not the `@AppStorage` copy, so a domain that has become readable counts.
+            defaultsSayFinished: UserDefaults.standard.bool(forKey: OnboardingDefaults.hasCompletedOnboardingKey),
+            settingsSayFinished: store.settings.hasCompletedOnboarding,
+            protectedDataAvailable: protectedData,
+            passcodeConfigured: lockService.isLockConfigured
+        )
+        if OnboardingLaunchGate.shouldHealDefaults(evidence) {
+            UserDefaults.standard.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
+            FernletAuditLog.log("onboarding.completionBitHealed")
+        }
+        let next = OnboardingLaunchGate.decide(evidence)
+        onboardingDecision = OnboardingLaunchGate.settle(
+            current: startingOver ? nil : onboardingDecision, next: next, evidence: evidence
+        )
     }
 
     /// Defers CloudKit-sync activation ~5 s past first render so launch never blocks on iCloud.

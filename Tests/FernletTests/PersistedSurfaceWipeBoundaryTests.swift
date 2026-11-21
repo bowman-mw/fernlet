@@ -552,7 +552,7 @@ struct PersistedSurfaceWipeBoundaryTests {
             reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — App colors' Paper row (design `b2-colors`) writes the custom dark background `fernletCustomDarkBackgroundHex` (Settings' Appearance pickers moved here), and Appearance's App colors row reads it for its swatch; kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": .kept(
-            reason: "@AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) — the kept `hasCompletedOnboarding` bit. The constant lives in OnboardingCoordinator.swift, so this binding's key cannot be resolved from here."
+            reason: "@AppStorage(OnboardingDefaults.hasCompletedOnboardingKey) — the kept `hasCompletedOnboarding` bit — plus `refreshOnboardingDecision`'s fresh read of the same key and its heal write (`OnboardingLaunchGate`, owner's bug 2026-11-20). The constant lives in OnboardingCoordinator.swift, so this binding's key cannot be resolved from here."
         ),
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/BackupExclusionLaunchGate.swift": .unreachableByDesign(
             reason: "A read-only site: the launch gate reads `OnboardingDefaults.hasCompletedOnboardingKey` as legacy evidence of prior use. Nothing here writes a key, so there is no surface for the funnel to clear — and the key it reads carries its own kept row."
@@ -622,7 +622,7 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/ContentView.swift": 1,
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": 2,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/BackupExclusionLaunchGate.swift": 1,
-        "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": 1,
+        "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": 3,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/ReviewDemo/ReviewDemo.swift": 1,
         "unresolved:OnboardingDefaults.lockSetupDeferredKey@App/Fernlet/ReviewDemo/ReviewDemo.swift": 1,
         "unresolved:Self.reviewDemoIntimacyPendingKey@App/Fernlet/ReviewDemo/FernletStore+ReviewDemoFriend.swift": 1,

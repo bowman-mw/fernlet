@@ -286,6 +286,7 @@ wall and not a review checklist.
 
 | File | Purpose |
 | --- | --- |
+| `Fernlet/App/Fernlet/OnboardingLaunchGate.swift` | Pure decision for the ready scene: app, onboarding, or wait for unlock. Either completion witness (`UserDefaults` bit or the store's `settings.hasCompletedOnboarding`) shows the app, so a pre-first-unlock relaunch never shows onboarding to someone who finished it (owner's bug 2026-11-20). |
 | `Fernlet/App/Fernlet/OnboardingCoordinator.swift` | Onboarding state machine, step progression, storage choice, lock setup deferral, iCloud data detection, and `OnboardingDefaults` keys. Since 2026-09-23 also the post-age-gate intimacy choice (`ageCheckFinished()` → the step's second page; `complete()` commits it only when answered, different from the setting, and the 16+ gate is still open) and `DeferredLockSetupNudge`, the one-time progress-photo lock-setup nudge for a user who deferred the lock step — the first reader of `lockSetupDeferredKey`. |
 | `Fernlet/App/Fernlet/OnboardingWelcomeView.swift` | First onboarding screen presenting the Fernlet welcome message and entry CTA. |
 | `Fernlet/App/Fernlet/OnboardingPermissionsView.swift` | Onboarding step for requesting HealthKit and notification permissions. |
