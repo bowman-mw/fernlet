@@ -30,10 +30,16 @@ struct WorldGround: Equatable {
     /// between the crossed roads and the saved lines, so they show only where the map is uncovered. Empty while "Show
     /// worn paths" is off.
     var worn: WornWaysDrawing = .none
+    /// Subway hops (owner 2026-11-21): each a straight line of two points, drawn dotted over the fog, since a hop
+    /// lifts none and would otherwise never show.
+    var hops: [[GeoPoint]] = []
 
     /// How wide a saved line draws, in points: the mockups' `--m-trail` line, the same for a walk's and a
     /// ride's (owner 2026-10-29, Refinements group 19).
     static let trailWidth: CGFloat = 5
+    /// A subway hop's dot, and the gap from one dot to the next, in points (a walk's footsteps are 3.5 and 6).
+    static let hopDot: CGFloat = 5
+    static let hopGap: CGFloat = 12
 }
 
 /// Fernlet's own ground layer over whichever base map is underneath: the crossed major roads, the worn paths,
@@ -113,6 +119,14 @@ struct WorldGroundLayer: View {
                                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                 context.stroke(line, with: .color(darkStyle ? WorldPalette.gameCream : WorldPalette.ink),
                                style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round, dash: [0.5, 6]))
+            }
+            // Subway hops: wider-spaced, heavier dots than a walk's footsteps, so the two never read alike.
+            for hop in ground.hops {
+                let line = path(for: hop, size: size)
+                context.stroke(line, with: .color(WorldPalette.gameCream.opacity(0.9)),
+                               style: StrokeStyle(lineWidth: WorldGround.hopDot + 3, lineCap: .round, dash: [0.5, WorldGround.hopGap]))
+                context.stroke(line, with: .color(darkStyle ? WorldPalette.gameCream : WorldPalette.ink),
+                               style: StrokeStyle(lineWidth: WorldGround.hopDot, lineCap: .round, dash: [0.5, WorldGround.hopGap]))
             }
         }
         .allowsHitTesting(false)

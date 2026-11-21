@@ -633,6 +633,7 @@ final class AppleNearbyFinder: WorldNearbyFinding {
         case .hotel: .hotel
         case .restaurant: .restaurant
         case .gym: .fitnessCenter
+        case .station: .publicTransport
         }
     }
 

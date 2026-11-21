@@ -837,6 +837,8 @@ final class FernletStore {
         source.onVisit = { [weak self] visit in
             self?.worldPlaces.handleVisit(visit)
         }
+        // A subway hop the source inferred (owner 2026-11-21): the fog keeper keeps it, never in a decoy.
+        source.onSubwayHop = { [weak self] hop in self?.worldFog.keepSubwayHop(hop) }
         wireWorldRoadTrip(to: source, adopted: adopted != nil)
         return source
     }()

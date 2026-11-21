@@ -98,9 +98,10 @@ nonisolated struct WornTransitQuestion: Equatable, Sendable {
     /// What the ride was guessed to be: ``WornWayKind/rail`` or ``WornWayKind/ferry``.
     let guess: WornWayKind
 
-    /// The question for `trip`, or nil when its guess is a road or the person already said what it was.
+    /// The question for `trip`, or nil when its guess is a road or a subway hop (which has its own sheet), or the
+    /// person already said what it was.
     init?(_ trip: WornTrip?) {
-        guard let trip, !trip.confirmed, trip.kind != .road else { return nil }
+        guard let trip, !trip.confirmed, trip.kind == .rail || trip.kind == .ferry else { return nil }
         tripID = trip.id
         guess = trip.kind
     }
@@ -136,7 +137,7 @@ nonisolated enum WornTransitAskCopy {
         case .ferry:
             LocalizedStringResource("wornTransit.ask.ferryQuestion", defaultValue: "Was that a ferry?",
                                     comment: "Home: asks whether the ride that just ended was on a ferry or another boat")
-        case .rail, .road:
+        case .rail, .road, .subway:
             LocalizedStringResource("wornTransit.ask.trainQuestion", defaultValue: "Was that a train?",
                                     comment: "Home: asks whether the ride that just ended was on a train")
         }
@@ -162,7 +163,7 @@ nonisolated enum WornTransitAskCopy {
         case .ferry:
             LocalizedStringResource("wornTransit.ask.keptFerry", defaultValue: "Kept as a ferry ride.",
                                     comment: "Spoken after answering Home's question: the ride is now a ferry ride")
-        case .road:
+        case .road, .subway:
             LocalizedStringResource("wornTransit.ask.keptRoad", defaultValue: "Kept as a road trip.",
                                     comment: "Spoken after answering Home's question: the ride went by road")
         }

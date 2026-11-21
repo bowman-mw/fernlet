@@ -143,6 +143,8 @@ struct WorldMapHome: View {
     /// map tap landed.
     @State private var wornWaySheet: WornWaySheetRoute?
     @State private var pendingWayTap: WornWayPendingTap?
+    /// The kept subway hops the ground draws as dotted lines and a tap can open (owner 2026-11-21).
+    @State private var subwayHops: [WorldSubwayHop] = []
     @State private var lastMapTap: Date?
     /// DEBUG `transitAsk`: a staged "Was that a train?" (display only); nil in release builds.
     @State private var testTransitQuestion: WornTransitQuestion?
@@ -211,6 +213,8 @@ struct WorldMapHome: View {
         .onChange(of: roadsSource, initial: true) { roads.update(cells: store.worldRoadCells, atlas: store.worldFog.atlas.openedAtlas) }
         // The road counter changes at most once a trip or an unlock; a decoy's start or end changes it too.
         .onChange(of: store.worldFog.wornWays) { updateWorn() }
+        // A subway hop changes no counter: the kept trips say when one came or went.
+        .onChange(of: store.worldFog.wornTrips, initial: true) { updateSubwayHops() }
         .onChange(of: store.duressSessionActive) { updateWorn() }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
@@ -587,7 +591,7 @@ struct WorldMapHome: View {
                            trails: kept + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride])
                                + (demo ? [WorldRoadTestScenes.walk] : []),
                            traces: trace.count >= 2 ? [trace] : [], roads: roads.drawing, roadsOverFog: roadsOverFog,
-                           worn: wornScene?.drawing ?? worn.drawing)
+                           worn: wornScene?.drawing ?? worn.drawing, hops: subwayHops.map { [$0.from, $0.to] })
     }
 
     /// What the crossed roads are worked out from: the lifted cells' count, whether a decoy shows, and the atlas.
@@ -619,6 +623,12 @@ struct WorldMapHome: View {
     /// switch takes effect when Home comes back to the front).
     private func updateWorn() {
         worn.update(store.wornWaysRequest(trails: savedLines, trailStamp: savedLinesStamp), store: store)
+        updateSubwayHops()
+    }
+
+    /// Reads the kept subway hops again (owner 2026-11-21): none in a decoy, nor while "Show worn paths" is off.
+    private func updateSubwayHops() {
+        subwayHops = WorldMapPreferences.showWornPaths() ? store.worldFog.subwayHops() : []
     }
 
     /// DEBUG `worn`: a footpath and a road at each level round the person, display only; nil in release builds.
@@ -1309,12 +1319,17 @@ extension WorldMapHome {
         if livePlanesOn, livePlanes.open(at: location) { return }
         let size = geometry.size
         let tallies = store.wornYourWorldTallies()
-        guard !tallies.isEmpty else { return }
+        guard !tallies.isEmpty || !subwayHops.isEmpty else { return }
         let anchors = shownMarkers.map(\.point) + shownPhotoPlaces.map(\.point) + tripPhotoPlaces.map(\.point)
         guard !WornWayLookup.isOnMarker(location, markers: anchors.map { viewport.screenPoint(for: $0, in: size) },
                                         companion: companionPoint(viewport: viewport, size: size)) else { return }
         let ground = viewport.geo(at: location, in: size)
         let reach = WornWayLookup.toleranceMetres(pointsPerMetre: viewport.pointsPerMetre(at: ground.latitude, in: size))
+        // A subway hop's dotted line (owner 2026-11-21) lies over the fog, so its tap wins.
+        if let hop = WorldSubwayHopLookup.hop(at: ground, within: reach, hops: subwayHops) {
+            pendingWayTap = WornWayPendingTap(hop: hop, serial: (pendingWayTap?.serial ?? 0) &+ 1)
+            return
+        }
         guard let key = WornWayLookup.way(at: ground, within: reach, tallies: tallies, today: WornDay.number(for: now)) else { return }
         pendingWayTap = WornWayPendingTap(key: key, serial: (pendingWayTap?.serial ?? 0) &+ 1)
     }
@@ -1331,7 +1346,7 @@ extension WorldMapHome {
         pendingWayTap = nil
         guard isFrontmost, passport?.isPresented != true, explore.openLandmark == nil, explore.openCity == nil,
               openPhotoPlace == nil, openTripPhotos == nil, placeSheet == nil, wornWaySheet == nil else { return }
-        wornWaySheet = .way(tap.key)
+        wornWaySheet = tap.route
     }
 
     /// VoiceOver's "Paths near you" on Sprout: the worn ways within 200 m, or a spoken line when there are none.
