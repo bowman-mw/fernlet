@@ -46,3 +46,31 @@ struct OnboardingWelcomeView: View {
             .accessibilityElement(children: .combine)
     }
 }
+
+/// The Welcome screen's notice on a phone that already holds a Fernlet passcode though nothing
+/// said onboarding finished (``OnboardingLaunchGate``): one line saying so and a way straight into
+/// the app that writes nothing over what is already there.
+struct OnboardingExistingSetupNotice: View {
+    var continueAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Fernlet is already set up on this iPhone, with a passcode.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(WorldPalette.mossInk)
+                .multilineTextAlignment(.center)
+            Button(action: continueAction) {
+                Text("Continue to Fernlet")
+                    .font(.fernlet(.body))
+                    .underline()
+                    .foregroundStyle(WorldPalette.mossInk)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("Opens the app and keeps your passcode, profile and entries as they are."))
+            .accessibilityIdentifier("onboarding.welcome.continueExisting")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+}

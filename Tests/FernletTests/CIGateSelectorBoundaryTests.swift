@@ -1353,7 +1353,9 @@ import Testing
     /// 609 → 611 on 2026-11-19 for `CloudKitExpectedSchemaTests` and `MirrorSyncHealthTests` (on no
     /// line), release review finding F2: the expected CloudKit schema held to the code, and the
     /// mirror's refused exports classified.
-    static let measuredInventoryRows = 611
+    /// 611 → 612 on 2026-11-20 for `OnboardingLaunchGateTests` (on no line), the owner's bug where a
+    /// launch before the first unlock showed onboarding to someone who had finished it.
+    static let measuredInventoryRows = 612
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has three

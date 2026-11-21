@@ -13329,6 +13329,22 @@
         }
       }
     },
+    "Continue to Fernlet" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar a Fernlet"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar a Fernlet"
+          }
+        }
+      }
+    },
     "Contrast %@:1" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -20476,6 +20492,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet incluye un registro privado de la actividad íntima. Las notas que agregues se sellan en este dispositivo. Viene activado."
+          }
+        }
+      }
+    },
+    "Fernlet is already set up on this iPhone, with a passcode." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet ya está configurado en este iPhone, con un código."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet ya está configurado en este iPhone, con un código."
           }
         }
       }
@@ -35386,6 +35418,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Se abre en"
+          }
+        }
+      }
+    },
+    "Opens the app and keeps your passcode, profile and entries as they are." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la app y mantiene tu código, tu perfil y tus registros tal como están."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la app y mantiene tu código, tu perfil y tus registros tal como están."
           }
         }
       }
@@ -76361,6 +76409,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Leyendo tus patrones recientes..."
+          }
+        }
+      }
+    },
+    "launch.waitForUnlock" : {
+      "comment" : "Launch screen line shown when Fernlet was opened before the phone's first unlock after a restart and cannot read its records yet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unlock your iPhone to open Fernlet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquea tu iPhone para abrir Fernlet."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquea tu iPhone para abrir Fernlet."
           }
         }
       }

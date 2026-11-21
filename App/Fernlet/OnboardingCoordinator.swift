@@ -233,6 +233,13 @@ final class OnboardingCoordinatorModel {
     @ObservationIgnored private let onComplete: () -> Void
     /// Where the lock step's deferral and the completion bit land (``OnboardingDefaults``).
     @ObservationIgnored private let defaults: UserDefaults
+    /// Whether this phone already holds a Fernlet passcode though nothing said onboarding finished
+    /// (``OnboardingLaunchGate``). Fixed for the flow's life.
+    @ObservationIgnored let existingSetup: Bool
+    /// The lock step is skipped over an existing passcode: its setup sheet would be refused anyway
+    /// (`FernletLockService.configure` never mints over a lock), and offering it would suggest a
+    /// second passcode could replace the first.
+    var skipsLockSetup: Bool { existingSetup }
 
     /// Exposed so the personal-details step can run the system age-range request. Onboarding is the one
     /// place Fernlet asks unprompted; everywhere else the request is user-initiated from Settings.
@@ -242,9 +249,13 @@ final class OnboardingCoordinatorModel {
     /// - Parameter defaults: Where the lock deferral and `hasCompletedOnboarding` are written.
     ///   Production uses `.standard`, which `FernletApp` reads; tests pass a throwaway suite.
     /// - Parameter onComplete: Called once onboarding finishes.
-    init(store: FernletStore, defaults: UserDefaults = .standard, onComplete: @escaping () -> Void) {
+    /// - Parameter existingSetup: A Fernlet passcode already exists on this phone
+    ///   (``OnboardingLaunchGate``): the flow offers "Continue to Fernlet" and skips its lock step.
+    init(store: FernletStore, defaults: UserDefaults = .standard, existingSetup: Bool = false,
+         onComplete: @escaping () -> Void) {
         self.store = store
         self.defaults = defaults
+        self.existingSetup = existingSetup
         self.onComplete = onComplete
         self.goal = store.settings.selectedGoal
         self.profile = store.settings.userProfile
@@ -253,10 +264,11 @@ final class OnboardingCoordinatorModel {
 
     /// Moves to the next ``Step``, or runs ``complete()`` when the last step finishes.
     func advance() {
-        guard let next = Step(rawValue: step.rawValue + 1) else {
+        guard var next = Step(rawValue: step.rawValue + 1) else {
             complete()
             return
         }
+        if skipsLockSetup && next == .lockSetup, let after = Step(rawValue: next.rawValue + 1) { next = after }
         step = next
     }
 
@@ -266,7 +278,8 @@ final class OnboardingCoordinatorModel {
     /// is draft state on this model, and both of those are simply re-written by the step's own
     /// action when the user chooses again.
     func back() {
-        guard let previous = Step(rawValue: step.rawValue - 1) else { return }
+        guard var previous = Step(rawValue: step.rawValue - 1) else { return }
+        if skipsLockSetup && previous == .lockSetup, let before = Step(rawValue: previous.rawValue - 1) { previous = before }
         step = previous
     }
 
@@ -277,6 +290,23 @@ final class OnboardingCoordinatorModel {
     var backActionIfAvailable: (() -> Void)? {
         guard canGoBack else { return nil }
         return { self.back() }
+    }
+
+    /// "Continue to Fernlet" on a phone that already holds a Fernlet passcode
+    /// (``OnboardingLaunchGate/Decision/onboarding(existingSetup:)``): marks onboarding finished and
+    /// opens the app, writing nothing else — no profile, goals, storage choice, companion or lock.
+    func continueWithExistingSetup() {
+        guard existingSetup else { return }
+        FernletAuditLog.log("onboarding.continuedWithExistingSetup")
+        finishKeepingExistingSetup()
+    }
+
+    /// The one finish that keeps everything: the store's completion witness, the device's bit, then
+    /// the hand-back. Shared by ``continueWithExistingSetup()`` and ``complete()``'s guard.
+    private func finishKeepingExistingSetup() {
+        store.markOnboardingFinished()
+        defaults.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
+        onComplete()
     }
 
     /// Records that lock setup was deferred ("Face ID later" or "Skip for now"), audits it, and advances.
@@ -357,6 +387,14 @@ final class OnboardingCoordinatorModel {
     ///   color, and the intimacy answer all land here, so a flow abandoned before this call leaves
     ///   the store untouched.
     func complete() {
+        // Never over a finished setup (owner's bug 2026-11-20): if anything already says onboarding
+        // finished — another device's settings arriving over iCloud mid-flow, or a launch that showed
+        // onboarding to someone who had finished it — nothing typed here replaces what they have.
+        guard !store.settings.hasCompletedOnboarding else {
+            FernletAuditLog.log("onboarding.complete.keptExistingSetup")
+            finishKeepingExistingSetup()
+            return
+        }
         store.completeOnboarding(profile: profile, preferences: nutritionPreferences, goal: goal)
         applyIntimacyTrackingChoice()
         store.replaceGoals(WorkoutPlanner.defaultGoals(
@@ -409,9 +447,12 @@ struct OnboardingCoordinator: View {
     init(
         store: FernletStore,
         detector: any ExistingCloudDataDetecting,
+        existingSetup: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _model = State(initialValue: OnboardingCoordinatorModel(store: store, onComplete: onComplete))
+        _model = State(initialValue: OnboardingCoordinatorModel(
+            store: store, existingSetup: existingSetup, onComplete: onComplete
+        ))
         self.detector = detector
     }
 
@@ -442,6 +483,11 @@ struct OnboardingCoordinator: View {
         switch model.step {
         case .welcome:
             OnboardingWelcomeView(stepText: model.step.indexText, continueAction: model.advance)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if model.existingSetup {
+                        OnboardingExistingSetupNotice(continueAction: model.continueWithExistingSetup)
+                    }
+                }
                 // R8: the App Review demo build's one extra button, under Continue (`ReviewDemo`).
                 #if FERNLET_DEMO
                 .safeAreaInset(edge: .bottom, spacing: 0) { ReviewDemoStartLink(start: model.startReviewDemo) }

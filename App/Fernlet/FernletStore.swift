@@ -5853,6 +5853,11 @@ final class FernletStore {
         return nil
     }
 
+    /// Marks onboarding finished without writing anything else (`DiaryStore.markOnboardingFinished`).
+    func markOnboardingFinished() {
+        diary.markOnboardingFinished()
+    }
+
     func completeOnboarding(profile: UserNutritionProfile, preferences: UserNutritionPreferences, goal: GoalType) {
         diary.completeOnboarding(profile: profile, preferences: preferences, goal: goal)
         // Onboarding is the fresh-install visibility determination point (the migration marker is

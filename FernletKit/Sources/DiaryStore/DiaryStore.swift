@@ -1555,6 +1555,17 @@ public final class DiaryStore {
         }
     }
 
+    /// Marks onboarding finished and touches nothing else — the "Continue to Fernlet" path over a
+    /// setup that already exists, where re-committing a fresh profile, goal or preferences would
+    /// overwrite the person's own (owner's bug 2026-11-20). Unlike ``completeOnboarding(profile:preferences:goal:)``
+    /// it stamps no visibility marker: no determination was made here.
+    public func markOnboardingFinished() {
+        guard !settings.hasCompletedOnboarding else { return }
+        batchSnapshotPersistence {
+            settings.hasCompletedOnboarding = true
+        }
+    }
+
     // MARK: - Recipes & ingredients (pure)
 
     /// Creates a manual recipe from editor inputs: resolves or mints custom-ingredient
