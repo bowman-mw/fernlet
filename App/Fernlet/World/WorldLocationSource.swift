@@ -167,6 +167,9 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   that could be a ride (`WorldSubwayHopWatch`), Motion's history for the gap is read once, and a gap that was
 ///   mostly automotive at a train's pace is handed to ``onSubwayHop`` to be kept as a dotted hop. No GPS is used for
 ///   it, and only where Motion is read.
+/// - **The tracker diary (owner 2026-11-21):** while its Settings switch is on, ``diary`` is told of each fence exit,
+///   fence armed, listen, trace, mode and Motion change, and counts each minute's readings by accuracy. Never a
+///   coordinate: `WorldDiaryEvent` has no field for one.
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
 ///   permission screens (step 5c: the map intro's Turn on location, and Settings → Home map's background
 ///   mapping after its explainer); nothing here asks on its own.
@@ -208,6 +211,8 @@ final class WorldLocationSource: NSObject {
     let flights = WorldFlightKeeper()
     /// The connected car (owner 2026-11-09, car signals): CarPlay or a car the car book knows, read with every reading.
     let cars = WorldCarKeeper()
+    /// The tracker diary (owner 2026-11-21): while its switch is on, what this source did and when, events only.
+    let diary = WorldTrackerDiary()
     /// The hotel check-in offer (owner 2026-11-15): told when a drive starts and ends, and fed every reading after
     /// ``onFix``, so the offer goes once the person leaves.
     let hotelOffers = WorldHotelOfferKeeper()
@@ -260,6 +265,8 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var quietListens = 0
     /// When a reading last read the audio route (``readsRoute(at:lastRead:)``); nil before one.
     @ObservationIgnored private var lastRouteRead: Date?
+    /// What Motion last said, as the diary last heard it (a change is a line).
+    @ObservationIgnored private var diaryMotion: WorldMotionKind?
     /// Subway hops' rules: the last good reading, to tell a gap from (``lookForHop(_:)``).
     @ObservationIgnored private var hops = WorldSubwayHopWatch()
     /// The motion query about a hop candidate, if one is in flight (tests await it).
@@ -348,11 +355,13 @@ final class WorldLocationSource: NSObject {
             if driving { self?.startTrace(.drive) } else { self?.endTrace(.drive) }
             self?.applyPace()
             self?.hotelDrivingChanged(driving)
+            self?.noteMode()
         }
         rides.onCyclingChanged = { [weak self] cycling in
             self?.riding.cycling = cycling
             if cycling { self?.startTrace(.ride) } else { self?.endTrace(.ride) }
             self?.applyPace()
+            self?.noteMode()
         }
         rides.carLinked = cars.isLinked
         cars.onLinkChanged = { [weak self] linked in self?.carLinkChanged(linked) }
@@ -371,11 +380,24 @@ final class WorldLocationSource: NSObject {
         }
     }
 
+    /// Tells the diary the mode car and bike detection is in now.
+    private func noteMode() {
+        diary.note(.mode, detail: WorldTrackerDiary.token(for: rides.mode))
+    }
+
+    /// Tells the diary when Motion's activity is no longer what it last heard.
+    private func noteMotion() {
+        let kind = rides.motionNow?.kind
+        guard kind != diaryMotion else { return }
+        diaryMotion = kind
+        if let kind { diary.note(.motion, detail: kind.rawValue) }
+    }
+
     /// A car connected or went (CarPlay, or a car the car book knows): car detection hears it, and a car connecting
     /// while the app runs in the background with nothing continuous on starts a listen.
     private func carLinkChanged(_ linked: Bool) {
         rides.carLinked = linked
-        if linked { startListening() }
+        if linked { startListening(because: .carLinked) }
     }
 
     /// Driving Focus turned on or off, or the Start a drive or End a drive action ran (owner 2026-11-09, car signals).
@@ -387,7 +409,7 @@ final class WorldLocationSource: NSObject {
             return
         }
         rides.hint(until: now.addingTimeInterval(Self.hintLife))
-        startListening(for: Self.hintListenTime)
+        startListening(for: Self.hintListenTime, because: .hint)
     }
 
     /// The cool-down, the listen and the walk follow's loop end with the source (the memory wall's ML1); each
@@ -500,6 +522,7 @@ final class WorldLocationSource: NSObject {
         isUpdating = false
         // A walk followed drops to its own pace once Fernlet is no longer open.
         applyPace()
+        diary.flush()
         // A drive's trace (or a ride's or a walk's follow), or a listen, keeps the updates running in the background
         // until it ends.
         guard trace == nil, listening == nil else { return }
@@ -656,7 +679,7 @@ final class WorldLocationSource: NSObject {
     /// fence.
     private func endPassengerListen() {
         guard listening != nil else { return }
-        endListening()
+        endListening(because: .passengerDriving)
         applyPace()
         guard trace == nil else { return }
         if walkSession == nil { manager.allowsBackgroundLocationUpdates = false }
@@ -685,10 +708,11 @@ final class WorldLocationSource: NSObject {
         guard Self.tracesDrive(permission: permission, backgroundMapping: backgroundMapping(),
                                declaresBackground: Self.declaresBackgroundLocation, walking: isWalking) else { return }
         endCoolDown()
-        endListening()
+        endListening(because: .traceTookOver)
         quietListens = 0
         if trace != nil { stopTrace(thenFence: false) }
         trace = kind
+        diary.note(.traceStarted, detail: WorldTrackerDiary.token(for: kind))
         if kind == .walk { startWalkTicks() } else { walk.reset() }
         applyPace()
         beforeTrace = (manager.activityType, manager.pausesLocationUpdatesAutomatically)
@@ -738,6 +762,8 @@ final class WorldLocationSource: NSObject {
     private func stopTrace(_ kind: WorldTrace? = nil, thenFence: Bool = true) {
         guard let trace, kind.map({ $0 == trace }) ?? true else { return }
         self.trace = nil
+        diary.note(.traceEnded, detail: WorldTrackerDiary.token(for: trace))
+        diary.flush()
         endCoolDown()
         endWalkTicks()
         applyPace()
@@ -791,6 +817,7 @@ final class WorldLocationSource: NSObject {
         region.notifyOnEntry = false
         region.notifyOnExit = true
         manager.startMonitoring(for: region)
+        diary.note(.fenceArmed, value: Int(region.radius.rounded()))
     }
 
     /// Takes the leaving fence down and ends a listen (background mapping off, Always withdrawn, the delete funnel).
@@ -800,7 +827,7 @@ final class WorldLocationSource: NSObject {
             manager.stopMonitoring(for: region)
         }
         guard listening != nil else { return }
-        endListening()
+        endListening(because: .mappingOff)
         applyPace()
         guard trace == nil else { return }
         if walkSession == nil { manager.allowsBackgroundLocationUpdates = false }
@@ -810,12 +837,14 @@ final class WorldLocationSource: NSObject {
     /// The person left the fence (or a car connected, or a hint came): continuous updates for `duration`
     /// (``listenTime`` by default), unless updates already run (the map in front, a walk, a trace) or a listen is
     /// on, the fence is no longer allowed, or a road trip's passenger is driving (``listens(roadTripPassenger:driving:)``).
-    fileprivate func startListening(for duration: TimeInterval = WorldLocationSource.listenTime) {
+    fileprivate func startListening(for duration: TimeInterval = WorldLocationSource.listenTime,
+                                    because reason: WorldListenReason) {
         guard listening == nil, trace == nil, !isUpdating, !isWalking, Self.declaresBackgroundLocation,
               Self.listens(roadTripPassenger: isRoadTripPassenger, driving: rides.isDriving),
               Self.armsFence(permission: permission, backgroundMapping: backgroundMapping(),
                              monitoringAvailable: true) else { return }
         manager.allowsBackgroundLocationUpdates = true
+        diary.note(.listenStarted, detail: reason.rawValue)
         listenUntil = Date().addingTimeInterval(duration)
         listening = Task { [weak self] in
             do {
@@ -835,6 +864,8 @@ final class WorldLocationSource: NSObject {
         listening?.cancel()
         listening = nil
         listenUntil = nil
+        diary.note(.listenEnded, detail: WorldListenEnd.timeUp.rawValue)
+        diary.flush()
         walk.reset()
         quietListens = min(quietListens + 1, Self.maxQuietListens)
         applyPace()
@@ -845,8 +876,9 @@ final class WorldLocationSource: NSObject {
         armFence()
     }
 
-    /// Cancels a running listen, leaving the updates to whoever takes them over.
-    private func endListening() {
+    /// Cancels a running listen, leaving the updates to whoever takes them over; the diary hears why.
+    private func endListening(because end: WorldListenEnd) {
+        if listening != nil { diary.note(.listenEnded, detail: end.rawValue) }
         listening?.cancel()
         listening = nil
         listenUntil = nil
@@ -934,6 +966,7 @@ final class WorldLocationSource: NSObject {
     func walkTick(at now: Date) -> Bool {
         guard trace == .walk else { return false }
         rides.tickNow()
+        noteMotion()
         let motion = rides.motionNow
         guard walk.isOver(at: now, motion: motion?.kind, motionSince: motion?.since) else { return true }
         FernletAuditLog.log("worldMap.location.walkStill")
@@ -987,6 +1020,7 @@ final class WorldLocationSource: NSObject {
         guard fix.point.isValid, fix.accuracy.isFinite, fix.accuracy >= 0 else { return }
         guard Self.handsOn(fix, after: lastHandedOn, spacing: thinSpacing) else { return }
         lastHandedOn = fix
+        diary.countReading(accuracy: fix.accuracy, at: fix.at)
         if listening != nil, Self.listenIsOver(until: listenUntil, now: Date()) { listenOver() }
         guard flights.admits(fix) else {
             if flights.isFlying { rides.takeOff(at: fix.at) }
@@ -1000,6 +1034,7 @@ final class WorldLocationSource: NSObject {
             cars.refresh()
         }
         rides.handle(fix)
+        noteMotion()
         if rides.isDriving { startTrace(.drive) } else if rides.isCycling { startTrace(.ride) }
         followWalk(fix)
         var stamped = fix
@@ -1014,7 +1049,7 @@ final class WorldLocationSource: NSObject {
         cars.noteReading(stamped, mode: rides.mode)
         guard lowPower, trace == nil else { return }
         armFence(at: stamped)
-        if Self.listens(afterLowPowerSpeed: stamped.speed) { startListening() }
+        if Self.listens(afterLowPowerSpeed: stamped.speed) { startListening(because: .fastReading) }
     }
 
     /// iOS paused the updates (the car or the bike has stood still a while): the end hint, so the trace or
@@ -1037,7 +1072,7 @@ final class WorldLocationSource: NSObject {
               !flights.isInFlight(visit.arrived) else { return }
         quietListens = 0
         onVisit?(visit)
-        if Self.listensAfterVisit(departed: visit.departed, now: Date()) { startListening() }
+        if Self.listensAfterVisit(departed: visit.departed, now: Date()) { startListening(because: .visitDeparture) }
     }
 
     /// How recently a visit's departure must have been for it to start a listen (iOS often reports one late).
@@ -1114,7 +1149,10 @@ extension WorldLocationSource: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
         // The person left the leaving fence (iOS relaunches Fernlet for it when it was closed): listen a while.
         guard region.identifier == Self.fenceIdentifier else { return }
-        Task { @MainActor in self.startListening() }
+        Task { @MainActor in
+            self.diary.note(.fenceExit)
+            self.startListening(because: .fenceExit)
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?,

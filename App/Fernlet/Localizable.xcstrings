@@ -5606,6 +5606,22 @@
     "45" : {
 
     },
+    "48 hours of what background mapping did, on this iPhone. No places." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "48 horas de lo que hizo el mapeo en segundo plano, en este iPhone. Sin lugares."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "48 horas de lo que hizo el mapeo en segundo plano, en este iPhone. Sin lugares."
+          }
+        }
+      }
+    },
     "5 each side" : {
       "localizations" : {
         "es" : {
@@ -26431,6 +26447,22 @@
         }
       }
     },
+    "It stays on this iPhone, encrypted with your map. Delete map history erases it, and so does turning the diary off." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se queda en este iPhone, cifrado con tu mapa. Borrar el historial del mapa lo elimina, y desactivar el diario también."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se queda en este iPhone, cifrado con tu mapa. Borrar el historial del mapa lo elimina, y desactivar el diario también."
+          }
+        }
+      }
+    },
     "It stays on your Private panel." : {
       "localizations" : {
         "es" : {
@@ -26985,6 +27017,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Dejar los datos de Fernlet fuera de las copias de seguridad del dispositivo?"
+          }
+        }
+      }
+    },
+    "Keep a tracker diary" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llevar un diario del rastreador"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llevar un diario del rastreador"
           }
         }
       }
@@ -33977,6 +34025,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aún nada. Describe una comida cuando estés ^[listo](inflect: true)."
+          }
+        }
+      }
+    },
+    "Nothing yet. Lines appear as background mapping works." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nada todavía. Las líneas aparecen a medida que trabaja el mapeo en segundo plano."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nada todavía. Las líneas aparecen a medida que trabaja el mapeo en segundo plano."
           }
         }
       }
@@ -52096,6 +52160,22 @@
         }
       }
     },
+    "Times and counts only. No place is ever written here." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo horas y recuentos. Aquí nunca se escribe ningún lugar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo horas y recuentos. Aquí nunca se escribe ningún lugar."
+          }
+        }
+      }
+    },
     "Times without a time zone" : {
       "comment" : "Airports: the heading of how a Flighty file's times are read",
       "localizations" : {
@@ -52682,6 +52762,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tour de Francia: %@ en bici. Que no se entere el pelotón."
+          }
+        }
+      }
+    },
+    "Tracker diary" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diario del rastreador"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diario del rastreador"
           }
         }
       }
@@ -54451,6 +54547,22 @@
         }
       }
     },
+    "View the diary" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver el diario"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver el diario"
+          }
+        }
+      }
+    },
     "Viewfinder ready" : {
       "localizations" : {
         "es" : {
@@ -55409,6 +55521,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lo que Fernlet muestra, lee y protege."
+          }
+        }
+      }
+    },
+    "What Fernlet's background mapping did over the last 48 hours, newest first." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo que hizo el mapeo en segundo plano de Fernlet en las últimas 48 horas, lo más reciente primero."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo que hizo el mapeo en segundo plano de Fernlet en las últimas 48 horas, lo más reciente primero."
           }
         }
       }
@@ -92081,6 +92209,30 @@
         }
       }
     },
+    "settings.search.title.trackerDiary" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tracker diary"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diario del rastreador"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diario del rastreador"
+          }
+        }
+      }
+    },
     "settings.search.title.turnAIOff" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -95266,6 +95418,702 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ritmo, nota de técnica"
+          }
+        }
+      }
+    },
+    "trackerDiary.fenceArmed" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Watching a circle of %lld m for you to leave"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vigilando un círculo de %lld m por si sales"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vigilando un círculo de %lld m por si sales"
+          }
+        }
+      }
+    },
+    "trackerDiary.fenceExit" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Woke: you left the circle Fernlet was watching"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activado: saliste del círculo que Fernlet vigilaba"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activado: saliste del círculo que Fernlet vigilaba"
+          }
+        }
+      }
+    },
+    "trackerDiary.listen.carLinked" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started checking: a car connected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: se conectó un coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: se conectó un carro"
+          }
+        }
+      }
+    },
+    "trackerDiary.listen.fastReading" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started checking: a reading faster than walking"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: una lectura más rápida que caminar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: una lectura más rápida que caminar"
+          }
+        }
+      }
+    },
+    "trackerDiary.listen.fenceExit" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started checking: you left the circle"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: saliste del círculo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: saliste del círculo"
+          }
+        }
+      }
+    },
+    "trackerDiary.listen.hint" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started checking: Driving Focus or Start a drive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: modo Conducción o Iniciar un trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: modo Conducción o Iniciar un trayecto"
+          }
+        }
+      }
+    },
+    "trackerDiary.listen.visitDeparture" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started checking: you left a place you stopped at"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: saliste de un lugar donde paraste"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: saliste de un lugar donde paraste"
+          }
+        }
+      }
+    },
+    "trackerDiary.listenEnd.mappingOff" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped checking: background mapping went off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: se desactivó el mapeo en segundo plano"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: se desactivó el mapeo en segundo plano"
+          }
+        }
+      }
+    },
+    "trackerDiary.listenEnd.passenger" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped checking: a road trip friend's iPhone maps this drive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: el iPhone de un amigo del viaje mapea este trayecto"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: el iPhone de un amigo del viaje mapea este trayecto"
+          }
+        }
+      }
+    },
+    "trackerDiary.listenEnd.timeUp" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped checking: nothing found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: no encontró nada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: no encontró nada"
+          }
+        }
+      }
+    },
+    "trackerDiary.listenEnd.traceTookOver" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped checking: found something to follow"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: encontró algo que seguir"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de comprobar: encontró algo que seguir"
+          }
+        }
+      }
+    },
+    "trackerDiary.mode.cycling" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Now on a bike"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora en bici"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora en bici"
+          }
+        }
+      }
+    },
+    "trackerDiary.mode.driving" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Now in a car, bus or train"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora en coche, autobús o tren"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora en carro, autobús o tren"
+          }
+        }
+      }
+    },
+    "trackerDiary.mode.onFoot" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Now on foot"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora a pie"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora a pie"
+          }
+        }
+      }
+    },
+    "trackerDiary.motion.automotive" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Motion: in a vehicle"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: en un vehículo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: en un vehículo"
+          }
+        }
+      }
+    },
+    "trackerDiary.motion.cycling" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Motion: cycling"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: en bici"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: en bici"
+          }
+        }
+      }
+    },
+    "trackerDiary.motion.running" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Motion: running"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: corriendo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: corriendo"
+          }
+        }
+      }
+    },
+    "trackerDiary.motion.stationary" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Motion: still"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: en reposo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: en reposo"
+          }
+        }
+      }
+    },
+    "trackerDiary.motion.unknown" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Motion: can't tell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: no se sabe"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: no se sabe"
+          }
+        }
+      }
+    },
+    "trackerDiary.motion.walking" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Motion: walking"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: caminando"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movimiento: caminando"
+          }
+        }
+      }
+    },
+    "trackerDiary.other" : {
+      "comment" : "Tracker diary: a line this version of Fernlet has no words for",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Something else"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otra cosa"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otra cosa"
+          }
+        }
+      }
+    },
+    "trackerDiary.readings" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Location readings this minute: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecturas de ubicación en este minuto: %lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecturas de ubicación en este minuto: %lld"
+          }
+        }
+      }
+    },
+    "trackerDiary.readings.detail" : {
+      "comment" : "Tracker diary: how many of a minute's location readings were how accurate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Within 10 m: %1$lld · within 30 m: %2$lld · within 65 m: %3$lld · rougher: %4$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A menos de 10 m: %1$lld · a menos de 30 m: %2$lld · a menos de 65 m: %3$lld · menos precisas: %4$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A menos de 10 m: %1$lld · a menos de 30 m: %2$lld · a menos de 65 m: %3$lld · menos precisas: %4$lld"
+          }
+        }
+      }
+    },
+    "trackerDiary.trace.drive" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started following a drive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a seguir un trayecto en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a seguir un trayecto en carro"
+          }
+        }
+      }
+    },
+    "trackerDiary.trace.ride" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started following a bike ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a seguir una salida en bici"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a seguir una salida en bici"
+          }
+        }
+      }
+    },
+    "trackerDiary.trace.walk" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started following a walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a seguir un paseo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a seguir una caminata"
+          }
+        }
+      }
+    },
+    "trackerDiary.traceEnd.drive" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped following the drive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de seguir el trayecto en coche"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de seguir el trayecto en carro"
+          }
+        }
+      }
+    },
+    "trackerDiary.traceEnd.ride" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped following the bike ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de seguir la salida en bici"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de seguir la salida en bici"
+          }
+        }
+      }
+    },
+    "trackerDiary.traceEnd.walk" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stopped following the walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de seguir el paseo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de seguir la caminata"
           }
         }
       }

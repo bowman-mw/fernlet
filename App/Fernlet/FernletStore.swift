@@ -839,6 +839,10 @@ final class FernletStore {
         }
         // A subway hop the source inferred (owner 2026-11-21): the fog keeper keeps it, never in a decoy.
         source.onSubwayHop = { [weak self] hop in self?.worldFog.keepSubwayHop(hop) }
+        // The tracker diary (owner 2026-11-21): sealed in the map's vault, nothing in a decoy, gone with every wipe.
+        source.diary.attach(vault: worldMapVault)
+        source.diary.mayWrite = { [weak self] in !(self?.duressSessionActive ?? true) }
+        worldFog.onCleared = { [weak source] in source?.diary.forget() }
         wireWorldRoadTrip(to: source, adopted: adopted != nil)
         return source
     }()

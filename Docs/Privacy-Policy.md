@@ -172,6 +172,13 @@
      way" (`SubwayHopStations`, through `AppleNearbyFinder`: two points, a 400 m radius and the public transport
      kind, on the person's tap only; the names are shown and never kept). A new use of an existing destination
      (Apple Maps) behind a tap; nothing goes to the developer and no promise is weakened under §13.
+     Also 2026-11-20 (the tracker diary, the owner's pick of 2026-11-21, "events only, no places"; THE SENTENCE IS
+     A DRAFT for the owner to approve word for word): §6 adds "If you turn on the tracker diary in Settings → Home
+     map, Fernlet keeps for 48 hours a list of what background mapping did and when …, with no places in it"
+     (`WorldTrackerDiary`: `tracker-diary.bin` in the map's own encrypted folder under the buffer key, event
+     tokens, times and counts only, no field for a coordinate; off by default, nothing in a decoy, removed by
+     the vault's wipe on every wipe path and when the switch goes off). On-device only; nothing is sent
+     anywhere and no promise is weakened under §13.
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -509,7 +516,7 @@ Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
 you're driving or riding, the road you take; to notice a trip starting, it asks iOS to tell it when
 you leave a place, then checks for a couple of minutes.
-If that check finds you walking, it keeps following your walk so the map uncovers along it, and stops a few minutes after you stop.
+If that check finds you walking, it keeps following your walk so the map uncovers along it, and stops a few minutes after you stop. If you turn on the tracker diary in Settings → Home map, Fernlet keeps for 48 hours a list of what background mapping did and when (that it woke, checked, or followed a walk or a drive, and how many location readings it got), with no places in it; it is encrypted on this iPhone with your map, never leaves it, and is deleted with your map history or when you turn the diary off.
 If you turn on background mapping, Fernlet also counts how often you pass along each part of the map, by road, rail or water, and when you last did, so the roads, railways and ferry crossings you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. It also keeps each ride (the day, when it started and ended, and the way it went) until you forget it or clear your map, so you can change or forget one ride. A ride with no GPS, such as a subway, is worked out afterwards from the gap in GPS and your iPhone's motion data, and kept as a straight dotted line between where the GPS stopped and where it came back; it uncovers nothing, and you can forget it like any ride. If you turn on background mapping or Log my bike
 rides, Fernlet uses your iPhone's motion data to tell when you're walking, riding in a car, on a train, bus or boat, or cycling, on this
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as

@@ -527,6 +527,16 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: .homeMap,
             route: .homeMap
         ),
+        // The tracker diary (owner 2026-11-21): Home map's switch and its page of what background mapping did.
+        SettingsSearchEntry(
+            title: "Tracker diary",
+            display: LocalizedStringResource(
+                "settings.search.title.trackerDiary", defaultValue: "Tracker diary",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["tracker diary", "diary", "tracker", "background mapping log", "log", "events", "debug", "listen", "fence"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
         // Round 7 (car and bike detection): Home map's "Log my bike rides".
         SettingsSearchEntry(
             title: "Log my bike rides",
