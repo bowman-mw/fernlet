@@ -16,6 +16,9 @@ public nonisolated enum WornWayKind: UInt8, Sendable, CaseIterable, Hashable {
     case rail = 2
     /// A ferry or any boat (reserved).
     case ferry = 3
+    /// A subway hop (owner 2026-11-21): a ride with no GPS, kept as a trip of two points, from the last good reading
+    /// before it to the first after. Never written to the counter: a hop has no way under it to wear.
+    case subway = 4
 }
 
 /// How worn a path or road looks. ``abandoned`` is the fourth look (owner's call 8): a way that faded below level 1.

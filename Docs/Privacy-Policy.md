@@ -164,6 +164,14 @@
      before behind the same off-by-default switch, so the effective date moves to November 20, 2026. Nothing
      new is kept (the map record is the same cells), nothing leaves the iPhone, and no promise is weakened
      under §13.
+     Also 2026-11-20 (subway hops; the owner picked "build subway hops now" on 2026-11-21; BOTH SENTENCES ARE
+     DRAFTS for the owner to approve word for word): §6 adds "A ride with no GPS, such as a subway, is worked
+     out afterwards from the gap in GPS and your iPhone's motion data, and kept as a straight dotted line …"
+     (`WorldSubwayHopWatch`; a trip of two points in the kept rides, no fog lifted, nothing counted), and "When
+     you tap a subway ride on your map, Fernlet asks Apple Maps for the stations near its two ends, in the same
+     way" (`SubwayHopStations`, through `AppleNearbyFinder`: two points, a 400 m radius and the public transport
+     kind, on the person's tap only; the names are shown and never kept). A new use of an existing destination
+     (Apple Maps) behind a tap; nothing goes to the developer and no promise is weakened under §13.
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -502,7 +510,7 @@ if you turn on the optional background mapping, which notes the places you stop 
 you're driving or riding, the road you take; to notice a trip starting, it asks iOS to tell it when
 you leave a place, then checks for a couple of minutes.
 If that check finds you walking, it keeps following your walk so the map uncovers along it, and stops a few minutes after you stop.
-If you turn on background mapping, Fernlet also counts how often you pass along each part of the map, by road, rail or water, and when you last did, so the roads, railways and ferry crossings you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. It also keeps each ride (the day, when it started and ended, and the way it went) until you forget it or clear your map, so you can change or forget one ride. If you turn on background mapping or Log my bike
+If you turn on background mapping, Fernlet also counts how often you pass along each part of the map, by road, rail or water, and when you last did, so the roads, railways and ferry crossings you use most can show on your map and fade when you stop using them; it is encrypted on this iPhone with the rest of your map and deleted with it. It also keeps each ride (the day, when it started and ended, and the way it went) until you forget it or clear your map, so you can change or forget one ride. A ride with no GPS, such as a subway, is worked out afterwards from the gap in GPS and your iPhone's motion data, and kept as a straight dotted line between where the GPS stopped and where it came back; it uncovers nothing, and you can forget it like any ride. If you turn on background mapping or Log my bike
 rides, Fernlet uses your iPhone's motion data to tell when you're walking, riding in a car, on a train, bus or boat, or cycling, on this
 iPhone only, so your trips map properly and, with Log my bike rides on, your bike rides are logged as
 exercise; it never keeps the motion data itself. To tell when you're driving, it also notes
@@ -539,7 +547,7 @@ To name a place you stop at, or to check where a photo you take on your own was 
 Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
 keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
 you look at your places.
-When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at a hotel; only that location is sent, with nothing about you attached.
+When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at a hotel; only that location is sent, with nothing about you attached. When you tap a subway ride on your map, Fernlet asks Apple Maps for the stations near its two ends, in the same way.
 
 **Airports and flights.** With Airports and flights on, Fernlet notes the airports you visit and the flights you take from your location, and keeps them in your passport, encrypted on this iPhone and carried only in the passport's own sealed backup if you use it.
 If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports, gate times, aircraft type and tail number; it doesn't keep the file and never contacts Flighty. The aircraft type and tail number stay in your passport, encrypted on this iPhone, so the map can point out a plane you've flown on and the passport can stamp each type you've flown.

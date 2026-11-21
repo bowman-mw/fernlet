@@ -36,11 +36,12 @@ import WorldMapStore
 extension WorldFogKeeper {
     // MARK: The UI's actions
 
-    /// The kept trips whose way passes through `cell`, newest first (the tap-a-path sheet).
+    /// The kept trips whose way passes through `cell`, newest first (the tap-a-path sheet). Never a subway hop: its
+    /// straight line crosses ways it never used, and it has its own sheet.
     func trips(through cell: HexCell) -> [WornTrip] {
         guard !isDecoy, tripStore.isLoaded else { return [] }
         do {
-            return try tripStore.trips(through: cell)
+            return try tripStore.trips(through: cell).filter { $0.kind != .subway }
         } catch {
             FernletAuditLog.log("worldMap.trips.readFailed")
             return []

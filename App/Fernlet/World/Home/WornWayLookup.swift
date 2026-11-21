@@ -87,8 +87,21 @@ nonisolated enum WornWayLookup {
 /// A tap on Home that found a worn way, waiting out a double-tap's second tap (which zooms the map instead) before
 /// its sheet opens; `serial` tells two taps on the same way apart.
 nonisolated struct WornWayPendingTap: Equatable, Sendable {
-    let key: WornWayKey
+    /// What the sheet opens on: the way, or the subway hop, the tap found.
+    let route: WornWaySheetRoute
     let serial: Int
+
+    /// A tap on a worn way.
+    init(key: WornWayKey, serial: Int) {
+        route = .way(key)
+        self.serial = serial
+    }
+
+    /// A tap on a subway hop's dotted line.
+    init(hop: WorldSubwayHop, serial: Int) {
+        route = .hop(hop)
+        self.serial = serial
+    }
 
     /// How long a tap waits for a second tap.
     static let doubleTapWindow: Duration = .milliseconds(350)

@@ -557,6 +557,19 @@ public final class WornTripStore {
         return found.sorted { $0.start > $1.start }
     }
 
+    /// The newest `limit` trips of `kind`, with their lines (each piece read once): the subway hops the map draws
+    /// from their own two points, since no counter holds them.
+    public func trips(kind: WornWayKind, limit: Int) throws -> [WornTrip] {
+        let wanted = summaries.filter { $0.kind == kind }.prefix(max(0, limit))
+        let ids = Set(wanted.map(\.id))
+        var found: [WornTrip] = []
+        // Bounded: at most `limit` trips, in at most maxChunks pieces.
+        for chunk in Set(wanted.map(\.chunk)).sorted() {
+            found += try readChunk(chunk).map(\.trip).filter { ids.contains($0.id) }
+        }
+        return found.sorted { $0.start > $1.start }
+    }
+
     /// Deletes trip `id` (forgotten by the person); whether it was kept. An emptied piece's file goes.
     @discardableResult
     public func delete(_ id: UUID) throws -> Bool {

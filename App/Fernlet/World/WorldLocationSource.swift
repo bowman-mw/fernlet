@@ -163,6 +163,10 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   metres or better, or the location indicator shows; the readings are thinned here to the same spacing instead
 ///   (``handsOn(_:after:spacing:)``), so the keepers do no more work than before; (3) a listen ends by the clock of
 ///   the readings as well as by its sleeping task, which does not run while suspended (``listenUntil``).
+/// - **Subway hops (owner 2026-11-21):** underground nothing is traced. When a good reading comes back after a gap
+///   that could be a ride (`WorldSubwayHopWatch`), Motion's history for the gap is read once, and a gap that was
+///   mostly automotive at a train's pace is handed to ``onSubwayHop`` to be kept as a dotted hop. No GPS is used for
+///   it, and only where Motion is read.
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
 ///   permission screens (step 5c: the map intro's Turn on location, and Settings → Home map's background
 ///   mapping after its explainer); nothing here asks on its own.
@@ -195,6 +199,8 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored var onFix: ((WorldFix) -> Void)?
     /// Called with every low-power visit (Always mode).
     @ObservationIgnored var onVisit: ((WorldVisit) -> Void)?
+    /// Called with each subway hop found (``lookForHop(_:)``); the fog keeper keeps it.
+    @ObservationIgnored var onSubwayHop: ((WorldSubwayHopCandidate) -> Void)?
 
     /// Car and bike detection (round 7), fed every reading this source hands on.
     let rides = WorldRideKeeper()
@@ -254,6 +260,10 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private var quietListens = 0
     /// When a reading last read the audio route (``readsRoute(at:lastRead:)``); nil before one.
     @ObservationIgnored private var lastRouteRead: Date?
+    /// Subway hops' rules: the last good reading, to tell a gap from (``lookForHop(_:)``).
+    @ObservationIgnored private var hops = WorldSubwayHopWatch()
+    /// The motion query about a hop candidate, if one is in flight (tests await it).
+    @ObservationIgnored private(set) var hopQuery: Task<Void, Never>?
     /// The walk follow's rules: what a listen has seen of a walk, and whether a followed one still moves.
     @ObservationIgnored private var walk = WorldWalkFollow()
     /// The walk follow's loop: it ticks every ``walkTickInterval`` so a walk that stopped (no readings come from a
@@ -386,6 +396,7 @@ final class WorldLocationSource: NSObject {
         coolDown?.cancel()
         listening?.cancel()
         walkTicks?.cancel()
+        hopQuery?.cancel()
     }
 
     /// Home's map came to the front or went behind a panel, a sheet or another tab.
@@ -848,6 +859,30 @@ final class WorldLocationSource: NSObject {
         return now >= until
     }
 
+    // MARK: Subway hops (owner 2026-11-21)
+
+    /// Shows a stamped reading to the hop rules; a candidate (the first good reading after a gap that could be a
+    /// ride) asks Motion's history about the gap, once, where Motion is read.
+    private func lookForHop(_ fix: WorldFix) {
+        let candidate = hops.observe(fix, moving: rides.isDriving || rides.isCycling)
+        guard let candidate, rides.usesMotion, hopQuery == nil else { return }
+        hopQuery = Task { [weak self] in
+            guard let samples = await self?.rides.motion.samples(from: candidate.left, to: candidate.arrived) else { return }
+            self?.tookHop(candidate, samples: samples)
+        }
+    }
+
+    /// Motion's history for a candidate's gap came back: a hop when it was mostly automotive at a train's pace
+    /// (`WorldSubwayHopWatch.isHop`), unless a drive or a ride turned out to be on, or Motion went off meanwhile.
+    private func tookHop(_ candidate: WorldSubwayHopCandidate, samples: [WorldMotionSample]) {
+        hopQuery = nil
+        guard rides.usesMotion, !rides.isDriving, !rides.isCycling else { return }
+        let automotive = WorldSubwayHopWatch.automotiveSeconds(in: samples, from: candidate.left, to: candidate.arrived)
+        guard WorldSubwayHopWatch.isHop(candidate, automotive: automotive) else { return }
+        FernletAuditLog.log("worldMap.location.subwayHop")
+        onSubwayHop?(candidate)
+    }
+
     // MARK: A walk nobody started, followed (owner 2026-11-21)
 
     /// Whether a walk may be followed, or go on being followed: never once car or bike detection says a drive or a
@@ -974,6 +1009,7 @@ final class WorldLocationSource: NSObject {
         stamped.atAirport = flights.currentAirport != nil
         latest = stamped
         onFix?(stamped)
+        lookForHop(stamped)
         hotelOffers.noteReading(stamped.point)
         cars.noteReading(stamped, mode: rides.mode)
         guard lowPower, trace == nil else { return }

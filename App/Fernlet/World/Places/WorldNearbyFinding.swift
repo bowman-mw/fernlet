@@ -2,7 +2,7 @@ import Foundation
 import WorldMapStore
 
 /// A kind of place Apple Maps can be asked for around a point (owner, 2026-11-15: "Can be used for things like
-/// food tracking and workouts too"). Only the hotel is asked for today; the others are here so the meal and workout
+/// food tracking and workouts too"). The hotel and, on a tapped subway hop, the station are asked for today; the others are here so the meal and workout
 /// screens can use the same seam later. Frozen tokens.
 nonisolated enum WorldNearbyCategory: String, CaseIterable, Sendable {
     /// A hotel (the drive-end check-in offer).
@@ -11,6 +11,8 @@ nonisolated enum WorldNearbyCategory: String, CaseIterable, Sendable {
     case restaurant
     /// A gym (for workouts, later).
     case gym
+    /// A public transport station (a tapped subway hop's two ends, owner 2026-11-15).
+    case station
 }
 
 /// One place an Apple Maps lookup returned: its kind, Apple's name for it and where it is. Plain values, held in

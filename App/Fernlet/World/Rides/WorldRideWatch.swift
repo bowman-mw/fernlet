@@ -15,7 +15,9 @@ import WorldMapStore
 ///   on a bike is no drive, nor a GPS spike on foot).
 /// - **Driving, by Motion:** confident (medium or high) automotive activity that has held ``motionHold`` as
 ///   far as the samples are known, unless a reading since it began was at walking pace (the speed floor).
-///   A short automotive flicker between walking samples starts nothing.
+///   A short automotive flicker between walking samples starts nothing, and nor does a car's activity that Motion's
+///   history shows already ended on foot (2026-11-20: a ride read back after it was over started a drive and ended
+///   it in the same step).
 /// - **A drive survives red lights and traffic:** a quiet minute or two, or slow readings, never end it. It
 ///   ends on foot (a confident walking or running sample after it started, or walking-pace readings spanning
 ///   ``footTime`` after the last fast one that also carried the person ``footDistance`` beyond their accuracy at
@@ -271,12 +273,20 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
             guard sampleAt.map({ sample.at > $0 }) ?? true else { continue }
             sampleAt = sample.at
             events += settle(at: sample.at)
-            // The activity before this sample held until it.
-            events += startByMotion(knownThrough: sample.at)
+            // The activity before this sample held until it. A car's activity that this very sample ends on foot is a
+            // ride already over (read from Motion's history after a subway ride, or a wake long after a drive): no
+            // drive starts only to end in the same step, which used to cool a trace down and look for a hotel.
+            if !Self.endsOnFoot(sample.kind, carLinked: carLinked) { events += startByMotion(knownThrough: sample.at) }
             events += take(sample)
         }
         if let end { events += startByMotion(knownThrough: end) }
         return events
+    }
+
+    /// Whether a sample of `kind` ends a drive on foot at once: Motion's walking or running, unless a car is connected
+    /// (``take(_:)``).
+    static func endsOnFoot(_ kind: WorldMotionKind, carLinked: Bool) -> Bool {
+        (kind == .walking || kind == .running) && !carLinked
     }
 
     /// Ends a drive or ride that has gone quiet, as of `date`; what changed.

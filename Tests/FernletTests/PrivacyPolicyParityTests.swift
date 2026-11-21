@@ -159,6 +159,9 @@ struct PrivacyPolicyParityTests {
     /// The marker added 2026-11-20 (following a walk in the background, owner's pick A) pins that the check after
     /// leaving a place goes on following a walk it finds: `it keeps following your walk`.
     ///
+    /// The two markers added 2026-11-20 (subway hops) pin that a ride with no GPS is kept as a straight dotted line
+    /// worked out from the gap and the motion data, and that a tap on one asks Apple Maps for its stations.
+    ///
     /// The two markers added 2026-11-15 (hotel check-in) pin the drive-end lookup: Apple Maps is asked what is
     /// nearby when a drive ends, and only that location is sent.
     private static let substanceMarkers = [
@@ -218,6 +221,9 @@ struct PrivacyPolicyParityTests {
         "to notice a trip starting",
         // Following a walk in the background (2026-11-20, a draft until the owner approves it word for word).
         "it keeps following your walk",
+        // Subway hops (2026-11-20, drafts until the owner approves them word for word).
+        "kept as a straight dotted line between where the GPS stopped",
+        "asks Apple Maps for the stations near its two ends",
         "so your trips map properly",
         // Car signals (2026-11-09): what the car book keeps of the Bluetooth devices seen on drives.
         "scrambled tag for each",

@@ -3,16 +3,18 @@ import FernletUI
 import SwiftUI
 import WorldMapStore
 
-/// What a worn way's sheet opens on: the way a tap found, or (VoiceOver's "Paths near you" on the companion) the
-/// ways near the person, each opening the same page.
+/// What a worn way's sheet opens on: the way a tap found, (VoiceOver's "Paths near you" on the companion) the
+/// ways near the person, each opening the same page, or the subway hop a tap found (owner 2026-11-21).
 nonisolated enum WornWaySheetRoute: Identifiable, Equatable, Sendable {
     case way(WornWayKey)
     case nearby([WornWayLookup.Nearby])
+    case hop(WorldSubwayHop)
 
     var id: String {
         switch self {
         case let .way(key): "way-\(key.cell.q)-\(key.cell.r)-\(key.kind.rawValue)"
         case let .nearby(ways): "nearby-\(ways.count)-\(ways.first.map { "\($0.key.cell.q)-\($0.key.cell.r)" } ?? "")"
+        case let .hop(hop): "hop-\(hop.id.uuidString)"
         }
     }
 }
@@ -59,6 +61,8 @@ struct WornWaySheet: View {
                     WornWayDetail(key: key, book: book) { dismiss() }
                 case let .nearby(ways):
                     WornWayNearbyList(ways: ways, book: book) { dismiss() }
+                case let .hop(hop):
+                    SubwayHopDetail(hop: hop, book: book) { dismiss() }
                 }
             }
             .toolbar {
@@ -296,6 +300,8 @@ nonisolated enum WornWayCopy {
         case .road:
             LocalizedStringResource("wornWay.title.road", defaultValue: "Frequent road",
                                     comment: "Worn way sheet: the name of a road the person drives often")
+        case .subway:
+            SubwayHopCopy.title
         }
     }
 
@@ -305,6 +311,7 @@ nonisolated enum WornWayCopy {
         case .rail: WornTransitAskCopy.train
         case .ferry: WornTransitAskCopy.ferry
         case .road: road
+        case .subway: SubwayHopCopy.subway
         }
     }
 
@@ -320,10 +327,13 @@ nonisolated enum WornWayCopy {
         case .road:
             LocalizedStringResource("wornWay.thisWas.road", defaultValue: "This was a road",
                                     comment: "Worn way sheet: changes the path, or one ride, to a road (a car or a bus)")
+        case .subway:
+            SubwayHopCopy.thisWasSubway
         }
     }
 
-    /// The two kinds `kind` isn't, in a fixed order.
+    /// The two kinds `kind` isn't, in a fixed order. Never a subway: a hop has no way to move a ride onto, and a
+    /// traced ride was not underground.
     static func otherKinds(than kind: WornWayKind) -> [WornWayKind] {
         [WornWayKind.road, .rail, .ferry].filter { $0 != kind }
     }

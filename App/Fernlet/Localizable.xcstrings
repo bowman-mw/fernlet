@@ -94662,6 +94662,222 @@
         }
       }
     },
+    "subwayHop.fromOnly" : {
+      "comment" : "Subway hop sheet: only the station the ride started at was found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desde %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desde %@"
+          }
+        }
+      }
+    },
+    "subwayHop.fromTo" : {
+      "comment" : "Subway hop sheet: the stations a ride started and ended at, as Apple Maps names them",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From %1$@ to %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De %1$@ a %2$@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De %1$@ a %2$@"
+          }
+        }
+      }
+    },
+    "subwayHop.guess" : {
+      "comment" : "Subway hop sheet: explains that the ride is a guess and why its line is straight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet guessed this from a gap in GPS and your iPhone's motion data. It draws a straight dotted line between where the GPS stopped and where it came back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet lo ha deducido de un tramo sin GPS y de los datos de movimiento de tu iPhone. Dibuja una línea recta de puntos entre donde se perdió el GPS y donde volvió."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fernlet lo dedujo de un tramo sin GPS y de los datos de movimiento de tu iPhone. Dibuja una línea recta de puntos entre donde se perdió el GPS y donde volvió."
+          }
+        }
+      }
+    },
+    "subwayHop.kind" : {
+      "comment" : "The kind of a kept ride that went underground: a subway or metro",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Subway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metro"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metro"
+          }
+        }
+      }
+    },
+    "subwayHop.looking" : {
+      "comment" : "Subway hop sheet: shown while Apple Maps is asked for the station names",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Looking up the stations…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscando las estaciones…"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscando las estaciones…"
+          }
+        }
+      }
+    },
+    "subwayHop.noStations" : {
+      "comment" : "Subway hop sheet: Apple Maps gave no station near either end of the ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No station names found."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se han encontrado nombres de estaciones."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontraron nombres de estaciones."
+          }
+        }
+      }
+    },
+    "subwayHop.thisWas" : {
+      "comment" : "Changes a kept ride to a subway or metro ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This was a subway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto fue un metro"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto fue un metro"
+          }
+        }
+      }
+    },
+    "subwayHop.title" : {
+      "comment" : "Subway hop sheet: title of a ride with no GPS that Fernlet guessed was a subway ride",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Possible subway ride"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posible trayecto en metro"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posible trayecto en metro"
+          }
+        }
+      }
+    },
+    "subwayHop.toOnly" : {
+      "comment" : "Subway hop sheet: only the station the ride ended at was found",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "To %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hasta %@"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hasta %@"
+          }
+        }
+      }
+    },
     "tab.food" : {
       "comment" : "Tab bar: meals, recipes and nutrition",
       "extractionState" : "extracted_with_value",
