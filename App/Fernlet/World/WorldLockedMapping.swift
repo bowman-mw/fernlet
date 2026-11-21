@@ -68,6 +68,8 @@ final class WorldLockedMappingHolder {
         started.rides.usesMotion = started.rides.motion.permission == .allowed
         // A subway hop found locked is kept at once: the kept trips are under the buffer key.
         started.onSubwayHop = { [weak keeper] hop in keeper?.keepSubwayHop(hop) }
+        // The tracker diary is under the buffer key too, so a locked wake is in it (when its switch can be read).
+        started.diary.attach(vault: mapVault)
         started.cars.isDecoy = true
         started.flights.attach(vault: mapVault)
         // A road trip's book and line are under the buffer key: a passenger traces no drive, and the iPhone that maps

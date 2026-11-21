@@ -66,6 +66,7 @@ extension SettingsSearchSynonyms {
                             "frecuentes", "abandonados"],
         "Live planes nearby": ["aviones en directo cerca", "aviones", "avión", "aeronaves", "vuelos",
                                "rastreador de vuelos", "adsb", "cielo"],
+        "Tracker diary": ["diario del rastreador", "diario", "rastreador", "registro", "eventos", "mapeo en segundo plano"],
         "Log my bike rides": ["registrar mis salidas en bici", "bici", "bicicleta", "ciclismo", "movimiento",
                               "movimiento y forma física"],
         "Remember places I stop at": ["recordar los lugares donde me detengo", "lugares", "visitas", "dónde has estado",
