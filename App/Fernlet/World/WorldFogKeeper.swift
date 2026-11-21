@@ -147,6 +147,9 @@ final class WorldFogKeeper {
     /// its workout log, which holds Fernlet's own bike rides and Health's workouts from any app when they are read in.
     /// None by default.
     @ObservationIgnored var cyclingWorkouts: @MainActor (DateInterval) -> [DateInterval] = { _ in [] }
+    /// Called at the end of ``clearAll()``, after the vault's folder went: the store has the tracker diary forget
+    /// its lines here, so every wipe path that clears the map clears it (owner 2026-11-21).
+    @ObservationIgnored var onCleared: (@MainActor () -> Void)?
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
     /// The frequent roads the map draws: each way's trip count and last day (option B, owner 2026-11-15), published
@@ -575,6 +578,8 @@ final class WorldFogKeeper {
         let passportGone = atlas.clearAll()
         let cornerGone = cornerNudge.clearAll()
         let vaultGone = vault.clearAll()
+        // What else lives in the vault's folder and holds lines in memory (the tracker diary) forgets them now.
+        onCleared?()
         return vaultGone && pictureGone && driveGone && passportGone && cornerGone
     }
 

@@ -7,6 +7,8 @@ import Foundation
 ///   starts on its own from the first open, with no prompt of its own beyond iOS's location prompt.
 /// - **Always, low power** (off by default): iOS's visit and significant-change updates fill the fog
 ///   along the day. Needs the Always permission, asked only when the person turns this on.
+/// - **Tracker diary** (off by default; owner, 2026-11-21): whether `WorldTrackerDiary` keeps the last 48 hours of
+///   what background mapping did and when, events only, in the map's vault. Off forgets it.
 /// - **Save new routes** (on by default; owner, 2026-10-22): whether a finished walk keeps its line on
 ///   this iPhone. Off stops new lines only: the walk still lifts the fog and logs its distance.
 /// - **Remember where your workout spaces are** (asked once, in workout-space setup; step 6a): not asked
@@ -54,6 +56,7 @@ nonisolated enum WorldMapPreferences {
         static let alwaysLowPower = "fernlet.worldMap.alwaysLowPower"
         static let saveNewRoutes = "fernlet.worldMap.saveNewRoutes"
         static let showWornPaths = "fernlet.worldMap.showWornPaths"
+        static let trackerDiary = "fernlet.worldMap.trackerDiary"
         static let rememberSpaces = "fernlet.worldMap.rememberSpaces"
         static let remembersPlaces = "fernlet.worldMap.rememberPlaces"
         static let remembersEatingOut = "fernlet.worldMap.rememberEatingOut"
@@ -167,6 +170,17 @@ nonisolated enum WorldMapPreferences {
     /// Records that the calendar flights' upgrade ran.
     static func setCalendarFlightsUpgraded(in defaults: UserDefaults = .standard) {
         defaults.set(true, forKey: Key.calendarFlightsUpgraded)
+    }
+
+    /// Whether the tracker diary is on (owner 2026-11-21; default off): `WorldTrackerDiary` keeps 48 hours of what
+    /// background mapping did, events only.
+    static func trackerDiary(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.trackerDiary)
+    }
+
+    /// Sets the tracker diary's switch.
+    static func setTrackerDiary(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.trackerDiary)
     }
 
     /// Whether "Log my bike rides" is on (default off).
@@ -357,6 +371,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.alwaysLowPower)
         defaults.removeObject(forKey: Key.saveNewRoutes)
         defaults.removeObject(forKey: Key.showWornPaths)
+        defaults.removeObject(forKey: Key.trackerDiary)
         defaults.removeObject(forKey: Key.rememberSpaces)
         defaults.removeObject(forKey: Key.remembersPlaces)
         defaults.removeObject(forKey: Key.remembersEatingOut)
