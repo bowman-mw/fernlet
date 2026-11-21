@@ -159,6 +159,9 @@ struct PrivacyPolicyParityTests {
     /// The marker added 2026-11-20 (following a walk in the background, owner's pick A) pins that the check after
     /// leaving a place goes on following a walk it finds: `it keeps following your walk`.
     ///
+    /// The marker added 2026-11-21 pins that the same check runs when Fernlet is closed while the person is on the
+    /// move (the listen on leaving the front): `It checks the same way when you close Fernlet`.
+    ///
     /// The two markers added 2026-11-20 (the tracker diary) pin that it is opt-in and holds no places.
     ///
     /// The two markers added 2026-11-20 (subway hops) pin that a ride with no GPS is kept as a straight dotted line
@@ -223,6 +226,8 @@ struct PrivacyPolicyParityTests {
         "to notice a trip starting",
         // Following a walk in the background (2026-11-20, a draft until the owner approves it word for word).
         "it keeps following your walk",
+        // The check on leaving Fernlet while moving (2026-11-21, a draft until the owner approves it word for word).
+        "It checks the same way when you close Fernlet while you're on the move",
         // Subway hops (2026-11-20, drafts until the owner approves them word for word).
         "kept as a straight dotted line between where the GPS stopped",
         "asks Apple Maps for the stations near its two ends",

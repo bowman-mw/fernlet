@@ -163,6 +163,15 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   metres or better, or the location indicator shows; the readings are thinned here to the same spacing instead
 ///   (``handsOn(_:after:spacing:)``), so the keepers do no more work than before; (3) a listen ends by the clock of
 ///   the readings as well as by its sleeping task, which does not run while suspended (``listenUntil``).
+/// - **Leaving the front while moving (the owner's phone log of the evening of 2026-11-20):** every time Fernlet
+///   went to the background on a ten-minute walk the updates stopped in the same second, and no fence exit came
+///   during the walk (iOS delivered eight fence or visit wakes all evening). So when Fernlet leaves the front with
+///   nothing continuous running, and the recent readings or Motion show the person moving
+///   (``listensOnLeaving(readingsMoving:motion:motionKnown:now:)``, `WorldMoveWatch`), a listen starts at once, with
+///   the fence armed behind it as ever; the readings taken with Fernlet open already count toward its walk, so a
+///   walk under way is followed within seconds. Standing still starts none: the updates stop and only the fence
+///   watches, exactly as before. A trace or a listen already running when Fernlet comes to the front or leaves it
+///   is never touched by either.
 /// - **Subway hops (owner 2026-11-21):** underground nothing is traced. When a good reading comes back after a gap
 ///   that could be a ride (`WorldSubwayHopWatch`), Motion's history for the gap is read once, and a gap that was
 ///   mostly automotive at a train's pace is handed to ``onSubwayHop`` to be kept as a dotted hop. No GPS is used for
@@ -273,6 +282,8 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored private(set) var hopQuery: Task<Void, Never>?
     /// The walk follow's rules: what a listen has seen of a walk, and whether a followed one still moves.
     @ObservationIgnored private var walk = WorldWalkFollow()
+    /// Whether the recent readings show the person moving (asked when Fernlet leaves the front).
+    @ObservationIgnored private var moves = WorldMoveWatch()
     /// The walk follow's loop: it ticks every ``walkTickInterval`` so a walk that stopped (no readings come from a
     /// still phone) ends.
     @ObservationIgnored private var walkTicks: Task<Void, Never>?
@@ -516,8 +527,9 @@ final class WorldLocationSource: NSObject {
     }
 
     /// Stops the map's updates (the app went to the background) and arms the leaving fence where the person is;
-    /// a walk keeps them running until it ends.
-    func stopForeground() {
+    /// a walk keeps them running until it ends. `leavingFront` (the app's own edges) also starts a listen at once
+    /// when the person is moving; ending a walk the person started, or losing the permission, never does.
+    func stopForeground(leavingFront: Bool = true) {
         guard isUpdating, !isWalking else { return }
         isUpdating = false
         // A walk followed drops to its own pace once Fernlet is no longer open.
@@ -526,8 +538,25 @@ final class WorldLocationSource: NSObject {
         // A drive's trace (or a ride's or a walk's follow), or a listen, keeps the updates running in the background
         // until it ends.
         guard trace == nil, listening == nil else { return }
-        manager.stopUpdatingLocation()
         armFence()
+        // Moving: listen at once, since the fence's exit may come minutes late or never (the phone log of 2026-11-20).
+        let now = Date()
+        if leavingFront, Self.listensOnLeaving(readingsMoving: moves.isMoving(at: now), motion: rides.motionNow?.kind,
+                                               motionKnown: rides.motionKnownThrough, now: now) {
+            startListening(because: .leftFront)
+        }
+        if listening == nil { manager.stopUpdatingLocation() }
+    }
+
+    /// Whether leaving the front starts a listen at once: the recent readings show movement (`WorldMoveWatch`), or
+    /// Motion, read no more than `WorldMoveWatch.freshTime` ago, says walking, running, cycling or a vehicle. Still,
+    /// unknown, not read or read long ago, nothing starts: standing still costs nothing.
+    nonisolated static func listensOnLeaving(readingsMoving: Bool, motion: WorldMotionKind?, motionKnown: Date?,
+                                             now: Date) -> Bool {
+        if readingsMoving { return true }
+        guard let motion, let motionKnown, motion != .stationary, motion != .unknown else { return false }
+        let age = now.timeIntervalSince(motionKnown)
+        return age >= 0 && age <= WorldMoveWatch.freshTime
     }
 
     /// Keeps updates running for a walk the person started, asking for precise location for this walk
@@ -558,7 +587,7 @@ final class WorldLocationSource: NSObject {
         walkSession?.invalidate()
         walkSession = nil
         if Self.declaresBackgroundLocation { manager.allowsBackgroundLocationUpdates = false }
-        stopForeground()
+        stopForeground(leavingFront: false)
     }
 
     /// Whether background mapping holds a background activity session: under exactly the leaving fence's conditions
@@ -845,6 +874,7 @@ final class WorldLocationSource: NSObject {
                              monitoringAvailable: true) else { return }
         manager.allowsBackgroundLocationUpdates = true
         diary.note(.listenStarted, detail: reason.rawValue)
+        walk.countFromHere()
         listenUntil = Date().addingTimeInterval(duration)
         listening = Task { [weak self] in
             do {
@@ -865,6 +895,7 @@ final class WorldLocationSource: NSObject {
         listening = nil
         listenUntil = nil
         diary.note(.listenEnded, detail: WorldListenEnd.timeUp.rawValue)
+        noteNoWalk()
         diary.flush()
         walk.reset()
         quietListens = min(quietListens + 1, Self.maxQuietListens)
@@ -874,6 +905,17 @@ final class WorldLocationSource: NSObject {
         guard !isUpdating, !isWalking else { return }
         manager.stopUpdatingLocation()
         armFence()
+    }
+
+    /// Tells the diary what stood between the listen that just ran out and a walk follow
+    /// (`WorldWalkFollow.blocker(motionRead:motion:)`), with how many of its readings were good and how many too
+    /// rough: the phone log of 2026-11-20 could not say why three full listens followed nothing.
+    private func noteNoWalk() {
+        let motion = rides.motionNow?.kind
+        let blocker: WorldWalkBlocker? = Self.followsWalk(driving: rides.isDriving, cycling: rides.isCycling)
+            ? walk.blocker(motionRead: rides.usesMotion, motion: motion) : .motionSaysRide
+        guard let blocker else { return }
+        diary.note(.walkNotSeen, detail: blocker.rawValue, counts: [walk.goodSeen, walk.roughSeen])
     }
 
     /// Cancels a running listen, leaving the updates to whoever takes them over; the diary hears why.
@@ -925,21 +967,29 @@ final class WorldLocationSource: NSObject {
 
     /// Shows a reading to the walk follow, after car and bike detection heard it: a followed walk notes whether it
     /// moved, and ends at once when a drive or a ride is on; a listen looks for steady walking and, seeing it,
-    /// becomes the follow.
+    /// becomes the follow. With Fernlet open and nothing recording the readings are only noted, so a listen that
+    /// starts as Fernlet leaves the front (``stopForeground()``) already knows the walk; no follow starts in front.
     private func followWalk(_ fix: WorldFix) {
         let walks = Self.followsWalk(driving: rides.isDriving, cycling: rides.isCycling)
         if trace == .walk {
             if walks { walk.follow(fix) } else { stopTrace(.walk) }
             return
         }
-        guard listening != nil, trace == nil, walks else { return }
+        guard Self.watchesForWalk(listening: listening != nil, appOpen: isUpdating, walking: isWalking),
+              trace == nil, walks else { return }
         let motion = rides.motionNow?.kind
         walk.see(fix, motion: motion)
-        guard walk.seesWalk(motionRead: rides.usesMotion, motion: motion) else { return }
+        guard listening != nil, walk.seesWalk(motionRead: rides.usesMotion, motion: motion) else { return }
         startTrace(.walk)
         guard trace == .walk else { return }
         walk.start(at: fix.at)
         FernletAuditLog.log("worldMap.location.walkFollowed")
+    }
+
+    /// Whether a reading is shown to the walk rules: during a listen, and with Fernlet open while no walk the person
+    /// started records.
+    nonisolated static func watchesForWalk(listening: Bool, appOpen: Bool, walking: Bool) -> Bool {
+        listening || (appOpen && !walking)
     }
 
     /// Starts the walk follow's loop: every ``walkTickInterval`` it asks whether the person is still.
@@ -1005,7 +1055,7 @@ final class WorldLocationSource: NSObject {
         stopTrace()
         if permission == .denied || permission == .notAsked {
             stopWalk()
-            stopForeground()
+            stopForeground(leavingFront: false)
         }
     }
 
@@ -1027,6 +1077,7 @@ final class WorldLocationSource: NSObject {
             return
         }
         let lowPower = !isUpdating && !isWalking && trace == nil && listening == nil
+        moves.observe(fix)
         // The route again from a reading: a suspended app hears no route change, and a car may have connected since.
         // At most every ``routeReadGap`` (option F, owner 2026-11-17); route changes while running still arrive at once.
         if Self.readsRoute(at: fix.at, lastRead: lastRouteRead) {

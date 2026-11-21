@@ -95566,6 +95566,30 @@
         }
       }
     },
+    "trackerDiary.listen.leftFront" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Started checking: you closed Fernlet while moving"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: cerraste Fernlet en movimiento"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezó a comprobar: cerraste Fernlet en movimiento"
+          }
+        }
+      }
+    },
     "trackerDiary.listen.visitDeparture" : {
       "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
       "extractionState" : "extracted_with_value",
@@ -96114,6 +96138,198 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dejó de seguir la caminata"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.detail" : {
+      "comment" : "Tracker diary: how many of a check's location readings were good enough to count, and how many were not",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good readings: %1$lld · too rough to use: %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecturas buenas: %1$lld · demasiado imprecisas: %2$lld"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecturas buenas: %1$lld · demasiado imprecisas: %2$lld"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.motionSaysRide" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: Motion said vehicle or bike"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: Movimiento indicó vehículo o bici"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: Movimiento indicó vehículo o bici"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.motionUnsure" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: Motion didn't say walking, and the readings alone weren't sure"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: Movimiento no indicó caminar y las lecturas solas no bastaron"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: Movimiento no indicó caminar y las lecturas solas no bastaron"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.noRun" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: no good reading at walking pace"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: ninguna lectura buena a paso de caminar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: ninguna lectura buena a paso de caminar"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.notFar" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: the readings didn't go far enough"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: las lecturas no llegaron lo bastante lejos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: las lecturas no llegaron lo suficientemente lejos"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.tooFast" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: faster than a walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: más rápido que un paseo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: más rápido que una caminata"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.tooShort" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: under 45 seconds at walking pace"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: menos de 45 segundos a paso de caminar"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: menos de 45 segundos a paso de caminar"
+          }
+        }
+      }
+    },
+    "trackerDiary.walkNotSeen.tooSlow" : {
+      "comment" : "Tracker diary (Settings, Home map): one line of what background mapping did",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No walk followed: slower than a walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ningún paseo: más lento que un paseo"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se siguió ninguna caminata: más lento que una caminata"
           }
         }
       }
