@@ -18,9 +18,11 @@
 //  `FernletStore`s over one set of repositories is exactly what the coalescing prevents.
 //
 
+import CloudKitSync
 import FernletFoundation
 import Foundation
 import HealthKitGateway
+import PrivateStoreCore
 import UIKit
 
 /// The only store acquisition path used by both the UI loader and background exchange intents.
@@ -76,6 +78,7 @@ final class FernletStoreAccess: @unchecked Sendable {
         if let loadingStore { return attaching(healthKitService, to: try await loadingStore.value) }
         let task = Task { @MainActor [weak self] () throws -> FernletStore in
             guard let self else { throw ExchangeIntentServiceError.storeUnavailable }
+            await Self.reopenStoresRefusedWhileLocked()
             let store = try await FernletStore.load(
                 healthKitService: healthKitService,
                 statusUpdate: statusUpdate
@@ -120,6 +123,30 @@ final class FernletStoreAccess: @unchecked Sendable {
         // thing to discover by inference either.
         FernletAuditLog.log("storeAccess.healthKitServiceLateAttached")
         return store
+    }
+
+    /// Reopens either Core Data store whose first open this process failed, before a load reads them.
+    ///
+    /// A background relaunch on a locked phone (location, HealthKit, a refresh task) can open the
+    /// stores before anything reaches this cache: `FernletApp.init()` builds the HealthKit cache
+    /// cleaner, and more launch work may follow. Their `FileProtectionType.complete` files cannot be
+    /// read then, and each controller remembers the failure. Without this, the load after unlocking
+    /// still found the main store "unavailable" and showed the failure screen, and Try again could
+    /// not clear it: only a force-quit did. `load()` has just passed `requireProtectedData()`, so the
+    /// files are readable now. Both calls are no-ops when the store is already open.
+    private static func reopenStoresRefusedWhileLocked() async {
+        await PersistenceController.shared.retryFailedInitialLoadIfNeeded(
+            protectedDataAvailable: UIApplication.shared.isProtectedDataAvailable
+        )
+        do {
+            try PrivatePersistenceController.shared.reloadStoreIfNeeded()
+        } catch {
+            // R7: never silent. Sealed writes fail until the next scene activation retries this.
+            FernletAuditLog.log("privatePersistence.reloadStoreIfNeeded.failed", context: [
+                "trigger": "storeLoad",
+                "errorType": "\(type(of: error))"
+            ])
+        }
     }
 
     /// The gate `load()` runs first: throws `ExchangeIntentServiceError.deviceLocked` while

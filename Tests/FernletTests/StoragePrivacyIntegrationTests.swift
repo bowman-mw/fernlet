@@ -57,6 +57,61 @@ struct StoragePrivacyIntegrationTests {
         }
     }
 
+    /// A first open that failed is retried once the cause is gone — the background relaunch on a
+    /// locked phone, whose remembered failure used to last until a force-quit. A directory squatting
+    /// on the store path stands in for the unreadable protected file.
+    @Test func failedFirstOpenReopensOnRetryOnceTheCauseIsGone() async throws {
+        let storeURL = makeTemporaryStoreURL()
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
+        defer { removeTemporaryStore(at: storeURL) }
+        let controller = PersistenceController(
+            preferences: StoragePreferences(iCloudSyncEnabled: false),
+            storeURL: storeURL
+        )
+        #expect(controller.didFailToLoad == true)
+
+        try FileManager.default.removeItem(at: storeURL)
+        let reopened = await controller.retryFailedInitialLoadIfNeeded(protectedDataAvailable: true)
+
+        #expect(reopened == true)
+        #expect(controller.didFailToLoad == false)
+        #expect(controller.container.persistentStoreCoordinator.persistentStores.isEmpty == false)
+    }
+
+    /// While protected data is still sealed the retry does not try, and the failure stands.
+    @Test func failedFirstOpenIsNotRetriedWhileProtectedDataIsSealed() async throws {
+        let storeURL = makeTemporaryStoreURL()
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
+        defer { removeTemporaryStore(at: storeURL) }
+        let controller = PersistenceController(
+            preferences: StoragePreferences(iCloudSyncEnabled: false),
+            storeURL: storeURL
+        )
+        try FileManager.default.removeItem(at: storeURL)
+
+        let reopened = await controller.retryFailedInitialLoadIfNeeded(protectedDataAvailable: false)
+
+        #expect(reopened == false)
+        #expect(controller.didFailToLoad == true)
+    }
+
+    /// A store that opened the first time is left alone: the retry answers `true` and keeps the
+    /// same container.
+    @Test func openStoreIsLeftAloneByTheRetry() async throws {
+        let storeURL = makeTemporaryStoreURL()
+        defer { removeTemporaryStore(at: storeURL) }
+        let controller = PersistenceController(
+            preferences: StoragePreferences(iCloudSyncEnabled: false),
+            storeURL: storeURL
+        )
+        let container = controller.container
+
+        let open = await controller.retryFailedInitialLoadIfNeeded(protectedDataAvailable: true)
+
+        #expect(open == true)
+        #expect(controller.container === container)
+    }
+
     /// Local-only preferences with backup inclusion set to false do NOT exclude
     /// the store from backup.
     @Test func localOnlyPath_backupInclusionEnabled_storeNotExcluded() throws {
