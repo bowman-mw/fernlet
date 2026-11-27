@@ -90,10 +90,17 @@ nonisolated public final class PersistenceController {
     /// working on `container.viewContext`, so the isolation the compiler now checks is the isolation
     /// the type always had by convention. `preview` next to it is isolated the same way.
     @MainActor public static let shared: PersistenceController = {
+        PersistenceController(preferences: coldLaunchPreferences())
+    }()
+
+    /// The preferences ``shared`` opens with: the saved ones with iCloud mirroring forced off, which
+    /// the app turns back on through `reload(with:)` once onboarding and consent are known. One
+    /// reader, so ``retryFailedInitialLoadIfNeeded()`` reopens the store exactly as `shared` did.
+    @MainActor public static func coldLaunchPreferences() -> StoragePreferences {
         var startupPreferences = StoragePreferencesStore.currentPreferences()
         startupPreferences.iCloudSyncEnabled = false
-        return PersistenceController(preferences: startupPreferences)
-    }()
+        return startupPreferences
+    }
 
     /// In-memory controller for SwiftUI previews and tests (plain `NSPersistentContainer`, no
     /// CloudKit, `/dev/null`-backed store).
@@ -221,6 +228,39 @@ nonisolated public final class PersistenceController {
     @MainActor
     public func reload(with preferences: StoragePreferences) async throws {
         try await reload(with: preferences, compacting: false)
+    }
+
+    /// Opens the store again when the first open failed, and reports whether the store is open now.
+    ///
+    /// **Why.** ``didFailToLoad`` is decided once, when the controller is built, and only a
+    /// successful `reload(with:)` clears it. `shared` is built at the first touch in the process, and
+    /// a background relaunch (location, HealthKit, a refresh task) can make that touch while the phone
+    /// is locked, when the store's `FileProtectionType.complete` file cannot be read. The failure
+    /// then outlived the lock: every load and every Try again said the records could not be opened
+    /// until the app was force-quit. Called at the start of every app load, so the first load after
+    /// unlocking reopens the store instead.
+    ///
+    /// A no-op that answers `true` when the store is already open, and `false` without trying while a
+    /// reload is in flight (that reload decides) or while the open would still fail. The open uses
+    /// ``coldLaunchPreferences()``: a failed first open means no reload has succeeded since, so the
+    /// controller is still where `shared` started.
+    ///
+    /// - Parameter protectedDataAvailable: Whether protected files can be read right now (the app
+    ///   passes `UIApplication.isProtectedDataAvailable`); `false` skips the attempt.
+    /// - Returns: Whether the store is open after the call.
+    @MainActor
+    @discardableResult
+    public func retryFailedInitialLoadIfNeeded(protectedDataAvailable: Bool) async -> Bool {
+        guard didFailToLoad else { return true }
+        guard protectedDataAvailable, !isReloading else { return false }
+        do {
+            try await reload(with: Self.coldLaunchPreferences())
+            FernletAuditLog.log("persistence.initialLoadRetry.succeeded")
+        } catch {
+            // R7: never silent. The caller still sees `didFailToLoad` and shows the failure screen.
+            FernletAuditLog.log("persistence.initialLoadRetry.failed", context: ["errorType": "\(type(of: error))"])
+        }
+        return !didFailToLoad
     }
 
     /// Rebuilds the whole stack under new preferences (the sync-toggle path): saves and resets

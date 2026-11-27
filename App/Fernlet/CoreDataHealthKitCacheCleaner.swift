@@ -45,11 +45,18 @@ struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
         case deviceCacheNotCleared
     }
 
-    private let controller: PersistenceController
+    /// The injected stack, or nil for the shared one, resolved at use by ``controller``.
+    private let injectedController: PersistenceController?
     private let residueStore: any DeviceHealthResidueStoring
 
+    /// The Core Data stack to scrub. Resolved at USE, not in `init`: `FernletApp.init()` builds the
+    /// production cleaner on every launch, a background relaunch on a locked phone included, and
+    /// touching `PersistenceController.shared` there opened the protected store while it could not
+    /// be read, which the controller then remembered as a failure.
+    private var controller: PersistenceController { injectedController ?? .shared }
+
     /// - Parameters:
-    ///   - controller: The Core Data stack to scrub; `nil` resolves the shared one.
+    ///   - controller: The Core Data stack to scrub; `nil` resolves the shared one when first used.
     ///   - residueStore: The device-local HealthKit cache the opt-out empties; `nil` resolves the
     ///     production file (the same instance the launch-path store reads, so the clear is seen).
     ///   Both are deliberately `nil`-defaulted rather than `= .shared` / `= .production`: those are
@@ -57,7 +64,7 @@ struct CoreDataHealthKitCacheCleaner: HealthKitCacheClearing {
     ///   is nonisolated. Resolving in the body — which carries this type's own isolation — is the
     ///   supported form.
     init(controller: PersistenceController? = nil, residueStore: (any DeviceHealthResidueStoring)? = nil) {
-        self.controller = controller ?? .shared
+        self.injectedController = controller
         self.residueStore = residueStore ?? FileDeviceHealthResidueStore.production
     }
 
