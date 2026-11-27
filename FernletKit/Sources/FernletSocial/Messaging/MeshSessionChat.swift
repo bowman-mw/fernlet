@@ -118,6 +118,22 @@ public final class MeshSessionChat {
     /// target and capabilities on the roster, and the roster carries none.
     @ObservationIgnored public var chatAllowedProvider: (() -> Bool)?
 
+    /// Whether this phone has locally peer-banned a sender — the shop's repeatedly-reported-designer
+    /// ban (`ModerationBanStore.isPeerBanned`, through the app's `isProximitySellerBanned`). Decided
+    /// 2026-11-13: a ban on someone's whole shop silences their chat too. The ban store is not
+    /// reachable from `ProximityHost`, so the composition wires it here, as it wires
+    /// ``chatAllowedProvider``. Nil means no ban is known, which bans no one.
+    ///
+    /// A banned sender's message is dropped at the text arm (final, like a block) and any of their
+    /// rows already held leave the transcript at the next gate fold (``refreshVisibleTranscript()``).
+    @ObservationIgnored public var peerBannedProvider: ((String) -> Bool)?
+
+    /// Whether `fingerprint`'s chat is silenced on this phone: blocked (the host's list) or locally
+    /// peer-banned (``peerBannedProvider``).
+    func isSenderSilenced(_ fingerprint: String) -> Bool {
+        meshHost.host.isBlockedFingerprint(fingerprint) || peerBannedProvider?(fingerprint) == true
+    }
+
     /// Resolved once per decision point so the four enforcement seams can never disagree. Public so
     /// the in-session UI can withhold the chat affordance from the same value the transport enforces.
     public var isChatAllowed: Bool { chatAllowedProvider?() == true }
@@ -295,14 +311,13 @@ public final class MeshSessionChat {
     /// right after a Report or a block made from inside the session (App Review guideline 1.2), so
     /// the person's own action hides the author's rows at once rather than at the next message.
     ///
-    /// Folded here so the gate value cannot disagree with the seam it came from.
-    /// `isBlockedFingerprint` ONLY: `ModerationBanStore.isPeerBanned` is not reachable from
-    /// `ProximityHost`, so the routed path consults the block half and not the ban half — inherited
-    /// from the photo arm, which has the same gap, and named rather than papered over. Closing it is a
-    /// host-protocol widening, not an item-4 edit.
+    /// Folded here so the gate value cannot disagree with the seam it came from: the host's block
+    /// list ∪ the local peer ban (``isSenderSilenced(_:)``). The ban half arrives through
+    /// ``peerBannedProvider`` because `ModerationBanStore` is not reachable from `ProximityHost`; the
+    /// photo arm still consults the block half only.
     public func refreshVisibleTranscript() {
-        sessionMessages.refreshGates(chatAllowed: isChatAllowed) { [meshHost] fingerprint in
-            meshHost.host.isBlockedFingerprint(fingerprint)
+        sessionMessages.refreshGates(chatAllowed: isChatAllowed) { fingerprint in
+            self.isSenderSilenced(fingerprint)
         }
     }
 
@@ -375,6 +390,12 @@ public final class MeshSessionChat {
             return .refusedForNow
         }
         guard allowIncomingRoutedText(body.header.id, from: delivery.quotaKey) else {
+            return .refusedForGood
+        }
+        // A shop ban silences chat (2026-11-13). The engine already refused a BLOCKED author before
+        // the unwrap; a peer-banned one is dropped here, final, so it never reaches the transcript.
+        if peerBannedProvider?(delivery.author.fingerprint) == true {
+            FernletAuditLog.log("mesh.routedProjection.transcriptPeerBanned")
             return .refusedForGood
         }
         refreshVisibleTranscript()

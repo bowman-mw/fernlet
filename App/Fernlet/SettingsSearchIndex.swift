@@ -799,6 +799,18 @@ nonisolated enum SettingsSearchIndex {
         ),
 
         // Privacy & Data
+        // The page's first switch (World Friends spec §1.6, `fr-tap-switch`): meeting someone new by
+        // tapping phones on Home. The words are the ones people use for the gesture.
+        SettingsSearchEntry(
+            title: "Connect by tapping phones",
+            display: LocalizedStringResource(
+                "settings.search.title.connectByTappingPhones", defaultValue: "Connect by tapping phones",
+                comment: "Settings search result: the name of a setting a search can find, on the Privacy & Data page. Short, sentence case, like the row it leads to."),
+            keywords: ["tap", "tapping", "tap phones", "bump", "bump phones", "meet", "meet someone", "connect",
+                       "phones together", "new friend", "make a friend"],
+            breadcrumb: .privacyData,
+            route: .privacyData
+        ),
         SettingsSearchEntry(
             title: "Sync to iCloud",
             display: LocalizedStringResource(
@@ -1328,6 +1340,11 @@ nonisolated extension SettingsSearchBreadcrumb {
         token: "Connection log › History",
         display: LocalizedStringResource(
             "settings.search.breadcrumb.connectionLogHistory", defaultValue: "Connection log › History",
+            comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
+    static let privacyData = SettingsSearchBreadcrumb(
+        token: "Privacy & Data",
+        display: LocalizedStringResource(
+            "settings.search.breadcrumb.privacyData", defaultValue: "Privacy & Data",
             comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
     static let privacyDataICloud = SettingsSearchBreadcrumb(
         token: "Privacy & Data › iCloud",

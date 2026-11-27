@@ -35,7 +35,7 @@ import ProximityKit
                 != RoutedShareRefusalCopy.message(.storeRefused),
                 "unavailable storage is a different fact from full storage")
         let title: LocalizedStringKey = RoutedShareRefusalCopy.title
-        #expect(title == "Session")
+        #expect(title == "Hangout")
         #expect(RoutedShareRefusalCopy.message(.keyMismatch)
                 != RoutedShareRefusalCopy.message(.destinationNotAddressable),
                 "not everyone being here yet is a different fact from sources that disagree")

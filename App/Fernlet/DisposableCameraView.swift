@@ -867,7 +867,7 @@ struct DisposableCameraView: View {
             PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet)
         }
         let meshName = manager.currentMesh?.name ?? ""
-        guard !names.isEmpty else { return meshName.isEmpty ? Text("Session") : Text(verbatim: meshName) }
+        guard !names.isEmpty else { return meshName.isEmpty ? Text("Hangout") : Text(verbatim: meshName) }
         let together = FriendsSessionNames.sentence(names)
         guard !meshName.isEmpty else { return Text("With \(together)") }
         return Text("\(meshName) · with \(together)")

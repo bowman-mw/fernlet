@@ -320,7 +320,7 @@ struct FriendsView: View {
                 cacheWarningBanner
             }
             if !features.photos.meshPhotos.isEmpty || !soloAlbum.sets.isEmpty || !roadTripSets.isEmpty {
-                FriendsSearchField(prompt: "Search by friend or session name", text: $sessionSearchText)
+                FriendsSearchField(prompt: "Search by friend or hangout name", text: $sessionSearchText)
             }
             // The solo camera's photos still held (b4-mem-solo-waiting): when they show, in the
             // camera's own words.

@@ -62,10 +62,10 @@ import ProximityKit
 /// That is display only, and deliberately so — the
 /// *projection* is fail-closed at both ends (the engine's projectable set omits the text row while
 /// the gate is shut, and the chat's pre-open verdict marks a gated item final), which is the
-/// load-bearing half and is tested. Its `isRefused` half is `ProximityHost.isBlockedFingerprint` and **not** yet
-/// `ModerationBanStore.isPeerBanned`: the ban store is not reachable from `ProximityHost`, so the
-/// routed path consults the block half only — the same gap the photo arm has, inherited and named
-/// rather than silently different.
+/// load-bearing half and is tested. Its `isRefused` half is `ProximityHost.isBlockedFingerprint` ∪
+/// `ModerationBanStore.isPeerBanned`: the ban store is not reachable from `ProximityHost`, so the app
+/// wires the ban half through `MeshSessionChat.peerBannedProvider` (a shop ban silences chat, decided
+/// 2026-11-13). The photo arm still consults the block half only.
 ///
 /// ## What P3's sealed store did and did not change (plan §17.3)
 ///

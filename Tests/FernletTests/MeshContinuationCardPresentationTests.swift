@@ -154,7 +154,7 @@ import Testing
     /// A card about a session that is OVER speaks in the past tense: the ending keeps its headline —
     /// that is the news the token carried through the end — and all three fold to one sentence.
     @Test func anEndedSessionSpeaksInThePastTense() {
-        let past: LocalizedStringKey = "That session has since ended. Nothing that was already saved was lost."
+        let past: LocalizedStringKey = "That hangout has since ended. Nothing that was already saved was lost."
         // R2: bounded by the three kinds.
         for kind in MeshContinuationCardKind.allCases {
             let live = MeshContinuationCardPresentation.card(for: kind)

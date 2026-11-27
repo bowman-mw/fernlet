@@ -139,6 +139,9 @@ public nonisolated struct TrainerAuditEvent: Codable, Equatable, Identifiable, S
         case trainerRevoked
         case sessionEnded
         case error
+        /// The person withdrew a report they made of this peer (Friends & Blocks). The block, if
+        /// any, stays: withdrawing a report never unblocks.
+        case peerReportWithdrawn
     }
 
     public var id: UUID

@@ -302,7 +302,8 @@ ProximityKit:
 - ``ProximityTrustVault`` (`ProximityTrustVault.swift`): Fernlet's records of the people its radios
   meet, in FernletDomainModel's persisted types: kept friends, revoked ("Removed") peers, blocked keys
   and reported sellers, keyed on the full signing key, and the audit trail, capped at 500 rows. It
-  mints them (`trust`; `block` and `report`, with a stub for a key it has never seen), re-derives a
+  mints them (`trust`; `block` and `report`, with a stub for a key it has never seen), withdraws a
+  report without touching the block (``ProximityTrustVault/withdrawReport(signingPublicKey:)``), re-derives a
   legacy 8-character fingerprint from the signing key on every load and calls `onChange` after each write;
   the app's `FernletStore` owns it, seeds it from the snapshot and saves on `onChange`. It answers
   ProximityKit's `ProximityTrustStore`, which the app's adapter hands `FernletSocial`'s features as

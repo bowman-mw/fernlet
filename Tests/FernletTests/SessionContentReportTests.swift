@@ -107,6 +107,43 @@ struct SessionContentReportTests {
         #expect(store.proximityTrustVault.peer(signingPublicKey: ben.key) == nil, "and nobody else is reported")
     }
 
+    /// "Withdraw report" on a reported person's card in Friends & Blocks withdraws the report ONLY:
+    /// the report's stamp and reason go, it is recorded, and the person stays blocked (and removed)
+    /// until Unblock. A second withdrawal, or one for someone never reported, does nothing.
+    @Test func withdrawingAReportKeepsThePersonBlocked() throws {
+        let ana = Self.peer(0x43)
+        store.reportProximityPeer(signingPublicKey: ana.key, reason: .offensive)
+        let reported = try #require(store.proximityTrustVault.peer(signingPublicKey: ana.key))
+        #expect(reported.reportedAt != nil && reported.blockedAt != nil)
+
+        store.withdrawProximityPeerReport(signingPublicKey: ana.key)
+        let withdrawn = try #require(store.proximityTrustVault.peer(signingPublicKey: ana.key))
+        #expect(withdrawn.reportedAt == nil && withdrawn.reportReason == nil, "the report is withdrawn")
+        #expect(withdrawn.blockedAt == reported.blockedAt && withdrawn.revokedAt == reported.revokedAt,
+                "and the block is untouched: withdrawing a report never unblocks")
+        #expect(store.isBlockedFingerprint(ana.fingerprint) && store.isBlockedProximitySigningKey(ana.key))
+        let withdrawals = store.proximityTrustVault.auditEvents.filter { $0.kind == .peerReportWithdrawn }
+        #expect(withdrawals.count == 1 && withdrawals.first?.peerFingerprint == ana.fingerprint, "and it is recorded")
+
+        store.withdrawProximityPeerReport(signingPublicKey: ana.key)
+        store.withdrawProximityPeerReport(signingPublicKey: Self.peer(0x44).key)
+        #expect(store.proximityTrustVault.auditEvents.filter { $0.kind == .peerReportWithdrawn }.count == 1,
+                "nothing to withdraw records nothing")
+        #expect(store.proximityTrustVault.peer(signingPublicKey: Self.peer(0x44).key) == nil, "and creates no one")
+    }
+
+    /// The card offers "Withdraw report" exactly where Report was (a reported person), on the detail card
+    /// and its swipe mirror, and the action calls the withdrawal — never Unblock.
+    @Test func friendsAndBlocksOffersWithdrawReportOnAReportedPersonsCard() throws {
+        let source = try RepoRoot.source("App/Fernlet/FriendListView.swift")
+        #expect(source.components(separatedBy: "store.withdrawProximityPeerReport(signingPublicKey: peer.signingPublicKey)").count == 3,
+                "the card and the swipe each withdraw the report")
+        let card = try #require(source.range(of: "Button(\"Withdraw report\")"))
+        let cardAction = String(source[card.lowerBound...].prefix(300))
+        #expect(!cardAction.contains("unblock"), "withdrawing a report never unblocks")
+        #expect(source.contains("Label(\"Withdraw report\", systemImage: \"flag.slash\")"))
+    }
+
     /// The report funnel refuses an empty key and this device's own key outright, whatever built
     /// the subject.
     @Test func theFunnelNeverReportsThisDevice() throws {

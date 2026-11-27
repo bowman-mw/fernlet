@@ -52,7 +52,7 @@ enum FernletSocialCopy {
         /// - Parameter limit: The per-sender, per-session photo cap.
         static func photoLimitReached(_ limit: Int) -> String {
             String(localized: "proximity.camera.photoLimitReached",
-                   defaultValue: "You've shared the maximum of \(limit) photos in this mesh session.",
+                   defaultValue: "You've shared the maximum of \(limit) photos in this hangout.",
                    bundle: .module,
                    comment: "Alert on the in-person camera when this phone has shared as many photos as one session allows. %lld is that number.")
         }

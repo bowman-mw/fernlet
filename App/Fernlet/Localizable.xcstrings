@@ -517,7 +517,24 @@
         }
       }
     },
+    "%@ left the hangout — no heart was sent." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ ha salido de la quedada; no se ha enviado ningún corazón."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ salió del convivio; no se envió ningún corazón."
+          }
+        }
+      }
+    },
     "%@ left the session — no heart was sent." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4245,7 +4262,42 @@
         }
       }
     },
+    "%lld photos stayed on this phone. No one else was in the hangout when you took them." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photo stayed on this phone. No one else was in the hangout when you took it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photos stayed on this phone. No one else was in the hangout when you took them."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld fotos se han quedado en este móvil. No había nadie más en la quedada cuando las hiciste."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld fotos se quedaron en este teléfono. No había nadie más en el convivio cuando las tomaste."
+          }
+        }
+      }
+    },
     "%lld photos stayed on this phone. No one else was in the session when you took them." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -6115,7 +6167,24 @@
         }
       }
     },
+    "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a hangout. Hangout messages are never stored — they disappear for everyone when the hangout ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una foto que ha compartido un amigo se elimina de tu móvil con el botón de eliminar del visor de fotos, y todo el lote se puede descartar al final de una quedada. Los mensajes de la quedada nunca se guardan (desaparecen para todos cuando termina la quedada) y Fernlet no envía mensajes que contengan palabras de su breve lista de insultos. Las recetas y actividades que te han enviado se quitan eliminándolas donde aparecen. Para que alguien deje de enviarte cualquiera de estas cosas, bloquea o denuncia a esa persona."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una foto que compartió un amigo se elimina de tu teléfono con el botón de eliminar del visor de fotos, y todo el lote se puede descartar al final de un convivio. Los mensajes del convivio nunca se guardan (desaparecen para todos cuando termina el convivio) y Fernlet no envía mensajes que contengan palabras de su breve lista de insultos. Las recetas y actividades que te enviaron se quitan eliminándolas donde aparecen. Para que alguien deje de enviarte cualquiera de estas cosas, bloquea o reporta a esa persona."
+          }
+        }
+      }
+    },
     "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a session. Session messages are never stored — they disappear for everyone when the session ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -17352,7 +17421,24 @@
         }
       }
     },
+    "During a hangout, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Durante una quedada, mantén pulsado un mensaje que alguien haya enviado y elige “Denunciar…”. Haz lo mismo con una foto que alguien haya compartido cuando elijas qué fotos conservar, o toca la bandera en el visor de fotos. La persona queda denunciada y bloqueada en tu móvil, sus mensajes se ocultan y la foto denunciada se elimina de tu móvil."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Durante un convivio, mantén presionado un mensaje que alguien envió y elige “Reportar…”. Haz lo mismo con una foto que alguien compartió cuando eliges qué fotos conservar, o toca la bandera en el visor de fotos. La persona queda reportada y bloqueada en tu teléfono, sus mensajes se ocultan y la foto reportada se elimina de tu teléfono."
+          }
+        }
+      }
+    },
     "During a session, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -19108,7 +19194,24 @@
         }
       }
     },
+    "Everything friends share with you happens in person: custom companion clothing, the photos you take together, messages during a hangout, recipes, and the activities you start. Objectionable content and abusive behavior aren't welcome here." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todo lo que tus amigos comparten contigo pasa en persona: la ropa personalizada para el compañero, las fotos que os hacéis juntos, los mensajes durante una quedada, las recetas y las actividades que empezáis. Aquí no son bienvenidos el contenido inapropiado ni el comportamiento abusivo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todo lo que tus amigos comparten contigo pasa en persona: la ropa personalizada para el compañero, las fotos que toman juntos, los mensajes durante un convivio, las recetas y las actividades que empiezas. Aquí no son bienvenidos el contenido inapropiado ni el comportamiento abusivo."
+          }
+        }
+      }
+    },
     "Everything friends share with you happens in person: custom companion clothing, the photos you take together, messages during a session, recipes, and the activities you start. Objectionable content and abusive behavior aren't welcome here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -23929,6 +24032,22 @@
         }
       }
     },
+    "Hangouts last up to six hours. Anything you kept is already saved." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las quedadas duran hasta seis horas. Todo lo que has conservado ya está guardado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los convivios duran hasta seis horas. Todo lo que conservaste ya está guardado."
+          }
+        }
+      }
+    },
     "Haptics" : {
       "localizations" : {
         "es" : {
@@ -25820,7 +25939,24 @@
         }
       }
     },
+    "In Friends & Blocks, swipe a person or open their card to Report or Block them. During a hangout, tap the ••• beside someone in the People list to block them there and then. Blocking hides their content from you and yours from them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En Amigos y bloqueos, desliza a una persona o abre su tarjeta para denunciarla o bloquearla. Durante una quedada, toca ••• junto a alguien en la lista Personas para bloquear a esa persona ahí mismo. Al bloquear, dejas de ver su contenido y esa persona deja de ver el tuyo."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En Amigos y bloqueos, desliza a una persona o abre su tarjeta para reportarla o bloquearla. Durante un convivio, toca ••• junto a alguien en la lista Personas para bloquear a esa persona ahí mismo. Al bloquear, dejas de ver su contenido y esa persona deja de ver el tuyo."
+          }
+        }
+      }
+    },
     "In Friends & Blocks, swipe a person or open their card to Report or Block them. During a session, tap the ••• beside someone in the People list to block them there and then. Blocking hides their content from you and yours from them." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -27247,7 +27383,24 @@
         }
       }
     },
+    "Keep this tab open. When someone from that hangout is nearby again, you'll reconnect automatically, and anything still on its way will finish arriving." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén esta pestaña abierta. Cuando alguien de esa quedada vuelva a estar cerca, os volveréis a conectar automáticamente y lo que todavía esté en camino terminará de llegar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén esta pestaña abierta. Cuando alguien de ese convivio vuelva a estar cerca, se reconectarán automáticamente y lo que todavía esté en camino terminará de llegar."
+          }
+        }
+      }
+    },
     "Keep this tab open. When someone from that session is nearby again, you'll reconnect automatically, and anything still on its way will finish arriving." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -30555,7 +30708,24 @@
         }
       }
     },
+    "Messages stay in this hangout only — they disappear for everyone when the hangout ends." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los mensajes solo existen en esta quedada: desaparecen para todos cuando la quedada termina."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los mensajes solo existen en este convivio: desaparecen para todos cuando el convivio termina."
+          }
+        }
+      }
+    },
     "Messages stay in this session only — they disappear for everyone when the session ends." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -33235,7 +33405,24 @@
         }
       }
     },
+    "Nobody has joined this hangout yet — that message wasn't sent. Try again in a moment." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía no se ha unido nadie a esta quedada: ese mensaje no se ha enviado. Inténtalo de nuevo en un momento."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía no se ha unido nadie a este convivio: ese mensaje no se envió. Inténtalo de nuevo en un momento."
+          }
+        }
+      }
+    },
     "Nobody has joined this session yet — that message wasn't sent. Try again in a moment." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -37330,7 +37517,24 @@
         }
       }
     },
+    "Pick up your last hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retoma tu última quedada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retoma tu último convivio"
+          }
+        }
+      }
+    },
     "Pick up your last session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -43670,7 +43874,24 @@
         }
       }
     },
+    "Search by friend or hangout name" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar por amigo o nombre de la quedada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar por amigo o nombre del convivio"
+          }
+        }
+      }
+    },
     "Search by friend or session name" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -44463,6 +44684,7 @@
       }
     },
     "Sessions last up to six hours. Anything you kept is already saved." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -49303,6 +49525,38 @@
         }
       }
     },
+    "That hangout has since ended. Nothing that was already saved was lost." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esa quedada ya ha terminado. No se ha perdido nada de lo que ya estaba guardado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese convivio ya terminó. No se perdió nada de lo que ya estaba guardado."
+          }
+        }
+      }
+    },
+    "That hangout is over, so it can't be reopened. Anything you kept is already saved." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esa quedada ya ha terminado, así que no se puede volver a abrir. Todo lo que has conservado ya está guardado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese convivio ya terminó, así que no se puede reabrir. Todo lo que conservaste ya está guardado."
+          }
+        }
+      }
+    },
     "That list is full. Remove one to add another." : {
       "comment" : "Location editor, Weights I have: shown when a typed weight can't be added because the list is at its limit",
       "localizations" : {
@@ -49353,6 +49607,7 @@
       }
     },
     "That session has since ended. Nothing that was already saved was lost." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -49369,6 +49624,7 @@
       }
     },
     "That session is over, so it can't be reopened. Anything you kept is already saved." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -50023,6 +50279,22 @@
         }
       }
     },
+    "The hangout is carrying on now that Fernlet is open again. Nothing that was already saved was lost." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La quedada continúa ahora que Fernlet está abierto otra vez. No se ha perdido nada de lo que ya estaba guardado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El convivio continúa ahora que Fernlet está abierto otra vez. No se perdió nada de lo que ya estaba guardado."
+          }
+        }
+      }
+    },
     "The intimate log backup in iCloud is damaged and can't be opened." : {
       "comment" : "Privacy & Data: the intimate-log Sealed backup will not authenticate.",
       "localizations" : {
@@ -50513,6 +50785,7 @@
       }
     },
     "The session is carrying on now that Fernlet is open again. Nothing that was already saved was lost." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -51254,6 +51527,22 @@
         }
       }
     },
+    "This hangout stays on screen" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta quedada sigue en pantalla"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este convivio sigue en pantalla"
+          }
+        }
+      }
+    },
     "This iCloud account also holds an encrypted backup of your journal, cycle, intimate logs or photos. To restore it to this iPhone, turn on its backup in Settings › Privacy & Data after setup." : {
       "localizations" : {
         "es" : {
@@ -51822,6 +52111,7 @@
       }
     },
     "This session stays on screen" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -56241,6 +56531,22 @@
         }
       }
     },
+    "Withdraw report" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retirar denuncia"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retirar reporte"
+          }
+        }
+      }
+    },
     "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
       "localizations" : {
         "es" : {
@@ -57322,7 +57628,24 @@
         }
       }
     },
+    "You left your last hangout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Has salido de tu última quedada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Saliste de tu último convivio"
+          }
+        }
+      }
+    },
     "You left your last session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -57449,7 +57772,24 @@
         }
       }
     },
+    "You were removed from that hangout. Anything you kept is already saved." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Te han quitado de esa quedada. Todo lo que has conservado ya está guardado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Te quitaron de ese convivio. Todo lo que conservaste ya está guardado."
+          }
+        }
+      }
+    },
     "You were removed from that session. Anything you kept is already saved." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -59037,7 +59377,72 @@
         }
       }
     },
+    "Your last hangout couldn't be reopened" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo reabrir tu última quedada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo reabrir tu último convivio"
+          }
+        }
+      }
+    },
+    "Your last hangout ended" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu última quedada terminó"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu último convivio terminó"
+          }
+        }
+      }
+    },
+    "Your last hangout ended for you" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu última quedada terminó para ti"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu último convivio terminó para ti"
+          }
+        }
+      }
+    },
+    "Your last hangout timed out" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se acabó el tiempo de tu última quedada"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se acabó el tiempo de tu último convivio"
+          }
+        }
+      }
+    },
     "Your last session couldn't be reopened" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -59054,6 +59459,7 @@
       }
     },
     "Your last session ended" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -59070,6 +59476,7 @@
       }
     },
     "Your last session ended for you" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -59086,6 +59493,7 @@
       }
     },
     "Your last session timed out" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -68074,19 +68482,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "your nearby-friends session state"
+            "value" : "your nearby-friends hangout state"
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "el estado de tu sesión de amigos cerca"
+            "state" : "needs_review",
+            "value" : "el estado de tu quedada de amigos cerca"
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "el estado de tu sesión de amigos cerca"
+            "state" : "needs_review",
+            "value" : "el estado de tu convivio de amigos cerca"
           }
         }
       }
@@ -68314,19 +68722,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "session photos you hadn't chosen yet"
+            "value" : "hangout photos you hadn't chosen yet"
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "las fotos de sesión que todavía no habías elegido"
+            "state" : "needs_review",
+            "value" : "las fotos de la quedada que todavía no habías elegido"
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "las fotos de sesión que todavía no habías elegido"
+            "state" : "needs_review",
+            "value" : "las fotos del convivio que todavía no habías elegido"
           }
         }
       }
@@ -70532,13 +70940,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "1 photo from your last session is waiting. Nothing is saved until you choose."
+                  "value" : "1 photo from your last hangout is waiting. Nothing is saved until you choose."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld photos from your last session are waiting. Nothing is saved until you choose."
+                  "value" : "%lld photos from your last hangout are waiting. Nothing is saved until you choose."
                 }
               }
             }
@@ -70549,14 +70957,14 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld foto de tu última sesión te está esperando. No se guarda nada hasta que elijas."
+                  "state" : "needs_review",
+                  "value" : "%lld foto de tu última quedada te está esperando. No se guarda nada hasta que elijas."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fotos de tu última sesión te están esperando. No se guarda nada hasta que elijas."
+                  "state" : "needs_review",
+                  "value" : "%lld fotos de tu última quedada te están esperando. No se guarda nada hasta que elijas."
                 }
               }
             }
@@ -70567,14 +70975,14 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld foto de tu última sesión te está esperando. No se guarda nada hasta que elijas."
+                  "state" : "needs_review",
+                  "value" : "%lld foto de tu último convivio te está esperando. No se guarda nada hasta que elijas."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fotos de tu última sesión te están esperando. No se guarda nada hasta que elijas."
+                  "state" : "needs_review",
+                  "value" : "%lld fotos de tu último convivio te están esperando. No se guarda nada hasta que elijas."
                 }
               }
             }
@@ -74168,7 +74576,24 @@
         }
       }
     },
+    "iOS didn't give Fernlet time in the background, so this hangout keeps going while Fernlet is open. Nothing you've kept is affected." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "iOS no le ha dado a Fernlet tiempo en segundo plano, así que esta quedada continúa mientras Fernlet esté abierto. Lo que has conservado no se ve afectado."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "iOS no le dio a Fernlet tiempo en segundo plano, así que este convivio continúa mientras Fernlet esté abierto. Lo que conservaste no se ve afectado."
+          }
+        }
+      }
+    },
     "iOS didn't give Fernlet time in the background, so this session keeps going while Fernlet is open. Nothing you've kept is affected." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -74185,6 +74610,7 @@
       }
     },
     "iOS ended the background session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -74196,6 +74622,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iOS terminó la sesión en segundo plano"
+          }
+        }
+      }
+    },
+    "iOS ended the hangout in the background" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "iOS ha terminado la quedada en segundo plano"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "iOS terminó el convivio en segundo plano"
           }
         }
       }
@@ -89630,6 +90072,30 @@
         }
       }
     },
+    "settings.search.breadcrumb.privacyData" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Privacidad y datos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Privacidad y datos"
+          }
+        }
+      }
+    },
     "settings.search.breadcrumb.privacyDataAirportsAndFlights" : {
       "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
       "extractionState" : "extracted_with_value",
@@ -90501,6 +90967,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Emociones del compañero"
+          }
+        }
+      }
+    },
+    "settings.search.title.connectByTappingPhones" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connect by tapping phones"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Conectar juntando los móviles"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Conectar juntando teléfonos"
           }
         }
       }

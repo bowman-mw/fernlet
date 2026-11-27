@@ -158,7 +158,7 @@ public enum NotificationService {
                                defaultValue: "New message from \(name)", bundle: .module,
                                comment: "Title of the notification for a mesh session message that arrived while the app was backgrounded. The argument is the sender's sanitized display name.")
         content.body = String(localized: "notification.sessionMessage.body",
-                              defaultValue: "Open Fernlet to reply — session messages disappear when the session ends.",
+                              defaultValue: "Open Fernlet to reply — hangout messages disappear when the hangout ends.",
                               bundle: .module,
                               comment: "Body of the session-message notification. The disappearance is the important half: session chat is not stored anywhere after the session.")
         content.sound = .default

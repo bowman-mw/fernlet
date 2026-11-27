@@ -104,19 +104,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Open Fernlet to reply — session messages disappear when the session ends."
+            "value" : "Open Fernlet to reply — hangout messages disappear when the hangout ends."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre Fernlet para responder: los mensajes de la sesión desaparecen cuando termina la sesión."
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para responder: los mensajes de la quedada desaparecen cuando termina la quedada."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre Fernlet para responder: los mensajes de la sesión desaparecen cuando termina la sesión."
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para responder: los mensajes del convivio desaparecen cuando termina el convivio."
           }
         }
       }

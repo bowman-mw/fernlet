@@ -230,6 +230,25 @@ public final class ProximityTrustVault: ProximityTrustStore {
         onChange()
     }
 
+    /// Withdraws this device's report of a peer (Friends & Blocks' "Withdraw report"): clears
+    /// `reportedAt`/`reportReason` and records it. **The report only** — `blockedAt` and `revokedAt`
+    /// are left exactly as they are, so a reported-and-blocked person stays blocked. A person report
+    /// never leaves this device, so there is nothing to recall from anywhere else.
+    ///
+    /// - Parameter signingPublicKey: The reported peer's key; an unknown or unreported key does nothing.
+    public func withdrawReport(signingPublicKey: Data) {
+        guard let index = trustedPeers.firstIndex(where: { $0.signingPublicKey == signingPublicKey }),
+              trustedPeers[index].reportedAt != nil else { return }
+        trustedPeers[index].reportedAt = nil
+        trustedPeers[index].reportReason = nil
+        recordAuditWithoutSaving(TrainerAuditEvent(
+            kind: .peerReportWithdrawn,
+            peerFingerprint: trustedPeers[index].fingerprint,
+            peerDisplayName: trustedPeers[index].displayName,
+            message: "Withdrew report of \(trustedPeers[index].displayName)"))
+        onChange()
+    }
+
     public func recordTrainerAudit(_ event: TrainerAuditEvent) {
         recordAuditWithoutSaving(event)
         onChange()

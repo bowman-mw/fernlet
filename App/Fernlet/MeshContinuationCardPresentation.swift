@@ -312,8 +312,8 @@ nonisolated enum MeshContinuationCardPresentation {
         case .refused:
             return MeshContinuationCard(
                 kind: kind,
-                title: "This session stays on screen",
-                message: "iOS didn't give Fernlet time in the background, so this session keeps going while Fernlet is open. Nothing you've kept is affected.",
+                title: "This hangout stays on screen",
+                message: "iOS didn't give Fernlet time in the background, so this hangout keeps going while Fernlet is open. Nothing you've kept is affected.",
                 symbolName: "iphone",
                 sessionHasEnded: false
             )
@@ -328,7 +328,7 @@ nonisolated enum MeshContinuationCardPresentation {
         case .endedBySystem:
             return MeshContinuationCard(
                 kind: kind,
-                title: "iOS ended the background session",
+                title: "iOS ended the hangout in the background",
                 message: Self.continuesOnScreen,
                 symbolName: "moon.zzz",
                 sessionHasEnded: false
@@ -339,10 +339,10 @@ nonisolated enum MeshContinuationCardPresentation {
     /// The sentence both foreground-return endings share, deliberately: an expiry and a system end
     /// differ in what happened and in nothing the person has to do about it, so they are one key.
     private static let continuesOnScreen: LocalizedStringKey =
-        "The session is carrying on now that Fernlet is open again. Nothing that was already saved was lost."
+        "The hangout is carrying on now that Fernlet is open again. Nothing that was already saved was lost."
 
     /// The sentence all three endings share once the session they happened in is over: the news is
     /// still which ending it was, and the reassurance is still the only thing the person needs.
     private static let sessionHasSinceEnded: LocalizedStringKey =
-        "That session has since ended. Nothing that was already saved was lost."
+        "That hangout has since ended. Nothing that was already saved was lost."
 }

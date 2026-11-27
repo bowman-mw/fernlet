@@ -28,7 +28,7 @@ import FernletSocial
 enum RoutedShareRefusalCopy {
 
     /// The alert's title — the session alert's existing key, so the two share one catalog row.
-    static let title: LocalizedStringKey = "Session"
+    static let title: LocalizedStringKey = "Hangout"
 
     /// The sentence for one cause.
     ///
@@ -61,7 +61,7 @@ enum RoutedShareRefusalCopy {
     /// - Returns: a `LocalizedStringKey`, or nil when every capture was shared.
     static func photoKeptNotice(count: Int) -> LocalizedStringKey? {
         guard count > 0 else { return nil }
-        return "\(count) photos stayed on this phone. No one else was in the session when you took them."
+        return "\(count) photos stayed on this phone. No one else was in the hangout when you took them."
     }
 
     /// The inline notice the chat panel shows at the top of its compose bar — above the text
@@ -88,7 +88,7 @@ enum RoutedShareRefusalCopy {
         case .staged, .empty:
             return nil
         case .noDestinations:
-            return "Nobody has joined this session yet — that message wasn't sent. Try again in a moment."
+            return "Nobody has joined this hangout yet — that message wasn't sent. Try again in a moment."
         case .ageGated:
             return "Messages are turned off for this account."
         case .filtered:

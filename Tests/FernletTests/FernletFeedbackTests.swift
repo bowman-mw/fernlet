@@ -50,7 +50,7 @@ private final class PlayedLog {
         let touches = Set(FernletFeedbackEvent.allCases.filter { $0.scope == .touch })
         #expect(touches == [.setLogged, .tick, .logged, .limit, .moved, .held])
         let outcomes = Set(FernletFeedbackEvent.allCases.filter { $0.scope == .outcome })
-        #expect(outcomes == [.captured, .done, .caveat, .failed, .friendHere])
+        #expect(outcomes == [.captured, .done, .caveat, .failed, .friendHere, .phonesTapped])
         // The report's feels for the app-wide events (§3.3), and "time's up" is one feel everywhere.
         #expect(FernletFeedbackEvent.tick.haptic == .selection)
         #expect(FernletFeedbackEvent.limit.haptic == .rigidLimit)
@@ -102,6 +102,23 @@ private final class PlayedLog {
         }
         #expect(log.events == [.failed, .done, .restEnded, .pace])
         #expect(log.haptics == [.error, .success, .attention, .softPulse])
+    }
+
+    /// The phones-together tap (World Friends §1.2) still buzzes under "Fewer": it plays `phonesTapped`,
+    /// the same firm feel as `held`, as an outcome — and every other `held` long press is still a touch.
+    @Test func thePhonesTogetherTapSurvivesFewerAndHeldStaysATouch() throws {
+        let log = PlayedLog()
+        let fewer = FernletFeedbackPreferences.resolved(in: try defaults(level: "fewer"))
+        log.feedback.play(.held, preferences: fewer)
+        log.feedback.play(.phonesTapped, preferences: fewer)
+        #expect(log.events == [.phonesTapped])
+        #expect(log.haptics == [FernletFeedbackEvent.held.haptic], "the tap keeps the long press's firm feel")
+        #expect(FernletFeedbackEvent.held.scope == .touch, "a long press elsewhere still drops under Fewer")
+        #expect(FernletFeedbackEvent.phonesTapped.sound == nil, "the tap is never heard by the room")
+
+        let tapHome = try RepoRoot.source("App/Fernlet/World/Friends/TapToConnectHome.swift")
+        #expect(tapHome.contains(".fernletFeedback(.phonesTapped, trigger: presentation.tapCount)"))
+        #expect(!tapHome.contains(".fernletFeedback(.held"), "the tap must not fall back to the touch-scoped held")
     }
 
     /// The one resolver ANDs the surface's switch with the level; an unset or unknown level is All.

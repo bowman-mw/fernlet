@@ -79,7 +79,10 @@ engine through its public seams.
   for this device's own rows, which `canBeReported` never offers), the key the app's Report… on a
   message names, and ``MeshSessionChat/refreshVisibleTranscript()`` re-folds the view gates at once
   after such a report, so the reported author's rows leave the transcript without waiting for the next
-  message. The transcript is memory-only and vanishes: the composition's
+  message. **A shop ban silences chat (2026-11-13).** ``MeshSessionChat/peerBannedProvider`` carries
+  the local peer ban (``ModerationBanStore``, unreachable from `ProximityHost`) into the chat: a banned
+  sender's message is dropped, final, at the text arm, and their held rows leave at the next gate fold,
+  as a block's do. The transcript is memory-only and vanishes: the composition's
   observer drops it at a session's formation, its end and a privacy wipe's start, each right after the
   engine advances its session-content generation, which is what the liveness reads.
 - ``MeshSessionHearts`` (`HeartSharing/MeshSessionHearts.swift`): the in-session heart to one
