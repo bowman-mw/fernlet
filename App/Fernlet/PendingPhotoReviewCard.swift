@@ -67,11 +67,11 @@ struct PendingPhotoReviewCard: View {
     /// The card's sentence, naming the count; the key carries `one`/`other` plural variations.
     ///
     /// - Parameter count: How many photos are waiting.
-    /// - Returns: "3 photos from your last session are waiting. Nothing is saved until you choose."
+    /// - Returns: "3 photos from your last hangout are waiting. Nothing is saved until you choose."
     static func body(_ count: Int) -> LocalizedStringResource {
         LocalizedStringResource(
             "friends.pendingReview.body",
-            defaultValue: "\(count) photos from your last session are waiting. Nothing is saved until you choose.",
+            defaultValue: "\(count) photos from your last hangout are waiting. Nothing is saved until you choose.",
             comment: "Body of the Friends tab card for photos waiting to be chosen. The count is how many photos. Must keep saying that nothing is saved (not in Fernlet, not in the camera roll) until the person chooses."
         )
     }

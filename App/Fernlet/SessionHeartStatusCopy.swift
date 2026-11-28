@@ -91,7 +91,7 @@ enum SessionHeartStatusCopy {
         case .alreadySending:
             return "Already sending \(firstName) some warmth — one moment."
         case .recipientLeft:
-            return "\(firstName) left the session — no heart was sent."
+            return "\(firstName) left the hangout — no heart was sent."
         case .notReachableYet:
             return "Fernlet can't reach \(firstName) yet, so no heart was sent. Try again in a moment."
         case .identityUnconfirmed:

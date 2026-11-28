@@ -280,6 +280,13 @@ struct FriendListView: View {
                 Label("Report", systemImage: "flag")
             }
             .tint(Color.goldenrod)
+        } else {
+            Button {
+                store.withdrawProximityPeerReport(signingPublicKey: peer.signingPublicKey)
+            } label: {
+                Label("Withdraw report", systemImage: "flag.slash")
+            }
+            .tint(Color.slate)
         }
     }
 
@@ -475,6 +482,13 @@ struct FriendListView: View {
                 if peer.reportedAt == nil {
                     Button("Report") { reportSubject = personSubject(for: peer) }
                         .buttonStyle(ActionPillButtonStyle(.destructive))
+                } else {
+                    // The report only: a reported person stays blocked until Unblock (owner, 2026-11).
+                    Button("Withdraw report") {
+                        store.withdrawProximityPeerReport(signingPublicKey: peer.signingPublicKey)
+                    }
+                    .buttonStyle(ActionPillButtonStyle(.secondary))
+                    .accessibilityIdentifier("friends.withdrawReport")
                 }
             }
         }

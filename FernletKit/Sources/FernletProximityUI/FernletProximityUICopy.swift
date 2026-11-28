@@ -55,7 +55,7 @@ enum FernletProximityUICopy {
         /// translation of the old sentence must not be shown for the new one.
         static var explainerPending: String {
             String(localized: "proximity.review.explainer.pending",
-                   defaultValue: "Nothing from this session is saved until you choose. Photos you don't keep are deleted from this phone.",
+                   defaultValue: "Nothing from this hangout is saved until you choose. Photos you don't keep are deleted from this phone.",
                    bundle: .module,
                    comment: "Explainer under the photo review sheet's title. Two promises, both load-bearing: nothing is saved (not to Fernlet, not to the camera roll) until the person chooses, and unkept photos are deleted from this phone.")
         }
@@ -112,7 +112,7 @@ enum FernletProximityUICopy {
         /// The working line while the review waits for the ended session to be left (its buttons are
         /// disabled meanwhile).
         static var endingSession: String {
-            String(localized: "proximity.review.endingSession", defaultValue: "Ending the session...", bundle: .module,
+            String(localized: "proximity.review.endingSession", defaultValue: "Ending the hangout...", bundle: .module,
                    comment: "Status line on the photo review while Fernlet finishes leaving the in-person session that just ended; the buttons are disabled meanwhile. Takes at most a few seconds.")
         }
 

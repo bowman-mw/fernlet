@@ -549,13 +549,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "You've shared the maximum of %lld photo in this mesh session."
+                  "value" : "You've shared the maximum of %lld photo in this hangout."
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "You've shared the maximum of %lld photos in this mesh session."
+                  "value" : "You've shared the maximum of %lld photos in this hangout."
                 }
               }
             }
@@ -566,14 +566,14 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Ya has compartido el máximo de %lld foto en esta sesión."
+                  "state" : "needs_review",
+                  "value" : "Ya has compartido el máximo de %lld foto en esta quedada."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Ya has compartido el máximo de %lld fotos en esta sesión."
+                  "state" : "needs_review",
+                  "value" : "Ya has compartido el máximo de %lld fotos en esta quedada."
                 }
               }
             }
@@ -584,14 +584,14 @@
             "plural" : {
               "one" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Ya compartiste el máximo de %lld foto en esta sesión."
+                  "state" : "needs_review",
+                  "value" : "Ya compartiste el máximo de %lld foto en este convivio."
                 }
               },
               "other" : {
                 "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Ya compartiste el máximo de %lld fotos en esta sesión."
+                  "state" : "needs_review",
+                  "value" : "Ya compartiste el máximo de %lld fotos en este convivio."
                 }
               }
             }

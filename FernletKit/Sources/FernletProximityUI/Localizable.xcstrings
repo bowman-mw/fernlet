@@ -438,19 +438,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Ending the session..."
+            "value" : "Ending the hangout..."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminando la sesión..."
+            "state" : "needs_review",
+            "value" : "Terminando la quedada..."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminando la sesión..."
+            "state" : "needs_review",
+            "value" : "Terminando el convivio..."
           }
         }
       }
@@ -462,19 +462,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Nothing from this session is saved until you choose. Photos you don't keep are deleted from this phone."
+            "value" : "Nothing from this hangout is saved until you choose. Photos you don't keep are deleted from this phone."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se guarda nada de esta sesión hasta que elijas. Las fotos que no conserves se eliminan de este móvil."
+            "state" : "needs_review",
+            "value" : "No se guarda nada de esta quedada hasta que elijas. Las fotos que no conserves se eliminan de este móvil."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se guarda nada de esta sesión hasta que elijas. Las fotos que no conserves se eliminan de este teléfono."
+            "state" : "needs_review",
+            "value" : "No se guarda nada de este convivio hasta que elijas. Las fotos que no conserves se eliminan de este teléfono."
           }
         }
       }

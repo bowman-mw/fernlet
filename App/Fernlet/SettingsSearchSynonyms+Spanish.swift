@@ -111,6 +111,9 @@ extension SettingsSearchSynonyms {
         "Connection History": ["historial de conexiones", "historial", "conexiones anteriores", "sesiones",
                                "registro", "conexiones"],
         // Privacy & data
+        "Connect by tapping phones": ["conectar juntando los móviles", "conectar juntando teléfonos", "juntar",
+                                      "juntando", "tocar", "chocar", "móviles juntos", "teléfonos juntos",
+                                      "conocer", "nuevo amigo", "hacer un amigo"],
         "Sync to iCloud": ["sincronizar con icloud", "sincronizar", "sincronización", "nube", "entre dispositivos",
                            "copia de seguridad"],
         "Delete iCloud data": ["borrar datos de icloud", "borrar icloud", "eliminar datos de la nube", "borrar nube"],

@@ -71,6 +71,11 @@ struct WorldFriendsHomeTests {
         }
         let open = FriendsNearbyKind.classify(friendName: "Sam", discoveryInfo: ["v": "1", "meshName": "Picnic", "memberCount": "3"])
         #expect(FriendsNearbyCopy.title(open, someoneNearby: "Someone nearby") == "Join Sam's hangout")
+        // Someone who isn't a friend, in an open hangout, is offered the join too, not only "Someone nearby".
+        let strangers = FriendsNearbyKind.classify(friendName: nil, discoveryInfo: ["v": "1", "meshName": "Picnic", "memberCount": "3"])
+        #expect(strangers == .hangout(friend: nil, hangoutName: "Picnic", others: 2))
+        #expect(FriendsNearbyCopy.title(strangers, someoneNearby: "Someone nearby") == "Join this hangout")
+        #expect(FriendsNearbyCopy.detail(strangers) == "Picnic · they say yes before you're in")
     }
 
     /// On Home, two friends from a closed hangout are two friends nearby: one marker each (at most two),

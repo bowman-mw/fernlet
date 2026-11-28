@@ -812,7 +812,7 @@ struct MeshRoutedHeartCeremonyTests {
              "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."),
             (.cooldown, "You just sent \(name) some warmth — hearts settle for a few minutes."),
             (.alreadySending, "Already sending \(name) some warmth — one moment."),
-            (.recipientLeft, "\(name) left the session — no heart was sent."),
+            (.recipientLeft, "\(name) left the hangout — no heart was sent."),
             (.notReachableYet,
              "Fernlet can't reach \(name) yet, so no heart was sent. Try again in a moment."),
             (.identityUnconfirmed,

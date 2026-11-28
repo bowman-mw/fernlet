@@ -47,15 +47,15 @@ enum SessionResumeCopy {
             return nil
         case .offerResume:
             return SessionResumeCard(
-                title: "Pick up your last session",
-                message: "Keep this tab open. When someone from that session is nearby again, you'll reconnect automatically, and anything still on its way will finish arriving.",
+                title: "Pick up your last hangout",
+                message: "Keep this tab open. When someone from that hangout is nearby again, you'll reconnect automatically, and anything still on its way will finish arriving.",
                 symbolName: "arrow.clockwise.circle"
             )
         case .previousSessionEnded(let ending):
             return endedCard(ending)
         case .previousSessionCouldNotBeReopened:
             return SessionResumeCard(
-                title: "Your last session couldn't be reopened",
+                title: "Your last hangout couldn't be reopened",
                 message: "Its saved state was set aside. Nothing that was already saved was lost.",
                 symbolName: "doc.badge.ellipsis"
             )
@@ -67,26 +67,26 @@ enum SessionResumeCopy {
         switch ending {
         case .ended:
             return SessionResumeCard(
-                title: "Your last session ended",
-                message: "That session is over, so it can't be reopened. Anything you kept is already saved.",
+                title: "Your last hangout ended",
+                message: "That hangout is over, so it can't be reopened. Anything you kept is already saved.",
                 symbolName: "checkmark.circle"
             )
         case .expired:
             return SessionResumeCard(
-                title: "Your last session timed out",
-                message: "Sessions last up to six hours. Anything you kept is already saved.",
+                title: "Your last hangout timed out",
+                message: "Hangouts last up to six hours. Anything you kept is already saved.",
                 symbolName: "clock"
             )
         case .youLeft:
             return SessionResumeCard(
-                title: "You left your last session",
+                title: "You left your last hangout",
                 message: "It can't be reopened, but anything you kept is already saved.",
                 symbolName: "figure.walk"
             )
         case .youWereRemoved:
             return SessionResumeCard(
-                title: "Your last session ended for you",
-                message: "You were removed from that session. Anything you kept is already saved.",
+                title: "Your last hangout ended for you",
+                message: "You were removed from that hangout. Anything you kept is already saved.",
                 symbolName: "person.crop.circle.badge.minus"
             )
         }

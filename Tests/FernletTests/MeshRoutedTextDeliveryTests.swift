@@ -403,6 +403,50 @@ struct MeshRoutedTextDeliveryTests {
             """)
     }
 
+    /// A shop ban silences chat (decided 2026-11-13): a sender this phone has locally peer-banned
+    /// (`ModerationBanStore`, wired through `peerBannedProvider`) projects nothing, and the drop is
+    /// final, like a block's. The other direction still delivers, so the pair is live.
+    @Test func aPeerBannedSellersMessageIsDroppedAndIsFinal() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "text-banned")
+        defer { rig.teardown() }
+        try await rig.settleChattingPair()
+        let banned = rig.identities[0].localFingerprint
+        rig.nodes[1].features.chat.peerBannedProvider = { $0 == banned }
+
+        #expect(rig.sendText(at: 0, "from a banned shop") == .staged)
+        let itemID = try #require(rig.stagedOwnItemID(at: 0))
+        #expect(rig.sendText(at: 1, "still heard") == .staged)
+        try await rig.settle(until: { rig.transcript(at: 0).count == 2 && rig.isMarkedFinal(at: 1, itemID: itemID) })
+        #expect(rig.transcript(at: 1) == ["still heard"], "the banned seller's message never reaches the transcript")
+        #expect(rig.isMarkedFinal(at: 1, itemID: itemID), "and the drop is final: it leaves the re-entry list")
+        #expect(rig.nodes[1].features.chat.sessionMessages.unreadCount == 0, "a dropped message is never unread")
+    }
+
+    /// The app wires the seam to the shop's own ban query, so the ban the shop shows is the ban chat
+    /// obeys (the rig wires no app, which is why the cells above set the provider themselves).
+    @Test func theAppWiresTheChatToTheShopsPeerBan() throws {
+        let store = try RepoRoot.source("App/Fernlet/FernletStore.swift")
+        #expect(store.contains(
+            "features.chat.peerBannedProvider = { [weak self] fingerprint in self?.isProximitySellerBanned(fingerprint: fingerprint) ?? false }"
+        ))
+    }
+
+    /// A ban that lands mid-hangout hides the seller's rows already on screen at the next gate fold,
+    /// the same moment a Report… or a block takes them away.
+    @Test func aBanMidHangoutHidesTheSellersHeldRows() async throws {
+        let rig = try MeshFoundingRig.build(2, label: "text-banned-later")
+        defer { rig.teardown() }
+        try await rig.settleChattingPair()
+        #expect(rig.sendText(at: 0, "before the ban") == .staged)
+        try await rig.settle(until: { rig.transcript(at: 1).count == 1 })
+
+        let banned = rig.identities[0].localFingerprint
+        rig.nodes[1].features.chat.peerBannedProvider = { $0 == banned }
+        rig.nodes[1].features.chat.refreshVisibleTranscript()
+        #expect(rig.transcript(at: 1).isEmpty, "the banned seller's held row leaves the transcript")
+        #expect(rig.transcript(at: 0).contains("before the ban"), "the seller's own echo is theirs to keep")
+    }
+
     /// Nothing decrypts while the routed access gate is closed — the text twin of the photo claim,
     /// and the reason the mutation predicate is hoisted above the open.
     @Test func nothingProjectsWhileTheRoutedGateIsClosed() async throws {

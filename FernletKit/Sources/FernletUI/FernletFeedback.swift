@@ -107,6 +107,10 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
     case failed
     /// A friend was linked or verified in person.
     case friendHere
+    /// Two phones were tapped together on Home to connect (World Friends §1.2): the tap's one firm
+    /// haptic. It feels like ``held`` (the phones held together is a hold recognized) but answers as
+    /// an outcome, so "Fewer" keeps it: the tap is the only sign the phones met, not a fussy touch.
+    case phonesTapped
 
     // MARK: Session moments
 
@@ -133,7 +137,7 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
     public var haptic: FernletHaptic {
         switch self {
         case .restEnded, .holdEnded, .timerEnded: .attention
-        case .holdStarted, .held: .firm
+        case .holdStarted, .held, .phonesTapped: .firm
         case .setLogged, .zoneDrift: .light
         case .blockChanged, .friendHere: .heavy
         case .workoutFinished, .done: .success
@@ -165,7 +169,7 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
         case .restEnded, .holdEnded, .blockChanged, .workoutFinished, .timerEnded: .chime
         case .holdStarted: .tick
         case .setLogged, .zoneDrift, .tick, .logged, .limit, .moved, .held, .captured, .done, .caveat,
-             .failed, .friendHere, .pace, .messageIn, .windDetent, .wound, .shutter: nil
+             .failed, .friendHere, .phonesTapped, .pace, .messageIn, .windDetent, .wound, .shutter: nil
         }
     }
 
@@ -176,7 +180,7 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
     public var scope: FernletFeedbackScope {
         switch self {
         case .setLogged, .tick, .logged, .limit, .moved, .held: .touch
-        case .captured, .done, .caveat, .failed, .friendHere: .outcome
+        case .captured, .done, .caveat, .failed, .friendHere, .phonesTapped: .outcome
         case .restEnded, .holdStarted, .holdEnded, .blockChanged, .workoutFinished, .zoneDrift, .pace,
              .timerEnded, .messageIn, .windDetent, .wound, .shutter: .session
         }
@@ -191,8 +195,8 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
         case .messageIn: .seconds(10)
         case .logged: .milliseconds(150)
         case .restEnded, .holdStarted, .holdEnded, .setLogged, .blockChanged, .workoutFinished, .zoneDrift,
-             .tick, .limit, .moved, .held, .captured, .done, .caveat, .failed, .friendHere, .pace,
-             .timerEnded, .windDetent, .wound, .shutter: nil
+             .tick, .limit, .moved, .held, .captured, .done, .caveat, .failed, .friendHere, .phonesTapped,
+             .pace, .timerEnded, .windDetent, .wound, .shutter: nil
         }
     }
 }

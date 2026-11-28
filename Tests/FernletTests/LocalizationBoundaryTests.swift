@@ -3922,7 +3922,7 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld shots left", source: "the in-person camera's film count"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
-                     key: "%lld photos stayed on this phone. No one else was in the session when you took them.",
+                     key: "%lld photos stayed on this phone. No one else was in the hangout when you took them.",
                      source: "RoutedShareRefusalCopy.photoKeptNotice, the camera's photos-kept notice"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "Expires in %lld days", source: "an activity card's expiry label"),

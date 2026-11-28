@@ -281,19 +281,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet saves the shared pictures you choose after a friend session."
+            "value" : "Fernlet saves the shared pictures you choose after a hangout with friends."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fernlet guarda las fotos compartidas que elijas después de una sesión con amigos."
+            "state" : "needs_review",
+            "value" : "Fernlet guarda las fotos compartidas que elijas después de una quedada con amigos."
           }
         },
         "es-MX" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fernlet guarda las fotos compartidas que elijas después de una sesión con amigos."
+            "state" : "needs_review",
+            "value" : "Fernlet guarda las fotos compartidas que elijas después de un convivio con amigos."
           }
         }
       }

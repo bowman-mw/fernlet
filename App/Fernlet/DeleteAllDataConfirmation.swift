@@ -368,7 +368,7 @@ nonisolated enum DeleteAllStoreNames {
             "deleteAll.store.recipePhotos", defaultValue: "recipe photos",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
         "session photos you hadn't chosen yet": LocalizedStringResource(
-            "deleteAll.store.unchosenSessionPhotos", defaultValue: "session photos you hadn't chosen yet",
+            "deleteAll.store.unchosenSessionPhotos", defaultValue: "hangout photos you hadn't chosen yet",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
         "photos from the camera on your own": LocalizedStringResource(
             "deleteAll.store.soloCameraPhotos", defaultValue: "photos from the camera on your own",
@@ -407,7 +407,7 @@ nonisolated enum DeleteAllStoreNames {
             "deleteAll.store.heartsParkedInICloud", defaultValue: "hearts parked in iCloud",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
         "your nearby-friends session state": LocalizedStringResource(
-            "deleteAll.store.nearbyFriendsSessionState", defaultValue: "your nearby-friends session state",
+            "deleteAll.store.nearbyFriendsSessionState", defaultValue: "your nearby-friends hangout state",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
         "your nearby-friends delivery state": LocalizedStringResource(
             "deleteAll.store.nearbyFriendsDeliveryState", defaultValue: "your nearby-friends delivery state",

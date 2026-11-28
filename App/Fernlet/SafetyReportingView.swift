@@ -42,7 +42,7 @@ struct SafetyReportingView: View {
 
                 section(
                     "A kind, safe space",
-                    "Everything friends share with you happens in person: custom companion clothing, the photos you take together, messages during a session, recipes, and the activities you start. Objectionable content and abusive behavior aren't welcome here.")
+                    "Everything friends share with you happens in person: custom companion clothing, the photos you take together, messages during a hangout, recipes, and the activities you start. Objectionable content and abusive behavior aren't welcome here.")
 
                 section(
                     "Report a shared item",
@@ -50,15 +50,15 @@ struct SafetyReportingView: View {
 
                 section(
                     "Report or block a person",
-                    "In Friends & Blocks, swipe a person or open their card to Report or Block them. During a session, tap the ••• beside someone in the People list to block them there and then. Blocking hides their content from you and yours from them.")
+                    "In Friends & Blocks, swipe a person or open their card to Report or Block them. During a hangout, tap the ••• beside someone in the People list to block them there and then. Blocking hides their content from you and yours from them.")
 
                 section(
                     "Report a message or a photo",
-                    "During a session, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone.")
+                    "During a hangout, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone.")
 
                 section(
                     "Photos, messages and activities",
-                    "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a session. Session messages are never stored — they disappear for everyone when the session ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them.")
+                    "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a hangout. Hangout messages are never stored — they disappear for everyone when the hangout ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them.")
 
                 section(
                     "What happens next",

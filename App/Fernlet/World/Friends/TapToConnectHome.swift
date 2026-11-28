@@ -291,8 +291,9 @@ struct TapToConnectHomeLayer: ViewModifier {
                 if let question { cue.lastQuestion = question }
             }
             .onChange(of: snapshot.isWaitingForPeer) { _, waiting in if waiting { announceWaiting() } }
-            // §1.2: both phones give one firm haptic at the tap (the phones held together is a hold recognized).
-            .fernletFeedback(.held, trigger: presentation.tapCount) { old, new in new > old }
+            // §1.2: both phones give one firm haptic at the tap. `phonesTapped`, not `held`: it feels the
+            // same, but "Fewer" drops touches and keeps outcomes, and the tap must survive "Fewer".
+            .fernletFeedback(.phonesTapped, trigger: presentation.tapCount) { old, new in new > old }
             .onChange(of: presentation.declinedThereCount) { old, new in if new > old { declinedThere() } }
             .task(id: cue.line) { await letLineStand() }
             .sheet(isPresented: questionShown(snapshot)) {

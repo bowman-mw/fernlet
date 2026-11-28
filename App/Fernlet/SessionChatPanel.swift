@@ -107,7 +107,7 @@ struct SessionChatPanel: View {
             Text("Say hello")
                 .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(WorldPalette.bark)
-            Text("Messages stay in this session only — they disappear for everyone when the session ends.")
+            Text("Messages stay in this hangout only — they disappear for everyone when the hangout ends.")
                 .font(FernletFramedFont.body)
                 .foregroundStyle(WorldPalette.dim)
                 .multilineTextAlignment(.center)

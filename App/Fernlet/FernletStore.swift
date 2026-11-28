@@ -292,6 +292,9 @@ final class FernletStore {
         // messages — see `MeshSessionChat.chatAllowedProvider`. `?? false` keeps a deallocated facade
         // fail-closed, matching the nil-means-no contract the provider already documents.
         features.chat.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
+        // A shop ban silences chat too (decided 2026-11-13): a locally peer-banned seller's messages are
+        // dropped and their held rows hidden, the same as a block.
+        features.chat.peerBannedProvider = { [weak self] fingerprint in self?.isProximitySellerBanned(fingerprint: fingerprint) ?? false }
         // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
         features.moderation.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
         features.moderation.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
@@ -2668,6 +2671,13 @@ final class FernletStore {
         forgetProximityFriendCaches(signingPublicKey: signingPublicKey)
         presenceManager.refreshRoster()
         recipeShareManager.refreshNameDisclosure()   // SEC-L29: the friend tags follow the vault too
+        snapshotSaveCoordinator.schedule()
+    }
+
+    /// Withdraws this device's report of a person (Friends & Blocks' "Withdraw report"). The report
+    /// only: a block stays, so nothing here touches the roster or the name disclosure the block set.
+    func withdrawProximityPeerReport(signingPublicKey: Data) {
+        proximityTrustVault.withdrawReport(signingPublicKey: signingPublicKey)
         snapshotSaveCoordinator.schedule()
     }
 

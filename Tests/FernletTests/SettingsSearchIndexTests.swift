@@ -13,6 +13,7 @@
 // matching the queries the catalog was written for, `Text(entry.title)` quietly renders English
 // forever on a clean build, and a display key the sync never harvested renders English forever too.
 
+import FernletDomainModel
 import Foundation
 import SwiftUI
 import Testing
@@ -76,6 +77,21 @@ struct SettingsSearchIndexTests {
             let results = SettingsSearchIndex.results(for: testCase.query)
             #expect(results.contains { $0.title == testCase.title && $0.route == .privacyData },
                     "query '\(testCase.query)' does not find \(testCase.title)")
+        }
+    }
+
+    /// "Connect by tapping phones", the first switch on Privacy & Data (World Friends §1.6), was in no
+    /// search: the words people use for the gesture now find it, in English and in Spanish.
+    @Test func tappingPhonesWordsFindTheConnectByTappingSwitch() {
+        for query in ["tap", "tapping", "bump", "meet", "connect by tapping", "phones together"] {
+            let results = SettingsSearchIndex.results(for: query)
+            #expect(results.contains { $0.title == "Connect by tapping phones" && $0.route == .privacyData },
+                    "query '\(query)' does not find Connect by tapping phones")
+        }
+        let spanish = InputLanguages([.spanish])
+        for query in ["juntar", "conectar juntando", "chocar"] {
+            #expect(SettingsSearchIndex.results(for: query, languages: spanish).contains { $0.title == "Connect by tapping phones" },
+                    "query '\(query)' does not find Connect by tapping phones in Spanish")
         }
     }
 
