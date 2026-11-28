@@ -14,13 +14,15 @@ import FernletUI
 /// Gentle, low-cost "ambient" home surfaces (spec §12): an at-most-once-a-day gentle offer
 /// (breathing / worry box / short walk), a looking-back journal card, a macro-gap meal nudge,
 /// forgotten-favorite meal chips, a forgotten-good workout nudge, the gentle reminders (a forgotten
-/// recipe or calm tool, last year's seasonal rhythm — `AmbientReminders.swift`), and a dismissible
+/// recipe or calm tool, a quiet place, short days, last year's seasonal rhythm — `AmbientReminders.swift`), and a dismissible
 /// preventive-care micronutrient bubble.
 ///
 /// The gentle reminders, the meal chips and the workout nudge share one switch (Settings › Your day ›
 /// Reminders › Gentle reminders) and the caps of `AmbientReminderSchedule`: each kind at most once a
 /// month, at most two on one day, and "Not now" puts a kind away for a month. They read only unsealed
-/// stores (CAP-2): meals, recipes, workouts, water and this iPhone's breathing finish dates.
+/// stores (CAP-2): meals, recipes, workouts, water, nightly sleep totals, this iPhone's breathing finish
+/// dates and the weather's coarse latitude, plus CAP-2's one named exception, Home's place summary
+/// (`FernletStore+AmbientPlaces.swift`).
 ///
 /// Each card renders only when it has something worth surfacing, so the section quietly
 /// disappears on a sparse day rather than nagging. Rendered by `HomeView`; the history reads
@@ -593,6 +595,8 @@ struct AmbientCardsView: View {
         case .seasonalWorkouts, .forgottenWorkout: "figure.run"
         case .seasonalWater: "drop"
         case .forgottenMeal: "fork.knife"
+        case .quietPlace: "mappin.and.ellipse"
+        case .shortDays: "sun.horizon"
         }
     }
 
@@ -640,25 +644,42 @@ struct AmbientCardsView: View {
             }
         case .season, .none:
             activeSheet = .recipeBook
+        case .place, .shortDays:
+            // No open button: these cards only have "Not now".
+            break
         }
         putAway(reminder.kind)
     }
 
-    /// Today's reminders after the caps, from unsealed history only (CAP-2); none while the Gentle
-    /// reminders switch is off. Records what showed, so the monthly and daily caps hold.
+    /// Today's reminders after the caps, from unsealed history only (CAP-2, with its one named exception:
+    /// Home's place summary, read by `ambientQuietPlaces()`); none while the Gentle reminders switch is
+    /// off. Records what showed, so the monthly and daily caps hold, and when a quiet-place card named a
+    /// restaurant, gym or name-only place, so those come at most once a quarter (P3-B).
     private func chooseReminders(days: [String: FernletDay], hasForgottenMeals: Bool,
                                  hasForgottenWorkout: Bool) -> [AmbientReminder] {
         guard store.settings.gentleRemindersEnabled else { return [] }
         let now = Date()
         let history = AmbientHistory.gather(days: days, recipes: store.recipes + store.savedRecipes, now: now)
+        var schedule = AmbientReminderMemory.schedule()
+        // A place card already shown today stays today, whatever its quarter says.
+        let placeShownToday = schedule.dayKey == store.todayKey
+            && schedule.shownToday.contains(AmbientReminderKind.quietPlace.rawValue)
+        // Short days use the weather's coarse latitude only while weather prompts are on; never asked for here.
+        let latitude = store.settings.weatherPromptsEnabled ? WeatherKitService.shared.coarseLatitude() : nil
         let found = AmbientReminderFinder.candidates(
             history: history, calmFinishes: AmbientReminderMemory.calmFinishes(),
             hasForgottenMeals: hasForgottenMeals, hasForgottenWorkout: hasForgottenWorkout,
-            now: now, southern: AmbientSeason.isSouthern(region: Locale.current.region?.identifier))
-        var schedule = AmbientReminderMemory.schedule()
+            now: now, southern: AmbientSeason.isSouthern(region: Locale.current.region?.identifier),
+            places: store.ambientQuietPlaces(),
+            indoorPlaceAllowed: placeShownToday || AmbientReminderMemory.indoorPlaceRested(now: now),
+            latitude: latitude)
         let chosen = schedule.choose(from: found.map(\.kind), dayKey: store.todayKey, now: now)
         AmbientReminderMemory.save(schedule)
-        return found.filter { chosen.contains($0.kind) }
+        let shown = found.filter { chosen.contains($0.kind) }
+        if !placeShownToday, shown.contains(where: AmbientQuietPlaceFinder.isIndoor) {
+            AmbientReminderMemory.recordIndoorPlaceShown(at: now)
+        }
+        return shown
     }
 
     /// Today's friend card after the caps; none while the Gentle reminders switch is off. Reads only

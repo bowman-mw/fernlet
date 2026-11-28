@@ -211,7 +211,10 @@ extension FernletStore {
         guard worldPlacesKey != nil, !UITestSupport.worldHomeScenes.contains("namesOffline") else { return nil }
         let keeper = worldPlaces
         let name = await keeper.name(of: place)
-        return duressSessionActive ? nil : name
+        guard !duressSessionActive else { return nil }
+        // Home's quiet-place summary (P1-A) keeps Fernlet's own kind token for it, never Apple's name.
+        if let category = name?.category, worldPlacesKey != nil { keeper.store.notePlaceKind(category, for: place.id) }
+        return name
     }
 
     /// Gives place `id` the person's own name, shown from then on in place of the one asked for by its

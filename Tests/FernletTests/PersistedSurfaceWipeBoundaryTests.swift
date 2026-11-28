@@ -197,6 +197,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         // G8 (2026-11-15): the gentle reminders' calm finish dates and card schedule.
         "fernlet.ambientReminders.calmFinishes": .cleared(token: "AmbientReminderMemory.clearAll"),
         "fernlet.ambientReminders.schedule": .cleared(token: "AmbientReminderMemory.clearAll"),
+        // P3-B (2026-11-27): when a quiet-place card last named a restaurant, gym or name-only place (a date only).
+        "fernlet.ambientReminders.indoorPlaceShown": .cleared(token: "AmbientReminderMemory.clearAll"),
         "fernlet.companionFeelings.bedtimeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "fernlet.companionFeelings.wakeMinute": .cleared(token: "CompanionEmotionPreferences.clearAll"),
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .cleared(token: "CompanionEmotionPreferences.clearAll"),

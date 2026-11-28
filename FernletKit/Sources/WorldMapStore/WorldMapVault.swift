@@ -202,6 +202,13 @@ public final class WorldMapVault {
         /// context, so neither file ever opens as the other.
         public static let placeMarks = File(name: "places-marks.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
                                             role: .buffer, context: Data("placeMarks".utf8))
+        /// Home's small summary of Where you've been (``PlaceVisitSummary``, owner's P1-A, 2026-11-27): per
+        /// place, the person's own name or Fernlet's kind token, the last-visit day and a 60-day visit count.
+        /// Written only by the fold under the hub key (``PlaceLogStore/fold(hubKey:now:calendar:)``) and read by
+        /// ``PlaceVisitSummaryReader`` with Private closed, so it is under the device side's purpose and the
+        /// buffer key, bound to its own context.
+        public static let placeSummary = File(name: "places-summary.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
+                                              role: .buffer, context: Data("placeSummary".utf8))
         /// Where each solo camera photo was taken (`PhotoPlaceStore`), by photo id.
         public static let photoPlaces = File(name: "photo-places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
                                              role: .store)
