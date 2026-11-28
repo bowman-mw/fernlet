@@ -245,6 +245,9 @@ struct PrivacyPolicyParityTests {
         // Hotel check-in (2026-11-15, owner's request): the drive-end Apple Maps lookup and what it sends.
         "When a drive ends, Fernlet asks Apple Maps which places are nearby",
         "only that location is sent, with nothing about you attached",
+        // Arrival offers (2026-11-27, owner's pick N6-A): both lookups' new purposes, word for word.
+        "logging a meal at a restaurant or starting a workout at a gym",
+        "or to offer a meal or a workout where you've stopped",
         // Travel-day memories (2026-11-15): the one travel fact that may reach the AI, a city, on the iPhone only.
         "Sprout's memory can note which city you travelled to",
         "only the city, never the airport, times or where you were",

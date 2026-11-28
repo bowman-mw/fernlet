@@ -47,6 +47,8 @@ nonisolated enum WorldQuickStartCopy {
                           comment: "World Home quick-start card heading when friends nearby is the only choice")
         case .eatingPlace(let name), .home(let name), .hotel(let name):
             return name
+        case .arrivedToEat: return WorldArrivalCopy.eatingOut
+        case .arrivedAtGym: return WorldArrivalCopy.atTheGym
         }
     }
 
@@ -156,14 +158,14 @@ nonisolated enum WorldQuickStartCopy {
                           comment: "World Home quick start at a hotel: Move's workout suggestion with no equipment, for the hotel room")
         case .checkIn(let hotel):
             return checkIn(at: hotel)
+        case .arrival(let choice): return WorldArrivalCopy.title(choice)
         }
     }
 
     /// A choice's line.
     static func detail(_ option: WorldQuickStartOption) -> String {
         switch option {
-        case .todaysPlan(_, let session):
-            return session
+        case .todaysPlan(_, let session): return session
         case .suggestWorkout(let space, let equipment, let gentle):
             return gentle ? String(localized: "worldQuickStart.suggest.gentle", defaultValue: "\(space) · only if you feel up to it",
                                    comment: "World Home quick start on a resting day at a workout space: the space's name, then a gentle qualifier")
@@ -220,6 +222,7 @@ nonisolated enum WorldQuickStartCopy {
                 : String(localized: "worldQuickStart.roomWorkout.detail", defaultValue: "No equipment · nothing to set up",
                          comment: "World Home quick start at a hotel: under 'Suggest a room workout'; the workout needs no equipment and no workout space")
         case .checkIn: return checkInDetail
+        case .arrival(let choice): return WorldArrivalCopy.detail(choice)
         }
     }
 
@@ -230,6 +233,13 @@ nonisolated enum WorldQuickStartCopy {
     }
 
     /// "Check in at the Ace": the blue button's check-in row, and the word that slides out beside the button.
+    /// The words beside the button for `card`'s offer: "Check in at the Ace" after a drive ended at a hotel, "Log a
+    /// meal here" or "Start a workout here" on arriving at a restaurant or gym; nil with none.
+    static func offerLabel(_ card: WorldQuickStartCard) -> String? {
+        if let hotel = card.checkInHotel { return checkIn(at: hotel) }
+        return card.arrivalKind.map(WorldArrivalCopy.buttonLabel)
+    }
+
     static func checkIn(at hotel: String) -> String {
         String(localized: "worldQuickStart.checkIn", defaultValue: "Check in at \(hotel)",
                comment: "World Home quick start after a drive ended at a hotel: checks in there; the hotel's name as Apple Maps gives it, e.g. 'Check in at The Ace Hotel' (Spanish: Registrarse en …)")

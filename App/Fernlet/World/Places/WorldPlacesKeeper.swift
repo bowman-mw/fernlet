@@ -35,6 +35,9 @@ import WorldMapStore
 /// - **Places to eat** ("Remember places I eat out", `b1-qs-food`): a visit the device decides is at a
 ///   food-and-drink place (by Apple's reference) is held in memory (``eatingVisit``), and meals logged
 ///   during it are noted there (``noteMeals(_:now:)``).
+/// - **Arrival offers** (owner's pick N1-B, 2026-11-27): when that same lookup decides the person has stopped at a
+///   food-and-drink place or a gym, the place's kind and Apple's name go to ``onArrival`` (the store's gate, then the
+///   blue button), in memory only; no new lookup runs for it (``offerArrival(_:at:now:)``).
 ///
 /// With "Remember places I stop at" off (Settings › Home map, ``WorldMapPreferences/remembersPlaces(in:)``)
 /// nothing new is noted in Where you've been; with "Remember places I eat out" off no meal is noted. A lookup
@@ -80,6 +83,9 @@ final class WorldPlacesKeeper {
     /// Whether that check may run when it comes due: the store's gate for a reading (the map's own location,
     /// the app in front, no decoy). Nil (a test) schedules none.
     @ObservationIgnored var mayRecheck: (() -> Bool)?
+    /// Hands an arrival offer to the store (a restaurant or gym the stop lookup decided on), or nil when what is held
+    /// in memory is forgotten (the wipes, a decoy), so the offers held elsewhere go too. Nil (a test) hands nothing.
+    @ObservationIgnored var onArrival: ((WorldArrivalOffer?) -> Void)?
     /// Whether each place's reference read as food and drink when asked this session (in memory only).
     @ObservationIgnored var eatsAt: [String: Bool] = [:]
     /// Whether a decoy session is showing.
@@ -155,7 +161,11 @@ final class WorldPlacesKeeper {
                                                                  "places": "\(nearby?.count ?? 0)",
                                                                  "verdict": Self.token(verdict)])
         guard !isDecoy else { return false }
-        if let verdict { offerSpot(WorldRememberSpot.kind(for: verdict, nearby: nearby ?? []), at: point, now: now) }
+        if let verdict {
+            let spot = WorldRememberSpot.kind(for: verdict, nearby: nearby ?? [])
+            offerSpot(spot, at: point, now: now)
+            offerArrival(spot, at: point, now: now)
+        }
         var noted = false
         if remembersPlaces(), case .allowed(let placeID) = verdict {
             noted = update { state in
@@ -234,6 +244,17 @@ final class WorldPlacesKeeper {
         eatingPlaces = []
         eatingNames = [:]
         lookup.forgetNames()
+        onArrival?(nil)
+    }
+
+    /// Hands the store an arrival offer when the stop lookup decided on a named food-and-drink place or gym
+    /// (`spot`) and its switch is on: "Remember places I eat out" for a restaurant, "Remember places I stop at" for a
+    /// gym (owner's pick N5-B). Nothing in a decoy.
+    func offerArrival(_ spot: WorldRememberSpot.Kind, at point: GeoPoint, now: Date) {
+        guard !isDecoy, let onArrival, case .named(_, let name?, let category?) = spot,
+              let kind = WorldArrivalKind(category),
+              WorldArrivalRules.allows(kind, remembersPlaces: remembersPlaces(), remembersEatingOut: remembersEatingOut()) else { return }
+        onArrival(WorldArrivalOffer(kind: kind, name: name, point: point, anchor: point, since: now))
     }
 
     /// The name and kind of `place` as the lookup gives them again by its reference (in memory only), or

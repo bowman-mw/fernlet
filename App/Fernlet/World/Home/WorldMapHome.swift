@@ -477,7 +477,7 @@ struct WorldMapHome: View {
                         let buttonCard = WorldQuickStart.card(for: buttonContext)
                         WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(buttonCard),
                                               tripLabel: trip.todayLabel,
-                                              checkInLabel: buttonCard?.checkInHotel.map(WorldQuickStartCopy.checkIn(at:)), action: toggleCard)
+                                              checkInLabel: buttonCard.flatMap(WorldQuickStartCopy.offerLabel), action: toggleCard)
                     }
                 }
             }
@@ -849,6 +849,25 @@ struct WorldMapHome: View {
         case .checkIn:
             // The stay starts; the map greets the person once it sees them there (`ref-hotel`).
             store.checkInAtWorldHotelOffer()
+        case .arrival(let choice):
+            chooseOnArrival(choice)
+        }
+    }
+
+    /// A choice at a restaurant or gym the person arrived at (owner's picks N2-A and N3-A, 2026-11-27). The offer
+    /// goes once a meal is logged or a workout started from it (``FernletStore/worldArrivalOffer``).
+    private func chooseOnArrival(_ choice: WorldArrivalChoice) {
+        switch choice {
+        case .logMeal:
+            menuSearch = WorldMenuSearch(seed: store.worldArrivalMealSeed())
+        case .findMenu:
+            menuSearch = store.worldArrivalMenuSeed().map { WorldMenuSearch(seed: $0) }
+        case .startPlan:
+            guidedSession = store.startTodaysPlanAtArrival()
+        case .logWorkout:
+            onSheet(.workout)
+        case .suggestWorkout:
+            onSheet(.workoutSuggestion)
         }
     }
 

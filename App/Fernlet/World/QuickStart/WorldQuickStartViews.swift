@@ -41,8 +41,9 @@ struct WorldQuickStartButton: View {
     /// "Trip to Honolulu" on the day of a calendar flight, at its airport (World-Airports-Spec §10.7): it slides
     /// out for 3 seconds, and the name says it ("Quick start, Trip to Honolulu").
     var tripLabel: String? = nil
-    /// "Check in at the Ace" after a drive ended at a hotel (owner, 2026-11-15): it slides out for 30 seconds, and
-    /// the name says it ("Quick start, Check in at the Ace").
+    /// "Check in at the Ace" after a drive ended at a hotel (owner, 2026-11-15), or "Log a meal here" / "Start a
+    /// workout here" on arriving at a restaurant or gym (owner, 2026-11-27): it slides out for 30 seconds, and the
+    /// name says it ("Quick start, Check in at the Ace").
     var checkInLabel: String? = nil
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -195,6 +196,15 @@ struct WorldQuickStartOptionRow: View {
         case .cookSomething: WorldSprites.bowlInk
         case .roomWorkout: WorldPlaceSprites.suitcase
         case .checkIn: WorldPlaceSprites.hotel
+        case .arrival(let choice): Self.sprite(for: choice)
+        }
+    }
+
+    /// The pixel icon for a choice on arrival at a restaurant (the bowl) or a gym (the dumbbell).
+    static func sprite(for choice: WorldArrivalChoice) -> WorldSprite {
+        switch choice {
+        case .logMeal, .findMenu: WorldSprites.bowl
+        case .startPlan, .logWorkout, .suggestWorkout: WorldSprites.dumbbell
         }
     }
 
@@ -221,6 +231,11 @@ struct WorldQuickStartOptionRow: View {
         case .cookSomething: "cookSomething"
         case .roomWorkout: "roomWorkout"
         case .checkIn: "checkIn"
+        case .arrival(.logMeal): "arrival.logMeal"
+        case .arrival(.findMenu): "arrival.findMenu"
+        case .arrival(.startPlan): "arrival.startPlan"
+        case .arrival(.logWorkout): "arrival.logWorkout"
+        case .arrival(.suggestWorkout): "arrival.suggestWorkout"
         }
     }
 }

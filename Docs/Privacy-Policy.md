@@ -187,6 +187,18 @@
      readings or Motion show movement, the same two-minute check as after leaving a place). Background location
      is used at one more moment behind the same off-by-default switch, so the effective date moves to
      November 21, 2026. Nothing new is kept, nothing leaves the iPhone, and no promise is weakened under §13.
+     And 2026-11-27 (arrival offers at a restaurant or a gym; the owner's picks N1-B to N7-A of 2026-11-27, N6-A
+     giving both sentences word for word): §6's drive-end sentence becomes "When a drive ends, Fernlet asks Apple
+     Maps which places are nearby, so it can offer things like checking in at a hotel, logging a meal at a
+     restaurant or starting a workout at a gym; only that location is sent, with nothing about you attached", and
+     the foreground sentence adds "or to offer a meal or a workout where you've stopped" after "To name a place
+     you stop at". The drive-end lookup is the same single Apple Maps request, now asking for restaurants (with
+     "Remember places I eat out" on) and gyms (with "Remember places I stop at" on) as well as hotels; the
+     foreground one is the stop lookup that already runs while the map is open. The place's name and point are
+     held in memory only and never shown on the button or written, and nothing runs in the background that did
+     not before. A new use of an existing destination behind the existing switches, like the subway hops of
+     2026-11-20, so the effective date stays November 21, 2026; nothing goes to the developer and no promise is
+     weakened under §13.
      Before submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -558,11 +570,11 @@ you back when you return; it stays until you remove it in Settings › Home map.
 If you add the map widget, Fernlet gives it a picture of the map around you, with your marked places, saved trails, and the paths and roads you use most, on this iPhone only and never in a backup; your visit counts and the history of
 where you've been stay sealed in Private, and the widget's copy is deleted whenever you delete your map history.
 
-To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks
-Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
+To name a place you stop at, or to offer a meal or a workout where you've stopped, or to check where
+a photo you take on your own was taken, Fernlet asks Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
 keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
 you look at your places.
-When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at a hotel; only that location is sent, with nothing about you attached. When you tap a subway ride on your map, Fernlet asks Apple Maps for the stations near its two ends, in the same way.
+When a drive ends, Fernlet asks Apple Maps which places are nearby, so it can offer things like checking in at a hotel, logging a meal at a restaurant or starting a workout at a gym; only that location is sent, with nothing about you attached. When you tap a subway ride on your map, Fernlet asks Apple Maps for the stations near its two ends, in the same way.
 
 **Airports and flights.** With Airports and flights on, Fernlet notes the airports you visit and the flights you take from your location, and keeps them in your passport, encrypted on this iPhone and carried only in the passport's own sealed backup if you use it.
 If you add past flights from a Flighty export file, Fernlet reads the file on this iPhone and keeps only each flight's date, airports, gate times, aircraft type and tail number; it doesn't keep the file and never contacts Flighty. The aircraft type and tail number stay in your passport, encrypted on this iPhone, so the map can point out a plane you've flown on and the passport can stamp each type you've flown.

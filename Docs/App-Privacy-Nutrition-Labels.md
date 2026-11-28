@@ -166,8 +166,11 @@ stays on the device.
   (Bluetooth tags and car names), homes and hotels, airports, flights and the Hangar:** on the
   device only, encrypted with the map.
 - **Flights from Calendar** and the **Flighty file**: read on the device; nothing sent.
-- **Apple Maps lookup when a drive ends** (hotel check-in): a location goes to Apple to answer the
-  request, as the existing place lookups do. Apple is not a partner that keeps it for the developer.
+- **Apple Maps lookup when a drive ends** (hotel check-in; since 2026-11-27 also the restaurant and gym arrival
+  offers, through the same request): a location goes to Apple to answer the request, as the existing place
+  lookups do. Apple is not a partner that keeps it for the developer. The arrival offers add no data type and no
+  destination: the restaurant's or gym's name is held in memory only and never sent to the developer, so no label
+  changes.
 - **Recovery code:** the backup keys, sealed to the 12 words, sit in the user's own iCloud private
   database. Ciphertext in the user's iCloud, like the sealed backups (Sensitive-info row).
 - **Memories as their own synced rows** and **the per-device day key**: the same user's-own-iCloud

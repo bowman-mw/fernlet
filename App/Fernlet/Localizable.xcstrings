@@ -102780,6 +102780,294 @@
         }
       }
     },
+    "worldQuickStart.arrival.findMenu" : {
+      "comment" : "World Home quick start at a restaurant the person just arrived at: searches the web for its menu by the place's name, which is not shown (Spanish: Buscar el menú)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Find the menu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar el menú"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar el menú"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.heading.eatingOut" : {
+      "comment" : "World Home quick-start card heading at a restaurant the person just arrived at; no place name (Spanish: Comiendo fuera)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating out"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comiendo fuera"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comiendo fuera"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.heading.gym" : {
+      "comment" : "World Home quick-start card heading at a gym the person just arrived at; no place name (Spanish: En el gimnasio)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "At the gym"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En el gimnasio"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En el gimnasio"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.label.meal" : {
+      "comment" : "World Home: the words beside the blue button after arriving at a restaurant; opens Log meal (Spanish: Registrar una comida aquí)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log a meal here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar una comida aquí"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar una comida aquí"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.label.workout" : {
+      "comment" : "World Home: the words beside the blue button after arriving at a gym (Spanish: Empezar un entreno aquí)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start a workout here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar un entreno aquí"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar un entrenamiento aquí"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.logMeal" : {
+      "comment" : "World Home quick start at a restaurant the person just arrived at: opens Log meal (Spanish: Registrar una comida)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log a meal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar una comida"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar una comida"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.logMeal.detail" : {
+      "comment" : "World Home quick start at a restaurant: under 'Log a meal'; breakfast, lunch, snack or dinner is chosen from the time now (Spanish: Elige la comida según la hora)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Picks the meal by the time of day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige la comida según la hora"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige la comida según la hora"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.logWorkout" : {
+      "comment" : "World Home quick start at a gym the person just arrived at, with no plan due: opens Log workout (Spanish: Registrar un entreno)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log a workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar un entreno"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar un entrenamiento"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.logWorkout.detail" : {
+      "comment" : "World Home quick start at a gym: under 'Log a workout' (Spanish: Añade lo que hiciste)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add what you did"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añade lo que hiciste"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agrega lo que hiciste"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.startPlan" : {
+      "comment" : "World Home quick start at a gym the person just arrived at, with a plan due today: starts its next guided session (Spanish: Empezar el plan de hoy)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start today's plan"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar el plan de hoy"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar el plan de hoy"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.suggestWorkout" : {
+      "comment" : "World Home quick start at a gym the person just arrived at, below 'Log a workout': opens Move's workout suggestion (Spanish: Sugerir un entreno)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggest a workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sugerir un entreno"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sugerir un entrenamiento"
+          }
+        }
+      }
+    },
+    "worldQuickStart.arrival.suggestWorkout.detail" : {
+      "comment" : "World Home quick start at a gym: under 'Suggest a workout'; Move's suggestion follows today's readiness (Spanish: Elegido según cómo estás hoy)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Picked for how you are today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elegido según cómo estás hoy"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elegido según cómo te sientes hoy"
+          }
+        }
+      }
+    },
     "worldQuickStart.backToWorkout" : {
       "comment" : "World Home quick start during a guided workout: returns to it; the workout's name",
       "extractionState" : "extracted_with_value",

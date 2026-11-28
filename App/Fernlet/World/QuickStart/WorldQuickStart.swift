@@ -112,6 +112,10 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     /// The hotel a drive just ended at, by Apple's name, to offer a check-in (owner, 2026-11-15): nil at a home or the
     /// current hotel, once the person left, and in a decoy.
     var hotelOffer: String?
+    /// The restaurant or gym the person just arrived at (owner's picks, 2026-11-27; `FernletStore+WorldArrivalOffer`):
+    /// its kind only, never its name (N4-B). Nil at a home or hotel, once used or left, with its switch off, and in
+    /// a decoy.
+    var arrival: WorldArrivalKind?
     /// A workout space the person set up at that home (its pin near the home, or the space they stand
     /// at): "Suggest today's workout · Home space" leads the home card only with one (draft 2's note).
     var homeSpace: Space?
@@ -185,6 +189,24 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case roomWorkout(gentle: Bool)
     /// "Check in at the Ace" after a drive ended at a hotel (owner, 2026-11-15): starts the stay there.
     case checkIn(hotel: String)
+    /// A choice at a restaurant or gym the person arrived at (owner's picks N2-A and N3-A, 2026-11-27).
+    case arrival(WorldArrivalChoice)
+}
+
+/// The choices the blue button offers at a restaurant or gym the person arrived at (owner's picks, 2026-11-27). No
+/// place name on any of them (N4-B).
+nonisolated enum WorldArrivalChoice: Equatable, Hashable, Sendable {
+    /// "Log a meal": Log meal, with the meal type picked by the time of day (N2-A, first).
+    case logMeal
+    /// "Find the menu": Log meal, ready for Fernlet's food lookup by the place's name (N2-A, second); the person's
+    /// location is never sent.
+    case findMenu
+    /// "Start today's plan" at a gym with a plan due today (N3-A): its next guided session, as drawn.
+    case startPlan(session: String)
+    /// "Log a workout" at a gym with no plan due (N3-A, first): Log workout.
+    case logWorkout
+    /// "Suggest a workout" below it (N3-A, the owner's note): Move's suggestion.
+    case suggestWorkout
 }
 
 /// The card the blue button opens (the design's `.qs` card): a heading, an optional line, and the
@@ -222,6 +244,10 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case home(String)
         /// The hotel's name (`ref-home-blue`'s hotel card).
         case hotel(String)
+        /// "Eating out": a restaurant the person arrived at, unnamed (owner's pick N4-B, 2026-11-27).
+        case arrivedToEat
+        /// "At the gym": a gym the person arrived at, unnamed (N4-B).
+        case arrivedAtGym
     }
 
     /// The line under the heading.
@@ -283,6 +309,10 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 ///    workout first only with a workout space at that home, Around the block again (the latest loop from the
 ///    door), Cook something, Walk or run together. **At a hotel** its name: Suggest a room workout (no
 ///    equipment), Walk or run together. On a resting day "Resting counts today", the gentle stretch leading.
+/// 6r. **At a restaurant just arrived at** (owner's picks N1 to N5, 2026-11-27), away from a pinned space and not a
+///    favourite place to eat (6a wins there): "Eating out", Log a meal first, Find the menu second. **At a gym just
+///    arrived at**, after the resting day's card: "At the gym", Start today's plan when a plan is due, else Log a
+///    workout and Suggest a workout. No place name on either (N4-B); a hotel's check-in (6c) and a home (6h) win.
 /// 6a. **At a favourite place to eat** (away from a pinned space, round 6: `b1-qs-food`, `b3-qs-food-camera`)
 ///    its name: Log your usual, the disposable camera on your own, Find its menu; on a resting day too. The
 ///    button shows the bowl, never badges or buzzes on arrival.
@@ -315,16 +345,17 @@ nonisolated enum WorldQuickStart {
         guard let card = card(for: context) else { return nil }
         // At a favourite place to eat the bowl stays, camera row or not (`b3-qs-food-camera`).
         if case .eatingPlace = card.heading { return .eat }
+        if card.heading == .arrivedToEat { return .eat }
         if card.options.contains(where: \.isCamera) { return .camera }
         switch card.heading {
-        case .space, .workout: return context.isResting ? .rest : .space
+        case .space, .workout, .arrivedAtGym: return context.isResting ? .rest : .space
         case .gentle: return .rest
         case .savedLine: return .trail
         case .savedRun: return .run
         case .airport: return .walk
         case .session, .walk, .walking, .running, .home, .hotel: return .walk
         case .friendNearby, .inPerson: return .friends
-        case .eatingPlace: return .eat
+        case .eatingPlace, .arrivedToEat: return .eat
         }
     }
 
@@ -378,7 +409,9 @@ nonisolated enum WorldQuickStart {
             return WorldQuickStartCard(heading: .hotel(hotel), note: nil, options: [.checkIn(hotel: hotel)] + walk)
         }
         if context.space == nil, let place = context.eatingPlace { return eating(place, context) }
+        if context.space == nil, context.arrival == .restaurant { return arrivedToEat() }
         if context.isResting { return resting(context, walk: walk) }
+        if context.space == nil, context.arrival == .gym { return arrivedAtGym(plannedSession: context.plannedSession) }
         if let space = context.space {
             let first: WorldQuickStartOption = context.plannedSession.map { .todaysPlan(space: space.name, session: $0) }
                 ?? .suggestWorkout(space: space.name, equipment: space.equipment, gentle: false)
@@ -429,6 +462,21 @@ nonisolated enum WorldQuickStart {
                                    options: usual + camera + [.findMenu(place: place.name)])
     }
 
+    /// At a restaurant the person arrived at that isn't a favourite (owner's pick N2-A): "Log a meal" first, "Find
+    /// the menu" second.
+    private static func arrivedToEat() -> WorldQuickStartCard {
+        WorldQuickStartCard(heading: .arrivedToEat, note: nil, options: [.arrival(.logMeal), .arrival(.findMenu)])
+    }
+
+    /// At a gym the person arrived at that isn't a pinned space (owner's pick N3-A, with the owner's note): "Start
+    /// today's plan" when a plan is due today; otherwise "Log a workout", with "Suggest a workout" below it.
+    private static func arrivedAtGym(plannedSession: String?) -> WorldQuickStartCard {
+        guard let plannedSession else {
+            return WorldQuickStartCard(heading: .arrivedAtGym, note: nil, options: [.arrival(.logWorkout), .arrival(.suggestWorkout)])
+        }
+        return WorldQuickStartCard(heading: .arrivedAtGym, note: nil, options: [.arrival(.startPlan(session: plannedSession))])
+    }
+
     /// At a home or the hotel (`ref-home-blue` draft 2): the home's workout only with a space set up there
     /// (today's plan there when one is planned, as at any space), the loop from the door while a walk can
     /// start, the recipe book and the walk; at a hotel the room workout and the walk. A resting day leads
@@ -463,6 +511,16 @@ extension WorldQuickStartCard {
     nonisolated var checkInHotel: String? {
         for option in options {
             if case .checkIn(let hotel) = option { return hotel }
+        }
+        return nil
+    }
+
+    /// The kind of place the card offers a meal or a workout at on arrival, for the words beside the button ("Log a
+    /// meal here", "Start a workout here"); nil when it offers neither.
+    nonisolated var arrivalKind: WorldArrivalKind? {
+        for option in options {
+            guard case .arrival(let choice) = option else { continue }
+            return choice == .logMeal || choice == .findMenu ? .restaurant : .gym
         }
         return nil
     }
