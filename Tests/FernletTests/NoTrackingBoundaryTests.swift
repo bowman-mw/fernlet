@@ -749,9 +749,11 @@ struct NoTrackingBoundaryTests {
         "AppleMutedBaseMap.swift": (2, [
             // ApplePlaceLookup: the stop and solo-photo lookup, within 300 m, in the foreground.
             "Where you've been's stops and a solo photo's place: Apple's points of interest round where the person stands",
-            // AppleNearbyFinder (owner 2026-11-15): the drive-end hotel lookup, within 150 m, the hotel kind only; and,
-            // through the same request (2026-11-20), a tapped subway hop's stations, within 400 m of each end.
-            "When a drive ends: hotels within 150 m of where it ended, for the check-in offer; only the point and the kind go"
+            // AppleNearbyFinder (owner 2026-11-15): the drive-end lookup, within 150 m, widened (owner 2026-11-27, N1-B
+            // and N7-A) from the hotel kind to hotels, restaurants and gyms, only the kinds whose switch is on, in the
+            // same one request; and, through the same request (2026-11-20), a tapped subway hop's stations, within
+            // 400 m of each end.
+            "When a drive ends: hotels, restaurants and gyms within 150 m of where it ended, for the arrival offers; only the point and the kind go"
         ])
     ]
 

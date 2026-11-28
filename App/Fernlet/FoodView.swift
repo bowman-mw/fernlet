@@ -1442,11 +1442,14 @@ private enum MealFlowDestination: Hashable {
 }
 
 /// What Log meal's sheet opens with, when something hands it a start: the description already typed,
-/// and by-hand macros already open with their numbers (the DEBUG screenshot gallery; nothing in
-/// shipping code passes one yet).
+/// by-hand macros already open with their numbers (the DEBUG screenshot gallery), and the meal type
+/// already picked (the blue button's "Log a meal" at a restaurant, by the time of day). The World's
+/// "Find …'s menu" passes one too.
 struct MealSheetSeed {
     var description: String
     var macros: Macros? = nil
+    /// The meal type to open with; nil leaves it on "Auto".
+    var mealType: MealType? = nil
 }
 
 /// The manual recipe editor: name, notes, catalog-bound ingredients, per-serving totals, servings,
@@ -3138,12 +3141,13 @@ struct MealSheet: View {
         return onLogged.first { [store] meals, dayKey in _ = store.tagFreeMeals(meals, loggedTo: dayKey) }
     }
 
-    /// Opens with the seed's description and by-hand macros, once (a later appear keeps the edits).
+    /// Opens with the seed's description, meal type and by-hand macros, once (a later appear keeps the edits).
     private func applySeed() {
         // DEBUG screenshot run (`bb-free`): `FERNLET_UI_TEST_BB_SCENARIO=free` opens with the tag on.
         if UITestSupport.bodybuildingScenario == "free" { isFreeMeal = true }
         guard let seed, description.isEmpty else { return }
         description = seed.description
+        if mealType == nil, let type = seed.mealType { mealType = type }
         if let macros = seed.macros {
             manualProtein = macros.protein
             manualCarbs = macros.carbs

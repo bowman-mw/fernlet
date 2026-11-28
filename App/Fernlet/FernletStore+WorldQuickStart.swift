@@ -44,6 +44,8 @@ extension FernletStore {
         context.base = worldQuickStartBase(at: worldLocation.latest)
         // A drive just ended at a hotel (owner 2026-11-15): "Check in at the Ace" (`FernletStore+WorldHotelOffer`).
         context.hotelOffer = context.base == nil ? worldHotelOffer?.name : nil
+        // A restaurant or gym just arrived at (owner 2026-11-27): its kind only (`FernletStore+WorldArrivalOffer`).
+        context.arrival = context.base == nil ? worldArrivalOffer?.kind : nil
         if includingPlans, context.base?.isHotel == false {
             context.homeSpace = worldHomeSpace(at: worldLocation.latest, standingAt: context.space?.id)
         }
