@@ -5,9 +5,10 @@ import FernletFoundation
 // AmbientReminderFinder.swift
 //
 // Which gentle reminders have something to say today: the forgotten good things (a recipe, a calm
-// tool) and the seasonal rhythms (soup, walks, workouts, water). Pure, with the clock injected; the
-// caps that decide which of them actually show live in `AmbientReminderSchedule`. CAP-2: reads only
-// the unsealed history in `AmbientHistory` (see AmbientReminders.swift).
+// tool), a quiet place (AmbientPlaces.swift), short days (AmbientShortDays.swift) and the seasonal
+// rhythms (soup, walks, workouts, water). Pure, with the clock injected; the caps that decide which of
+// them actually show live in `AmbientReminderSchedule`. CAP-2: reads only the unsealed history in
+// `AmbientHistory` and the place summary's values (see AmbientReminders.swift).
 
 /// The unsealed history the finders read, gathered once from the diary.
 nonisolated struct AmbientHistory: Equatable, Sendable {
@@ -21,6 +22,8 @@ nonisolated struct AmbientHistory: Equatable, Sendable {
     var workouts: [AmbientDatedAmount] = []
     /// One entry per day with water logged, its amount the bottles.
     var water: [AmbientDatedAmount] = []
+    /// One entry per day with a nightly sleep total, its amount the hours (S2-A: totals only, no wake times).
+    var nights: [AmbientDatedAmount] = []
     /// The earliest day with a meal, workout or water logged: the one-year gate's clock.
     var firstDataDate: Date?
 
@@ -29,7 +32,8 @@ nonisolated struct AmbientHistory: Equatable, Sendable {
 
     /// Gathers the history from `days` (the diary, keyed by `yyyy-MM-dd`) and the person's `recipes`.
     ///
-    /// Reads meals, workouts and bottle counts only, never a day's journals or anything sealed.
+    /// Reads meals, workouts, bottle counts and nightly sleep totals only, never a day's journals or
+    /// anything sealed.
     static func gather(days: [String: FernletDay], recipes: [RecipeDefinition], now: Date,
                        calendar: Calendar = .current) -> AmbientHistory {
         var history = AmbientHistory()
@@ -49,6 +53,9 @@ nonisolated struct AmbientHistory: Equatable, Sendable {
                 }
             }
             if day.bottleCount > 0 { history.water.append(AmbientDatedAmount(date: date, amount: Double(day.bottleCount))) }
+            if let hours = day.sleep?.hours ?? day.healthContext?.body?.sleepHours {
+                history.nights.append(AmbientDatedAmount(date: date, amount: hours))
+            }
         }
         history.recipeUses = recipes.compactMap { recipe in
             recipeDates[recipe.id].map { AmbientRecipeUse(id: recipe.id, name: recipe.name, dates: $0.sorted()) }
@@ -58,6 +65,7 @@ nonisolated struct AmbientHistory: Equatable, Sendable {
         history.walks.sort { $0.date < $1.date }
         history.workouts.sort { $0.date < $1.date }
         history.water.sort { $0.date < $1.date }
+        history.nights.sort { $0.date < $1.date }
         return history
     }
 
@@ -155,16 +163,26 @@ nonisolated enum AmbientReminderFinder {
     static let seasonalGateDays = 330
 
     /// Every reminder with something to say today, in priority order: the recipe, the calm tool, the
-    /// meal chips and the workout (when Home found them), then the seasonal rhythms. The caps in
-    /// `AmbientReminderSchedule` then pick at most two.
+    /// meal chips and the workout (when Home found them), short days, a quiet place, then the seasonal
+    /// rhythms. The caps in `AmbientReminderSchedule` then pick at most two.
+    ///
+    /// `places` and `indoorPlaceAllowed` feed the quiet place (``AmbientQuietPlaceFinder``); `latitude`
+    /// (the weather's, rounded to 1°, or nil) feeds short days (``AmbientShortDaysFinder``).
     static func candidates(history: AmbientHistory, calmFinishes: [AmbientCalmTool: [Date]],
                            hasForgottenMeals: Bool, hasForgottenWorkout: Bool, now: Date, southern: Bool,
+                           places: [AmbientQuietPlace] = [], indoorPlaceAllowed: Bool = true, latitude: Int? = nil,
                            calendar: Calendar = .current) -> [AmbientReminder] {
         var found: [AmbientReminder] = []
         if let recipe = forgottenRecipe(history.recipeUses, now: now) { found.append(recipe) }
         if let calm = forgottenCalm(calmFinishes, now: now) { found.append(calm) }
         if hasForgottenMeals { found.append(AmbientReminder(kind: .forgottenMeal, subject: .none)) }
         if hasForgottenWorkout { found.append(AmbientReminder(kind: .forgottenWorkout, subject: .none)) }
+        if let short = AmbientShortDaysFinder.reminder(latitude: latitude, nights: history.nights, now: now, calendar: calendar) {
+            found.append(short)
+        }
+        if let place = AmbientQuietPlaceFinder.reminder(places, indoorAllowed: indoorPlaceAllowed, now: now, calendar: calendar) {
+            found.append(place)
+        }
         found += seasonal(history, now: now, southern: southern, calendar: calendar)
         assert(Set(found.map(\.kind)).count == found.count, "one reminder per kind")
         return found

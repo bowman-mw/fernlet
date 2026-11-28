@@ -41,6 +41,10 @@ extension FernletStore {
             let removed = current.places.filter { result.removedPlaces.contains($0.id) }
             try worldPlaces.store.updateDeviceState { $0.forgettingPlaces(removed) }
             for workout in result.workoutIDs { worldRoutes.delete(for: workout) }
+            // Home's quiet-place summary (P1-A) forgets every place that lost a visit here.
+            let kept = Set(result.log.stops.map(\.id))
+            let lostVisit = current.stops.filter { $0.kind == .visit && !kept.contains($0.id) }.compactMap(\.placeID)
+            worldPlaces.store.forgetInVisitSummary(Set(lostVisit).union(result.removedPlaces))
             // A place remembered with "Remember this place" loses its kept mark and icon too (round 7).
             worldPlaces.forgetKeptPlaces(result.removedPlaces)
             // The map's places to eat as they are now, so a deleted place's icon goes at once.

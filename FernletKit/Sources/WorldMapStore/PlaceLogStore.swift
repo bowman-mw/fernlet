@@ -26,6 +26,14 @@ import Foundation
 ///
 /// Both go with the vault: Delete everything, the silent wipe and the recovery lock remove the folder and
 /// its keys together. Nothing here is synced, backed up, exported, shared, given to the AI or sent anywhere.
+///
+/// **Home's summary** (owner's P1-A, 2026-11-27; ``PlaceVisitSummary``, `places-summary.bin`, the buffer key):
+/// each fold also counts the visits it adds into a small summary Home's quiet-place card reads with
+/// Private closed (``PlaceVisitSummaryReader``): the person's own name or Fernlet's kind token, the
+/// last-visit day and a 60-day count per place. The one exception to "never its kind": the summary keeps
+/// Fernlet's own five-word kind token (a place to eat, or the kind the name lookup reported while Private
+/// was open), never Apple's name, point or reference. Deleting a place, a day or a stop forgets those
+/// places in it; "Delete all of it", the app-lock reset and every wipe remove it.
 @MainActor
 public final class PlaceLogStore {
     private let vault: WorldMapVault
@@ -148,14 +156,80 @@ public final class PlaceLogStore {
         let current = try reading(hubKey: hubKey)
         if current.keyChanged {
             vault.remove(WorldMapVault.File.placesDevice)
+            vault.remove(WorldMapVault.File.placeSummary)
             FernletAuditLog.log("worldMap.places.resetCleared")
             return .empty
         }
         let device = try deviceState()
         let next = current.log.folding(device, now: now, calendar: calendar)
         if next != current.log { try saveLog(next, hubKey: hubKey) }
+        updateVisitSummary(before: current.log, after: next, eating: device.eatingPlaces, now: now, calendar: calendar)
         if device.waitsForFold { try saveDeviceState(device.folded) }
         return next
+    }
+
+    // MARK: Home's summary (P1-A)
+
+    /// Counts the visits `after` holds that `before` did not into Home's summary (every visit in `after`
+    /// when no summary was written yet), and brings its names in line. Written after the log, so a fold
+    /// cut short counts nothing twice (the next fold sees those stops as already in the log). A failure is
+    /// audited and never fails the fold: the summary is Home's convenience, not a record.
+    private func updateVisitSummary(before: PlaceLog, after: PlaceLog, eating: [EatingPlace], now: Date, calendar: Calendar) {
+        do {
+            let stored = try visitSummary()
+            let counted = stored == nil ? Set<UUID>() : Set(before.stops.map(\.id))
+            let visits = after.stops.filter { $0.kind == .visit && !counted.contains($0.id) }
+            let next = (stored ?? .empty).folding(newVisits: visits, log: after, eating: eating, now: now, calendar: calendar)
+            if next != stored { try saveVisitSummary(next) }
+        } catch {
+            FernletAuditLog.log("worldMap.places.summaryUnsaved")
+        }
+    }
+
+    /// Home's summary as stored, or nil when none was written yet (or it could never open, or reads as
+    /// none: it is removed and written again).
+    func visitSummary() throws -> PlaceVisitSummary? {
+        let file = WorldMapVault.File.placeSummary
+        guard case .bytes(let data) = try found(file, read: { try self.vault.read(file) }) else { return nil }
+        do {
+            let summary = try decoder.decode(PlaceVisitSummary.self, from: data)
+            return summary.schemaVersion == PlaceVisitSummary.currentSchema ? summary : nil
+        } catch {
+            FernletAuditLog.log("worldMap.places.summaryUnreadable")
+            vault.remove(file)
+            return nil
+        }
+    }
+
+    /// Seals `summary` as Home's summary.
+    func saveVisitSummary(_ summary: PlaceVisitSummary) throws {
+        try vault.write(try encoder.encode(summary), to: WorldMapVault.File.placeSummary)
+    }
+
+    /// Notes Fernlet's kind token for place `id` in Home's summary, from the kind the app's name lookup
+    /// reported while Private was open. Nothing when the place has no entry; a failure is audited.
+    public func notePlaceKind(_ kind: PlaceCategory, for id: UUID) {
+        do {
+            guard let stored = try visitSummary() else { return }
+            let next = stored.notingKind(kind, for: id)
+            if next != stored { try saveVisitSummary(next) }
+        } catch {
+            FernletAuditLog.log("worldMap.places.summaryKindUnsaved")
+        }
+    }
+
+    /// Forgets places `ids` in Home's summary (the person deleted the place, or one of its visits): a
+    /// place comes back only with its next visit. A summary that can't be read or written now is removed.
+    public func forgetInVisitSummary(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        do {
+            guard let stored = try visitSummary() else { return }
+            let next = stored.forgetting(ids)
+            if next != stored { try saveVisitSummary(next) }
+        } catch {
+            FernletAuditLog.log("worldMap.places.summaryForgetFailed")
+            vault.remove(WorldMapVault.File.placeSummary)
+        }
     }
 
     /// Deletes the day that starts at `day`: its stops, their visits off each place's count (a place left
@@ -166,6 +240,8 @@ public final class PlaceLogStore {
         let result = current.deletingDay(day, calendar: calendar)
         try saveLog(result.log, hubKey: hubKey)
         try saveDeviceState(try deviceState().forgetting(result.removedPlaces))
+        let visited = current.stops(on: day, calendar: calendar).filter { $0.kind == .visit }.compactMap(\.placeID)
+        forgetInVisitSummary(Set(visited).union(result.removedPlaces))
         return result.workoutIDs
     }
 
@@ -173,15 +249,20 @@ public final class PlaceLogStore {
     public func rename(_ id: UUID, to name: String, hubKey: SymmetricKey, now: Date) throws -> PlaceLog {
         let current = try fold(hubKey: hubKey, now: now)
         let next = current.renaming(id, to: name)
-        if next != current { try saveLog(next, hubKey: hubKey) }
+        if next != current {
+            try saveLog(next, hubKey: hubKey)
+            // Home's summary takes the person's name at once (no visit is counted: both logs hold the same stops).
+            updateVisitSummary(before: next, after: next, eating: [], now: now, calendar: .current)
+        }
         return next
     }
 
-    /// Deletes all of it ("Delete all of it"): the log (keyless), and of the device side everything but the
+    /// Deletes all of it ("Delete all of it"): the log and Home's summary (keyless), and of the device side everything but the
     /// homes and hotel, which stay until they are removed in Settings › Home map (the approved policy
     /// sentence; round 6). A device side that can't be read now goes whole. Whether it all went.
     public func deleteAll() -> Bool {
         let log = vault.remove(WorldMapVault.File.places)
+        let summary = vault.remove(WorldMapVault.File.placeSummary)
         let homes: HomeBook?
         do {
             homes = try deviceState().homes
@@ -189,13 +270,13 @@ public final class PlaceLogStore {
             homes = nil
         }
         let device = vault.remove(WorldMapVault.File.placesDevice)
-        guard let homes, homes != .empty else { return log && device }
+        guard let homes, homes != .empty else { return log && device && summary }
         do {
             try saveDeviceState(PlaceDeviceState.empty.withHomes(homes))
         } catch {
             FernletAuditLog.log("worldMap.places.homesNotKept")
         }
-        return log && device
+        return log && device && summary
     }
 
     // MARK: Homes and hotels, places to eat (round 6)
@@ -210,11 +291,12 @@ public final class PlaceLogStore {
         return next
     }
 
-    /// Removes both files whole, the homes and hotel with them: the app-lock reset, whose screen says it
+    /// Removes both files whole (and Home's summary), the homes and hotel with them: the app-lock reset, whose screen says it
     /// deletes the places you've been. Keyless. Whether both are gone.
     public func deleteEverything() -> Bool {
         let log = vault.remove(WorldMapVault.File.places)
         let device = vault.remove(WorldMapVault.File.placesDevice)
-        return log && device
+        let summary = vault.remove(WorldMapVault.File.placeSummary)
+        return log && device && summary
     }
 }

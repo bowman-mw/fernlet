@@ -73032,6 +73032,222 @@
         }
       }
     },
+    "home.quietPlace.body.beach" : {
+      "comment" : "Home 'A favourite spot' card about a beach the person used to enjoy. Gentle, never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You haven't been to the beach in a while. It could be a nice spot today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas a la playa. Hoy podría ser un buen sitio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas a la playa. Hoy podría ser un buen lugar."
+          }
+        }
+      }
+    },
+    "home.quietPlace.body.campground" : {
+      "comment" : "Home 'A favourite spot' card about a campground the person used to enjoy. Gentle, never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You haven't been to the campground in a while. It could be a nice place to get away to."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas al camping. Podría ser un buen sitio para desconectar."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas al campamento. Podría ser un buen lugar para desconectarte."
+          }
+        }
+      }
+    },
+    "home.quietPlace.body.gym" : {
+      "comment" : "Home 'Still there' card about a gym the person used to go to. Never mentions exercise, workouts or fitness; no pressure.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The gym you used to go to is still there, whenever you feel like it. No rush."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El gimnasio al que ibas sigue ahí, para cuando te apetezca. Sin prisa."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El gimnasio al que ibas sigue ahí, para cuando tengas ganas. Sin prisa."
+          }
+        }
+      }
+    },
+    "home.quietPlace.body.named.indoor" : {
+      "comment" : "Home 'Still there' card. The placeholder is the person's own name for a place they used to go to (often a restaurant or gym). Never mentions eating or exercise; no pressure.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is still there, whenever you feel like it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ sigue ahí, para cuando te apetezca."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ sigue ahí, para cuando tengas ganas."
+          }
+        }
+      }
+    },
+    "home.quietPlace.body.named.outdoor" : {
+      "comment" : "Home 'A favourite spot' card. The placeholder is the person's own name for a park, beach or campground they used to visit. Gentle, never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You haven't been to %@ in a while. It could be a nice spot today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas a %@. Hoy podría ser un buen sitio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas a %@. Hoy podría ser un buen lugar."
+          }
+        }
+      }
+    },
+    "home.quietPlace.body.park" : {
+      "comment" : "Home 'A favourite spot' card about a park the person used to enjoy. Gentle, never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You haven't been to the park in a while. It could be a nice spot today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas al parque. Hoy podría ser un buen sitio."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hace tiempo que no vas al parque. Hoy podría ser un buen lugar."
+          }
+        }
+      }
+    },
+    "home.quietPlace.body.restaurant" : {
+      "comment" : "Home 'Still there' card about a restaurant the person used to go to. Never mentions eating, food or meals; no pressure.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That restaurant you used to like is still there, whenever you feel like it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese restaurante que te gustaba sigue ahí, para cuando te apetezca."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese restaurante que te gustaba sigue ahí, para cuando se te antoje."
+          }
+        }
+      }
+    },
+    "home.quietPlace.title.favouriteSpot" : {
+      "comment" : "Home card title over a park, beach or campground the person used to enjoy and hasn't been to in a while.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A favourite spot"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un rincón favorito"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un lugar favorito"
+          }
+        }
+      }
+    },
+    "home.quietPlace.title.stillThere" : {
+      "comment" : "Home card title over a restaurant, gym or other place the person used to go to. Never pressure to eat or exercise.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still there"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sigue ahí"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sigue ahí"
+          }
+        }
+      }
+    },
     "home.seasonal.soup.action" : {
       "comment" : "Home 'Soup season' card: opens the recipe book to find a soup.",
       "extractionState" : "extracted_with_value",
@@ -73364,6 +73580,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El invierno pasado entrenaste mucho. Vaya como vaya este invierno, está bien."
+          }
+        }
+      }
+    },
+    "home.shortDays.body" : {
+      "comment" : "Home 'Short days' card: the days are short and the person has slept less than usual lately. An invitation, never an instruction; never a number or a comparison.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Short days and short nights lately. Morning light and an early night might help."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Días cortos y noches cortas últimamente. Un poco de luz por la mañana y acostarte pronto podrían ayudarte."
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Días cortos y noches cortas últimamente. Un poco de luz en la mañana y dormirte temprano podrían ayudarte."
+          }
+        }
+      }
+    },
+    "home.shortDays.title" : {
+      "comment" : "Home card title in the short-daylight months when the person's sleep has run short lately. Gentle, never a warning.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Short days"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Días cortos"
+          }
+        },
+        "es-MX" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Días cortos"
           }
         }
       }

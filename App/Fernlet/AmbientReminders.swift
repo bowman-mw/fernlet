@@ -12,9 +12,18 @@ import FernletFoundation
 // words.
 //
 // CAP-2 (G3, PR #152): Home is not behind the lock, so nothing here reads sealed or Private-hub data.
-// The inputs are meals, recipes, workouts and water from the diary, and the breathing and grounding
-// finish dates this iPhone keeps. Never the journal, mood tags, the Worry Box, the cycle, intimacy,
-// or the World map's places (sealed under the hub key). `AmbientRemindersTests` scans this file.
+// The inputs are meals, recipes, workouts, water and nightly sleep totals from the diary, the
+// breathing and grounding finish dates this iPhone keeps, and the weather's coarse latitude (rounded
+// to 1°, never stored). Never the journal, mood tags, the Worry Box, the cycle, intimacy, or the World
+// map's places (sealed under the hub key). `AmbientRemindersTests` scans this file.
+//
+// CAP-2's one named exception (owner's P1-A, 2026-11-27): the quiet-place card reads Home's place
+// summary, `PlaceVisitSummary`, through its one reader, `PlaceVisitSummaryReader`, and nothing else of
+// the World map. The fold under the hub key writes that summary (per place: the person's own name or
+// Fernlet's kind token, the last-visit day and a 60-day visit count; never Apple's name, a point, a
+// reference or the timeline) under the map vault's buffer key, device-only. It is never written or read
+// in a decoy, and every wipe removes it with the map vault. `FernletStore+AmbientPlaces.swift` is the
+// only file that touches the reader; `AmbientRemindersSealedBoundaryTests` allows exactly that type.
 //
 // Never on the list: streaks, goals, personal bests, milestones, counts shown to the person, or any
 // comparison of now with before. A seasonal card says what last year was like and nothing else.
@@ -38,12 +47,16 @@ nonisolated enum AmbientReminderKind: String, CaseIterable, Sendable {
     case seasonalWorkouts
     /// "Warm days ahead": last summer the water kept coming.
     case seasonalWater
+    /// "A favourite spot": a place the person used to enjoy and hasn't been to in a while (P2-A, 2026-11-27).
+    case quietPlace
+    /// "Short days": short daylight and short nights lately (S1-C, 2026-11-27).
+    case shortDays
 
     /// Whether the kind is a seasonal-rhythm card, which shares one monthly cap with the others.
     var isSeasonal: Bool {
         switch self {
         case .seasonalSoup, .seasonalWalks, .seasonalWorkouts, .seasonalWater: true
-        case .forgottenMeal, .forgottenWorkout, .forgottenRecipe, .forgottenCalm: false
+        case .forgottenMeal, .forgottenWorkout, .forgottenRecipe, .forgottenCalm, .quietPlace, .shortDays: false
         }
     }
 }
@@ -145,6 +158,10 @@ nonisolated struct AmbientReminder: Equatable, Sendable {
         case calm(AmbientCalmTool)
         /// Last year's season the card talks about.
         case season(AmbientSeason)
+        /// A quiet place: the person's own name for it, or nil to name it by its kind.
+        case place(label: String?, kind: AmbientPlaceKind?)
+        /// Short days and short nights: nothing more to say.
+        case shortDays
     }
 
     /// The kind, which the caps count by.

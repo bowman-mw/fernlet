@@ -190,6 +190,16 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// The latitude of the location this app already holds, rounded to the nearest whole degree, or nil
+    /// (no permission, or no fix yet). For the Home "Short days" card's on-device day length (S3-A,
+    /// 2026-11-27): it never asks for a location or a permission, never fetches, and nothing is stored.
+    public func coarseLatitude() -> Int? {
+        guard isAuthorized, let location = locationManager.location else { return nil }
+        let latitude = location.coordinate.latitude
+        guard latitude.isFinite, (-90...90).contains(latitude) else { return nil }
+        return Int(latitude.rounded())
+    }
+
     /// Requests when-in-use authorization. Returns whether it ended up granted.
     ///
     /// Concurrent callers on `.notDetermined` coalesce onto one in-flight `authRequest`, so a

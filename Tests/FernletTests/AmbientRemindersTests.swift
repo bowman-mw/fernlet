@@ -538,14 +538,26 @@ struct AmbientRemindersSealedBoundaryTests {
     static let files = [
         "App/Fernlet/AmbientReminders.swift", "App/Fernlet/AmbientReminderFinder.swift",
         "App/Fernlet/AmbientReminderMemory.swift", "App/Fernlet/AmbientReminderCopy.swift",
-        "App/Fernlet/AmbientFriendNudges.swift"
+        "App/Fernlet/AmbientFriendNudges.swift", "App/Fernlet/AmbientPlaces.swift",
+        "App/Fernlet/AmbientShortDays.swift", readerFile
     ]
 
-    /// Names of sealed or Private-hub stores and reads that must never appear in their code.
+    /// Names of sealed or Private-hub stores and reads that must never appear in their code. Since P1-A the
+    /// World map's own names are on it too, so the one exception below is the only way in.
     static let forbidden = [
         "journal", "lookBackJournal", "worry", "cycle", "period", "intimacy", "hubContentKey", "hubKey",
-        "worldPlace", "PlaceLog", "decrypt", "sealed", "mood", "emotion"
+        "worldPlace", "PlaceLog", "decrypt", "sealed", "mood", "emotion",
+        "WorldMapStore", "worldMapVault", "Vault", "PlaceRecord", "PlaceDeviceState", "PlaceStop", "KnownPlace",
+        "EatingPlace", "placeID"
     ]
+
+    /// CAP-2's one named exception (owner's P1-A, 2026-11-27): Home's place summary, read only through this
+    /// type, and only from ``readerFile``.
+    static let allowedReader = "PlaceVisitSummaryReader"
+    /// The one file that may use ``allowedReader``.
+    static let readerFile = "App/Fernlet/FernletStore+AmbientPlaces.swift"
+    /// Exactly what ``readerFile`` may write to reach the reader; everything else in it is scanned as usual.
+    static let readerFragments = ["import WorldMapStore", "PlaceVisitSummaryReader(vault: worldMapVault)"]
 
     /// `source` without its comment lines (the comments say what is never read, by name).
     static func code(_ source: String) -> String {
@@ -555,18 +567,59 @@ struct AmbientRemindersSealedBoundaryTests {
             .joined(separator: "\n")
     }
 
-    @Test func theRemindersNeverNameASealedStore() throws {
-        var scanned = Self.files.map { try? RepoRoot.source($0) }.compactMap { $0 }
-        #expect(scanned.count == Self.files.count, "a reminder file moved")
+    /// The scanned code of every reminder file and Home's choosing code, by path (the reader file without
+    /// its allowed fragments).
+    static func scannedCode() throws -> [String: String] {
+        var scanned: [String: String] = [:]
+        for file in files {
+            var source = code(try RepoRoot.source(file))
+            if file == readerFile {
+                for fragment in readerFragments { source = source.replacingOccurrences(of: fragment, with: "") }
+            }
+            scanned[file] = source
+        }
         let cards = try RepoRoot.source("App/Fernlet/AmbientCards.swift")
         let start = try #require(cards.range(of: "private func chooseReminders"))
         let end = try #require(cards.range(of: "// MARK: - Weather-aware recovery"))
-        scanned.append(String(cards[start.lowerBound..<end.lowerBound]))
-        for source in scanned {
-            let lowered = Self.code(source).lowercased()
+        scanned["AmbientCards.chooseReminders"] = code(String(cards[start.lowerBound..<end.lowerBound]))
+        return scanned
+    }
+
+    @Test func theRemindersNeverNameASealedStore() throws {
+        let scanned = try Self.scannedCode()
+        #expect(scanned.count == Self.files.count + 1, "a reminder file moved")
+        for (file, source) in scanned {
+            let lowered = source.lowercased()
             for name in Self.forbidden {
-                #expect(!lowered.contains(name.lowercased()), "the gentle reminders name \(name)")
+                #expect(!lowered.contains(name.lowercased()), "\(file) names \(name)")
             }
         }
+    }
+
+    /// The named exception is exactly one reader in exactly one file: no other reminder file names it,
+    /// and the reader file uses each allowed fragment once.
+    @Test func onlyTheNamedReaderReachesThePlaceSummary() throws {
+        let scanned = try Self.scannedCode()
+        for (file, source) in scanned {
+            #expect(!source.contains(Self.allowedReader), "\(file) names \(Self.allowedReader) outside its one allowed use")
+        }
+        let reader = Self.code(try RepoRoot.source(Self.readerFile))
+        for fragment in Self.readerFragments {
+            #expect(reader.components(separatedBy: fragment).count == 2, "the reader file uses \(fragment) once")
+        }
+    }
+
+    /// The reader itself can read only the summary: no hub key, no other file, and it never writes.
+    @Test func theNamedReaderReadsOnlyTheSummary() throws {
+        let source = try RepoRoot.source("FernletKit/Sources/WorldMapStore/PlaceVisitSummary.swift")
+        let start = try #require(source.range(of: "public final class PlaceVisitSummaryReader"))
+        let reader = Self.code(String(source[start.lowerBound...]))
+        #expect(reader.contains("WorldMapVault.File.placeSummary"))
+        for banned in ["sealedWith", "hubKey", ".places)", ".placesDevice", ".placeMarks", "write(", "remove("] {
+            #expect(!reader.contains(banned), "the reader uses \(banned)")
+        }
+        let file = try RepoRoot.source("FernletKit/Sources/WorldMapStore/WorldMapVault.swift")
+        #expect(file.contains("placeSummary = File(name: \"places-summary.bin\""))
+        #expect(file.contains("role: .buffer, context: Data(\"placeSummary\".utf8)"), "the summary is under the buffer key, its own context")
     }
 }

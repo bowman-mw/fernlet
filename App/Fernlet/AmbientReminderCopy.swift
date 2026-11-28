@@ -34,6 +34,11 @@ nonisolated enum AmbientReminderCopy {
         case .seasonalWater:
             String(localized: "home.seasonal.water.title", defaultValue: "Warm days ahead",
                    comment: "Home card title as summer comes: last summer the person drank plenty of water on hot days.")
+        case .quietPlace:
+            quietPlaceTitle(reminder.subject)
+        case .shortDays:
+            String(localized: "home.shortDays.title", defaultValue: "Short days",
+                   comment: "Home card title in the short-daylight months when the person's sleep has run short lately. Gentle, never a warning.")
         }
     }
 
@@ -49,6 +54,12 @@ nonisolated enum AmbientReminderCopy {
             calmBody(toolName(tool))
         case .season(let season):
             seasonalBody(reminder.kind, season)
+        case .place(let label, let kind):
+            quietPlaceBody(label: label, kind: kind)
+        case .shortDays:
+            String(localized: "home.shortDays.body",
+                   defaultValue: "Short days and short nights lately. Morning light and an early night might help.",
+                   comment: "Home 'Short days' card: the days are short and the person has slept less than usual lately. An invitation, never an instruction; never a number or a comparison.")
         }
     }
 
@@ -65,7 +76,7 @@ nonisolated enum AmbientReminderCopy {
             String(localized: "home.seasonal.water.body.summer",
                    defaultValue: "Last summer you kept the water coming on the hot days. It's warming up again.",
                    comment: "Home 'Warm days ahead' card as summer comes. Never a comparison with now, never a count.")
-        case .forgottenMeal, .forgottenWorkout, .forgottenRecipe, .forgottenCalm:
+        case .forgottenMeal, .forgottenWorkout, .forgottenRecipe, .forgottenCalm, .quietPlace, .shortDays:
             nil
         }
     }
@@ -142,8 +153,67 @@ nonisolated enum AmbientReminderCopy {
         case .seasonalSoup:
             String(localized: "home.seasonal.soup.action", defaultValue: "Find a soup",
                    comment: "Home 'Soup season' card: opens the recipe book to find a soup.")
-        case .forgottenMeal, .forgottenWorkout, .seasonalWalks, .seasonalWorkouts, .seasonalWater:
+        case .forgottenMeal, .forgottenWorkout, .seasonalWalks, .seasonalWorkouts, .seasonalWater, .quietPlace, .shortDays:
             nil
+        }
+    }
+
+    // MARK: - Quiet place (owner's P2-A, P3-B, P4-A; 2026-11-27)
+
+    /// The quiet-place card's title: "A favourite spot" for a park, beach or campground; "Still there" for
+    /// a restaurant, a gym or a place known only by the person's name.
+    static func quietPlaceTitle(_ subject: AmbientReminder.Subject) -> String {
+        guard case .place(_, let kind) = subject, kind?.isOutdoor == true else {
+            return String(localized: "home.quietPlace.title.stillThere", defaultValue: "Still there",
+                          comment: "Home card title over a restaurant, gym or other place the person used to go to. Never pressure to eat or exercise.")
+        }
+        return String(localized: "home.quietPlace.title.favouriteSpot", defaultValue: "A favourite spot",
+                      comment: "Home card title over a park, beach or campground the person used to enjoy and hasn't been to in a while.")
+    }
+
+    /// The quiet-place card's sentence: by the person's own name for the place when they gave one (P4-A),
+    /// else by its kind. A restaurant's or gym's line never mentions eating or exercise.
+    static func quietPlaceBody(label: String?, kind: AmbientPlaceKind?) -> String? {
+        if let label {
+            return kind?.isOutdoor == true ? namedOutdoorBody(label) : namedIndoorBody(label)
+        }
+        guard let kind else { return nil }
+        return kindBody(kind)
+    }
+
+    /// The sentence for a place the person named, when it is a park, beach or campground.
+    private static func namedOutdoorBody(_ label: String) -> String {
+        String(localized: "home.quietPlace.body.named.outdoor",
+               defaultValue: "You haven't been to \(label) in a while. It could be a nice spot today.",
+               comment: "Home 'A favourite spot' card. The placeholder is the person's own name for a park, beach or campground they used to visit. Gentle, never a scold.")
+    }
+
+    /// The sentence for a place the person named, when it is a restaurant, a gym or of no known kind.
+    private static func namedIndoorBody(_ label: String) -> String {
+        String(localized: "home.quietPlace.body.named.indoor",
+               defaultValue: "\(label) is still there, whenever you feel like it.",
+               comment: "Home 'Still there' card. The placeholder is the person's own name for a place they used to go to (often a restaurant or gym). Never mentions eating or exercise; no pressure.")
+    }
+
+    /// The sentence for a place named by its kind ("the park", "that restaurant").
+    private static func kindBody(_ kind: AmbientPlaceKind) -> String {
+        switch kind {
+        case .park:
+            String(localized: "home.quietPlace.body.park", defaultValue: "You haven't been to the park in a while. It could be a nice spot today.",
+                   comment: "Home 'A favourite spot' card about a park the person used to enjoy. Gentle, never a scold.")
+        case .beach:
+            String(localized: "home.quietPlace.body.beach", defaultValue: "You haven't been to the beach in a while. It could be a nice spot today.",
+                   comment: "Home 'A favourite spot' card about a beach the person used to enjoy. Gentle, never a scold.")
+        case .campground:
+            String(localized: "home.quietPlace.body.campground",
+                   defaultValue: "You haven't been to the campground in a while. It could be a nice place to get away to.",
+                   comment: "Home 'A favourite spot' card about a campground the person used to enjoy. Gentle, never a scold.")
+        case .restaurant:
+            String(localized: "home.quietPlace.body.restaurant", defaultValue: "That restaurant you used to like is still there, whenever you feel like it.",
+                   comment: "Home 'Still there' card about a restaurant the person used to go to. Never mentions eating, food or meals; no pressure.")
+        case .gym:
+            String(localized: "home.quietPlace.body.gym", defaultValue: "The gym you used to go to is still there, whenever you feel like it. No rush.",
+                   comment: "Home 'Still there' card about a gym the person used to go to. Never mentions exercise, workouts or fitness; no pressure.")
         }
     }
 
